@@ -1,0 +1,1865 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>MapLibre Stations + Buffers + ACS + LODES + CRE + Essential Services + LBAR (FTA Breakpoint Ratings)</title>
+
+    <!-- MapLibre GL JS -->
+    <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+    <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+
+    <!-- Turf.js -->
+    <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+
+    <!-- pako for gzip inflate (LODES CSV.GZ) -->
+    <script src="https://unpkg.com/pako@2.1.0/dist/pako.min.js"></script>
+
+    <!-- PapaParse for robust CSV parsing (handles quoted commas) -->
+    <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+
+    <style>
+      :root {
+        --border: #e5e7eb;
+        --muted: #555;
+        --bg: #ffffff;
+        --panel: #f6f8fa;
+        --warnbg: #fff7ed;
+        --warnbd: #fdba74;
+        --cardbg: #fff;
+      }
+
+      body { margin: 0; font-family: system-ui, sans-serif; background: var(--bg); }
+      #app { display: flex; height: 100vh; width: 100vw; }
+      #sidebar {
+        width: 520px;
+        border-right: 1px solid var(--border);
+        padding: 12px 14px;
+        overflow: auto;
+        box-sizing: border-box;
+      }
+      #map { flex: 1; }
+
+      h3 { margin: 8px 0 10px; font-size: 16px; }
+      .muted { color: var(--muted); font-size: 13px; line-height: 1.35; }
+      label { display:block; margin: 10px 0; font-size: 13px; }
+      select, button, input[type="file"], input[type="text"] {
+        width: 100%;
+        padding: 8px 10px;
+        margin-top: 6px;
+        box-sizing: border-box;
+        font: inherit;
+      }
+      button { cursor: pointer; }
+
+      .btnRow { display:flex; gap:10px; }
+      .btnRow button { width: 50%; }
+
+      #coords {
+        white-space: pre;
+        background: var(--panel);
+        padding: 10px;
+        border-radius: 8px;
+        overflow: auto;
+        border: 1px solid var(--border);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 12px;
+      }
+
+      .card {
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 10px;
+        margin-top: 10px;
+        background: var(--cardbg);
+      }
+
+      .warn {
+        border: 1px solid var(--warnbd);
+        background: var(--warnbg);
+        border-radius: 10px;
+        padding: 10px;
+        margin-top: 10px;
+        font-size: 12px;
+        line-height: 1.35;
+      }
+
+      .kv { font-size: 13px; }
+      .kv b { display:inline-block; min-width: 220px; }
+      #total { font-size: 22px; font-weight: 700; margin-top: 6px; }
+      hr { border: 0; border-top: 1px solid var(--border); margin: 12px 0; }
+      .tiny { font-size: 12px; color: var(--muted); }
+      code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+
+      /* Breakpoint panel */
+      .bpGrid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-top: 8px;
+      }
+      .bpItem {
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 10px;
+        background: #fafafa;
+      }
+      .pill {
+        display:inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        font-size: 12px;
+        background: #fff;
+      }
+      .pill.na { color: var(--muted); }
+      .pill.high { font-weight: 700; }
+      .pill.mh {}
+      .pill.med {}
+      .pill.ml {}
+      .pill.low {}
+
+      .bpTitle { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+      .bpMeta { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+      .twoCol { display:grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    </style>
+  </head>
+
+  <body>
+    <div id="app">
+      <div id="sidebar">
+        <h3>Stations</h3>
+        <div class="btnRow">
+          <button id="undo">Delete last point</button>
+          <button id="clear">Clear points</button>
+        </div>
+
+        <p class="muted">
+          Click the map to add station points. Each station gets a semi-transparent <b>0.5-mile</b> radial buffer.
+        </p>
+
+        <div class="card">
+          <div class="kv"><b>Stations:</b> <span id="nStations">0</span></div>
+          <div class="kv"><b>Status:</b> <span id="status">Idle</span></div>
+        </div>
+
+        <p style="margin-top:10px; margin-bottom:6px;">Lat/Lon list:</p>
+        <div id="coords"></div>
+
+        <hr />
+
+        <h3>Station-area Data</h3>
+        <p class="muted">
+          Summaries are computed within the <b>dissolved union</b> of all 0.5-mile buffers (avoids double counting).
+          For ACS, counts are area-apportioned; medians are shown as an area-weighted average estimate.
+        </p>
+
+        <label>
+          Geography level (ACS only)
+          <select id="geoLevel">
+            <option value="tract">Census Tracts (faster)</option>
+            <option value="bg">Block Groups (more detailed)</option>
+          </select>
+        </label>
+
+        <label>
+          Variable (ACS or LODES)
+          <select id="varSelect">
+            <optgroup label="Land Use (ACS: additive sums)">
+              <option value="B01003_001E">Total population (ACS B01003_001E)</option>
+              <option value="B11001_001E">Total households (ACS B11001_001E)</option>
+              <option value="B25001_001E">Total housing units (ACS B25001_001E)</option>
+              <option value="B25002_001E">Occupied housing units (ACS B25002_001E)</option>
+              <option value="B25002_003E">Vacant housing units (ACS B25002_003E)</option>
+            </optgroup>
+
+            <optgroup label="Land Use / Employment (LODES: additive sum)">
+              <option value="LODES_WAC_C000">Total existing employment (LODES WAC C000) — requires file upload</option>
+            </optgroup>
+
+            <optgroup label="Mobility / Transit-dependent (ACS: additive sums)">
+              <option value="B08201_002E">Zero-car households (ACS B08201_002E)</option>
+              <option value="B17001_002E">Persons below poverty level (ACS B17001_002E)</option>
+            </optgroup>
+
+            <optgroup label="Non-additive (ACS medians: area-weighted average estimate)">
+              <option value="B19013_001E">Median household income (ACS B19013_001E) ⚠</option>
+              <option value="B25064_001E">Median gross rent (ACS B25064_001E) ⚠</option>
+              <option value="B25077_001E">Median home value (ACS B25077_001E) ⚠</option>
+            </optgroup>
+          </select>
+        </label>
+
+        <label>
+          Year
+          <select id="yearSelect">
+            <option value="2023">2023</option>
+            <option value="2022">2022</option>
+            <option value="2021">2021</option>
+          </select>
+        </label>
+
+        <button id="run">Update summary</button>
+
+        <div id="aggWarning" class="warn" style="display:none;"></div>
+
+        <div class="card">
+          <div class="kv"><b>Intersecting geographies:</b> <span id="nGeos">0</span></div>
+          <div class="kv"><b>Aggregation method:</b> <span id="aggMethod">—</span></div>
+          <div class="kv"><b>Result in ½-mile union:</b></div>
+          <div id="total">—</div>
+          <div id="notes" class="tiny" style="margin-top:6px;"></div>
+        </div>
+
+        <div class="card">
+          <div class="kv"><b>FTA CIG Breakpoint Ratings (Small Starts – Land Use)</b></div>
+          <div class="tiny" style="margin-top:6px;">
+            Pop density + Employment + LBAR ratio + Community Risk + Essential services.
+          </div>
+
+          <div class="bpGrid">
+            <div class="bpItem">
+              <div class="bpTitle">Average population density</div>
+              <div><span id="bpPopPill" class="pill na">N/A</span></div>
+              <div class="bpMeta">Value: <span id="bpPopValue">—</span></div>
+              <div class="bpMeta">Source: ACS B01003_001E / union area</div>
+            </div>
+
+            <div class="bpItem">
+              <div class="bpTitle">Employment served by system</div>
+              <div><span id="bpEmpPill" class="pill na">N/A</span></div>
+              <div class="bpMeta">Value: <span id="bpEmpValue">—</span></div>
+              <div class="bpMeta">Source: LODES WAC C000 (uploaded)</div>
+            </div>
+
+            <div class="bpItem">
+              <div class="bpTitle">LBAR ratio (station areas / project counties)</div>
+              <div><span id="bpLbarPill" class="pill na">N/A</span></div>
+              <div class="bpMeta">Value: <span id="bpLbarValue">—</span></div>
+              <div class="bpMeta"><span id="bpLbarNote">Requires LBAR inventory + counties</span></div>
+            </div>
+
+            <div class="bpItem">
+              <div class="bpTitle">Community Risk (High-risk %)</div>
+              <div><span id="bpCrePill" class="pill na">N/A</span></div>
+              <div class="bpMeta">Value: <span id="bpCreValue">—</span></div>
+              <div class="bpMeta"><span id="bpCreNote">Requires CRE (tract) upload</span></div>
+            </div>
+
+            <div class="bpItem">
+              <div class="bpTitle">Avg essential services per station area</div>
+              <div><span id="bpEssPill" class="pill na">N/A</span></div>
+              <div class="bpMeta">Value: <span id="bpEssValue">—</span></div>
+              <div class="bpMeta"><span id="bpEssNote">Requires essential services upload</span></div>
+            </div>
+
+            <div class="bpItem">
+              <div class="bpTitle">Other categories</div>
+              <div><span class="pill na">N/A</span></div>
+              <div class="bpMeta">Not mapped in this prototype</div>
+            </div>
+          </div>
+        </div>
+
+        <hr />
+
+        <h3>Uploads for Remaining Land Use Measures</h3>
+
+        <div class="card">
+          <div class="kv"><b>Community Risk (CRE) Upload</b></div>
+          <div class="tiny" style="margin-top:6px;">
+            Upload tract CSV from Census (quoted commas are OK). Set: GEOID, POPUNI, and PRED3_E (or your chosen fields).
+          </div>
+
+          <label>
+            Upload CRE CSV (tract level)
+            <input id="creFile" type="file" accept=".csv" />
+          </label>
+
+          <div class="twoCol">
+            <label>GEOID column
+              <select id="creColGEOID" disabled></select>
+            </label>
+            <label>Total pop column
+              <select id="creColTotal" disabled></select>
+            </label>
+          </div>
+
+          <label>High-risk pop column
+            <select id="creColHigh" disabled></select>
+          </label>
+
+          <div class="tiny" id="creInfo">No file loaded.</div>
+        </div>
+
+        <div class="card">
+          <div class="kv"><b>Essential Services Upload</b></div>
+          <div class="tiny" style="margin-top:6px;">
+            Upload GeoJSON points or CSV. Counted within <b>1-mile</b> of each station; averaged across stations.
+          </div>
+
+          <label>
+            Upload essential services (GeoJSON or CSV)
+            <input id="essFile" type="file" accept=".json,.geojson,.csv" />
+          </label>
+
+          <div class="twoCol">
+            <label>Latitude column (CSV)
+              <select id="essColLat" disabled></select>
+            </label>
+            <label>Longitude column (CSV)
+              <select id="essColLon" disabled></select>
+            </label>
+          </div>
+
+          <div class="tiny" id="essInfo">No file loaded.</div>
+        </div>
+
+        <div class="card">
+          <div class="kv"><b>LBAR Housing Inventory Upload</b></div>
+          <div class="tiny" style="margin-top:6px;">
+            Upload GeoJSON points (properties.units, optional properties.county) or CSV (lat/lon/units, optional county FIPS).
+            Enter project counties as comma-separated 5-digit FIPS.
+          </div>
+
+          <label>
+            Upload LBAR inventory (GeoJSON or CSV)
+            <input id="lbarFile" type="file" accept=".json,.geojson,.csv" />
+          </label>
+
+          <div class="twoCol">
+            <label>Latitude column (CSV)
+              <select id="lbarColLat" disabled></select>
+            </label>
+            <label>Longitude column (CSV)
+              <select id="lbarColLon" disabled></select>
+            </label>
+          </div>
+
+          <div class="twoCol">
+            <label>Units column
+              <select id="lbarColUnits" disabled></select>
+            </label>
+            <label>County FIPS column (optional)
+              <select id="lbarColCounty" disabled></select>
+            </label>
+          </div>
+
+          <label>
+            Project counties (comma-separated 5-digit county FIPS)
+            <input id="lbarCounties" type="text" placeholder="e.g., 06075,06081" />
+          </label>
+
+          <label style="display:flex;align-items:center;gap:10px;margin-top:10px;">
+            <input id="toggleLbarLayer" type="checkbox" style="width:auto;margin:0;" />
+            Show LBAR points on map
+          </label>
+
+          <div class="tiny" id="lbarInfo">No file loaded.</div>
+        </div>
+
+        <hr />
+
+        <h3>LODES (File-based workflow)</h3>
+        <p class="muted">
+          Download the official <code>.csv.gz</code> file and load it from your computer (avoids cross-site fetch issues).
+        </p>
+
+        <div class="card">
+          <div class="kv"><b>Detected state:</b> <span id="lodesState">—</span></div>
+          <div class="kv"><b>LODES file loaded:</b> <span id="lodesLoaded">No</span></div>
+        </div>
+
+        <button id="downloadLodes">Download LODES WAC (JT00, S000) for current state</button>
+
+        <label>
+          Load downloaded LODES file (.csv.gz)
+          <input id="lodesFile" type="file" accept=".gz,.csv.gz" />
+        </label>
+
+        <div id="lodesInfo" class="tiny" style="margin-top:6px;"></div>
+
+        <div class="warn">
+          <b>Prototype note:</b> Parsing statewide LODES files can be slow and memory-heavy. For production, use a backend
+          or preprocessed extracts/tiles.
+        </div>
+      </div>
+
+      <div id="map"></div>
+    </div>
+
+    <script>
+      // ----------------------------
+      // Gray basemap (Carto light raster tiles)
+      // ----------------------------
+      const rasterStyle = {
+        version: 8,
+        sources: {
+          carto: {
+            type: "raster",
+            tiles: [
+              "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+              "https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+              "https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+              "https://d.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"
+            ],
+            tileSize: 256,
+            attribution:
+              '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors ' +
+              '© <a href="https://carto.com/attributions">CARTO</a>'
+          }
+        },
+        layers: [{ id: "carto", type: "raster", source: "carto" }]
+      };
+
+      const map = new maplibregl.Map({
+        container: "map",
+        style: rasterStyle,
+        center: [-104.9903, 39.7392],
+        zoom: 10
+      });
+      map.addControl(new maplibregl.NavigationControl(), "top-right");
+
+      function setStatus(s) { document.getElementById("status").textContent = s; }
+
+      // ----------------------------
+      // Robust CSV parsing + helpers
+      // ----------------------------
+      function parseCSV(text) {
+        const res = Papa.parse(text, {
+          header: true,
+          dynamicTyping: false,
+          skipEmptyLines: true
+        });
+        if (res.errors && res.errors.length) {
+          console.warn("CSV parse warnings:", res.errors.slice(0, 10));
+        }
+        const headers = res.meta && res.meta.fields ? res.meta.fields : [];
+        const rows = res.data || [];
+        return { headers, rows };
+      }
+
+      function fillSelect(selectEl, options, placeholder = "Select…") {
+        selectEl.innerHTML = "";
+        const opt0 = document.createElement("option");
+        opt0.value = "";
+        opt0.textContent = placeholder;
+        selectEl.appendChild(opt0);
+        for (const o of options) {
+          const opt = document.createElement("option");
+          opt.value = o;
+          opt.textContent = o;
+          selectEl.appendChild(opt);
+        }
+      }
+
+      function enableSelect(selectEl, enabled) { selectEl.disabled = !enabled; }
+
+      function toNumberSafe(v) {
+        if (v == null) return NaN;
+        const s = String(v).replace(/,/g, "").trim();
+        if (s === "") return NaN;
+        const n = Number(s);
+        return Number.isFinite(n) ? n : NaN;
+      }
+
+      function normalizeTractGEOID(raw) {
+        // CRE GEO_ID is like 1400000US01001020100 -> want trailing 11 digits
+        const s = String(raw || "").trim();
+        const m = s.match(/(\d{11})$/);
+        return m ? m[1] : "";
+      }
+
+      // ----------------------------
+      // Stations + buffers
+      // ----------------------------
+      let points = [];
+      let buffers = [];
+
+      function pointsGeoJSON() { return { type: "FeatureCollection", features: points }; }
+      function buffersGeoJSON() { return { type: "FeatureCollection", features: buffers }; }
+
+      function updateCoordsPanel() {
+        document.getElementById("nStations").textContent = String(points.length);
+        const lines = points.map((f, i) => {
+          const [lon, lat] = f.geometry.coordinates;
+          return `${i + 1}\t${lat.toFixed(6)}\t${lon.toFixed(6)}`;
+        });
+        document.getElementById("coords").textContent = "idx\tlat\tlon\n" + lines.join("\n");
+      }
+
+      function renderStationLayers() {
+        const ptsSrc = "stations";
+        const ptsLayer = "stations-layer";
+        const bufSrc = "buffers";
+        const bufFillLayer = "buffers-fill";
+        const bufLineLayer = "buffers-line";
+
+        if (!map.getSource(bufSrc)) {
+          map.addSource(bufSrc, { type: "geojson", data: buffersGeoJSON() });
+          map.addLayer({
+            id: bufFillLayer,
+            type: "fill",
+            source: bufSrc,
+            paint: { "fill-color": "#2b6cb0", "fill-opacity": 0.2 }
+          });
+          map.addLayer({
+            id: bufLineLayer,
+            type: "line",
+            source: bufSrc,
+            paint: { "line-color": "#2b6cb0", "line-width": 2, "line-opacity": 0.6 }
+          });
+        } else {
+          map.getSource(bufSrc).setData(buffersGeoJSON());
+        }
+
+        if (!map.getSource(ptsSrc)) {
+          map.addSource(ptsSrc, { type: "geojson", data: pointsGeoJSON() });
+          map.addLayer({
+            id: ptsLayer,
+            type: "circle",
+            source: ptsSrc,
+            paint: {
+              "circle-radius": 6,
+              "circle-stroke-width": 2,
+              "circle-color": "#2b6cb0",
+              "circle-stroke-color": "#ffffff"
+            }
+          });
+        } else {
+          map.getSource(ptsSrc).setData(pointsGeoJSON());
+        }
+
+        updateCoordsPanel();
+      }
+
+      function addStationPoint(lon, lat) {
+        const idx = points.length + 1;
+        points.push({
+          type: "Feature",
+          properties: { name: `Station ${idx}`, stationIdx: idx },
+          geometry: { type: "Point", coordinates: [lon, lat] }
+        });
+
+        const pt = turf.point([lon, lat]);
+        const circle = turf.circle(pt, 0.5, { units: "miles", steps: 64 });
+        buffers.push({ ...circle, properties: { stationIdx: idx } });
+
+        renderStationLayers();
+      }
+
+      function bufferUnionPolygon() {
+        if (buffers.length === 0) return null;
+        let u = buffers[0];
+        for (let i = 1; i < buffers.length; i++) u = turf.union(u, buffers[i]);
+        return u;
+      }
+
+      function bboxStringFromFeature(feat) { return turf.bbox(feat).join(","); }
+
+      // ----------------------------
+      // LBAR plotting (toggle)
+      // ----------------------------
+      function lbarSitesToGeoJSON() {
+        const feats = (LBAR_SITES || []).map((s, i) => ({
+          type: "Feature",
+          properties: { idx: i + 1 },
+          geometry: { type: "Point", coordinates: [s.lon, s.lat] }
+        }));
+        return { type: "FeatureCollection", features: feats };
+      }
+
+      function ensureLbarLayer() {
+        const srcId = "lbar-sites";
+        const layerId = "lbar-sites-layer";
+        const data = lbarSitesToGeoJSON();
+
+        if (!map.getSource(srcId)) {
+          map.addSource(srcId, { type: "geojson", data });
+          map.addLayer({
+            id: layerId,
+            type: "circle",
+            source: srcId,
+            paint: {
+              "circle-radius": 3,
+              "circle-color": "#333333",
+              "circle-opacity": 0.85
+            }
+          });
+        } else {
+          map.getSource(srcId).setData(data);
+        }
+      }
+
+      function removeLbarLayer() {
+        const srcId = "lbar-sites";
+        const layerId = "lbar-sites-layer";
+        if (map.getLayer(layerId)) map.removeLayer(layerId);
+        if (map.getSource(srcId)) map.removeSource(srcId);
+      }
+
+      function refreshLbarLayerVisibility() {
+        const cb = document.getElementById("toggleLbarLayer");
+        const on = cb && cb.checked;
+
+        if (!on) {
+          removeLbarLayer();
+          return;
+        }
+        if (!LBAR_SITES || LBAR_SITES.length === 0) {
+          removeLbarLayer();
+          return;
+        }
+        ensureLbarLayer();
+      }
+
+      // ----------------------------
+      // Variable metadata (main summary)
+      // ----------------------------
+      const VAR_META = {
+        "B01003_001E": { source: "ACS", agg: "sum", fmt: "int" },
+        "B11001_001E": { source: "ACS", agg: "sum", fmt: "int" },
+        "B25001_001E": { source: "ACS", agg: "sum", fmt: "int" },
+        "B25002_001E": { source: "ACS", agg: "sum", fmt: "int" },
+        "B25002_003E": { source: "ACS", agg: "sum", fmt: "int" },
+        "B08201_002E": { source: "ACS", agg: "sum", fmt: "int" },
+        "B17001_002E": { source: "ACS", agg: "sum", fmt: "int" },
+
+        "B19013_001E": { source: "ACS", agg: "avg", fmt: "usd" },
+        "B25064_001E": { source: "ACS", agg: "avg", fmt: "usd" },
+        "B25077_001E": { source: "ACS", agg: "avg", fmt: "usd" },
+
+        "LODES_WAC_C000": { source: "LODES", agg: "sum", fmt: "int" }
+      };
+
+      function getMeta(code) { return VAR_META[code] || { source: "ACS", agg: "sum", fmt: "int" }; }
+
+      function setAggUI(meta) {
+        const aggMethodEl = document.getElementById("aggMethod");
+        const warnEl = document.getElementById("aggWarning");
+
+        if (meta.source === "LODES") {
+          aggMethodEl.textContent = "Sum (LODES jobs for blocks whose internal point is inside union)";
+          warnEl.style.display = "block";
+          warnEl.innerHTML =
+            "<b>LODES method:</b> Sums LODES WAC jobs (C000) for blocks whose TIGERweb internal point " +
+            "falls within the dissolved 0.5-mile buffer union. Screening-grade approach.";
+          return;
+        }
+
+        if (meta.agg === "sum") {
+          aggMethodEl.textContent = "Sum (area-apportioned counts)";
+          warnEl.style.display = "none";
+          warnEl.textContent = "";
+        } else {
+          aggMethodEl.textContent = "Area-weighted average (approximation)";
+          warnEl.style.display = "block";
+          warnEl.textContent =
+            "Selected ACS variable is non-additive (e.g., median). This tool reports an area-weighted average estimate, not a true median.";
+        }
+      }
+
+      function formatValue(val, meta) {
+        if (!Number.isFinite(val)) return "—";
+        if (meta.fmt === "usd") {
+          return val.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+        }
+        return val.toLocaleString(undefined, { maximumFractionDigits: 0 });
+      }
+
+      // ----------------------------
+      // FTA Small Starts Land Use breakpoints
+      // ----------------------------
+      const BP = {
+        popDensity: [
+          { label: "High",        pill: "high", min: 15000, max: Infinity },
+          { label: "Medium-High", pill: "mh",   min: 9600,  max: 14999 },
+          { label: "Medium",      pill: "med",  min: 5760,  max: 9599 },
+          { label: "Medium-Low",  pill: "ml",   min: 2560,  max: 5759 },
+          { label: "Low",         pill: "low",  min: -Infinity, max: 2559 }
+        ],
+        employment: [
+          { label: "High",        pill: "high", min: 220000, max: Infinity },
+          { label: "Medium-High", pill: "mh",   min: 140000, max: 219999 },
+          { label: "Medium",      pill: "med",  min: 70000,  max: 139999 },
+          { label: "Medium-Low",  pill: "ml",   min: 40000,  max: 69999 },
+          { label: "Low",         pill: "low",  min: -Infinity, max: 39999 }
+        ],
+        lbarRatio: [
+          { label: "High",        pill: "high", min: 2.5000000001, max: Infinity }, // > 2.50
+          { label: "Medium-High", pill: "mh",   min: 2.25, max: 2.49 },
+          { label: "Medium",      pill: "med",  min: 1.50, max: 2.24 },
+          { label: "Medium-Low",  pill: "ml",   min: 1.10, max: 1.49 },
+          { label: "Low",         pill: "low",  min: -Infinity, max: 1.09 }
+        ],
+        communityRiskPct: [
+          { label: "High",        pill: "high", min: 50.0, max: Infinity },
+          { label: "Medium-High", pill: "mh",   min: 40.0, max: 49.9 },
+          { label: "Medium",      pill: "med",  min: 18.0, max: 39.9 },
+          { label: "Medium-Low",  pill: "ml",   min: 5.0,  max: 17.9 },
+          { label: "Low",         pill: "low",  min: -Infinity, max: 4.99 }
+        ],
+        essentialAvg: [
+          { label: "High",        pill: "high", min: 7.0000000001, max: Infinity }, // > 7
+          { label: "Medium-High", pill: "mh",   min: 5.0, max: 7.0 },
+          { label: "Medium",      pill: "med",  min: 3.0, max: 4.0 },
+          { label: "Medium-Low",  pill: "ml",   min: 1.0, max: 2.0 },
+          { label: "Low",         pill: "low",  min: -Infinity, max: 0.9999999999 } // < 1
+        ]
+      };
+
+      const RATING_ORDER = ["Low", "Medium-Low", "Medium", "Medium-High", "High"];
+
+      function classify(value, breakpoints) {
+        if (!Number.isFinite(value)) return { label: "N/A", pill: "na" };
+        for (const b of breakpoints) {
+          if (value >= b.min && value <= b.max) return { label: b.label, pill: b.pill };
+        }
+        return { label: "N/A", pill: "na" };
+      }
+
+      function bumpOneLevel(ratingLabel) {
+        const idx = RATING_ORDER.indexOf(ratingLabel);
+        if (idx < 0) return ratingLabel;
+        return RATING_ORDER[Math.min(RATING_ORDER.length - 1, idx + 1)];
+      }
+
+      function setPill(elId, label, pillClass) {
+        const el = document.getElementById(elId);
+        el.textContent = label;
+        el.className = `pill ${pillClass || "na"}`;
+      }
+
+      // ----------------------------
+      // TIGERweb overlay (tract/bg)
+      // ----------------------------
+      function renderCensusOverlay(geos) {
+        const srcId = "census-geos";
+        const fillId = "census-geos-fill";
+        const lineId = "census-geos-line";
+        const fc = { type: "FeatureCollection", features: geos };
+
+        if (!map.getSource(srcId)) {
+          map.addSource(srcId, { type: "geojson", data: fc });
+
+          map.addLayer({
+            id: fillId,
+            type: "fill",
+            source: srcId,
+            paint: { "fill-color": "#111827", "fill-opacity": 0.08 }
+          }, "buffers-fill");
+
+          map.addLayer({
+            id: lineId,
+            type: "line",
+            source: srcId,
+            paint: { "line-color": "#111827", "line-width": 1, "line-opacity": 0.35 }
+          }, "buffers-fill");
+        } else {
+          map.getSource(srcId).setData(fc);
+        }
+      }
+
+      // ----------------------------
+      // TIGERweb fetch for tracts / block groups / blocks
+      // ----------------------------
+      async function fetchTigerwebGeos(geoLevel, unionFeat) {
+        const bbox = bboxStringFromFeature(unionFeat);
+        const layerId = (geoLevel === "tract") ? 0 : 1;
+        const layerUrl = `https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Tracts_Blocks/MapServer/${layerId}`;
+
+        const params = new URLSearchParams({
+          where: "1=1",
+          outFields: "GEOID",
+          geometry: bbox,
+          geometryType: "esriGeometryEnvelope",
+          inSR: "4326",
+          spatialRel: "esriSpatialRelIntersects",
+          outSR: "4326",
+          returnGeometry: "true",
+          f: "geojson"
+        });
+
+        const url = `${layerUrl}/query?${params.toString()}`;
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`TIGERweb error ${resp.status}`);
+        const geojson = await resp.json();
+        return (geojson.features || []).filter(f => turf.booleanIntersects(f, unionFeat));
+      }
+
+      // ----------------------------
+      // ACS API fetch + aggregation
+      // ----------------------------
+      function parseGEOID(geoLevel, geoid) {
+        const state = geoid.slice(0, 2);
+        const county = geoid.slice(2, 5);
+        const tract = geoid.slice(5, 11);
+        const blkgrp = (geoLevel === "bg") ? geoid.slice(11, 12) : null;
+        return { state, county, tract, blkgrp };
+      }
+
+      async function fetchACSValues(geoLevel, year, varCode, geoids) {
+        const groups = new Map();
+        for (const g of geoids) {
+          const p = parseGEOID(geoLevel, g);
+          const key = `${p.state}-${p.county}`;
+          if (!groups.has(key)) groups.set(key, { state: p.state, county: p.county });
+        }
+
+        const results = new Map();
+        const base = `https://api.census.gov/data/${year}/acs/acs5`;
+
+        for (const { state, county } of groups.values()) {
+          let forClause, inClause;
+          if (geoLevel === "tract") {
+            forClause = "tract:*";
+            inClause = `state:${state}%20county:${county}`;
+          } else {
+            forClause = "block%20group:*";
+            inClause = `state:${state}%20county:${county}%20tract:*`;
+          }
+
+          const url = `${base}?get=NAME,${encodeURIComponent(varCode)}&for=${forClause}&in=${inClause}`;
+          const resp = await fetch(url);
+          if (!resp.ok) throw new Error(`ACS API error ${resp.status} for state ${state} county ${county}`);
+          const rows = await resp.json();
+
+          const header = rows[0];
+          const idxVar = header.indexOf(varCode);
+          if (idxVar === -1) throw new Error(`ACS response missing variable ${varCode}`);
+
+          for (let i = 1; i < rows.length; i++) {
+            const r = rows[i];
+            const raw = r[idxVar];
+            if (raw === null || raw === undefined || raw === "") continue;
+            const val = Number(raw);
+            if (!Number.isFinite(val)) continue;
+
+            if (geoLevel === "tract") {
+              const tract = r[header.indexOf("tract")];
+              const st = r[header.indexOf("state")];
+              const co = r[header.indexOf("county")];
+              results.set(`${st}${co}${tract}`, val);
+            } else {
+              const bg = r[header.indexOf("block group")];
+              const tract = r[header.indexOf("tract")];
+              const st = r[header.indexOf("state")];
+              const co = r[header.indexOf("county")];
+              results.set(`${st}${co}${tract}${bg}`, val);
+            }
+          }
+        }
+        return results;
+      }
+
+      async function fetchACSCountyValues(year, varCode, countyFipsList) {
+        const base = `https://api.census.gov/data/${year}/acs/acs5`;
+        const byState = new Map();
+
+        for (const c5 of countyFipsList) {
+          const st = c5.slice(0, 2);
+          const co = c5.slice(2, 5);
+          if (!byState.has(st)) byState.set(st, []);
+          byState.get(st).push(co);
+        }
+
+        const out = new Map(); // c5 -> value
+        for (const [st, counties] of byState.entries()) {
+          const url = `${base}?get=NAME,${encodeURIComponent(varCode)}&for=county:*&in=state:${st}`;
+          const resp = await fetch(url);
+          if (!resp.ok) throw new Error(`ACS county fetch failed ${resp.status} for state ${st}`);
+          const rows = await resp.json();
+          const header = rows[0];
+          const idxVar = header.indexOf(varCode);
+          const idxState = header.indexOf("state");
+          const idxCounty = header.indexOf("county");
+
+          for (let i = 1; i < rows.length; i++) {
+            const r = rows[i];
+            const co = r[idxCounty];
+            if (!counties.includes(co)) continue;
+            const val = Number(r[idxVar]);
+            if (!Number.isFinite(val)) continue;
+            out.set(`${r[idxState]}${co}`, val);
+          }
+        }
+        return out;
+      }
+
+      function aggregateWithinUnion(unionFeat, geos, valueMap, aggMode) {
+        let numerator = 0;
+        let denom = 0;
+        let used = 0;
+
+        for (const f of geos) {
+          const geoid = f.properties && f.properties.GEOID;
+          if (!geoid) continue;
+          const v = valueMap.get(geoid);
+          if (v == null) continue;
+
+          const inter = turf.intersect(f, unionFeat);
+          if (!inter) continue;
+
+          const aInter = turf.area(inter);
+          const aGeo = turf.area(f);
+          if (aGeo <= 0) continue;
+
+          const frac = Math.min(1, Math.max(0, aInter / aGeo));
+          numerator += v * frac;
+          denom += frac;
+          used++;
+        }
+
+        if (aggMode === "avg") return { value: denom > 0 ? (numerator / denom) : NaN, used, weightSum: denom };
+        return { value: numerator, used, weightSum: denom };
+      }
+
+      async function computeAcsValueOnly(varCode, year, geoLevel) {
+        const unionFeat = bufferUnionPolygon();
+        if (!unionFeat) return { value: NaN, used: 0 };
+
+        const geos = await fetchTigerwebGeos(geoLevel, unionFeat);
+        if (geos.length === 0) return { value: NaN, used: 0 };
+
+        const geoids = geos.map(f => f.properties.GEOID).filter(Boolean);
+        const valueMap = await fetchACSValues(geoLevel, year, varCode, geoids);
+
+        const meta = getMeta(varCode);
+        const agg = aggregateWithinUnion(unionFeat, geos, valueMap, meta.agg);
+        return { value: agg.value, used: agg.used };
+      }
+
+      // ----------------------------
+      // Upload state: CRE, Essential Services, LBAR
+      // ----------------------------
+      let CRE_MAP = null; // Map(tractGEOID11 -> { total, high })
+      let CRE_HEADERS = [];
+      let CRE_ROWS = [];
+
+      let ESS_POINTS = null; // array of [lon,lat]
+      let ESS_HEADERS = [];
+      let ESS_ROWS = [];
+
+      let LBAR_SITES = null; // array {lon,lat,units,county5?}
+      let LBAR_HEADERS = [];
+      let LBAR_ROWS = [];
+
+      function guessHeader(headers, candidates) {
+        const lower = new Map(headers.map(h => [h.toLowerCase(), h]));
+        for (const c of candidates) {
+          const v = lower.get(c.toLowerCase());
+          if (v) return v;
+        }
+        return "";
+      }
+
+      // CRE builder
+      function buildCreMapFromRows(geoidCol, totalCol, highCol) {
+        const m = new Map();
+        for (const r of CRE_ROWS) {
+          const geoid11 = normalizeTractGEOID(r[geoidCol]);
+          if (!geoid11) continue;
+          const total = toNumberSafe(r[totalCol]);
+          const high = toNumberSafe(r[highCol]);
+          if (!Number.isFinite(total) || !Number.isFinite(high)) continue;
+          m.set(geoid11, { total, high });
+        }
+        return m;
+      }
+
+      async function computeCommunityRiskFromCre() {
+        const unionFeat = bufferUnionPolygon();
+        if (!unionFeat || !CRE_MAP) return { pct: NaN, highInUnion: 0, totalInUnion: 0, used: 0 };
+
+        const tracts = await fetchTigerwebGeos("tract", unionFeat);
+        let highSum = 0;
+        let totalSum = 0;
+        let used = 0;
+
+        for (const t of tracts) {
+          const geoid = t.properties && t.properties.GEOID;
+          if (!geoid) continue;
+          const v = CRE_MAP.get(geoid);
+          if (!v) continue;
+
+          const inter = turf.intersect(t, unionFeat);
+          if (!inter) continue;
+
+          const aInter = turf.area(inter);
+          const aTract = turf.area(t);
+          if (aTract <= 0) continue;
+          const frac = Math.min(1, Math.max(0, aInter / aTract));
+
+          highSum += v.high * frac;
+          totalSum += v.total * frac;
+          used++;
+        }
+
+        const pct = totalSum > 0 ? (highSum / totalSum) * 100 : NaN;
+        return { pct, highInUnion: highSum, totalInUnion: totalSum, used };
+      }
+
+      // Essential services
+      function extractPointsFromGeoJSON(obj) {
+        const pts = [];
+        if (!obj || obj.type !== "FeatureCollection" || !Array.isArray(obj.features)) return pts;
+        for (const f of obj.features) {
+          if (!f || !f.geometry) continue;
+          if (f.geometry.type === "Point" && Array.isArray(f.geometry.coordinates) && f.geometry.coordinates.length >= 2) {
+            const lon = Number(f.geometry.coordinates[0]);
+            const lat = Number(f.geometry.coordinates[1]);
+            if (Number.isFinite(lon) && Number.isFinite(lat)) pts.push([lon, lat]);
+          }
+        }
+        return pts;
+      }
+
+      function buildPointsFromCsvRows(rows, latCol, lonCol) {
+        const pts = [];
+        for (const r of rows) {
+          const lat = toNumberSafe(r[latCol]);
+          const lon = toNumberSafe(r[lonCol]);
+          if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+          pts.push([lon, lat]);
+        }
+        return pts;
+      }
+
+      function computeEssentialServicesAvg() {
+        if (!ESS_POINTS || ESS_POINTS.length === 0 || points.length === 0) return { avg: NaN, perStation: [] };
+
+        const perStation = [];
+        for (const p of points) {
+          const [lon, lat] = p.geometry.coordinates;
+          const buf = turf.circle(turf.point([lon, lat]), 1.0, { units: "miles", steps: 64 });
+          let count = 0;
+          for (const q of ESS_POINTS) {
+            if (turf.booleanPointInPolygon(turf.point(q), buf)) count++;
+          }
+          perStation.push(count);
+        }
+        const avg = perStation.reduce((a, b) => a + b, 0) / perStation.length;
+        return { avg, perStation };
+      }
+
+      // LBAR
+      function buildLbarSitesFromGeoJSON(obj) {
+        const sites = [];
+        if (!obj || obj.type !== "FeatureCollection" || !Array.isArray(obj.features)) return sites;
+        for (const f of obj.features) {
+          if (!f || !f.geometry || f.geometry.type !== "Point") continue;
+          const c = f.geometry.coordinates;
+          if (!Array.isArray(c) || c.length < 2) continue;
+          const lon = Number(c[0]);
+          const lat = Number(c[1]);
+          if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+
+          const p = f.properties || {};
+          const units = toNumberSafe(p.units ?? p.UNITS ?? p.lbar_units ?? p.LBAR_UNITS);
+          if (!Number.isFinite(units)) continue;
+
+          const county = String(p.county ?? p.COUNTY ?? p.county_fips ?? p.COUNTY_FIPS ?? "").trim();
+          const county5 = county.replace(/\D/g, "").slice(0, 5);
+          sites.push({ lon, lat, units, county5: county5 || null });
+        }
+        return sites;
+      }
+
+      function buildLbarSitesFromCsvRows(rows, latCol, lonCol, unitsCol, countyCol) {
+        const sites = [];
+        for (const r of rows) {
+          const lat = toNumberSafe(r[latCol]);
+          const lon = toNumberSafe(r[lonCol]);
+          const units = toNumberSafe(r[unitsCol]);
+          if (!Number.isFinite(lat) || !Number.isFinite(lon) || !Number.isFinite(units)) continue;
+
+          let county5 = null;
+          if (countyCol) {
+            const raw = String(r[countyCol] ?? "").trim();
+            const digits = raw.replace(/\D/g, "");
+            if (digits.length >= 5) county5 = digits.slice(0, 5);
+          }
+          sites.push({ lon, lat, units, county5 });
+        }
+        return sites;
+      }
+
+      function parseCountyListInput() {
+        const raw = document.getElementById("lbarCounties").value || "";
+        const parts = raw.split(/[\s,;]+/).map(x => x.trim()).filter(Boolean);
+        const cleaned = parts.map(x => x.replace(/\D/g, "")).filter(x => x.length === 5);
+        return Array.from(new Set(cleaned));
+      }
+
+      async function computeLbarRatio() {
+        const unionFeat = bufferUnionPolygon();
+        if (!unionFeat || !LBAR_SITES || LBAR_SITES.length === 0) {
+          return { ratio: NaN, shareStation: NaN, shareCounty: NaN, note: "LBAR inventory not loaded." };
+        }
+
+        const year = document.getElementById("yearSelect").value;
+        const geoLevel = document.getElementById("geoLevel").value;
+
+        // LBAR units in station union
+        let lbarStation = 0;
+        for (const s of LBAR_SITES) {
+          if (turf.booleanPointInPolygon(turf.point([s.lon, s.lat]), unionFeat)) {
+            lbarStation += s.units;
+          }
+        }
+
+        // Total housing units in station union
+        const huStationRes = await computeAcsValueOnly("B25001_001E", year, geoLevel);
+        const huStation = huStationRes.value;
+        const shareStation = (Number.isFinite(huStation) && huStation > 0) ? (lbarStation / huStation) : NaN;
+
+        // County share inputs
+        const counties = parseCountyListInput();
+        if (counties.length === 0) {
+          return { ratio: NaN, shareStation, shareCounty: NaN, note: "Enter project counties (5-digit FIPS) to compute county share." };
+        }
+
+        const sitesWithCounty = LBAR_SITES.filter(s => s.county5 && s.county5.length === 5);
+        if (sitesWithCounty.length === 0) {
+          return { ratio: NaN, shareStation, shareCounty: NaN, note: "LBAR inventory missing county FIPS per site; cannot compute county share." };
+        }
+
+        let lbarCounty = 0;
+        for (const s of sitesWithCounty) {
+          if (counties.includes(s.county5)) lbarCounty += s.units;
+        }
+
+        const huCountyMap = await fetchACSCountyValues(year, "B25001_001E", counties);
+        let huCounty = 0;
+        let huFound = 0;
+        for (const c5 of counties) {
+          const v = huCountyMap.get(c5);
+          if (v != null) { huCounty += v; huFound++; }
+        }
+
+        const shareCounty = (huFound > 0 && huCounty > 0) ? (lbarCounty / huCounty) : NaN;
+        const ratio = (Number.isFinite(shareStation) && Number.isFinite(shareCounty) && shareCounty > 0)
+          ? (shareStation / shareCounty)
+          : NaN;
+
+        const note = Number.isFinite(shareCounty)
+          ? `LBAR county share=${(shareCounty*100).toFixed(2)}% (${huFound}/${counties.length} counties found in ACS)`
+          : "County share unavailable.";
+
+        return { ratio, shareStation, shareCounty, note };
+      }
+
+      // ----------------------------
+      // LODES: download + upload parsing + employment served computation
+      // ----------------------------
+      const STATE_FIPS_TO_ABBR = {
+        "01":"al","02":"ak","04":"az","05":"ar","06":"ca","08":"co","09":"ct","10":"de","11":"dc","12":"fl",
+        "13":"ga","15":"hi","16":"id","17":"il","18":"in","19":"ia","20":"ks","21":"ky","22":"la","23":"me",
+        "24":"md","25":"ma","26":"mi","27":"mn","28":"ms","29":"mo","30":"mt","31":"ne","32":"nv","33":"nh",
+        "34":"nj","35":"nm","36":"ny","37":"nc","38":"nd","39":"oh","40":"ok","41":"or","42":"pa","44":"ri",
+        "45":"sc","46":"sd","47":"tn","48":"tx","49":"ut","50":"vt","51":"va","53":"wa","54":"wv","55":"wi","56":"wy",
+        "72":"pr"
+      };
+
+      async function getStateFromMapCenter() {
+        const c = map.getCenter();
+        const layerUrl = "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Tracts_Blocks/MapServer/2";
+
+        const params = new URLSearchParams({
+          f: "geojson",
+          where: "1=1",
+          outFields: "GEOID",
+          geometry: `${c.lng},${c.lat}`,
+          geometryType: "esriGeometryPoint",
+          inSR: "4326",
+          spatialRel: "esriSpatialRelIntersects",
+          outSR: "4326",
+          returnGeometry: "false",
+          resultRecordCount: "1"
+        });
+
+        const url = `${layerUrl}/query?${params.toString()}`;
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`TIGERweb state lookup failed (${resp.status})`);
+        const gj = await resp.json();
+
+        const feat = gj.features && gj.features[0];
+        const geoid = feat && feat.properties && feat.properties.GEOID;
+        if (!geoid || geoid.length < 2) throw new Error("Could not infer state from TIGERweb GEOID.");
+        const stateFips = geoid.slice(0, 2);
+        const abbr = STATE_FIPS_TO_ABBR[stateFips];
+        if (!abbr) throw new Error(`Unsupported/unknown state FIPS: ${stateFips}`);
+        return { stateFips, abbr };
+      }
+
+      function startDownload(url, filename) {
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename || "";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+
+      let LODES_UPLOADED = null; // Map(w_geocode -> C000)
+      let LODES_UPLOADED_NAME = "";
+
+      function setLodesLoadedUI(loaded, name, nRows) {
+        document.getElementById("lodesLoaded").textContent = loaded ? "Yes" : "No";
+        document.getElementById("lodesInfo").textContent = loaded
+          ? `Loaded ${name} (${nRows.toLocaleString()} block rows).`
+          : "";
+      }
+
+      async function parseLodesFromUploadedFile(file) {
+        setStatus("Reading LODES file…");
+        const buf = await file.arrayBuffer();
+        const gz = new Uint8Array(buf);
+
+        setStatus("Decompressing LODES (gzip)…");
+        const csvText = pako.ungzip(gz, { to: "string" });
+
+        setStatus("Parsing LODES CSV…");
+        const lines = csvText.split(/\r?\n/);
+        if (lines.length < 2) throw new Error("LODES file appears empty.");
+
+        const header = lines[0].split(",");
+        const idxGeo = header.indexOf("w_geocode");
+        const idxC000 = header.indexOf("C000");
+        if (idxGeo === -1 || idxC000 === -1) {
+          throw new Error("LODES CSV missing expected columns (w_geocode, C000).");
+        }
+
+        const jobsMap = new Map();
+        for (let i = 1; i < lines.length; i++) {
+          const line = lines[i];
+          if (!line) continue;
+          const parts = line.split(",");
+          const g = parts[idxGeo];
+          const c = parts[idxC000];
+          if (!g || c === undefined) continue;
+          const v = Number(String(c).replace(/,/g, "").trim());
+          if (!Number.isFinite(v)) continue;
+          jobsMap.set(String(g), v);
+        }
+        return jobsMap;
+      }
+
+      async function fetchBlocksInternalPointsInUnion(unionFeat) {
+        const bbox = bboxStringFromFeature(unionFeat);
+        const layerUrl = "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Tracts_Blocks/MapServer/2";
+
+        const params = new URLSearchParams({
+          where: "1=1",
+          outFields: "GEOID,INTPTLAT,INTPTLON",
+          geometry: bbox,
+          geometryType: "esriGeometryEnvelope",
+          inSR: "4326",
+          spatialRel: "esriSpatialRelIntersects",
+          outSR: "4326",
+          returnGeometry: "false",
+          f: "geojson"
+        });
+
+        const url = `${layerUrl}/query?${params.toString()}`;
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`TIGERweb blocks query failed (${resp.status})`);
+        const gj = await resp.json();
+
+        const inside = new Set();
+        for (const f of (gj.features || [])) {
+          const p = f.properties || {};
+          const geoid = p.GEOID;
+          const lat = Number(p.INTPTLAT);
+          const lon = Number(p.INTPTLON);
+          if (!geoid || !Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+
+          if (turf.booleanPointInPolygon(turf.point([lon, lat]), unionFeat)) {
+            inside.add(String(geoid));
+          }
+        }
+        return inside;
+      }
+
+      async function computeEmploymentServedOnly() {
+        const unionFeat = bufferUnionPolygon();
+        if (!unionFeat || !LODES_UPLOADED) return { value: NaN, blocks: 0, matched: 0 };
+
+        const blocksInside = await fetchBlocksInternalPointsInUnion(unionFeat);
+
+        let sum = 0;
+        let matched = 0;
+        for (const geoid of blocksInside) {
+          const v = LODES_UPLOADED.get(geoid);
+          if (v != null) { sum += v; matched++; }
+        }
+        return { value: sum, blocks: blocksInside.size, matched };
+      }
+
+      // ----------------------------
+      // Breakpoint ratings updater
+      // ----------------------------
+      async function updateBreakpointRatings() {
+        const unionFeat = bufferUnionPolygon();
+        const year = document.getElementById("yearSelect").value;
+        const geoLevel = document.getElementById("geoLevel").value;
+
+        // Reset defaults
+        setPill("bpPopPill", "N/A", "na");
+        setPill("bpEmpPill", "N/A", "na");
+        setPill("bpLbarPill", "N/A", "na");
+        setPill("bpCrePill", "N/A", "na");
+        setPill("bpEssPill", "N/A", "na");
+
+        document.getElementById("bpPopValue").textContent = "—";
+        document.getElementById("bpEmpValue").textContent = "—";
+        document.getElementById("bpLbarValue").textContent = "—";
+        document.getElementById("bpCreValue").textContent = "—";
+        document.getElementById("bpEssValue").textContent = "—";
+
+        document.getElementById("bpLbarNote").textContent = "Requires LBAR inventory + counties";
+        document.getElementById("bpCreNote").textContent = "Requires CRE (tract) upload";
+        document.getElementById("bpEssNote").textContent = "Requires essential services upload";
+
+        if (!unionFeat) return;
+
+        try {
+          setStatus("Computing breakpoint ratings…");
+
+          // Population density
+          const SQM_PER_SQMI = 2589988.110336;
+          const areaSqMi = turf.area(unionFeat) / SQM_PER_SQMI;
+          const popRes = await computeAcsValueOnly("B01003_001E", year, geoLevel);
+          const popTotal = popRes.value;
+          const popDensity = (Number.isFinite(popTotal) && Number.isFinite(areaSqMi) && areaSqMi > 0)
+            ? (popTotal / areaSqMi) : NaN;
+
+          document.getElementById("bpPopValue").textContent = Number.isFinite(popDensity)
+            ? `${Math.round(popDensity).toLocaleString()} persons/sq mile`
+            : "—";
+
+          const popClass = classify(popDensity, BP.popDensity);
+          setPill("bpPopPill", popClass.label, popClass.pill);
+
+          // Employment served
+          if (LODES_UPLOADED) {
+            const empRes = await computeEmploymentServedOnly();
+            const emp = empRes.value;
+            document.getElementById("bpEmpValue").textContent = Number.isFinite(emp) ? emp.toLocaleString() : "—";
+            const empClass = classify(emp, BP.employment);
+            setPill("bpEmpPill", empClass.label, empClass.pill);
+          }
+
+          // Community Risk
+          if (CRE_MAP) {
+            const cre = await computeCommunityRiskFromCre();
+            const pct = cre.pct;
+            document.getElementById("bpCreValue").textContent = Number.isFinite(pct) ? `${pct.toFixed(2)}%` : "—";
+            const creClass = classify(pct, BP.communityRiskPct);
+            setPill("bpCrePill", creClass.label, creClass.pill);
+            document.getElementById("bpCreNote").textContent = `Used ${cre.used} intersecting tracts (area-apportioned).`;
+          }
+
+          // Essential services
+          if (ESS_POINTS && ESS_POINTS.length > 0 && points.length > 0) {
+            const ess = computeEssentialServicesAvg();
+            document.getElementById("bpEssValue").textContent = Number.isFinite(ess.avg) ? ess.avg.toFixed(2) : "—";
+            const essClass = classify(ess.avg, BP.essentialAvg);
+            setPill("bpEssPill", essClass.label, essClass.pill);
+            document.getElementById("bpEssNote").textContent =
+              `1-mile buffers; ${points.length} stations; ${ESS_POINTS.length} service points loaded.`;
+          }
+
+          // LBAR ratio + boost
+          if (LBAR_SITES && LBAR_SITES.length > 0) {
+            const lbar = await computeLbarRatio();
+            document.getElementById("bpLbarNote").textContent = lbar.note || "";
+
+            if (Number.isFinite(lbar.ratio)) {
+              document.getElementById("bpLbarValue").textContent =
+                `${lbar.ratio.toFixed(2)} (station share ${(lbar.shareStation*100).toFixed(2)}% / county share ${(lbar.shareCounty*100).toFixed(2)}%)`;
+
+              let cls = classify(lbar.ratio, BP.lbarRatio);
+
+              if (Number.isFinite(lbar.shareCounty) && lbar.shareCounty > 0.05) {
+                const bumpedLabel = bumpOneLevel(cls.label);
+                const pillMap = { "Low":"low", "Medium-Low":"ml", "Medium":"med", "Medium-High":"mh", "High":"high" };
+                cls = { label: bumpedLabel, pill: pillMap[bumpedLabel] || cls.pill };
+                document.getElementById("bpLbarNote").textContent += " | Boost applied (county share > 5%).";
+              }
+
+              setPill("bpLbarPill", cls.label, cls.pill);
+            }
+          }
+        } catch (e) {
+          console.error(e);
+        } finally {
+          setStatus("Ready");
+        }
+      }
+
+      // ----------------------------
+      // Main summary runners
+      // ----------------------------
+      async function runLodesEmploymentSummary(year) {
+        const notesEl = document.getElementById("notes");
+        const totalEl = document.getElementById("total");
+        const nGeosEl = document.getElementById("nGeos");
+
+        notesEl.textContent = "";
+        totalEl.textContent = "—";
+        nGeosEl.textContent = "0";
+
+        const unionFeat = bufferUnionPolygon();
+        if (!unionFeat) {
+          setStatus("No stations yet");
+          notesEl.textContent = "Add at least one station to compute employment served.";
+          return;
+        }
+
+        if (!LODES_UPLOADED) {
+          setStatus("LODES file required");
+          notesEl.textContent = "Download the LODES file for your state, then load the .csv.gz using the file picker.";
+          return;
+        }
+
+        setStatus("Querying TIGERweb blocks…");
+        const blocksInside = await fetchBlocksInternalPointsInUnion(unionFeat);
+        nGeosEl.textContent = String(blocksInside.size);
+
+        setStatus("Summing jobs within union…");
+        let sum = 0;
+        let matched = 0;
+
+        for (const geoid of blocksInside) {
+          const v = LODES_UPLOADED.get(geoid);
+          if (v != null) { sum += v; matched++; }
+        }
+
+        totalEl.textContent = sum.toLocaleString(undefined, { maximumFractionDigits: 0 });
+        notesEl.textContent =
+          `LODES WAC C000 summed for ${matched.toLocaleString()} matched blocks (of ${blocksInside.size.toLocaleString()} blocks in union); year ${year}. File: ${LODES_UPLOADED_NAME}`;
+
+        setStatus("Done");
+      }
+
+      async function runAcsSummary(varCode, year, geoLevel) {
+        const meta = getMeta(varCode);
+        const notesEl = document.getElementById("notes");
+        const totalEl = document.getElementById("total");
+        const nGeosEl = document.getElementById("nGeos");
+
+        notesEl.textContent = "";
+        totalEl.textContent = "—";
+        nGeosEl.textContent = "0";
+
+        const unionFeat = bufferUnionPolygon();
+        if (!unionFeat) {
+          setStatus("No stations yet");
+          notesEl.textContent = "Add at least one station to compute a station-area estimate.";
+          return;
+        }
+
+        setStatus("Querying TIGERweb…");
+        const geos = await fetchTigerwebGeos(geoLevel, unionFeat);
+        nGeosEl.textContent = String(geos.length);
+        renderCensusOverlay(geos);
+
+        if (geos.length === 0) {
+          setStatus("Done");
+          notesEl.textContent = "No tracts/block groups intersect the station-area union (unexpected).";
+          return;
+        }
+
+        setStatus("Fetching ACS values…");
+        const geoids = geos.map(f => f.properties.GEOID).filter(Boolean);
+        const valueMap = await fetchACSValues(geoLevel, year, varCode, geoids);
+
+        setStatus("Aggregating…");
+        const { value, used, weightSum } = aggregateWithinUnion(unionFeat, geos, valueMap, meta.agg);
+        totalEl.textContent = formatValue(value, meta);
+
+        const geoLabel = (geoLevel === "tract") ? "tracts" : "block groups";
+        if (meta.agg === "sum") {
+          notesEl.textContent = `Sum of area-apportioned counts using ${used} intersecting ${geoLabel}; ACS ${year} 5-year.`;
+        } else {
+          notesEl.textContent = `Area-weighted average estimate using ${used} intersecting ${geoLabel} (weight sum=${weightSum.toFixed(2)}); ACS ${year} 5-year.`;
+        }
+
+        setStatus("Done");
+      }
+
+      async function runSummary() {
+        const varCode = document.getElementById("varSelect").value;
+        const year = document.getElementById("yearSelect").value;
+        const geoLevel = document.getElementById("geoLevel").value;
+
+        const meta = getMeta(varCode);
+        setAggUI(meta);
+
+        if (meta.source === "LODES") {
+          await runLodesEmploymentSummary(year);
+        } else {
+          await runAcsSummary(varCode, year, geoLevel);
+        }
+
+        await updateBreakpointRatings();
+      }
+
+      // ----------------------------
+      // Init UI + event bindings
+      // ----------------------------
+      map.on("load", () => {
+        setStatus("Ready");
+        renderStationLayers();
+
+        // LBAR layer toggle
+        document.getElementById("toggleLbarLayer").addEventListener("change", () => {
+          refreshLbarLayerVisibility();
+        });
+
+        setAggUI(getMeta(document.getElementById("varSelect").value));
+        document.getElementById("varSelect").addEventListener("change", (e) => {
+          setAggUI(getMeta(e.target.value));
+        });
+
+        map.on("click", (e) => {
+          addStationPoint(e.lngLat.lng, e.lngLat.lat);
+          updateBreakpointRatings();
+        });
+
+        document.getElementById("clear").addEventListener("click", () => {
+          points = [];
+          buffers = [];
+          renderStationLayers();
+          document.getElementById("nGeos").textContent = "0";
+          document.getElementById("total").textContent = "—";
+          document.getElementById("notes").textContent = "";
+          setStatus("Cleared");
+          updateBreakpointRatings();
+          // keep layer consistent
+          refreshLbarLayerVisibility();
+        });
+
+        document.getElementById("undo").addEventListener("click", () => {
+          if (points.length > 0) {
+            points.pop();
+            buffers.pop();
+            renderStationLayers();
+            setStatus("Updated");
+            updateBreakpointRatings();
+          }
+        });
+
+        document.getElementById("run").addEventListener("click", async () => {
+          try {
+            await runSummary();
+          } catch (e) {
+            setStatus("Error");
+            document.getElementById("notes").textContent = String(e && e.message ? e.message : e);
+          }
+        });
+
+        document.getElementById("lbarCounties").addEventListener("input", () => {
+          updateBreakpointRatings();
+        });
+
+        // ----------------------------
+        // LODES download + upload
+        // ----------------------------
+        document.getElementById("downloadLodes").addEventListener("click", async () => {
+          try {
+            setStatus("Determining state…");
+            const { stateFips, abbr } = await getStateFromMapCenter();
+            document.getElementById("lodesState").textContent = `${abbr.toUpperCase()} (FIPS ${stateFips})`;
+
+            const year = document.getElementById("yearSelect").value;
+            const url = `https://lehd.ces.census.gov/data/lodes/LODES8/${abbr}/wac/${abbr}_wac_S000_JT00_${year}.csv.gz`;
+            const filename = `${abbr}_wac_S000_JT00_${year}.csv.gz`;
+
+            document.getElementById("lodesInfo").textContent =
+              `Downloading ${filename}. After download completes, load it using the file picker below.`;
+            setStatus("Starting download…");
+            startDownload(url, filename);
+            setStatus("Ready");
+          } catch (e) {
+            setStatus("Error");
+            document.getElementById("lodesInfo").textContent = String(e && e.message ? e.message : e);
+          }
+        });
+
+        document.getElementById("lodesFile").addEventListener("change", async (e) => {
+          const file = e.target.files && e.target.files[0];
+          if (!file) return;
+
+          try {
+            const jobsMap = await parseLodesFromUploadedFile(file);
+            LODES_UPLOADED = jobsMap;
+            LODES_UPLOADED_NAME = file.name;
+            setLodesLoadedUI(true, file.name, jobsMap.size);
+            setStatus("Ready");
+            updateBreakpointRatings();
+          } catch (err) {
+            LODES_UPLOADED = null;
+            LODES_UPLOADED_NAME = "";
+            setLodesLoadedUI(false, "", 0);
+            setStatus("Error");
+            document.getElementById("lodesInfo").textContent = String(err && err.message ? err.message : err);
+            updateBreakpointRatings();
+          }
+        });
+
+        // ----------------------------
+        // CRE upload (robust CSV)
+        // ----------------------------
+        document.getElementById("creFile").addEventListener("change", async (e) => {
+          const file = e.target.files && e.target.files[0];
+          if (!file) return;
+
+          try {
+            setStatus("Loading CRE CSV…");
+            const text = await file.text();
+            const parsed = parseCSV(text);
+
+            CRE_HEADERS = parsed.headers;
+            CRE_ROWS = parsed.rows;
+
+            const sG = document.getElementById("creColGEOID");
+            const sT = document.getElementById("creColTotal");
+            const sH = document.getElementById("creColHigh");
+
+            fillSelect(sG, CRE_HEADERS, "Select GEOID column…");
+            fillSelect(sT, CRE_HEADERS, "Select total population column…");
+            fillSelect(sH, CRE_HEADERS, "Select high-risk population column…");
+
+            enableSelect(sG, true);
+            enableSelect(sT, true);
+            enableSelect(sH, true);
+
+            // Defaults for CRE_23_Tract.csv typical fields
+            sG.value = guessHeader(CRE_HEADERS, ["GEO_ID", "geoid", "GEOID"]);
+            sT.value = guessHeader(CRE_HEADERS, ["POPUNI", "total", "TOT_POP", "population"]);
+            sH.value = guessHeader(CRE_HEADERS, ["PRED3_E", "HIGH_RISK", "high_risk", "risk3plus"]);
+
+            function rebuildCre() {
+              if (!sG.value || !sT.value || !sH.value) {
+                CRE_MAP = null;
+                document.getElementById("creInfo").textContent = "Select required columns to enable CRE computations.";
+                updateBreakpointRatings();
+                return;
+              }
+              CRE_MAP = buildCreMapFromRows(sG.value, sT.value, sH.value);
+
+              const sampleRaw = CRE_ROWS.length ? CRE_ROWS[0][sG.value] : "";
+              const sampleNorm = normalizeTractGEOID(sampleRaw);
+
+              document.getElementById("creInfo").textContent =
+                `Loaded ${file.name}: ${CRE_MAP.size.toLocaleString()} tracts mapped. ` +
+                (sampleRaw ? `Sample GEOID: "${sampleRaw}" -> "${sampleNorm}"` : "");
+
+              if (CRE_MAP.size === 0 && CRE_ROWS.length > 0) {
+                document.getElementById("creInfo").textContent +=
+                  " | If this remains 0, confirm GEO_ID contains tract IDs ending in 11 digits and selected columns are numeric.";
+              }
+
+              updateBreakpointRatings();
+            }
+
+            sG.onchange = rebuildCre;
+            sT.onchange = rebuildCre;
+            sH.onchange = rebuildCre;
+
+            rebuildCre();
+            setStatus("Ready");
+          } catch (err) {
+            CRE_MAP = null;
+            CRE_HEADERS = [];
+            CRE_ROWS = [];
+            document.getElementById("creInfo").textContent = `Error: ${String(err && err.message ? err.message : err)}`;
+            setStatus("Error");
+            updateBreakpointRatings();
+          }
+        });
+
+        // ----------------------------
+        // Essential services upload (GeoJSON or robust CSV)
+        // ----------------------------
+        document.getElementById("essFile").addEventListener("change", async (e) => {
+          const file = e.target.files && e.target.files[0];
+          if (!file) return;
+
+          try {
+            setStatus("Loading essential services…");
+            const name = file.name.toLowerCase();
+
+            ESS_POINTS = null;
+            ESS_HEADERS = [];
+            ESS_ROWS = [];
+
+            const latSel = document.getElementById("essColLat");
+            const lonSel = document.getElementById("essColLon");
+
+            if (name.endsWith(".json") || name.endsWith(".geojson")) {
+              const text = await file.text();
+              const obj = JSON.parse(text);
+              ESS_POINTS = extractPointsFromGeoJSON(obj);
+
+              fillSelect(latSel, [], "N/A (GeoJSON)");
+              fillSelect(lonSel, [], "N/A (GeoJSON)");
+              enableSelect(latSel, false);
+              enableSelect(lonSel, false);
+
+              document.getElementById("essInfo").textContent =
+                `Loaded ${file.name}: ${ESS_POINTS.length.toLocaleString()} points.`;
+            } else if (name.endsWith(".csv")) {
+              const text = await file.text();
+              const parsed = parseCSV(text);
+              ESS_HEADERS = parsed.headers;
+              ESS_ROWS = parsed.rows;
+
+              fillSelect(latSel, ESS_HEADERS, "Select latitude column…");
+              fillSelect(lonSel, ESS_HEADERS, "Select longitude column…");
+              enableSelect(latSel, true);
+              enableSelect(lonSel, true);
+
+              latSel.value = guessHeader(ESS_HEADERS, ["lat", "latitude", "y", "LAT", "Latitude"]);
+              lonSel.value = guessHeader(ESS_HEADERS, ["lon", "lng", "longitude", "x", "LON", "Longitude"]);
+
+              function rebuildEss() {
+                if (!latSel.value || !lonSel.value) {
+                  ESS_POINTS = null;
+                  document.getElementById("essInfo").textContent = "Select lat/lon columns to enable essential services computations.";
+                  updateBreakpointRatings();
+                  return;
+                }
+                ESS_POINTS = buildPointsFromCsvRows(ESS_ROWS, latSel.value, lonSel.value);
+                document.getElementById("essInfo").textContent =
+                  `Loaded ${file.name}: ${ESS_POINTS.length.toLocaleString()} points from CSV.`;
+                updateBreakpointRatings();
+              }
+
+              latSel.onchange = rebuildEss;
+              lonSel.onchange = rebuildEss;
+
+              rebuildEss();
+            } else {
+              throw new Error("Unsupported file type. Upload .geojson/.json or .csv.");
+            }
+
+            setStatus("Ready");
+            updateBreakpointRatings();
+          } catch (err) {
+            ESS_POINTS = null;
+            document.getElementById("essInfo").textContent = `Error: ${String(err && err.message ? err.message : err)}`;
+            setStatus("Error");
+            updateBreakpointRatings();
+          }
+        });
+
+        // ----------------------------
+        // LBAR upload (GeoJSON or robust CSV) + map plotting toggle
+        // ----------------------------
+        document.getElementById("lbarFile").addEventListener("change", async (e) => {
+          const file = e.target.files && e.target.files[0];
+          if (!file) return;
+
+          try {
+            setStatus("Loading LBAR inventory…");
+            const name = file.name.toLowerCase();
+
+            LBAR_SITES = null;
+            LBAR_HEADERS = [];
+            LBAR_ROWS = [];
+
+            const latSel = document.getElementById("lbarColLat");
+            const lonSel = document.getElementById("lbarColLon");
+            const uniSel = document.getElementById("lbarColUnits");
+            const ctySel = document.getElementById("lbarColCounty");
+
+            if (name.endsWith(".json") || name.endsWith(".geojson")) {
+              const text = await file.text();
+              const obj = JSON.parse(text);
+              LBAR_SITES = buildLbarSitesFromGeoJSON(obj);
+
+              fillSelect(latSel, [], "N/A (GeoJSON)");
+              fillSelect(lonSel, [], "N/A (GeoJSON)");
+              fillSelect(uniSel, [], "N/A (GeoJSON)");
+              fillSelect(ctySel, [], "N/A (GeoJSON)");
+              enableSelect(latSel, false);
+              enableSelect(lonSel, false);
+              enableSelect(uniSel, false);
+              enableSelect(ctySel, false);
+
+              document.getElementById("lbarInfo").textContent =
+                `Loaded ${file.name}: ${LBAR_SITES.length.toLocaleString()} sites (expects properties.units and optional properties.county).`;
+
+              refreshLbarLayerVisibility();
+              updateBreakpointRatings();
+            } else if (name.endsWith(".csv")) {
+              const text = await file.text();
+              const parsed = parseCSV(text);
+              LBAR_HEADERS = parsed.headers;
+              LBAR_ROWS = parsed.rows;
+
+              fillSelect(latSel, LBAR_HEADERS, "Select latitude column…");
+              fillSelect(lonSel, LBAR_HEADERS, "Select longitude column…");
+              fillSelect(uniSel, LBAR_HEADERS, "Select units column…");
+              fillSelect(ctySel, LBAR_HEADERS, "(Optional) Select county FIPS column…");
+
+              enableSelect(latSel, true);
+              enableSelect(lonSel, true);
+              enableSelect(uniSel, true);
+              enableSelect(ctySel, true);
+
+              latSel.value = guessHeader(LBAR_HEADERS, ["lat", "latitude", "y", "LAT", "Latitude"]);
+              lonSel.value = guessHeader(LBAR_HEADERS, ["lon", "lng", "longitude", "x", "LON", "Longitude"]);
+              uniSel.value = guessHeader(LBAR_HEADERS, ["units", "lbar_units", "LBAR_UNITS", "UNITS", "Total Low-Income Units"]);
+              ctySel.value = guessHeader(LBAR_HEADERS, ["county_fips", "county", "COUNTY", "COUNTY_FIPS", "FIPS"]);
+
+              function rebuildLbar() {
+                if (!latSel.value || !lonSel.value || !uniSel.value) {
+                  LBAR_SITES = null;
+                  document.getElementById("lbarInfo").textContent =
+                    "Select required columns (lat/lon/units) to enable LBAR computations.";
+                  refreshLbarLayerVisibility();
+                  updateBreakpointRatings();
+                  return;
+                }
+                const countyCol = ctySel.value || null;
+                LBAR_SITES = buildLbarSitesFromCsvRows(LBAR_ROWS, latSel.value, lonSel.value, uniSel.value, countyCol);
+
+                const hasCounty = LBAR_SITES.some(s => s.county5 && s.county5.length === 5);
+                document.getElementById("lbarInfo").textContent =
+                  `Loaded ${file.name}: ${LBAR_SITES.length.toLocaleString()} sites. County FIPS present: ${hasCounty ? "Yes" : "No"}.`;
+
+                refreshLbarLayerVisibility();
+                updateBreakpointRatings();
+              }
+
+              latSel.onchange = rebuildLbar;
+              lonSel.onchange = rebuildLbar;
+              uniSel.onchange = rebuildLbar;
+              ctySel.onchange = rebuildLbar;
+
+              rebuildLbar();
+            } else {
+              throw new Error("Unsupported file type. Upload .geojson/.json or .csv.");
+            }
+
+            setStatus("Ready");
+          } catch (err) {
+            LBAR_SITES = null;
+            document.getElementById("lbarInfo").textContent = `Error: ${String(err && err.message ? err.message : err)}`;
+            setStatus("Error");
+            refreshLbarLayerVisibility();
+            updateBreakpointRatings();
+          }
+        });
+
+        // Initialize ratings
+        updateBreakpointRatings();
+      });
+    </script>
+  </body>
+</html>
