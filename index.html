@@ -762,6 +762,33 @@
       }
 
       // ----------------------------
+      // TIGERweb paginated fetch helper
+      // ----------------------------
+      async function fetchTigerwebPaginated(layerUrl, params) {
+        const allFeatures = [];
+        let offset = 0;
+        const pageSize = 1000;
+
+        while (true) {
+          params.set("resultOffset", String(offset));
+          params.set("resultRecordCount", String(pageSize));
+
+          const url = `${layerUrl}/query?${params.toString()}`;
+          const resp = await fetch(url);
+          if (!resp.ok) throw new Error(`TIGERweb error ${resp.status}`);
+          const geojson = await resp.json();
+
+          const features = geojson.features || [];
+          allFeatures.push(...features);
+
+          if (!geojson.exceededTransferLimit || features.length === 0) break;
+          offset += features.length;
+        }
+
+        return allFeatures;
+      }
+
+      // ----------------------------
       // TIGERweb fetch for tracts / block groups / blocks
       // ----------------------------
       async function fetchTigerwebGeos(geoLevel, unionFeat) {
@@ -781,11 +808,8 @@
           f: "geojson"
         });
 
-        const url = `${layerUrl}/query?${params.toString()}`;
-        const resp = await fetch(url);
-        if (!resp.ok) throw new Error(`TIGERweb error ${resp.status}`);
-        const geojson = await resp.json();
-        return (geojson.features || []).filter(f => turf.booleanIntersects(f, unionFeat));
+        const allFeatures = await fetchTigerwebPaginated(layerUrl, params);
+        return allFeatures.filter(f => turf.booleanIntersects(f, unionFeat));
       }
 
       // ----------------------------
@@ -1262,13 +1286,10 @@
           f: "geojson"
         });
 
-        const url = `${layerUrl}/query?${params.toString()}`;
-        const resp = await fetch(url);
-        if (!resp.ok) throw new Error(`TIGERweb blocks query failed (${resp.status})`);
-        const gj = await resp.json();
+        const allFeatures = await fetchTigerwebPaginated(layerUrl, params);
 
         const inside = new Set();
-        for (const f of (gj.features || [])) {
+        for (const f of allFeatures) {
           const p = f.properties || {};
           const geoid = p.GEOID;
           const lat = Number(p.INTPTLAT);
