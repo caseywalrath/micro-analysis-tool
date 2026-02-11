@@ -16,7 +16,7 @@ However, there are several bugs that will produce **silently incorrect results**
 
 ## Critical Bugs (Will Produce Wrong Results)
 
-### 1. TIGERweb API pagination not handled
+### 1. TIGERweb API pagination not handled (RESOLVED)
 
 **Location:** `index.html` lines 767-789 (`fetchTigerwebGeos`), lines 1249-1283 (`fetchBlocksInternalPointsInUnion`)
 
@@ -31,6 +31,8 @@ Both `fetchTigerwebGeos()` and `fetchBlocksInternalPointsInUnion()` make a singl
 **Fix:** Check for `exceededTransferLimit` in the response and paginate using `resultOffset`/`resultRecordCount`, or split large bounding box queries into spatial tiles.
 
 **Impact:** All computed metrics can be silently too low for any moderately-sized station area.
+
+**Update:**This bug has been resolved and will be incorporated into a future change log document for future reference.
 
 ### 2. Breakpoint rating gaps (floating-point boundary errors)
 
