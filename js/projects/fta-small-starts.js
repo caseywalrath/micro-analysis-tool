@@ -344,9 +344,25 @@
     return { ratio: ratio, shareStation: shareStation, shareCounty: shareCounty, note: note };
   }
 
-  // ---- Breakpoint ratings updater ----
+  // ---- Breakpoint ratings updater (with concurrency guard) ----
+
+  var _bpRunning = false;
+  var _bpQueued = false;
 
   async function updateBreakpointRatings() {
+    if (_bpRunning) { _bpQueued = true; return; }
+    _bpRunning = true;
+    try {
+      do {
+        _bpQueued = false;
+        await _doUpdateBreakpointRatings();
+      } while (_bpQueued);
+    } finally {
+      _bpRunning = false;
+    }
+  }
+
+  async function _doUpdateBreakpointRatings() {
     var unionFeat = App.bufferUnionPolygon();
     var year = document.getElementById("yearSelect").value;
     var geoLevel = document.getElementById("geoLevel").value;
