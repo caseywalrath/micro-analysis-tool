@@ -472,11 +472,13 @@
       });
     }
 
-    // County FIPS input
+    // County FIPS input (debounced)
+    var _countyTimer = null;
     var lbarCountiesInput = document.getElementById("lbarCounties");
     if (lbarCountiesInput) {
       lbarCountiesInput.addEventListener("input", function () {
-        updateBreakpointRatings();
+        clearTimeout(_countyTimer);
+        _countyTimer = setTimeout(updateBreakpointRatings, 500);
       });
     }
 
