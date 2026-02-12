@@ -169,7 +169,8 @@
       var v = CRE_MAP.get(geoid);
       if (!v) continue;
 
-      var inter = turf.intersect(t, unionFeat);
+      var inter;
+      try { inter = turf.intersect(t, unionFeat); } catch (_) { continue; }
       if (!inter) continue;
 
       var aInter = turf.area(inter);

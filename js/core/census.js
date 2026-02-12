@@ -200,7 +200,8 @@
       var v = valueMap.get(geoid);
       if (v == null) continue;
 
-      var inter = turf.intersect(f, unionFeat);
+      var inter;
+      try { inter = turf.intersect(f, unionFeat); } catch (_) { continue; }
       if (!inter) continue;
 
       var aInter = turf.area(inter);
