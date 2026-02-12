@@ -68,10 +68,15 @@
   async function parseLodesFromUploadedFile(file) {
     App.setStatus("Reading LODES file\u2026");
     var buf = await file.arrayBuffer();
-    var gz = new Uint8Array(buf);
+    var bytes = new Uint8Array(buf);
 
-    App.setStatus("Decompressing LODES (gzip)\u2026");
-    var csvText = pako.ungzip(gz, { to: "string" });
+    var csvText;
+    if (bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b) {
+      App.setStatus("Decompressing LODES (gzip)\u2026");
+      csvText = pako.ungzip(bytes, { to: "string" });
+    } else {
+      csvText = new TextDecoder().decode(bytes);
+    }
 
     App.setStatus("Parsing LODES CSV\u2026");
     var lines = csvText.split(/\r?\n/);
