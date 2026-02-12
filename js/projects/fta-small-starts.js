@@ -716,11 +716,20 @@
     updateBreakpointRatings();
   }
 
-  // ---- Expose on App.fta namespace for app.js wiring ----
+  // ---- Register with App as a project ----
 
-  App.fta = {
-    init: init,
-    updateBreakpointRatings: updateBreakpointRatings,
-    refreshLbarLayerVisibility: refreshLbarLayerVisibility
-  };
+  App.registerProject({
+    id: "fta-small-starts",
+    name: "FTA Small Starts (Land Use)",
+    panelHTML: "projects/fta-small-starts.html",
+
+    init: function (_core) {
+      init();
+    },
+
+    update: async function (_core) {
+      await updateBreakpointRatings();
+      refreshLbarLayerVisibility();
+    }
+  });
 })();

@@ -6,6 +6,53 @@
 (function () {
   var App = window.App;
 
+  // ---- Project registry ----
+
+  var _project = null;
+
+  App.registerProject = function (config) {
+    _project = config;
+  };
+
+  // Build a core API object for passing to project hooks.
+  // Rebuilt each call so values like lodesData are always current.
+  function buildCore() {
+    return {
+      stations: App.stations,
+      buffers: App.buffers,
+      map: App.map,
+      lodesData: App.lodesData,
+      lodesFileName: App.lodesFileName,
+      getUnion: function () { return App.bufferUnionPolygon(); },
+      fetchTigerwebGeos: App.fetchTigerwebGeos,
+      fetchACSValues: App.fetchACSValues,
+      fetchACSCountyValues: App.fetchACSCountyValues,
+      aggregateWithinUnion: App.aggregateWithinUnion,
+      computeAcsValueOnly: App.computeAcsValueOnly,
+      computeEmploymentServedOnly: App.computeEmploymentServedOnly,
+      fetchBlocksInternalPointsInUnion: App.fetchBlocksInternalPointsInUnion,
+      utils: {
+        setStatus: App.setStatus,
+        parseCSV: App.parseCSV,
+        toNumberSafe: App.toNumberSafe,
+        normalizeTractGEOID: App.normalizeTractGEOID,
+        guessHeader: App.guessHeader,
+        fillSelect: App.fillSelect,
+        enableSelect: App.enableSelect,
+        formatValue: App.formatValue,
+        getMeta: App.getMeta,
+        setAggUI: App.setAggUI
+      }
+    };
+  }
+
+  // Notify the active project that data has changed.
+  async function notifyProject() {
+    if (_project && typeof _project.update === "function") {
+      await _project.update(buildCore());
+    }
+  }
+
   // ---- Summary runners ----
 
   async function runLodesEmploymentSummary(year) {
@@ -112,16 +159,17 @@
       await runAcsSummary(varCode, year, geoLevel);
     }
 
-    if (App.fta) await App.fta.updateBreakpointRatings();
+    await notifyProject();
   }
 
   // ---- Load project panel HTML ----
 
   async function loadProjectPanel() {
+    if (!_project || !_project.panelHTML) return;
     var panel = document.getElementById("project-panel");
     if (!panel) return;
     try {
-      var resp = await fetch("projects/fta-small-starts.html");
+      var resp = await fetch(_project.panelHTML);
       if (resp.ok) {
         panel.innerHTML = await resp.text();
       }
@@ -136,9 +184,11 @@
     App.setStatus("Ready");
     App.renderStationLayers();
 
-    // Load FTA project panel HTML, then init its event handlers
+    // Load project panel HTML, then init its event handlers
     await loadProjectPanel();
-    if (App.fta) App.fta.init();
+    if (_project && typeof _project.init === "function") {
+      _project.init(buildCore());
+    }
 
     // Variable selector
     App.setAggUI(App.getMeta(document.getElementById("varSelect").value));
@@ -146,10 +196,10 @@
       App.setAggUI(App.getMeta(e.target.value));
     });
 
-    // Map click: add station + update project
+    // Map click: add station + notify project
     App.map.on("click", function (e) {
       App.addStationPoint(e.lngLat.lng, e.lngLat.lat);
-      if (App.fta) App.fta.updateBreakpointRatings();
+      notifyProject();
     });
 
     // Clear stations
@@ -159,10 +209,7 @@
       document.getElementById("total").textContent = "\u2014";
       document.getElementById("notes").textContent = "";
       App.setStatus("Cleared");
-      if (App.fta) {
-        App.fta.updateBreakpointRatings();
-        App.fta.refreshLbarLayerVisibility();
-      }
+      notifyProject();
     });
 
     // Undo last station
@@ -170,7 +217,7 @@
       if (App.stations.length > 0) {
         App.undoLastStation();
         App.setStatus("Updated");
-        if (App.fta) App.fta.updateBreakpointRatings();
+        notifyProject();
       }
     });
 
@@ -217,14 +264,14 @@
         App.lodesFileName = file.name;
         App.setLodesLoadedUI(true, file.name, jobsMap.size);
         App.setStatus("Ready");
-        if (App.fta) App.fta.updateBreakpointRatings();
+        notifyProject();
       } catch (err) {
         App.lodesData = null;
         App.lodesFileName = "";
         App.setLodesLoadedUI(false, "", 0);
         App.setStatus("Error");
         document.getElementById("lodesInfo").textContent = String(err && err.message ? err.message : err);
-        if (App.fta) App.fta.updateBreakpointRatings();
+        notifyProject();
       }
     });
   });
