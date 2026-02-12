@@ -1,0 +1,135 @@
+// js/core/utils.js
+// Shared utility functions, variable metadata, and helpers.
+// No dependencies beyond PapaParse (loaded via CDN).
+
+(function () {
+  var App = window.App = window.App || {};
+
+  // --- Status ---
+
+  function setStatus(s) { document.getElementById("status").textContent = s; }
+
+  // --- CSV parsing + helpers ---
+
+  function parseCSV(text) {
+    var res = Papa.parse(text, {
+      header: true,
+      dynamicTyping: false,
+      skipEmptyLines: true
+    });
+    if (res.errors && res.errors.length) {
+      console.warn("CSV parse warnings:", res.errors.slice(0, 10));
+    }
+    var headers = res.meta && res.meta.fields ? res.meta.fields : [];
+    var rows = res.data || [];
+    return { headers: headers, rows: rows };
+  }
+
+  function fillSelect(selectEl, options, placeholder) {
+    if (placeholder === undefined) placeholder = "Select\u2026";
+    selectEl.innerHTML = "";
+    var opt0 = document.createElement("option");
+    opt0.value = "";
+    opt0.textContent = placeholder;
+    selectEl.appendChild(opt0);
+    for (var i = 0; i < options.length; i++) {
+      var opt = document.createElement("option");
+      opt.value = options[i];
+      opt.textContent = options[i];
+      selectEl.appendChild(opt);
+    }
+  }
+
+  function enableSelect(selectEl, enabled) { selectEl.disabled = !enabled; }
+
+  function toNumberSafe(v) {
+    if (v == null) return NaN;
+    var s = String(v).replace(/,/g, "").trim();
+    if (s === "") return NaN;
+    var n = Number(s);
+    return Number.isFinite(n) ? n : NaN;
+  }
+
+  function normalizeTractGEOID(raw) {
+    // CRE GEO_ID is like 1400000US01001020100 -> want trailing 11 digits
+    var s = String(raw || "").trim();
+    var m = s.match(/(\d{11})$/);
+    return m ? m[1] : "";
+  }
+
+  function guessHeader(headers, candidates) {
+    var lower = new Map(headers.map(function (h) { return [h.toLowerCase(), h]; }));
+    for (var i = 0; i < candidates.length; i++) {
+      var v = lower.get(candidates[i].toLowerCase());
+      if (v) return v;
+    }
+    return "";
+  }
+
+  // --- Variable metadata ---
+
+  var VAR_META = {
+    "B01003_001E": { source: "ACS", agg: "sum", fmt: "int" },
+    "B11001_001E": { source: "ACS", agg: "sum", fmt: "int" },
+    "B25001_001E": { source: "ACS", agg: "sum", fmt: "int" },
+    "B25002_001E": { source: "ACS", agg: "sum", fmt: "int" },
+    "B25002_003E": { source: "ACS", agg: "sum", fmt: "int" },
+    "B08201_002E": { source: "ACS", agg: "sum", fmt: "int" },
+    "B17001_002E": { source: "ACS", agg: "sum", fmt: "int" },
+
+    "B19013_001E": { source: "ACS", agg: "avg", fmt: "usd" },
+    "B25064_001E": { source: "ACS", agg: "avg", fmt: "usd" },
+    "B25077_001E": { source: "ACS", agg: "avg", fmt: "usd" },
+
+    "LODES_WAC_C000": { source: "LODES", agg: "sum", fmt: "int" }
+  };
+
+  function getMeta(code) { return VAR_META[code] || { source: "ACS", agg: "sum", fmt: "int" }; }
+
+  function setAggUI(meta) {
+    var aggMethodEl = document.getElementById("aggMethod");
+    var warnEl = document.getElementById("aggWarning");
+
+    if (meta.source === "LODES") {
+      aggMethodEl.textContent = "Sum (LODES jobs for blocks whose internal point is inside union)";
+      warnEl.style.display = "block";
+      warnEl.innerHTML =
+        "<b>LODES method:</b> Sums LODES WAC jobs (C000) for blocks whose TIGERweb internal point " +
+        "falls within the dissolved 0.5-mile buffer union. Screening-grade approach.";
+      return;
+    }
+
+    if (meta.agg === "sum") {
+      aggMethodEl.textContent = "Sum (area-apportioned counts)";
+      warnEl.style.display = "none";
+      warnEl.textContent = "";
+    } else {
+      aggMethodEl.textContent = "Area-weighted average (approximation)";
+      warnEl.style.display = "block";
+      warnEl.textContent =
+        "Selected ACS variable is non-additive (e.g., median). This tool reports an area-weighted average estimate, not a true median.";
+    }
+  }
+
+  function formatValue(val, meta) {
+    if (!Number.isFinite(val)) return "\u2014";
+    if (meta.fmt === "usd") {
+      return val.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+    }
+    return val.toLocaleString(undefined, { maximumFractionDigits: 0 });
+  }
+
+  // --- Expose on App namespace ---
+
+  App.setStatus = setStatus;
+  App.parseCSV = parseCSV;
+  App.fillSelect = fillSelect;
+  App.enableSelect = enableSelect;
+  App.toNumberSafe = toNumberSafe;
+  App.normalizeTractGEOID = normalizeTractGEOID;
+  App.guessHeader = guessHeader;
+  App.VAR_META = VAR_META;
+  App.getMeta = getMeta;
+  App.setAggUI = setAggUI;
+  App.formatValue = formatValue;
+})();
