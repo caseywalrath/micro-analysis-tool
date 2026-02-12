@@ -444,32 +444,283 @@
     }
   }
 
+  // ---- FTA event handler init (called by app.js after panel HTML is loaded) ----
+
+  function init() {
+    // LBAR layer toggle
+    var toggleLbar = document.getElementById("toggleLbarLayer");
+    if (toggleLbar) {
+      toggleLbar.addEventListener("change", function () {
+        refreshLbarLayerVisibility();
+      });
+    }
+
+    // County FIPS input
+    var lbarCountiesInput = document.getElementById("lbarCounties");
+    if (lbarCountiesInput) {
+      lbarCountiesInput.addEventListener("input", function () {
+        updateBreakpointRatings();
+      });
+    }
+
+    // CRE upload
+    var creFileInput = document.getElementById("creFile");
+    if (creFileInput) {
+      creFileInput.addEventListener("change", async function (e) {
+        var file = e.target.files && e.target.files[0];
+        if (!file) return;
+
+        try {
+          App.setStatus("Loading CRE CSV\u2026");
+          var text = await file.text();
+          var parsed = App.parseCSV(text);
+
+          CRE_HEADERS = parsed.headers;
+          CRE_ROWS = parsed.rows;
+
+          var sG = document.getElementById("creColGEOID");
+          var sT = document.getElementById("creColTotal");
+          var sH = document.getElementById("creColHigh");
+
+          App.fillSelect(sG, CRE_HEADERS, "Select GEOID column\u2026");
+          App.fillSelect(sT, CRE_HEADERS, "Select total population column\u2026");
+          App.fillSelect(sH, CRE_HEADERS, "Select high-risk population column\u2026");
+
+          App.enableSelect(sG, true);
+          App.enableSelect(sT, true);
+          App.enableSelect(sH, true);
+
+          sG.value = App.guessHeader(CRE_HEADERS, ["GEO_ID", "geoid", "GEOID"]);
+          sT.value = App.guessHeader(CRE_HEADERS, ["POPUNI", "total", "TOT_POP", "population"]);
+          sH.value = App.guessHeader(CRE_HEADERS, ["PRED3_E", "HIGH_RISK", "high_risk", "risk3plus"]);
+
+          function rebuildCre() {
+            if (!sG.value || !sT.value || !sH.value) {
+              CRE_MAP = null;
+              document.getElementById("creInfo").textContent = "Select required columns to enable CRE computations.";
+              updateBreakpointRatings();
+              return;
+            }
+            CRE_MAP = buildCreMapFromRows(sG.value, sT.value, sH.value);
+
+            var sampleRaw = CRE_ROWS.length ? CRE_ROWS[0][sG.value] : "";
+            var sampleNorm = App.normalizeTractGEOID(sampleRaw);
+
+            document.getElementById("creInfo").textContent =
+              "Loaded " + file.name + ": " + CRE_MAP.size.toLocaleString() + " tracts mapped. " +
+              (sampleRaw ? 'Sample GEOID: "' + sampleRaw + '" -> "' + sampleNorm + '"' : "");
+
+            if (CRE_MAP.size === 0 && CRE_ROWS.length > 0) {
+              document.getElementById("creInfo").textContent +=
+                " | If this remains 0, confirm GEO_ID contains tract IDs ending in 11 digits and selected columns are numeric.";
+            }
+
+            updateBreakpointRatings();
+          }
+
+          sG.onchange = rebuildCre;
+          sT.onchange = rebuildCre;
+          sH.onchange = rebuildCre;
+
+          rebuildCre();
+          App.setStatus("Ready");
+        } catch (err) {
+          CRE_MAP = null;
+          CRE_HEADERS = [];
+          CRE_ROWS = [];
+          document.getElementById("creInfo").textContent = "Error: " + String(err && err.message ? err.message : err);
+          App.setStatus("Error");
+          updateBreakpointRatings();
+        }
+      });
+    }
+
+    // Essential services upload
+    var essFileInput = document.getElementById("essFile");
+    if (essFileInput) {
+      essFileInput.addEventListener("change", async function (e) {
+        var file = e.target.files && e.target.files[0];
+        if (!file) return;
+
+        try {
+          App.setStatus("Loading essential services\u2026");
+          var name = file.name.toLowerCase();
+
+          ESS_POINTS = null;
+          ESS_HEADERS = [];
+          ESS_ROWS = [];
+
+          var latSel = document.getElementById("essColLat");
+          var lonSel = document.getElementById("essColLon");
+
+          if (name.endsWith(".json") || name.endsWith(".geojson")) {
+            var text = await file.text();
+            var obj = JSON.parse(text);
+            ESS_POINTS = extractPointsFromGeoJSON(obj);
+
+            App.fillSelect(latSel, [], "N/A (GeoJSON)");
+            App.fillSelect(lonSel, [], "N/A (GeoJSON)");
+            App.enableSelect(latSel, false);
+            App.enableSelect(lonSel, false);
+
+            document.getElementById("essInfo").textContent =
+              "Loaded " + file.name + ": " + ESS_POINTS.length.toLocaleString() + " points.";
+          } else if (name.endsWith(".csv")) {
+            var csvText = await file.text();
+            var parsed = App.parseCSV(csvText);
+            ESS_HEADERS = parsed.headers;
+            ESS_ROWS = parsed.rows;
+
+            App.fillSelect(latSel, ESS_HEADERS, "Select latitude column\u2026");
+            App.fillSelect(lonSel, ESS_HEADERS, "Select longitude column\u2026");
+            App.enableSelect(latSel, true);
+            App.enableSelect(lonSel, true);
+
+            latSel.value = App.guessHeader(ESS_HEADERS, ["lat", "latitude", "y", "LAT", "Latitude"]);
+            lonSel.value = App.guessHeader(ESS_HEADERS, ["lon", "lng", "longitude", "x", "LON", "Longitude"]);
+
+            function rebuildEss() {
+              if (!latSel.value || !lonSel.value) {
+                ESS_POINTS = null;
+                document.getElementById("essInfo").textContent = "Select lat/lon columns to enable essential services computations.";
+                updateBreakpointRatings();
+                return;
+              }
+              ESS_POINTS = buildPointsFromCsvRows(ESS_ROWS, latSel.value, lonSel.value);
+              document.getElementById("essInfo").textContent =
+                "Loaded " + file.name + ": " + ESS_POINTS.length.toLocaleString() + " points from CSV.";
+              updateBreakpointRatings();
+            }
+
+            latSel.onchange = rebuildEss;
+            lonSel.onchange = rebuildEss;
+
+            rebuildEss();
+          } else {
+            throw new Error("Unsupported file type. Upload .geojson/.json or .csv.");
+          }
+
+          App.setStatus("Ready");
+          updateBreakpointRatings();
+        } catch (err) {
+          ESS_POINTS = null;
+          document.getElementById("essInfo").textContent = "Error: " + String(err && err.message ? err.message : err);
+          App.setStatus("Error");
+          updateBreakpointRatings();
+        }
+      });
+    }
+
+    // LBAR upload
+    var lbarFileInput = document.getElementById("lbarFile");
+    if (lbarFileInput) {
+      lbarFileInput.addEventListener("change", async function (e) {
+        var file = e.target.files && e.target.files[0];
+        if (!file) return;
+
+        try {
+          App.setStatus("Loading LBAR inventory\u2026");
+          var name = file.name.toLowerCase();
+
+          LBAR_SITES = null;
+          LBAR_HEADERS = [];
+          LBAR_ROWS = [];
+
+          var latSel = document.getElementById("lbarColLat");
+          var lonSel = document.getElementById("lbarColLon");
+          var uniSel = document.getElementById("lbarColUnits");
+          var ctySel = document.getElementById("lbarColCounty");
+
+          if (name.endsWith(".json") || name.endsWith(".geojson")) {
+            var text = await file.text();
+            var obj = JSON.parse(text);
+            LBAR_SITES = buildLbarSitesFromGeoJSON(obj);
+
+            App.fillSelect(latSel, [], "N/A (GeoJSON)");
+            App.fillSelect(lonSel, [], "N/A (GeoJSON)");
+            App.fillSelect(uniSel, [], "N/A (GeoJSON)");
+            App.fillSelect(ctySel, [], "N/A (GeoJSON)");
+            App.enableSelect(latSel, false);
+            App.enableSelect(lonSel, false);
+            App.enableSelect(uniSel, false);
+            App.enableSelect(ctySel, false);
+
+            document.getElementById("lbarInfo").textContent =
+              "Loaded " + file.name + ": " + LBAR_SITES.length.toLocaleString() + " sites (expects properties.units and optional properties.county).";
+
+            refreshLbarLayerVisibility();
+            updateBreakpointRatings();
+          } else if (name.endsWith(".csv")) {
+            var csvText = await file.text();
+            var parsed = App.parseCSV(csvText);
+            LBAR_HEADERS = parsed.headers;
+            LBAR_ROWS = parsed.rows;
+
+            App.fillSelect(latSel, LBAR_HEADERS, "Select latitude column\u2026");
+            App.fillSelect(lonSel, LBAR_HEADERS, "Select longitude column\u2026");
+            App.fillSelect(uniSel, LBAR_HEADERS, "Select units column\u2026");
+            App.fillSelect(ctySel, LBAR_HEADERS, "(Optional) Select county FIPS column\u2026");
+
+            App.enableSelect(latSel, true);
+            App.enableSelect(lonSel, true);
+            App.enableSelect(uniSel, true);
+            App.enableSelect(ctySel, true);
+
+            latSel.value = App.guessHeader(LBAR_HEADERS, ["lat", "latitude", "y", "LAT", "Latitude"]);
+            lonSel.value = App.guessHeader(LBAR_HEADERS, ["lon", "lng", "longitude", "x", "LON", "Longitude"]);
+            uniSel.value = App.guessHeader(LBAR_HEADERS, ["units", "lbar_units", "LBAR_UNITS", "UNITS", "Total Low-Income Units"]);
+            ctySel.value = App.guessHeader(LBAR_HEADERS, ["county_fips", "county", "COUNTY", "COUNTY_FIPS", "FIPS"]);
+
+            function rebuildLbar() {
+              if (!latSel.value || !lonSel.value || !uniSel.value) {
+                LBAR_SITES = null;
+                document.getElementById("lbarInfo").textContent =
+                  "Select required columns (lat/lon/units) to enable LBAR computations.";
+                refreshLbarLayerVisibility();
+                updateBreakpointRatings();
+                return;
+              }
+              var countyCol = ctySel.value || null;
+              LBAR_SITES = buildLbarSitesFromCsvRows(LBAR_ROWS, latSel.value, lonSel.value, uniSel.value, countyCol);
+
+              var hasCounty = LBAR_SITES.some(function (s) { return s.county5 && s.county5.length === 5; });
+              document.getElementById("lbarInfo").textContent =
+                "Loaded " + file.name + ": " + LBAR_SITES.length.toLocaleString() + " sites. County FIPS present: " + (hasCounty ? "Yes" : "No") + ".";
+
+              refreshLbarLayerVisibility();
+              updateBreakpointRatings();
+            }
+
+            latSel.onchange = rebuildLbar;
+            lonSel.onchange = rebuildLbar;
+            uniSel.onchange = rebuildLbar;
+            ctySel.onchange = rebuildLbar;
+
+            rebuildLbar();
+          } else {
+            throw new Error("Unsupported file type. Upload .geojson/.json or .csv.");
+          }
+
+          App.setStatus("Ready");
+        } catch (err) {
+          LBAR_SITES = null;
+          document.getElementById("lbarInfo").textContent = "Error: " + String(err && err.message ? err.message : err);
+          App.setStatus("Error");
+          refreshLbarLayerVisibility();
+          updateBreakpointRatings();
+        }
+      });
+    }
+
+    // Initialize ratings
+    updateBreakpointRatings();
+  }
+
   // ---- Expose on App.fta namespace for app.js wiring ----
 
   App.fta = {
-    // State accessors (for event handlers in app.js)
-    getCRE_MAP: function () { return CRE_MAP; },
-    setCRE: function (headers, rows, map) { CRE_HEADERS = headers; CRE_ROWS = rows; CRE_MAP = map; },
-    getESS: function () { return { points: ESS_POINTS, headers: ESS_HEADERS, rows: ESS_ROWS }; },
-    setESS: function (headers, rows, points) { ESS_HEADERS = headers; ESS_ROWS = rows; ESS_POINTS = points; },
-    getLBAR: function () { return { sites: LBAR_SITES, headers: LBAR_HEADERS, rows: LBAR_ROWS }; },
-    setLBAR: function (headers, rows, sites) { LBAR_HEADERS = headers; LBAR_ROWS = rows; LBAR_SITES = sites; },
-
-    // Functions needed by event handlers
-    buildCreMapFromRows: buildCreMapFromRows,
-    computeCommunityRiskFromCre: computeCommunityRiskFromCre,
-    extractPointsFromGeoJSON: extractPointsFromGeoJSON,
-    buildPointsFromCsvRows: buildPointsFromCsvRows,
-    computeEssentialServicesAvg: computeEssentialServicesAvg,
-    buildLbarSitesFromGeoJSON: buildLbarSitesFromGeoJSON,
-    buildLbarSitesFromCsvRows: buildLbarSitesFromCsvRows,
-    parseCountyListInput: parseCountyListInput,
-    computeLbarRatio: computeLbarRatio,
-    refreshLbarLayerVisibility: refreshLbarLayerVisibility,
+    init: init,
     updateBreakpointRatings: updateBreakpointRatings,
-    classify: classify,
-    BP: BP,
-    RATING_ORDER: RATING_ORDER,
-    setPill: setPill
+    refreshLbarLayerVisibility: refreshLbarLayerVisibility
   };
 })();
