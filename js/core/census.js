@@ -36,6 +36,32 @@
     }
   }
 
+  // --- Paginated TIGERweb query (shared by census.js and lodes.js) ---
+
+  async function fetchAllTigerwebFeatures(layerUrl, params) {
+    var pageSize = 1000;
+    var offset = 0;
+    var allFeatures = [];
+
+    params.set("resultRecordCount", String(pageSize));
+
+    while (true) {
+      params.set("resultOffset", String(offset));
+      var url = layerUrl + "/query?" + params.toString();
+      var resp = await fetch(url);
+      if (!resp.ok) throw new Error("TIGERweb error " + resp.status);
+      var data = await resp.json();
+
+      var features = data.features || [];
+      allFeatures = allFeatures.concat(features);
+
+      if (!data.exceededTransferLimit || features.length === 0) break;
+      offset += features.length;
+    }
+
+    return allFeatures;
+  }
+
   // --- TIGERweb fetch for tracts / block groups ---
 
   async function fetchTigerwebGeos(geoLevel, unionFeat) {
@@ -55,11 +81,8 @@
       f: "geojson"
     });
 
-    var url = layerUrl + "/query?" + params.toString();
-    var resp = await fetch(url);
-    if (!resp.ok) throw new Error("TIGERweb error " + resp.status);
-    var geojson = await resp.json();
-    return (geojson.features || []).filter(function (f) {
+    var features = await fetchAllTigerwebFeatures(layerUrl, params);
+    return features.filter(function (f) {
       return turf.booleanIntersects(f, unionFeat);
     });
   }
@@ -212,6 +235,7 @@
   // --- Expose on App namespace ---
 
   App.renderCensusOverlay = renderCensusOverlay;
+  App.fetchAllTigerwebFeatures = fetchAllTigerwebFeatures;
   App.fetchTigerwebGeos = fetchTigerwebGeos;
   App.parseGEOID = parseGEOID;
   App.fetchACSValues = fetchACSValues;

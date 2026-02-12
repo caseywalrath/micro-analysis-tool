@@ -115,13 +115,9 @@
       f: "geojson"
     });
 
-    var url = layerUrl + "/query?" + params.toString();
-    var resp = await fetch(url);
-    if (!resp.ok) throw new Error("TIGERweb blocks query failed (" + resp.status + ")");
-    var gj = await resp.json();
+    var features = await App.fetchAllTigerwebFeatures(layerUrl, params);
 
     var inside = new Set();
-    var features = gj.features || [];
     for (var i = 0; i < features.length; i++) {
       var f = features[i];
       var p = f.properties || {};
