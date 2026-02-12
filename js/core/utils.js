@@ -1,6 +1,8 @@
 // js/core/utils.js
 // Shared utility functions, variable metadata, and helpers.
 // No dependencies beyond PapaParse (loaded via CDN).
+// Exports: setStatus, parseCSV, fillSelect, enableSelect, toNumberSafe,
+//          normalizeTractGEOID, guessHeader, VAR_META, getMeta, setAggUI, formatValue
 
 (function () {
   var App = window.App = window.App || {};

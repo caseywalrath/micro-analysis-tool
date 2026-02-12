@@ -2,6 +2,7 @@
 // Startup: wires core modules together, loads active project panel,
 // contains summary runners and core event bindings.
 // Depends on: all core modules (utils, map, stations, census, lodes).
+// Exports: registerProject
 
 (function () {
   var App = window.App;

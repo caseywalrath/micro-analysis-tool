@@ -1,4 +1,8 @@
-# Architecture
+# CLAUDE.md
+
+Project onboarding for Claude Code sessions. Read this first.
+
+## Overview
 
 Browser-based geospatial analysis tool. Pure front-end (no build step, no backend, no npm). Open `index.html` in a browser and it works. All data stays client-side; Census APIs are called directly.
 
@@ -54,7 +58,7 @@ app.js      (wires everything; defines App.registerProject)
 `stations` (Point array), `buffers` (Polygon array), `addStationPoint(lon, lat)`, `clearStations()`, `undoLastStation()`, `renderStationLayers()`, `bufferUnionPolygon()`, `getUnion()` (alias), `bboxStringFromFeature(feat)`
 
 ### census.js
-`renderCensusOverlay(geos)`, `fetchTigerwebGeos(geoLevel, unionFeat)`, `parseGEOID(geoLevel, geoid)`, `fetchACSValues(geoLevel, year, varCode, geoids)`, `fetchACSCountyValues(year, varCode, counties)`, `aggregateWithinUnion(unionFeat, geos, valueMap, aggMode)`, `computeAcsValueOnly(varCode, year, geoLevel)`
+`renderCensusOverlay(geos)`, `fetchAllTigerwebFeatures(layerUrl, params)`, `fetchTigerwebGeos(geoLevel, unionFeat)`, `parseGEOID(geoLevel, geoid)`, `fetchACSValues(geoLevel, year, varCode, geoids)`, `fetchACSCountyValues(year, varCode, counties)`, `aggregateWithinUnion(unionFeat, geos, valueMap, aggMode)`, `computeAcsValueOnly(varCode, year, geoLevel)`
 
 ### lodes.js
 `STATE_FIPS_TO_ABBR`, `getStateFromMapCenter()`, `startDownload(url, filename)`, `lodesData` (Map or null), `lodesFileName`, `setLodesLoadedUI(loaded, name, nRows)`, `parseLodesFromUploadedFile(file)`, `fetchBlocksInternalPointsInUnion(unionFeat)`, `computeEmploymentServedOnly()`
@@ -142,13 +146,10 @@ Remove the project `<script>` tag from `index.html`. The core app (map, stations
 +-----------------------------+
 ```
 
-## Known Issues (REVIEW.md)
+## Known Issues
 
-See `REVIEW.md` for the full code review. Key bugs planned for Phase 3:
+See `REVIEW.md` for the full code review. Remaining items not yet addressed:
 
-- TIGERweb pagination: API caps results at ~1000-2000 features, silently truncating larger queries
-- Breakpoint range gaps: some values fall between defined ranges and return "N/A"
-- Race conditions: overlapping `updateBreakpointRatings()` calls with no guard
-- LODES parser assumes gzip: fails on plain CSV upload
-- No debounce on county FIPS input
-- `turf.intersect` can throw on degenerate geometries
+- No Census API key (moderate: rate-limited without one)
+- No subresource integrity (SRI) hashes on CDN script tags
+- Mixed `.onchange` vs `addEventListener` patterns in FTA project

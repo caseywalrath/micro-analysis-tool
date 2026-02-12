@@ -1,6 +1,7 @@
 // js/core/map.js
 // Map initialization: Carto light basemap via MapLibre GL JS.
 // Depends on: maplibregl (loaded via CDN).
+// Exports: map
 
 (function () {
   var App = window.App = window.App || {};

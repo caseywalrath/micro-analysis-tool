@@ -36,23 +36,29 @@ Formalized how projects plug into the core via `App.registerProject()`.
 - `js/projects/fta-small-starts.js` — restructured as an `App.registerProject({...})` call with `init()` and `update()` hooks. All FTA-specific state remains in the closure
 - Core app works independently when no project script is loaded
 
-## 2026-02-12 — Documentation
+## 2026-02-12 — Phase 3: Bug fixes from REVIEW.md
 
-- Created `architecture.md` — file structure, App namespace API, project system reference, sidebar layout, known issues
-- Created `changelog.md` (this file)
+All 6 bugs addressed (Bug #5 — Census API key — excluded as it requires an external credential).
+
+- [x] **Bug #1 — TIGERweb pagination:** Added `fetchAllTigerwebFeatures()` in census.js that loops with `resultOffset`/`resultRecordCount` until `exceededTransferLimit` is false. Used by both `fetchTigerwebGeos` and `fetchBlocksInternalPointsInUnion`.
+- [x] **Bug #2 — Breakpoint range gaps:** Changed `classify()` to use `>= min` only (sorted high-to-low, first match wins). Removed fragile max bounds and epsilon hacks. Values like 4.5 for essential services now correctly classify instead of returning "N/A".
+- [x] **Bug #3 — Race conditions:** Added `_bpRunning`/`_bpQueued` concurrency guard around `updateBreakpointRatings()`. Overlapping calls coalesced into a single queued re-run.
+- [x] **Bug #4 — LODES gzip assumption:** Checks gzip magic bytes (`0x1f 0x8b`) before decompressing. Falls back to `TextDecoder` for plain CSV uploads.
+- [x] **Bug #6 — County FIPS debounce:** 500ms `setTimeout`/`clearTimeout` debounce on the county FIPS input listener.
+- [x] **Bug #7 — turf.intersect throws:** Wrapped in `try/catch` at both call sites (`aggregateWithinUnion` in census.js, `computeCommunityRiskFromCre` in fta-small-starts.js). Individual failures skip instead of aborting all aggregation.
+
+## 2026-02-12 — Phase 4: Documentation
+
+- Created `CLAUDE.md` — consolidated from `architecture.md`; primary onboarding doc for Claude Code sessions. Covers file structure, App namespace API, project system, sidebar layout, known issues.
+- Wrote `README.md` — user-facing overview: what the tool does, quick start, how to add projects, external dependencies.
+- Added `Exports:` lines to all 7 JS file headers listing their public API.
+- Updated `changelog.md` (this file) with Phase 3 and Phase 4 entries.
+- Removed `architecture.md` (content moved to `CLAUDE.md`).
 
 ---
 
-## Remaining work (from plan.md)
+## Remaining items (not planned for current scope)
 
-### Phase 3: Bug fixes from REVIEW.md
-- [ ] TIGERweb pagination: API silently truncates large queries (~1000-2000 feature cap)
-- [ ] Breakpoint range gaps: some values fall between defined ranges, return "N/A"
-- [ ] Race conditions: overlapping `updateBreakpointRatings()` calls with no guard
-- [ ] LODES parser assumes gzip: fails on plain CSV upload
-- [ ] No debounce on county FIPS input
-- [ ] `turf.intersect` can throw on degenerate geometries
-
-### Phase 4: User-facing documentation
-- [ ] README.md — what the tool does, how to run/use it
-- [ ] CLAUDE.md — developer/session onboarding (may consolidate with architecture.md)
+- No Census API key (moderate: lower rate limits without one)
+- No subresource integrity (SRI) hashes on CDN script tags
+- Mixed `.onchange` vs `addEventListener` patterns in FTA project

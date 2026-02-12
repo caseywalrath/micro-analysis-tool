@@ -2,6 +2,9 @@
 // TIGERweb census geometry fetching, ACS data retrieval, and area-weighted aggregation.
 // Depends on: App.map (map.js), App.bboxStringFromFeature (stations.js),
 //             App.getMeta (utils.js), turf (CDN).
+// Exports: renderCensusOverlay, fetchAllTigerwebFeatures, fetchTigerwebGeos,
+//          parseGEOID, fetchACSValues, fetchACSCountyValues,
+//          aggregateWithinUnion, computeAcsValueOnly
 
 (function () {
   var App = window.App = window.App || {};

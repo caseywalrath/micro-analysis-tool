@@ -2,6 +2,7 @@
 // FTA Small Starts (Land Use) project: breakpoint classification,
 // CRE / Essential Services / LBAR upload + computation, ratings updater.
 // Depends on: App namespace (utils, map, stations, census, lodes), turf (CDN).
+// Exports: none (self-registers via App.registerProject)
 
 (function () {
   var App = window.App = window.App || {};

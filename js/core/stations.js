@@ -1,6 +1,8 @@
 // js/core/stations.js
 // Station point + buffer management, map layer rendering.
 // Depends on: App.map (map.js), turf (CDN).
+// Exports: stations, buffers, addStationPoint, clearStations, undoLastStation,
+//          renderStationLayers, bufferUnionPolygon, getUnion, bboxStringFromFeature
 
 (function () {
   var App = window.App = window.App || {};
