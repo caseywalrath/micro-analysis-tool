@@ -75,41 +75,43 @@
 
   // ---- FTA breakpoint tables ----
 
+  // Breakpoint tables sorted high-to-low. classify() checks value >= min,
+  // returning the first (highest) match. No max needed — contiguous by design.
   var BP = {
     popDensity: [
-      { label: "High",        pill: "high", min: 15000, max: Infinity },
-      { label: "Medium-High", pill: "mh",   min: 9600,  max: 14999 },
-      { label: "Medium",      pill: "med",  min: 5760,  max: 9599 },
-      { label: "Medium-Low",  pill: "ml",   min: 2560,  max: 5759 },
-      { label: "Low",         pill: "low",  min: -Infinity, max: 2559 }
+      { label: "High",        pill: "high", min: 15000 },
+      { label: "Medium-High", pill: "mh",   min: 9600 },
+      { label: "Medium",      pill: "med",  min: 5760 },
+      { label: "Medium-Low",  pill: "ml",   min: 2560 },
+      { label: "Low",         pill: "low",  min: -Infinity }
     ],
     employment: [
-      { label: "High",        pill: "high", min: 220000, max: Infinity },
-      { label: "Medium-High", pill: "mh",   min: 140000, max: 219999 },
-      { label: "Medium",      pill: "med",  min: 70000,  max: 139999 },
-      { label: "Medium-Low",  pill: "ml",   min: 40000,  max: 69999 },
-      { label: "Low",         pill: "low",  min: -Infinity, max: 39999 }
+      { label: "High",        pill: "high", min: 220000 },
+      { label: "Medium-High", pill: "mh",   min: 140000 },
+      { label: "Medium",      pill: "med",  min: 70000 },
+      { label: "Medium-Low",  pill: "ml",   min: 40000 },
+      { label: "Low",         pill: "low",  min: -Infinity }
     ],
     lbarRatio: [
-      { label: "High",        pill: "high", min: 2.5000000001, max: Infinity },
-      { label: "Medium-High", pill: "mh",   min: 2.25, max: 2.49 },
-      { label: "Medium",      pill: "med",  min: 1.50, max: 2.24 },
-      { label: "Medium-Low",  pill: "ml",   min: 1.10, max: 1.49 },
-      { label: "Low",         pill: "low",  min: -Infinity, max: 1.09 }
+      { label: "High",        pill: "high", min: 2.50 },
+      { label: "Medium-High", pill: "mh",   min: 2.25 },
+      { label: "Medium",      pill: "med",  min: 1.50 },
+      { label: "Medium-Low",  pill: "ml",   min: 1.10 },
+      { label: "Low",         pill: "low",  min: -Infinity }
     ],
     communityRiskPct: [
-      { label: "High",        pill: "high", min: 50.0, max: Infinity },
-      { label: "Medium-High", pill: "mh",   min: 40.0, max: 49.9 },
-      { label: "Medium",      pill: "med",  min: 18.0, max: 39.9 },
-      { label: "Medium-Low",  pill: "ml",   min: 5.0,  max: 17.9 },
-      { label: "Low",         pill: "low",  min: -Infinity, max: 4.99 }
+      { label: "High",        pill: "high", min: 50.0 },
+      { label: "Medium-High", pill: "mh",   min: 40.0 },
+      { label: "Medium",      pill: "med",  min: 18.0 },
+      { label: "Medium-Low",  pill: "ml",   min: 5.0 },
+      { label: "Low",         pill: "low",  min: -Infinity }
     ],
     essentialAvg: [
-      { label: "High",        pill: "high", min: 7.0000000001, max: Infinity },
-      { label: "Medium-High", pill: "mh",   min: 5.0, max: 7.0 },
-      { label: "Medium",      pill: "med",  min: 3.0, max: 4.0 },
-      { label: "Medium-Low",  pill: "ml",   min: 1.0, max: 2.0 },
-      { label: "Low",         pill: "low",  min: -Infinity, max: 0.9999999999 }
+      { label: "High",        pill: "high", min: 7.0 },
+      { label: "Medium-High", pill: "mh",   min: 5.0 },
+      { label: "Medium",      pill: "med",  min: 3.0 },
+      { label: "Medium-Low",  pill: "ml",   min: 1.0 },
+      { label: "Low",         pill: "low",  min: -Infinity }
     ]
   };
 
@@ -118,8 +120,7 @@
   function classify(value, breakpoints) {
     if (!Number.isFinite(value)) return { label: "N/A", pill: "na" };
     for (var i = 0; i < breakpoints.length; i++) {
-      var b = breakpoints[i];
-      if (value >= b.min && value <= b.max) return { label: b.label, pill: b.pill };
+      if (value >= breakpoints[i].min) return { label: breakpoints[i].label, pill: breakpoints[i].pill };
     }
     return { label: "N/A", pill: "na" };
   }
