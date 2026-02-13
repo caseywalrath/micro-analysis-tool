@@ -20,29 +20,29 @@ Polyline drawing via click-to-add-waypoints, click-last-point-to-close. Lines re
 ### Polygon drawing — Implemented
 Vertex-by-vertex polygon drawing with snap-to-close. Polygons render as green filled regions with outlines and vertex dots. Supports undo and clear.
 
-### Line drawing with buffers — Not started
+### Line drawing with buffers — High Priority
 Extend the buffer system so line segments also get configurable buffers. The dissolved union would include both station buffers and line buffers.
 
-### Route-following lines — Not started
+### Route-following lines — Medium Priority
 Like line drawing, but snapped to the underlying street network. Requires a routing engine (e.g., OSRM, Valhalla, or a hosted API). The resulting route geometry gets buffered like any other line.
 
-### Walkshed polygons — Not started
+### Walkshed polygons — Low Priority
 Compute an isochrone/walkshed polygon from a selected point (e.g., 10-minute walk). Requires a network analysis service. The walkshed polygon could replace or supplement the circular buffer.
 
-### Unmerge dissolved union — Not started
+### Unmerge dissolved union — Low Priority
 Currently `bufferUnionPolygon()` always dissolves overlapping buffers. Add an option to keep individual buffers separate for per-station analysis or visual comparison.
 
-### Import geospatial data (KML/KMZ/GeoJSON) — Not started
+### Import geospatial data (KML/KMZ/GeoJSON) — Low priority
 Allow the user to upload KML, KMZ, or GeoJSON files. Imported geometries appear as map layers and can optionally be used as study area boundaries for analysis. Import/Export buttons exist in the Features panel but are currently disabled.
 
 ---
 
 ## Data & Analysis
 
-### More census categories — Not started
+### More census categories — Priority To Be Determined
 Expand `VAR_META` in utils.js with additional ACS variables (e.g., vehicle ownership, commute mode, housing tenure, age distribution, poverty status). Each entry needs a variable code, label, aggregation mode, and format.
 
-### Multiple simultaneous census summaries — Not started
+### Multiple simultaneous census summaries — Priority To Be Determined
 Currently the results card shows one variable at a time. Allow selecting multiple variables and display a table of aggregated results. May require rethinking the results card UI.
 
 ### Simplified LBAR Housing Inventory workflow — Not started
@@ -52,27 +52,27 @@ The current LBAR workflow requires uploading a pre-formatted inventory file with
 
 ## Persistence & Export
 
-### Local cache with reset — Not started
+### Local cache with reset — High Priority
 Save the current session state (stations, uploaded files, settings) to `localStorage` or `IndexedDB`. Restore automatically on page load. Include a "Reset" button to clear cached state and start fresh.
 
-### Export/import session data — Not started
+### Export/import session data — Medium Priority
 Export the full session (station coordinates, buffer settings, uploaded data references, project state) as a JSON file. Import the same file to restore a session. Enables sharing analysis setups between users.
 
 ---
 
 ## UI & Layout
 
-### Resizable sidebar — Not started
+### Resizable sidebar — Low Priority
 Allow the user to drag the sidebar edge to resize it. Currently the sidebar is a fixed 520px width defined in CSS.
 
-### Reorderable sidebar panels — Not started
+### Reorderable sidebar panels — Low Priority
 Allow the user to drag sidebar sections (Station-area Data, project panel, LODES) into a preferred order. Could use native drag-and-drop or a lightweight sortable library.
 
-### Dynamic panel loading/unloading — Not started
+### Dynamic panel loading/unloading — Low Priority
 Let users show/hide individual sidebar panels (e.g., collapse LODES section if not needed, or hide the project panel). Toggle via checkboxes or a panel menu.
 
-### Basemap switcher — Not started
+### Basemap switcher — Medium Priority
 Add an in-app control to switch between basemap styles (e.g., Carto light, Carto dark, OpenStreetMap, satellite). Currently hardcoded to Carto light in map.js.
 
-### Modern UI refresh — Not started
+### Modern UI refresh — Low Priority
 Update the visual design — better typography, spacing, input styling, card layouts, color palette. Consider a lightweight CSS framework or design tokens. Keep it dependency-free (no React/Vue).
