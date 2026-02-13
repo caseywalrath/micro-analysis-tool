@@ -57,6 +57,46 @@ All 6 bugs addressed (Bug #5 — Census API key — excluded as it requires an e
 
 ---
 
+## 2026-02-13 — UI cleanup and feature-panel enhancements
+
+### Removed Study Area / Status card
+- Removed the `<h3>Study Area</h3>` heading, the Status card (`#status` span, `#lineDrawing` div), and the `<hr>` separator from the sidebar in `index.html`
+- Guarded `setStatus()` in `utils.js` so it silently no-ops when the `#status` element is absent
+
+### Separated station placement from buffer drawing
+Stations and buffers are now independent. Clicking the map in Station mode places only a point marker — no buffer is drawn automatically.
+
+**New UI:** A **Buffer** row in the Features panel (right sidebar), directly below the Stations list, with a numeric radius input (in miles) and "mi" label. Default value is `0` (no buffers).
+
+**Behavior:**
+- Radius `0` → no buffers drawn; station points remain visible
+- Radius `> 0` → circular buffers drawn around all stations at that radius; changing the value live-updates all buffers
+- Summary runners now distinguish "no stations" from "no buffers (radius = 0)" and guide the user accordingly
+
+**Files changed:**
+- `js/core/stations.js` — `addStationPoint()` no longer auto-creates buffers; new `rebuildBuffers(radiusMiles)` regenerates all buffers on demand; new `removeStation(index)` for per-feature deletion
+- `index.html` — Buffer input added to Features panel; sidebar description updated to reference user-defined radius; "Result in ½-mile union" → "Result in buffer union"
+- `js/app.js` — wired `#bufferRadius` input listener; improved no-union messages; added `App.onFeatureDelete` hook
+- `css/style.css` — styles for `.fp-buffer-header`, `.fp-radius-input`, `.fp-radius-unit`
+
+### Per-feature delete buttons
+Each station, line, and polygon row in the Features panel now shows a trash can icon (inline SVG) on its right side.
+
+**Behavior:**
+- Hidden by default; fades in on row hover
+- Turns red on direct hover
+- Clicking removes that single feature from the map and re-renders
+
+**Files changed:**
+- `js/core/stations.js` — added `removeStation(index)`
+- `js/core/lines.js` — added `removeLine(index)`
+- `js/core/polygons.js` — added `removePolygon(index)`
+- `js/core/features.js` — `buildItem()` now creates an SVG trash button; `populateList()` passes the correct remove function per feature type; fires `App.onFeatureDelete` hook after removal
+- `js/app.js` — `App.onFeatureDelete` wired to `notifyProject()`
+- `css/style.css` — `.fp-delete` hidden by default, fades in on row hover, red on button hover
+
+---
+
 ## Remaining items (not planned for current scope)
 
 - No Census API key (moderate: lower rate limits without one)

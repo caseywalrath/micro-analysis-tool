@@ -38,14 +38,17 @@ Browser-based geospatial analysis tool. Pure front-end (no build step, no backen
 ## File Structure
 
 ```
-index.html                  App shell: sidebar layout, script tags
+index.html                  App shell: toolbar, sidebar, map, feature panel, script tags
 css/style.css               All styles
 js/
   app.js                    Startup, project registry, summary runners, event wiring
   core/
     utils.js                CSV parsing, number formatting, GEOID normalization, VAR_META
     map.js                  MapLibre GL map instance (Carto basemap)
-    stations.js             Station points, 0.5-mile buffers, union polygon
+    stations.js             Station points, user-defined buffers, union polygon
+    lines.js                Line drawing (polylines with snap-to-close)
+    polygons.js             Polygon drawing (vertex-by-vertex with snap-to-close)
+    features.js             Right-side feature panel: lists features, editable names, delete buttons
     census.js               TIGERweb geometry queries, ACS data fetch, area-weighted aggregation
     lodes.js                LODES .csv.gz download/upload/parse, block-level employment
   projects/
@@ -69,6 +72,9 @@ Order matters because modules depend on earlier ones:
 utils.js    (no deps)
 map.js      (creates App.map)
 stations.js (needs App.map, turf)
+lines.js    (needs App.map)
+polygons.js (needs App.map)
+features.js (needs App.stations, App.lines, App.polygons, App.removeStation, etc.)
 census.js   (needs App.map, App.bboxStringFromFeature, App.getMeta, turf)
 lodes.js    (needs App.map, App.bboxStringFromFeature, App.bufferUnionPolygon, pako, turf)
 app.js      (wires everything; defines App.registerProject)
@@ -84,7 +90,16 @@ app.js      (wires everything; defines App.registerProject)
 `map` (MapLibre instance)
 
 ### stations.js
-`stations` (Point array), `buffers` (Polygon array), `addStationPoint(lon, lat)`, `clearStations()`, `undoLastStation()`, `renderStationLayers()`, `bufferUnionPolygon()`, `getUnion()` (alias), `bboxStringFromFeature(feat)`
+`stations` (Point array), `buffers` (Polygon array), `addStationPoint(lon, lat)`, `rebuildBuffers(radiusMiles)`, `removeStation(index)`, `clearStations()`, `undoLastStation()`, `renderStationLayers()`, `bufferUnionPolygon()`, `getUnion()` (alias), `bboxStringFromFeature(feat)`
+
+### lines.js
+`lines` (LineString array), `handleLineClick(lngLat)`, `removeLine(index)`, `clearLines()`, `undoLastLine()`, `cancelLineDrawing()`, `renderLineLayers()`
+
+### polygons.js
+`polygons` (Polygon array), `handlePolygonClick(lngLat)`, `removePolygon(index)`, `clearPolygons()`, `undoLastPolygon()`, `cancelPolygonDrawing()`, `renderPolygonLayers()`
+
+### features.js
+`refreshFeaturePanel()`
 
 ### census.js
 `renderCensusOverlay(geos)`, `fetchAllTigerwebFeatures(layerUrl, params)`, `fetchTigerwebGeos(geoLevel, unionFeat)`, `parseGEOID(geoLevel, geoid)`, `fetchACSValues(geoLevel, year, varCode, geoids)`, `fetchACSCountyValues(year, varCode, counties)`, `aggregateWithinUnion(unionFeat, geos, valueMap, aggMode)`, `computeAcsValueOnly(varCode, year, geoLevel)`
@@ -93,7 +108,7 @@ app.js      (wires everything; defines App.registerProject)
 `STATE_FIPS_TO_ABBR`, `getStateFromMapCenter()`, `startDownload(url, filename)`, `lodesData` (Map or null), `lodesFileName`, `setLodesLoadedUI(loaded, name, nRows)`, `parseLodesFromUploadedFile(file)`, `fetchBlocksInternalPointsInUnion(unionFeat)`, `computeEmploymentServedOnly()`
 
 ### app.js
-`registerProject(config)` (see below)
+`drawMode`, `registerProject(config)`, `onFeatureDelete()` (hook, see below)
 
 ## Project System
 
@@ -157,12 +172,21 @@ No core code needs to change.
 
 Remove the project `<script>` tag from `index.html`. The core app (map, stations, ACS summaries, LODES) works independently.
 
-## Sidebar Layout
+## Layout
 
 ```
-+-----------------------------+
-|  Stations (core)            |  Always visible. Station count,
-|  [Delete last] [Clear]      |  undo/clear, coordinate list.
++---------------------------------------------------------------+
+|  Toolbar                                                      |
+|  [Station] [Line] [Route] [Polygon]   [Delete Last] [Clear]  |
++------------------+------------------------+-------------------+
+|  Sidebar (left)  |        Map (center)    | Feature Panel (R) |
+|  520px           |        flex            | 240px             |
++------------------+------------------------+-------------------+
+```
+
+### Sidebar (left)
+
+```
 +-----------------------------+
 |  Station-area Data (core)   |  Variable picker, year, geography
 |  [Update summary]           |  level, results card.
@@ -172,6 +196,22 @@ Remove the project `<script>` tag from `index.html`. The core app (map, stations
 +-----------------------------+
 |  LODES (core)               |  Download button, file picker,
 |  Download / Upload          |  status.
++-----------------------------+
+```
+
+### Feature Panel (right)
+
+```
++-----------------------------+
+|  Features                   |
+|  STATIONS                   |  Per-station rows with editable
+|    Station 1         [DEL]  |  names and delete buttons.
+|    Station 2         [DEL]  |
+|  BUFFER  [__0__] mi        |  Radius input: 0 = no buffers.
+|  LINES                      |  Per-line rows.
+|  ROUTES                     |  (placeholder)
+|  POLYGONS                   |  Per-polygon rows.
+|  [Import] [Export]          |  (disabled/placeholder)
 +-----------------------------+
 ```
 
