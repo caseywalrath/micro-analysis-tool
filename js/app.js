@@ -71,8 +71,13 @@
 
     var unionFeat = App.bufferUnionPolygon();
     if (!unionFeat) {
-      App.setStatus("No stations yet");
-      notesEl.textContent = "Add at least one station to compute employment served.";
+      if (App.stations.length === 0) {
+        App.setStatus("No stations yet");
+        notesEl.textContent = "Add at least one station to compute employment served.";
+      } else {
+        App.setStatus("No buffers");
+        notesEl.textContent = "Set a buffer radius in the Features panel to define the analysis area.";
+      }
       return;
     }
 
@@ -116,8 +121,13 @@
 
     var unionFeat = App.bufferUnionPolygon();
     if (!unionFeat) {
-      App.setStatus("No stations yet");
-      notesEl.textContent = "Add at least one station to compute a station-area estimate.";
+      if (App.stations.length === 0) {
+        App.setStatus("No stations yet");
+        notesEl.textContent = "Add at least one station to compute a station-area estimate.";
+      } else {
+        App.setStatus("No buffers");
+        notesEl.textContent = "Set a buffer radius in the Features panel to define the analysis area.";
+      }
       return;
     }
 
@@ -232,6 +242,14 @@
     App.setAggUI(App.getMeta(document.getElementById("varSelect").value));
     document.getElementById("varSelect").addEventListener("change", function (e) {
       App.setAggUI(App.getMeta(e.target.value));
+    });
+
+    // Buffer radius input
+    document.getElementById("bufferRadius").addEventListener("input", function () {
+      var val = parseFloat(this.value);
+      if (isNaN(val) || val < 0) val = 0;
+      App.rebuildBuffers(val);
+      notifyProject();
     });
 
     // Map click: dispatch based on draw mode

@@ -41,8 +41,8 @@
       <div id="sidebar">
         <h3>Station-area Data</h3>
         <p class="muted">
-          Summaries are computed within the <b>dissolved union</b> of all 0.5-mile buffers (avoids double counting).
-          For ACS, counts are area-apportioned; medians are shown as an area-weighted average estimate.
+          Summaries are computed within the <b>dissolved union</b> of all station buffers (avoids double counting).
+          Set the buffer radius in the Features panel. For ACS, counts are area-apportioned; medians are shown as an area-weighted average estimate.
         </p>
 
         <label>
@@ -97,7 +97,7 @@
         <div class="card">
           <div class="kv"><b>Intersecting geographies:</b> <span id="nGeos">0</span></div>
           <div class="kv"><b>Aggregation method:</b> <span id="aggMethod">—</span></div>
-          <div class="kv"><b>Result in ½-mile union:</b></div>
+          <div class="kv"><b>Result in buffer union:</b></div>
           <div id="total">—</div>
           <div id="notes" class="tiny" style="margin-top:6px;"></div>
         </div>
@@ -140,6 +140,14 @@
         <div class="fp-section">
           <div class="fp-section-header">Stations</div>
           <div id="fp-stations" class="fp-list"></div>
+        </div>
+
+        <div class="fp-section">
+          <div class="fp-section-header fp-buffer-header">
+            <span>Buffer</span>
+            <input id="bufferRadius" type="number" min="0" step="0.1" value="0" class="fp-radius-input" />
+            <span class="fp-radius-unit">mi</span>
+          </div>
         </div>
 
         <div class="fp-section">

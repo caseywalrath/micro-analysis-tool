@@ -9,6 +9,7 @@
 
   var points = [];
   var buffers = [];
+  var bufferRadiusMiles = 0; // user-defined; 0 = no buffers
 
   function pointsGeoJSON() { return { type: "FeatureCollection", features: points }; }
   function buffersGeoJSON() { return { type: "FeatureCollection", features: buffers }; }
@@ -70,11 +71,26 @@
       properties: { name: "Station " + idx, stationIdx: idx },
       geometry: { type: "Point", coordinates: [lon, lat] }
     });
+    rebuildBuffers(bufferRadiusMiles);
+  }
 
-    var pt = turf.point([lon, lat]);
-    var circle = turf.circle(pt, 0.5, { units: "miles", steps: 64 });
-    buffers.push({ type: circle.type, geometry: circle.geometry, properties: { stationIdx: idx } });
-
+  // Rebuild all buffers from current stations at the given radius.
+  // If radius is 0, buffers are cleared (points remain on the map).
+  function rebuildBuffers(radiusMiles) {
+    bufferRadiusMiles = radiusMiles;
+    buffers.length = 0;
+    if (radiusMiles > 0) {
+      for (var i = 0; i < points.length; i++) {
+        var coords = points[i].geometry.coordinates;
+        var pt = turf.point(coords);
+        var circle = turf.circle(pt, radiusMiles, { units: "miles", steps: 64 });
+        buffers.push({
+          type: circle.type,
+          geometry: circle.geometry,
+          properties: { stationIdx: points[i].properties.stationIdx }
+        });
+      }
+    }
     renderStationLayers();
   }
 
@@ -96,8 +112,7 @@
   function undoLastStation() {
     if (points.length === 0) return;
     points.pop();
-    buffers.pop();
-    renderStationLayers();
+    rebuildBuffers(bufferRadiusMiles);
   }
 
   // --- Expose on App namespace ---
@@ -105,6 +120,7 @@
   App.stations = points;
   App.buffers = buffers;
   App.addStationPoint = addStationPoint;
+  App.rebuildBuffers = rebuildBuffers;
   App.clearStations = clearStations;
   App.undoLastStation = undoLastStation;
   App.renderStationLayers = renderStationLayers;

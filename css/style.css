@@ -101,6 +101,28 @@ button { cursor: pointer; }
 
 .fp-list { min-height: 4px; }
 
+.fp-buffer-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.fp-radius-input {
+  width: 56px;
+  padding: 2px 4px;
+  margin-top: 0;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  text-align: right;
+}
+.fp-radius-unit {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
 .fp-item {
   display: flex;
   align-items: center;
