@@ -9,7 +9,7 @@
 
   // --- Status ---
 
-  function setStatus(s) { document.getElementById("status").textContent = s; }
+  function setStatus(s) { var el = document.getElementById("status"); if (el) el.textContent = s; }
 
   // --- CSV parsing + helpers ---
 
