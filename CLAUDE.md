@@ -2,6 +2,35 @@
 
 Project onboarding for Claude Code sessions. Read this first.
 
+## Developer Context
+
+**User Experience Level**: Beginner/non-coder
+- Limited experience with Git, GitHub, and project development
+- Does not read or understand code
+- Interfaces with Claude through web/chat, not terminal-based development
+- Requires clear, step-by-step instructions with explicit file paths
+
+---
+
+## Communication Guidelines
+
+- Use plain language, avoid jargon where possible
+- Always specify full file paths (e.g., `src/App.jsx` not "the main file")
+- Explain *where* code changes are happening before making them
+- Verify branch state before implementing features
+- Show git commands explicitly: `git status`, `git pull`, `git checkout branch-name`
+- Explain deployment implications (what happens when code is pushed)
+- Confirm which branch should be used as base before starting work
+- Use specific line numbers when referencing code locations
+**At session start**: Always notify the user what branch you are working on and why a new branch was created. Example: "This session is on branch `claude/review-changelog". It was created automatically for this session and includes all prior work."
+
+## Common Issues to Prevent
+
+- Wrong branch base → old UI deploying
+- Features reverting due to unclear git state
+- Changes made to wrong files
+- User confusion about what version is "live"
+- User not knowing a new branch was created or how to work from it
 ## Overview
 
 Browser-based geospatial analysis tool. Pure front-end (no build step, no backend, no npm). Open `index.html` in a browser and it works. All data stays client-side; Census APIs are called directly.
