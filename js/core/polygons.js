@@ -233,6 +233,12 @@
     renderPolygonLayers();
   }
 
+  function removePolygon(index) {
+    if (index < 0 || index >= polygons.length) return;
+    polygons.splice(index, 1);
+    renderPolygonLayers();
+  }
+
   function clearPolygons() {
     polygons.length = 0;
     currentCoords.length = 0;
@@ -262,6 +268,7 @@
 
   App.polygons = polygons;
   App.handlePolygonClick = handlePolygonClick;
+  App.removePolygon = removePolygon;
   App.clearPolygons = clearPolygons;
   App.undoLastPolygon = undoLastPolygon;
   App.cancelPolygonDrawing = cancelPolygonDrawing;

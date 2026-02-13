@@ -128,6 +128,21 @@ button { cursor: pointer; }
   align-items: center;
   padding: 1px 0;
 }
+.fp-delete {
+  width: auto;
+  margin: 0;
+  padding: 3px 4px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--muted);
+  opacity: 0;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.fp-item:hover .fp-delete { opacity: 1; }
+.fp-delete:hover { color: #e53e3e; }
 .fp-name {
   border: 1px solid transparent;
   background: transparent;

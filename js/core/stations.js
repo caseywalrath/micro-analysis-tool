@@ -103,6 +103,12 @@
 
   function bboxStringFromFeature(feat) { return turf.bbox(feat).join(","); }
 
+  function removeStation(index) {
+    if (index < 0 || index >= points.length) return;
+    points.splice(index, 1);
+    rebuildBuffers(bufferRadiusMiles);
+  }
+
   function clearStations() {
     points.length = 0;
     buffers.length = 0;
@@ -121,6 +127,7 @@
   App.buffers = buffers;
   App.addStationPoint = addStationPoint;
   App.rebuildBuffers = rebuildBuffers;
+  App.removeStation = removeStation;
   App.clearStations = clearStations;
   App.undoLastStation = undoLastStation;
   App.renderStationLayers = renderStationLayers;

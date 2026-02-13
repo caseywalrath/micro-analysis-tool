@@ -193,6 +193,10 @@
     }
   }
 
+  // ---- Feature delete hook (called by features.js) ----
+
+  App.onFeatureDelete = function () { notifyProject(); };
+
   // ---- Map load: wire everything ----
 
   App.map.on("load", async function () {

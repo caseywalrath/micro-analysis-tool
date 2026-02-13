@@ -200,6 +200,12 @@
     renderLineLayers();
   }
 
+  function removeLine(index) {
+    if (index < 0 || index >= lines.length) return;
+    lines.splice(index, 1);
+    renderLineLayers();
+  }
+
   function clearLines() {
     lines.length = 0;
     currentCoords.length = 0;
@@ -229,6 +235,7 @@
 
   App.lines = lines;
   App.handleLineClick = handleLineClick;
+  App.removeLine = removeLine;
   App.clearLines = clearLines;
   App.undoLastLine = undoLastLine;
   App.cancelLineDrawing = cancelLineDrawing;
