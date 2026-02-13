@@ -61,9 +61,6 @@
   /* ---- Sidebar panel update ---- */
 
   function updateLinesPanel() {
-    var countEl = document.getElementById("nLines");
-    if (countEl) countEl.textContent = String(lines.length);
-
     var drawingEl = document.getElementById("lineDrawing");
     if (drawingEl) {
       if (currentCoords.length > 0) {
@@ -74,6 +71,7 @@
         drawingEl.textContent = "";
       }
     }
+    if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
   }
 
   /* ---- Map layer rendering ---- */

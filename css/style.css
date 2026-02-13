@@ -75,15 +75,54 @@ button { cursor: pointer; }
 .btnRow { display:flex; gap:10px; }
 .btnRow button { width: 50%; }
 
-#coords {
-  white-space: pre;
-  background: var(--panel);
-  padding: 10px;
-  border-radius: 8px;
+/* ---- Right-side feature panel ---- */
+#feature-panel {
+  width: 240px;
+  border-left: 1px solid var(--border);
+  padding: 12px 10px;
   overflow: auto;
-  border: 1px solid var(--border);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  box-sizing: border-box;
+  background: var(--bg);
+  flex-shrink: 0;
+}
+#feature-panel h3 { margin: 0 0 10px; }
+
+.fp-section { margin-bottom: 6px; }
+.fp-section-header {
   font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 2px;
+}
+
+.fp-list { min-height: 4px; }
+
+.fp-item {
+  display: flex;
+  align-items: center;
+  padding: 1px 0;
+}
+.fp-name {
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 3px 6px;
+  font-size: 13px;
+  font-family: inherit;
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 4px;
+}
+.fp-name:hover {
+  border-color: var(--border);
+}
+.fp-name:focus {
+  border-color: #2b6cb0;
+  outline: none;
+  background: #fff;
 }
 
 .card {

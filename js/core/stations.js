@@ -14,12 +14,7 @@
   function buffersGeoJSON() { return { type: "FeatureCollection", features: buffers }; }
 
   function updateCoordsPanel() {
-    document.getElementById("nStations").textContent = String(points.length);
-    var lines = points.map(function (f, i) {
-      var coords = f.geometry.coordinates;
-      return (i + 1) + "\t" + coords[1].toFixed(6) + "\t" + coords[0].toFixed(6);
-    });
-    document.getElementById("coords").textContent = "idx\tlat\tlon\n" + lines.join("\n");
+    if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
   }
 
   function renderStationLayers() {

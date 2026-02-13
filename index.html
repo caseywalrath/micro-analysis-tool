@@ -42,14 +42,9 @@
         <h3>Study Area</h3>
 
         <div class="card">
-          <div class="kv"><b>Points:</b> <span id="nStations">0</span></div>
-          <div class="kv"><b>Lines:</b> <span id="nLines">0</span></div>
           <div class="kv"><b>Status:</b> <span id="status">Idle</span></div>
           <div id="lineDrawing" class="tiny"></div>
         </div>
-
-        <p style="margin-top:10px; margin-bottom:6px;">Lat/Lon list:</p>
-        <div id="coords"></div>
 
         <hr />
 
@@ -147,6 +142,30 @@
       </div>
 
       <div id="map"></div>
+
+      <div id="feature-panel">
+        <h3>Features</h3>
+
+        <div class="fp-section">
+          <div class="fp-section-header">Stations</div>
+          <div id="fp-stations" class="fp-list"></div>
+        </div>
+
+        <div class="fp-section">
+          <div class="fp-section-header">Lines</div>
+          <div id="fp-lines" class="fp-list"></div>
+        </div>
+
+        <div class="fp-section">
+          <div class="fp-section-header">Routes</div>
+          <div id="fp-routes" class="fp-list"></div>
+        </div>
+
+        <div class="fp-section">
+          <div class="fp-section-header">Polygons</div>
+          <div id="fp-polygons" class="fp-list"></div>
+        </div>
+      </div>
       </div><!-- #main-content -->
     </div>
 
@@ -155,6 +174,7 @@
     <script src="js/core/map.js"></script>
     <script src="js/core/stations.js"></script>
     <script src="js/core/lines.js"></script>
+    <script src="js/core/features.js"></script>
     <script src="js/core/census.js"></script>
     <script src="js/core/lodes.js"></script>
     <script src="js/app.js"></script>
