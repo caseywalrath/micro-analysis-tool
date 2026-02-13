@@ -232,6 +232,7 @@
 
     // Clear stations
     document.getElementById("clear").addEventListener("click", function () {
+      if (!confirm("Clear all stations and lines? This cannot be undone.")) return;
       App.clearStations();
       App.clearLines();
       document.getElementById("nGeos").textContent = "0";
