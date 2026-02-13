@@ -41,7 +41,8 @@
   function refreshFeaturePanel() {
     populateList("fp-stations", App.stations || []);
     populateList("fp-lines", App.lines || []);
-    // Routes and polygons will populate once those tools are implemented
+    populateList("fp-polygons", App.polygons || []);
+    // Routes will populate once that tool is implemented
   }
 
   App.refreshFeaturePanel = refreshFeaturePanel;

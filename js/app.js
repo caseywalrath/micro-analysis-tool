@@ -189,6 +189,7 @@
     App.setStatus("Ready");
     App.renderStationLayers();
     App.renderLineLayers();
+    App.renderPolygonLayers();
 
     // Load project panel HTML, then init its event handlers
     await loadProjectPanel();
@@ -213,9 +214,12 @@
           btn.classList.add("active");
         }
 
-        // Cancel in-progress line drawing when leaving line mode
+        // Cancel in-progress drawing when leaving a draw mode
         if (prevMode === "line" && App.drawMode !== "line") {
           App.cancelLineDrawing();
+        }
+        if (prevMode === "polygon" && App.drawMode !== "polygon") {
+          App.cancelPolygonDrawing();
         }
 
         App.setStatus(App.drawMode
@@ -238,15 +242,18 @@
       } else if (App.drawMode === "line") {
         App.handleLineClick(e.lngLat);
         notifyProject();
+      } else if (App.drawMode === "polygon") {
+        App.handlePolygonClick(e.lngLat);
+        notifyProject();
       }
-      // route, polygon: no-op for now
     });
 
     // Clear stations
     document.getElementById("clear").addEventListener("click", function () {
-      if (!confirm("Clear all stations and lines? This cannot be undone.")) return;
+      if (!confirm("Clear all features? This cannot be undone.")) return;
       App.clearStations();
       App.clearLines();
+      App.clearPolygons();
       document.getElementById("nGeos").textContent = "0";
       document.getElementById("total").textContent = "\u2014";
       document.getElementById("notes").textContent = "";
@@ -258,6 +265,9 @@
     document.getElementById("undo").addEventListener("click", function () {
       if (App.drawMode === "line") {
         App.undoLastLine();
+        notifyProject();
+      } else if (App.drawMode === "polygon") {
+        App.undoLastPolygon();
         notifyProject();
       } else if (App.stations.length > 0) {
         App.undoLastStation();
