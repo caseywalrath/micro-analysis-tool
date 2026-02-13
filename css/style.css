@@ -125,6 +125,17 @@ button { cursor: pointer; }
   background: #fff;
 }
 
+.fp-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.fp-actions button {
+  flex: 1;
+  padding: 6px 0;
+  font-size: 13px;
+}
+
 .card {
   border: 1px solid var(--border);
   border-radius: 10px;
