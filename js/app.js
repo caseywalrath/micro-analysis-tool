@@ -9,7 +9,7 @@
 
   // ---- Draw mode ----
 
-  App.drawMode = "station"; // "station" | "line" | "route" | "polygon"
+  App.drawMode = null; // null | "station" | "line" | "route" | "polygon"
 
   // ---- Project registry ----
 
@@ -201,14 +201,26 @@
     toolBtns.forEach(function (btn) {
       btn.addEventListener("click", function () {
         var prevMode = App.drawMode;
-        App.drawMode = btn.getAttribute("data-mode");
-        toolBtns.forEach(function (b) { b.classList.remove("active"); });
-        btn.classList.add("active");
-        // Cancel in-progress line drawing when switching away from line mode
+        var clickedMode = btn.getAttribute("data-mode");
+
+        // Toggle: clicking the active button deselects it
+        if (App.drawMode === clickedMode) {
+          App.drawMode = null;
+          btn.classList.remove("active");
+        } else {
+          App.drawMode = clickedMode;
+          toolBtns.forEach(function (b) { b.classList.remove("active"); });
+          btn.classList.add("active");
+        }
+
+        // Cancel in-progress line drawing when leaving line mode
         if (prevMode === "line" && App.drawMode !== "line") {
           App.cancelLineDrawing();
         }
-        App.setStatus(App.drawMode.charAt(0).toUpperCase() + App.drawMode.slice(1) + " mode");
+
+        App.setStatus(App.drawMode
+          ? App.drawMode.charAt(0).toUpperCase() + App.drawMode.slice(1) + " mode"
+          : "Ready");
       });
     });
 
