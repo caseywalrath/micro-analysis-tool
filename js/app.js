@@ -188,6 +188,7 @@
   App.map.on("load", async function () {
     App.setStatus("Ready");
     App.renderStationLayers();
+    App.renderLineLayers();
 
     // Load project panel HTML, then init its event handlers
     await loadProjectPanel();
@@ -199,9 +200,14 @@
     var toolBtns = document.querySelectorAll(".tool-btn");
     toolBtns.forEach(function (btn) {
       btn.addEventListener("click", function () {
+        var prevMode = App.drawMode;
         App.drawMode = btn.getAttribute("data-mode");
         toolBtns.forEach(function (b) { b.classList.remove("active"); });
         btn.classList.add("active");
+        // Cancel in-progress line drawing when switching away from line mode
+        if (prevMode === "line" && App.drawMode !== "line") {
+          App.cancelLineDrawing();
+        }
         App.setStatus(App.drawMode.charAt(0).toUpperCase() + App.drawMode.slice(1) + " mode");
       });
     });
@@ -217,13 +223,17 @@
       if (App.drawMode === "station") {
         App.addStationPoint(e.lngLat.lng, e.lngLat.lat);
         notifyProject();
+      } else if (App.drawMode === "line") {
+        App.handleLineClick(e.lngLat);
+        notifyProject();
       }
-      // line, route, polygon: no-op for now
+      // route, polygon: no-op for now
     });
 
     // Clear stations
     document.getElementById("clear").addEventListener("click", function () {
       App.clearStations();
+      App.clearLines();
       document.getElementById("nGeos").textContent = "0";
       document.getElementById("total").textContent = "\u2014";
       document.getElementById("notes").textContent = "";
@@ -233,7 +243,10 @@
 
     // Undo last station
     document.getElementById("undo").addEventListener("click", function () {
-      if (App.stations.length > 0) {
+      if (App.drawMode === "line") {
+        App.undoLastLine();
+        notifyProject();
+      } else if (App.stations.length > 0) {
         App.undoLastStation();
         App.setStatus("Updated");
         notifyProject();
