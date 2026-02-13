@@ -7,6 +7,10 @@
 (function () {
   var App = window.App;
 
+  // ---- Draw mode ----
+
+  App.drawMode = "station"; // "station" | "line" | "route" | "polygon"
+
   // ---- Project registry ----
 
   var _project = null;
@@ -191,16 +195,30 @@
       _project.init(buildCore());
     }
 
+    // ---- Toolbar: draw mode buttons ----
+    var toolBtns = document.querySelectorAll(".tool-btn");
+    toolBtns.forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        App.drawMode = btn.getAttribute("data-mode");
+        toolBtns.forEach(function (b) { b.classList.remove("active"); });
+        btn.classList.add("active");
+        App.setStatus(App.drawMode.charAt(0).toUpperCase() + App.drawMode.slice(1) + " mode");
+      });
+    });
+
     // Variable selector
     App.setAggUI(App.getMeta(document.getElementById("varSelect").value));
     document.getElementById("varSelect").addEventListener("change", function (e) {
       App.setAggUI(App.getMeta(e.target.value));
     });
 
-    // Map click: add station + notify project
+    // Map click: dispatch based on draw mode
     App.map.on("click", function (e) {
-      App.addStationPoint(e.lngLat.lng, e.lngLat.lat);
-      notifyProject();
+      if (App.drawMode === "station") {
+        App.addStationPoint(e.lngLat.lng, e.lngLat.lat);
+        notifyProject();
+      }
+      // line, route, polygon: no-op for now
     });
 
     // Clear stations

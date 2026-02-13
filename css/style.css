@@ -9,7 +9,48 @@
 }
 
 body { margin: 0; font-family: system-ui, sans-serif; background: var(--bg); }
-#app { display: flex; height: 100vh; width: 100vw; }
+#app { display: flex; flex-direction: column; height: 100vh; width: 100vw; }
+
+/* ---- Top toolbar ---- */
+#toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  flex-shrink: 0;
+}
+#draw-tools {
+  display: flex;
+  gap: 4px;
+}
+#draw-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: 32px;
+}
+#toolbar button {
+  width: auto;
+  margin-top: 0;
+  padding: 6px 14px;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+}
+#toolbar button:hover {
+  background: #eef1f5;
+}
+.tool-btn.active {
+  background: #2b6cb0 !important;
+  color: #fff;
+  border-color: #2b6cb0 !important;
+}
+
+/* ---- Main content (sidebar + map row) ---- */
+#main-content { display: flex; flex: 1; overflow: hidden; }
 #sidebar {
   width: 520px;
   border-right: 1px solid var(--border);

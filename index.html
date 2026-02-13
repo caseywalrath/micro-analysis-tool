@@ -24,19 +24,25 @@
 
   <body>
     <div id="app">
-      <div id="sidebar">
-        <h3>Stations</h3>
-        <div class="btnRow">
-          <button id="undo">Delete last point</button>
-          <button id="clear">Clear points</button>
+      <div id="toolbar">
+        <div id="draw-tools">
+          <button class="tool-btn active" data-mode="station">Station</button>
+          <button class="tool-btn" data-mode="line">Line</button>
+          <button class="tool-btn" data-mode="route">Route</button>
+          <button class="tool-btn" data-mode="polygon">Polygon</button>
         </div>
+        <div id="draw-actions">
+          <button id="undo">Delete Last Point</button>
+          <button id="clear">Clear</button>
+        </div>
+      </div>
 
-        <p class="muted">
-          Click the map to add station points. Each station gets a semi-transparent <b>0.5-mile</b> radial buffer.
-        </p>
+      <div id="main-content">
+      <div id="sidebar">
+        <h3>Study Area</h3>
 
         <div class="card">
-          <div class="kv"><b>Stations:</b> <span id="nStations">0</span></div>
+          <div class="kv"><b>Points:</b> <span id="nStations">0</span></div>
           <div class="kv"><b>Status:</b> <span id="status">Idle</span></div>
         </div>
 
@@ -139,6 +145,7 @@
       </div>
 
       <div id="map"></div>
+      </div><!-- #main-content -->
     </div>
 
     <!-- Core modules (order matters) -->
