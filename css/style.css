@@ -182,7 +182,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Libe
 /* Breakpoint panel */
 .bpGrid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 10px;
   margin-top: 8px;
 }
@@ -210,4 +210,4 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Libe
 .bpTitle { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
 .bpMeta { font-size: 12px; color: var(--muted); margin-top: 6px; }
 
-.twoCol { display:grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.twoCol { display:grid; grid-template-columns: 1fr; gap: 8px; }

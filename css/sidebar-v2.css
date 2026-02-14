@@ -6,7 +6,7 @@
 
 /* ---- Container ---- */
 #sidebar {
-  width: 520px;
+  width: 310px;
   border-right: 1px solid var(--border);
   padding: 0;
   overflow-y: auto;
@@ -147,7 +147,6 @@
 }
 #sidebar .sb2-kv b {
   display: inline-block;
-  min-width: 180px;
 }
 
 /* ---- Warnings ---- */
