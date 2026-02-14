@@ -1,0 +1,175 @@
+/* ============================================================
+   sidebar-v2.css
+   Styles for the new sidebar (#sidebar-v2).
+   Fully isolated from legacy sidebar CSS — all rules scoped
+   under #sidebar-v2 to prevent leakage.
+   ============================================================ */
+
+/* ---- Container ---- */
+#sidebar-v2 {
+  width: 520px;
+  border-right: 1px solid var(--border);
+  padding: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
+  background: var(--bg);
+  flex-shrink: 0;
+}
+#sidebar-v2.sb2-hidden {
+  display: none;
+}
+
+/* ---- Panel system ---- */
+#sidebar-v2 .sb2-panel {
+  border-bottom: 1px solid var(--border);
+}
+
+#sidebar-v2 .sb2-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  cursor: pointer;
+  user-select: none;
+  background: var(--panel);
+  transition: background 0.12s;
+}
+#sidebar-v2 .sb2-panel-header:hover {
+  background: #eef1f5;
+}
+
+#sidebar-v2 .sb2-panel-title {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #1a1a1a;
+}
+
+#sidebar-v2 .sb2-panel-toggle {
+  width: auto;
+  margin: 0;
+  padding: 0 4px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1;
+  transition: transform 0.15s;
+}
+#sidebar-v2 .sb2-panel.sb2-collapsed .sb2-panel-toggle {
+  transform: rotate(-90deg);
+}
+
+#sidebar-v2 .sb2-panel-body {
+  padding: 10px 14px 14px;
+}
+#sidebar-v2 .sb2-panel.sb2-collapsed .sb2-panel-body {
+  display: none;
+}
+
+/* ---- Typography ---- */
+#sidebar-v2 h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+#sidebar-v2 .sb2-muted {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+  margin: 0 0 8px;
+}
+
+#sidebar-v2 .sb2-tiny {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* ---- Form controls (scoped — won't inherit legacy width:100%) ---- */
+#sidebar-v2 label {
+  display: block;
+  margin: 8px 0;
+  font-size: 13px;
+  color: #333;
+}
+
+#sidebar-v2 select,
+#sidebar-v2 input[type="text"],
+#sidebar-v2 input[type="number"],
+#sidebar-v2 input[type="file"] {
+  width: 100%;
+  padding: 7px 9px;
+  margin-top: 4px;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+}
+#sidebar-v2 select:focus,
+#sidebar-v2 input[type="text"]:focus,
+#sidebar-v2 input[type="number"]:focus {
+  outline: none;
+  border-color: #2b6cb0;
+  box-shadow: 0 0 0 2px rgba(43, 108, 176, 0.15);
+}
+
+#sidebar-v2 button {
+  width: 100%;
+  padding: 8px 12px;
+  margin-top: 6px;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  transition: background 0.12s;
+}
+#sidebar-v2 button:hover {
+  background: #eef1f5;
+}
+
+/* ---- Cards ---- */
+#sidebar-v2 .sb2-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  margin-top: 8px;
+  background: var(--cardbg);
+}
+
+#sidebar-v2 .sb2-kv {
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+#sidebar-v2 .sb2-kv b {
+  display: inline-block;
+  min-width: 180px;
+}
+
+/* ---- Warnings ---- */
+#sidebar-v2 .sb2-warn {
+  border: 1px solid var(--warnbd);
+  background: var(--warnbg);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+/* ---- Empty state ---- */
+#sidebar-v2 .sb2-empty {
+  padding: 32px 14px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+}

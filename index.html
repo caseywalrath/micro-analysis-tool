@@ -20,6 +20,7 @@
 
     <!-- App styles -->
     <link rel="stylesheet" href="css/style.css" />
+    <link rel="stylesheet" href="css/sidebar-v2.css" />
   </head>
 
   <body>
@@ -35,9 +36,15 @@
           <button id="undo">Delete Last Feature</button>
           <button id="clear">Clear</button>
         </div>
+        <div id="sidebar-toggle-wrap">
+          <button id="sidebar-toggle" title="Switch between legacy and new sidebar">Sidebar v2</button>
+        </div>
       </div>
 
       <div id="main-content">
+      <!-- New sidebar (v2) — hidden by default during development -->
+      <div id="sidebar-v2" class="sb2-hidden"></div>
+
       <div id="sidebar">
         <h3>Station-area Data</h3>
         <p class="muted">
@@ -175,6 +182,7 @@
 
     <!-- Core modules (order matters) -->
     <script src="js/core/utils.js"></script>
+    <script src="js/core/sidebar.js"></script>
     <script src="js/core/map.js"></script>
     <script src="js/core/stations.js"></script>
     <script src="js/core/lines.js"></script>

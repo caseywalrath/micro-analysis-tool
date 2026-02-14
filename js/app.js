@@ -211,6 +211,28 @@
       _project.init(buildCore());
     }
 
+    // ---- Sidebar v2 toggle (development aid) ----
+    var sidebarToggleBtn = document.getElementById("sidebar-toggle");
+    if (sidebarToggleBtn) {
+      sidebarToggleBtn.addEventListener("click", function () {
+        var legacySidebar = document.getElementById("sidebar");
+        var v2Active = App.sidebar.isActive();
+
+        if (v2Active) {
+          // Switch back to legacy
+          App.sidebar.hide();
+          if (legacySidebar) legacySidebar.style.display = "";
+          sidebarToggleBtn.textContent = "Sidebar v2";
+        } else {
+          // Switch to v2
+          if (legacySidebar) legacySidebar.style.display = "none";
+          App.sidebar.show();
+          App.sidebar.render();
+          sidebarToggleBtn.textContent = "Sidebar v1";
+        }
+      });
+    }
+
     // ---- Toolbar: draw mode buttons ----
     var toolBtns = document.querySelectorAll(".tool-btn");
     toolBtns.forEach(function (btn) {
