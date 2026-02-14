@@ -89,8 +89,12 @@
   function getMeta(code) { return VAR_META[code] || { source: "ACS", agg: "sum", fmt: "int" }; }
 
   function setAggUI(meta) {
-    var aggMethodEl = document.getElementById("aggMethod");
-    var warnEl = document.getElementById("aggWarning");
+    // Use sidebar element resolver if available, fall back to direct lookup
+    var resolve = (App.sidebar && App.sidebar.el) ? App.sidebar.el : function (id) { return document.getElementById(id); };
+    var aggMethodEl = resolve("aggMethod");
+    var warnEl = resolve("aggWarning");
+
+    if (!aggMethodEl || !warnEl) return;
 
     if (meta.source === "LODES") {
       aggMethodEl.textContent = "Sum (LODES jobs for blocks whose internal point is inside union)";

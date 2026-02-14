@@ -7,9 +7,71 @@
 (function () {
   var App = window.App;
 
+  // Shorthand for the sidebar element resolver
+  var el = App.sidebar.el;
+
   // ---- Draw mode ----
 
   App.drawMode = null; // null | "station" | "line" | "route" | "polygon"
+
+  // ---- Station-area Data panel (v2 sidebar) ----
+
+  var STATION_DATA_PANEL_HTML =
+    '<p class="sb2-muted">' +
+      'Summaries are computed within the <b>dissolved union</b> of all station buffers (avoids double counting). ' +
+      'Set the buffer radius in the Features panel. For ACS, counts are area-apportioned; medians are shown as an area-weighted average estimate.' +
+    '</p>' +
+
+    '<label>Geography level (ACS only)' +
+      '<select id="v2-geoLevel">' +
+        '<option value="tract">Census Tracts (faster)</option>' +
+        '<option value="bg">Block Groups (more detailed)</option>' +
+      '</select>' +
+    '</label>' +
+
+    '<label>Variable (ACS or LODES)' +
+      '<select id="v2-varSelect">' +
+        '<optgroup label="Land Use (ACS: additive sums)">' +
+          '<option value="B01003_001E">Total population (ACS B01003_001E)</option>' +
+          '<option value="B11001_001E">Total households (ACS B11001_001E)</option>' +
+          '<option value="B25001_001E">Total housing units (ACS B25001_001E)</option>' +
+          '<option value="B25002_001E">Occupied housing units (ACS B25002_001E)</option>' +
+          '<option value="B25002_003E">Vacant housing units (ACS B25002_003E)</option>' +
+        '</optgroup>' +
+        '<optgroup label="Land Use / Employment (LODES: additive sum)">' +
+          '<option value="LODES_WAC_C000">Total existing employment (LODES WAC C000) — requires file upload</option>' +
+        '</optgroup>' +
+        '<optgroup label="Mobility / Transit-dependent (ACS: additive sums)">' +
+          '<option value="B08201_002E">Zero-car households (ACS B08201_002E)</option>' +
+          '<option value="B17001_002E">Persons below poverty level (ACS B17001_002E)</option>' +
+        '</optgroup>' +
+        '<optgroup label="Non-additive (ACS medians: area-weighted average estimate)">' +
+          '<option value="B19013_001E">Median household income (ACS B19013_001E) ⚠</option>' +
+          '<option value="B25064_001E">Median gross rent (ACS B25064_001E) ⚠</option>' +
+          '<option value="B25077_001E">Median home value (ACS B25077_001E) ⚠</option>' +
+        '</optgroup>' +
+      '</select>' +
+    '</label>' +
+
+    '<label>Year' +
+      '<select id="v2-yearSelect">' +
+        '<option value="2023">2023</option>' +
+        '<option value="2022">2022</option>' +
+        '<option value="2021">2021</option>' +
+      '</select>' +
+    '</label>' +
+
+    '<button id="v2-run">Update summary</button>' +
+
+    '<div id="v2-aggWarning" class="sb2-warn" style="display:none;"></div>' +
+
+    '<div class="sb2-card">' +
+      '<div class="sb2-kv"><b>Intersecting geographies:</b> <span id="v2-nGeos">0</span></div>' +
+      '<div class="sb2-kv"><b>Aggregation method:</b> <span id="v2-aggMethod">—</span></div>' +
+      '<div class="sb2-kv"><b>Result in buffer union:</b></div>' +
+      '<div id="v2-total" style="font-size:22px;font-weight:700;margin-top:6px;">—</div>' +
+      '<div id="v2-notes" class="sb2-tiny" style="margin-top:6px;"></div>' +
+    '</div>';
 
   // ---- Project registry ----
 
@@ -61,9 +123,9 @@
   // ---- Summary runners ----
 
   async function runLodesEmploymentSummary(year) {
-    var notesEl = document.getElementById("notes");
-    var totalEl = document.getElementById("total");
-    var nGeosEl = document.getElementById("nGeos");
+    var notesEl = el("notes");
+    var totalEl = el("total");
+    var nGeosEl = el("nGeos");
 
     notesEl.textContent = "";
     totalEl.textContent = "\u2014";
@@ -111,9 +173,9 @@
 
   async function runAcsSummary(varCode, year, geoLevel) {
     var meta = App.getMeta(varCode);
-    var notesEl = document.getElementById("notes");
-    var totalEl = document.getElementById("total");
-    var nGeosEl = document.getElementById("nGeos");
+    var notesEl = el("notes");
+    var totalEl = el("total");
+    var nGeosEl = el("nGeos");
 
     notesEl.textContent = "";
     totalEl.textContent = "\u2014";
@@ -161,9 +223,9 @@
   }
 
   async function runSummary() {
-    var varCode = document.getElementById("varSelect").value;
-    var year = document.getElementById("yearSelect").value;
-    var geoLevel = document.getElementById("geoLevel").value;
+    var varCode = el("varSelect").value;
+    var year = el("yearSelect").value;
+    var geoLevel = el("geoLevel").value;
 
     var meta = App.getMeta(varCode);
     App.setAggUI(meta);
@@ -211,6 +273,19 @@
       _project.init(buildCore());
     }
 
+    // ---- Register v2 sidebar panels ----
+    // Register all panels, render once, then wire event listeners.
+    // The DOM persists across show/hide toggles so listeners stay attached.
+    App.sidebar.addPanel({
+      id: "station-data",
+      title: "Station-area Data",
+      html: STATION_DATA_PANEL_HTML,
+      collapsed: false,
+      order: 10
+    });
+    App.sidebar.render();
+    wireV2StationDataEvents();
+
     // ---- Sidebar v2 toggle (development aid) ----
     var sidebarToggleBtn = document.getElementById("sidebar-toggle");
     if (sidebarToggleBtn) {
@@ -227,7 +302,6 @@
           // Switch to v2
           if (legacySidebar) legacySidebar.style.display = "none";
           App.sidebar.show();
-          App.sidebar.render();
           sidebarToggleBtn.textContent = "Sidebar v1";
         }
       });
@@ -264,11 +338,32 @@
       });
     });
 
-    // Variable selector
+    // Variable selector (legacy sidebar)
     App.setAggUI(App.getMeta(document.getElementById("varSelect").value));
     document.getElementById("varSelect").addEventListener("change", function (e) {
       App.setAggUI(App.getMeta(e.target.value));
     });
+
+    // Variable selector (v2 sidebar) — wired after panel render
+    function wireV2StationDataEvents() {
+      var v2Var = document.getElementById("v2-varSelect");
+      var v2Run = document.getElementById("v2-run");
+      if (v2Var) {
+        v2Var.addEventListener("change", function (e) {
+          App.setAggUI(App.getMeta(e.target.value));
+        });
+      }
+      if (v2Run) {
+        v2Run.addEventListener("click", async function () {
+          try {
+            await runSummary();
+          } catch (e) {
+            App.setStatus("Error");
+            el("notes").textContent = String(e && e.message ? e.message : e);
+          }
+        });
+      }
+    }
 
     // Buffer radius input
     document.getElementById("bufferRadius").addEventListener("input", function () {
@@ -298,9 +393,9 @@
       App.clearStations();
       App.clearLines();
       App.clearPolygons();
-      document.getElementById("nGeos").textContent = "0";
-      document.getElementById("total").textContent = "\u2014";
-      document.getElementById("notes").textContent = "";
+      el("nGeos").textContent = "0";
+      el("total").textContent = "\u2014";
+      el("notes").textContent = "";
       App.setStatus("Cleared");
       notifyProject();
     });
@@ -320,13 +415,13 @@
       }
     });
 
-    // Run summary
+    // Run summary (legacy sidebar)
     document.getElementById("run").addEventListener("click", async function () {
       try {
         await runSummary();
       } catch (e) {
         App.setStatus("Error");
-        document.getElementById("notes").textContent = String(e && e.message ? e.message : e);
+        el("notes").textContent = String(e && e.message ? e.message : e);
       }
     });
 
@@ -337,7 +432,7 @@
         var info = await App.getStateFromMapCenter();
         document.getElementById("lodesState").textContent = info.abbr.toUpperCase() + " (FIPS " + info.stateFips + ")";
 
-        var year = document.getElementById("yearSelect").value;
+        var year = el("yearSelect").value;
         var url = "https://lehd.ces.census.gov/data/lodes/LODES8/" + info.abbr + "/wac/" + info.abbr + "_wac_S000_JT00_" + year + ".csv.gz";
         var filename = info.abbr + "_wac_S000_JT00_" + year + ".csv.gz";
 

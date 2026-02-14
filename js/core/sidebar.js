@@ -49,7 +49,8 @@
     }
 
     _panels.sort(function (a, b) { return a.order - b.order; });
-    render();
+    // Caller should call render() explicitly after registering panels
+    // to avoid destroying event listeners on already-rendered panels.
   }
 
   /**
@@ -59,7 +60,12 @@
     var idx = _indexById(id);
     if (idx >= 0) {
       _panels.splice(idx, 1);
-      render();
+      // Remove just this panel's DOM node (preserves other panels' event listeners)
+      var container = getContainer();
+      if (container) {
+        var node = container.querySelector('[data-panel-id="' + id + '"]');
+        if (node) node.remove();
+      }
     }
   }
 
@@ -176,6 +182,20 @@
     if (btn) btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
   }
 
+  // ---- Element resolver ----
+
+  /**
+   * Resolve a DOM element by base ID, returning the v2-prefixed version
+   * when the new sidebar is active, or the legacy element otherwise.
+   * Example: el("varSelect") -> #v2-varSelect or #varSelect
+   */
+  function el(baseId) {
+    if (isActive()) {
+      return document.getElementById("v2-" + baseId) || document.getElementById(baseId);
+    }
+    return document.getElementById(baseId);
+  }
+
   // ---- Expose on App namespace ----
 
   App.sidebar = {
@@ -185,6 +205,7 @@
     render: render,
     isActive: isActive,
     show: show,
-    hide: hide
+    hide: hide,
+    el: el
   };
 })();
