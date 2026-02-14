@@ -98,6 +98,10 @@
       'or preprocessed extracts/tiles.' +
     '</div>';
 
+  // ---- Project panel placeholder (v2 sidebar) ----
+  // Content is moved from #project-panel when toggling sidebars.
+  var PROJECT_PANEL_HTML = '<div id="v2-project-panel"></div>';
+
   // ---- Project registry ----
 
   var _project = null;
@@ -315,11 +319,32 @@
       collapsed: true,
       order: 30
     });
+    // Only register the project panel if a project is active
+    if (_project) {
+      App.sidebar.addPanel({
+        id: "project",
+        title: _project.name || "Project",
+        html: PROJECT_PANEL_HTML,
+        collapsed: false,
+        order: 20
+      });
+    }
     App.sidebar.render();
     wireV2StationDataEvents();
     wireV2LodesEvents();
 
     // ---- Sidebar v2 toggle (development aid) ----
+    // Moves project panel DOM nodes between legacy and v2 containers
+    // so event listeners (wired by project init) are preserved.
+    function moveProjectContent(fromId, toId) {
+      var from = document.getElementById(fromId);
+      var to = document.getElementById(toId);
+      if (!from || !to) return;
+      while (from.firstChild) {
+        to.appendChild(from.firstChild);
+      }
+    }
+
     var sidebarToggleBtn = document.getElementById("sidebar-toggle");
     if (sidebarToggleBtn) {
       sidebarToggleBtn.addEventListener("click", function () {
@@ -328,11 +353,13 @@
 
         if (v2Active) {
           // Switch back to legacy
+          moveProjectContent("v2-project-panel", "project-panel");
           App.sidebar.hide();
           if (legacySidebar) legacySidebar.style.display = "";
           sidebarToggleBtn.textContent = "Sidebar v2";
         } else {
           // Switch to v2
+          moveProjectContent("project-panel", "v2-project-panel");
           if (legacySidebar) legacySidebar.style.display = "none";
           App.sidebar.show();
           sidebarToggleBtn.textContent = "Sidebar v1";
