@@ -745,9 +745,9 @@
     panelHTML: "projects/fta-small-starts.html",
 
     panels: [
-      { id: "fta-cre",  title: "Community Risk (CRE)", htmlFile: "projects/fta-cre.html",  collapsed: true, order: 22 },
-      { id: "fta-ess",  title: "Essential Services",    htmlFile: "projects/fta-ess.html",  collapsed: true, order: 24 },
-      { id: "fta-lbar", title: "LBAR Housing",          htmlFile: "projects/fta-lbar.html", collapsed: true, order: 26 }
+      { id: "fta-cre",  title: "Community Risk (CRE)", htmlFile: "projects/fta-cre.html",  collapsed: true, order: 25 },
+      { id: "fta-ess",  title: "Essential Services",    htmlFile: "projects/fta-ess.html",  collapsed: true, order: 26 },
+      { id: "fta-lbar", title: "LBAR Housing",          htmlFile: "projects/fta-lbar.html", collapsed: true, order: 27 }
     ],
 
     init: function (_core) {

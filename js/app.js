@@ -313,7 +313,7 @@
         title: _project.name || "Project",
         html: '<div id="project-panel"></div>',
         collapsed: false,
-        order: 20
+        order: 30
       });
       if (Array.isArray(_project.panels)) {
         _project.panels.forEach(function (p) {
@@ -332,7 +332,7 @@
       title: "LODES (File-based workflow)",
       html: LODES_PANEL_HTML,
       collapsed: true,
-      order: 30
+      order: 20
     });
     App.sidebar.render();
 
