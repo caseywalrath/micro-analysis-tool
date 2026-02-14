@@ -97,8 +97,37 @@ Each station, line, and polygon row in the Features panel now shows a trash can 
 
 ---
 
+## 2026-02-14 — New panel-based sidebar (Phases 1–6)
+
+Replaced the legacy hardcoded sidebar with a new panel manager system. Built alongside the old sidebar (Phases 1–5), then cut over in Phase 6.
+
+### Architecture
+- `js/core/sidebar.js` — new module exposing `App.sidebar` with `addPanel()`, `removePanel()`, `toggle()`, `render()`
+- Panels are registered programmatically in `app.js` on map load, with HTML defined as JS strings (not hardcoded in `index.html`)
+- Each panel has a collapsible header; click to expand/collapse
+- `css/sidebar-v2.css` — panel system styles scoped under `#sidebar`
+
+### Panels (in order)
+1. **Station-area Data** (order 10) — geography level, ACS/LODES variable picker, year, Update Summary button, results card
+2. **Project** (order 20) — empty `#project-panel` container, filled by the active project's HTML fragment
+3. **LODES** (order 30, starts collapsed) — state detection, download button, file picker, status
+
+### Cutover (Phase 6)
+- Removed ~90 lines of legacy sidebar HTML from `index.html`
+- Removed toggle button and dual-sidebar wiring
+- Renamed `#sidebar-v2` → `#sidebar`
+- Removed element resolver (`el()`), `show()`/`hide()`/`isActive()` from sidebar.js
+- Simplified `setAggUI()` and `setLodesLoadedUI()` back to direct `getElementById`
+- Rewrote `app.js` without v2-prefixed IDs, resolver, or dual event wiring
+- Removed legacy sidebar CSS rules from `style.css`
+- Updated `CLAUDE.md` with new sidebar architecture documentation
+
+**Net result:** 117 lines added, 353 removed across 8 files.
+
+---
+
 ## Remaining items (not planned for current scope)
 
 - No Census API key (moderate: lower rate limits without one)
 - No subresource integrity (SRI) hashes on CDN script tags
-- Mixed `.onchange` vs `addEventListener` patterns in FTA project
+- Phase 4 (migrate right-side Feature Panel into sidebar) — deferred for later consideration
