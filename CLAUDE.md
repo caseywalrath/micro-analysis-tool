@@ -38,12 +38,15 @@ Browser-based geospatial analysis tool. Pure front-end (no build step, no backen
 ## File Structure
 
 ```
-index.html                  App shell: toolbar, sidebar, map, feature panel, script tags
-css/style.css               All styles
+index.html                  App shell: toolbar, sidebar container, map, feature panel, script tags
+css/
+  style.css                 Core layout, toolbar, feature panel, project-specific styles
+  sidebar-v2.css            Sidebar panel system styles (scoped under #sidebar)
 js/
-  app.js                    Startup, project registry, summary runners, event wiring
+  app.js                    Startup, project registry, sidebar panel HTML, summary runners, event wiring
   core/
     utils.js                CSV parsing, number formatting, GEOID normalization, VAR_META
+    sidebar.js              Sidebar panel manager: addPanel, removePanel, toggle, render
     map.js                  MapLibre GL map instance (Carto basemap)
     stations.js             Station points, user-defined buffers, union polygon
     lines.js                Line drawing (polylines with snap-to-close)
@@ -62,6 +65,7 @@ projects/
 - **No build tools.** Plain `<script>` tags in dependency order. Anyone can read/edit the source directly.
 - **Global namespace.** All shared state and functions live on `window.App`. Each module IIFE reads `var App = window.App` and assigns its exports (e.g., `App.fetchTigerwebGeos = fetchTigerwebGeos`).
 - **Project-local state stays private.** Variables like `CRE_MAP`, `ESS_POINTS`, `LBAR_SITES` are declared inside the project IIFE closure, not on `App`.
+- **Panel-based sidebar.** Sidebar content is registered via `App.sidebar.addPanel()` and rendered on map load. Panel HTML is defined as strings in `app.js`, not hardcoded in `index.html`. Call `render()` once after all panels are registered (avoids destroying event listeners).
 - **External libraries via CDN:** MapLibre GL JS, Turf.js, pako (gzip), PapaParse (CSV).
 
 ## Script Load Order
@@ -70,6 +74,7 @@ Order matters because modules depend on earlier ones:
 
 ```
 utils.js    (no deps)
+sidebar.js  (needs App namespace from utils.js)
 map.js      (creates App.map)
 stations.js (needs App.map, turf)
 lines.js    (needs App.map)
@@ -77,7 +82,7 @@ polygons.js (needs App.map)
 features.js (needs App.stations, App.lines, App.polygons, App.removeStation, etc.)
 census.js   (needs App.map, App.bboxStringFromFeature, App.getMeta, turf)
 lodes.js    (needs App.map, App.bboxStringFromFeature, App.bufferUnionPolygon, pako, turf)
-app.js      (wires everything; defines App.registerProject)
+app.js      (wires everything; registers sidebar panels; defines App.registerProject)
 <project>   (calls App.registerProject)
 ```
 
@@ -85,6 +90,11 @@ app.js      (wires everything; defines App.registerProject)
 
 ### utils.js
 `setStatus(s)`, `parseCSV(text)`, `fillSelect(el, opts, placeholder)`, `enableSelect(el, bool)`, `toNumberSafe(v)`, `normalizeTractGEOID(raw)`, `guessHeader(headers, candidates)`, `VAR_META`, `getMeta(code)`, `setAggUI(meta)`, `formatValue(val, meta)`
+
+### sidebar.js
+`sidebar.addPanel(config)`, `sidebar.removePanel(id)`, `sidebar.toggle(id)`, `sidebar.render()`
+
+Panel config: `{ id, title, html, collapsed (default false), order (default 100) }`
 
 ### map.js
 `map` (MapLibre instance)
@@ -184,18 +194,22 @@ Remove the project `<script>` tag from `index.html`. The core app (map, stations
 +------------------+------------------------+-------------------+
 ```
 
-### Sidebar (left)
+### Sidebar (left, panel-based)
+
+The sidebar is an empty `<div id="sidebar">` populated at runtime by `App.sidebar`. Panels are registered in `app.js` on map load, then `render()` builds the DOM. Each panel has a collapsible header (click to toggle). Panel HTML strings live in `app.js` (station-data, lodes) or are fetched from a project HTML file.
 
 ```
 +-----------------------------+
-|  Station-area Data (core)   |  Variable picker, year, geography
-|  [Update summary]           |  level, results card.
+|  ▾ Station-area Data        |  Collapsible panel (order 10)
+|  Variable picker, year,     |  Geography level, ACS/LODES variable,
+|  [Update summary]           |  results card.
 +-----------------------------+
+|  ▾ Project Name             |  Collapsible panel (order 20)
 |  #project-panel             |  Empty <div> filled by the active
 |  (injected by project)      |  project's HTML fragment.
 +-----------------------------+
-|  LODES (core)               |  Download button, file picker,
-|  Download / Upload          |  status.
+|  ▸ LODES (File-based)       |  Collapsible panel (order 30, starts collapsed)
+|  Download / Upload          |  Download button, file picker, status.
 +-----------------------------+
 ```
 
@@ -221,4 +235,3 @@ See `REVIEW.md` for the full code review. Remaining items not yet addressed:
 
 - No Census API key (moderate: rate-limited without one)
 - No subresource integrity (SRI) hashes on CDN script tags
-- Mixed `.onchange` vs `addEventListener` patterns in FTA project

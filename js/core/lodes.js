@@ -62,9 +62,8 @@
   var LODES_UPLOADED_NAME = "";
 
   function setLodesLoadedUI(loaded, name, nRows) {
-    var resolve = (App.sidebar && App.sidebar.el) ? App.sidebar.el : function (id) { return document.getElementById(id); };
-    var loadedEl = resolve("lodesLoaded");
-    var infoEl = resolve("lodesInfo");
+    var loadedEl = document.getElementById("lodesLoaded");
+    var infoEl = document.getElementById("lodesInfo");
     if (loadedEl) loadedEl.textContent = loaded ? "Yes" : "No";
     if (infoEl) infoEl.textContent = loaded
       ? "Loaded " + name + " (" + nRows.toLocaleString() + " block rows)."

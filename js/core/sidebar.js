@@ -1,5 +1,5 @@
 // js/core/sidebar.js
-// Sidebar v2 panel manager: registration, collapse/expand, render.
+// Sidebar panel manager: registration, collapse/expand, render.
 // Depends on: utils.js (App namespace must exist).
 // Exports: App.sidebar
 
@@ -9,11 +9,11 @@
   // ---- Internal state ----
 
   var _panels = [];          // Array of { id, title, html, collapsed, order }
-  var _container = null;     // #sidebar-v2 DOM element (resolved lazily)
+  var _container = null;     // #sidebar DOM element (resolved lazily)
 
   function getContainer() {
     if (!_container) {
-      _container = document.getElementById("sidebar-v2");
+      _container = document.getElementById("sidebar");
     }
     return _container;
   }
@@ -81,14 +81,6 @@
   }
 
   /**
-   * Returns true if the v2 sidebar is currently visible.
-   */
-  function isActive() {
-    var el = getContainer();
-    return el && !el.classList.contains("sb2-hidden");
-  }
-
-  /**
    * Rebuild the entire sidebar DOM from the registered panels array.
    */
   function render() {
@@ -106,18 +98,6 @@
       var p = _panels[i];
       container.appendChild(_buildPanelDOM(p));
     }
-  }
-
-  // ---- Show / hide sidebar ----
-
-  function show() {
-    var el = getContainer();
-    if (el) el.classList.remove("sb2-hidden");
-  }
-
-  function hide() {
-    var el = getContainer();
-    if (el) el.classList.add("sb2-hidden");
   }
 
   // ---- Internal helpers ----
@@ -182,30 +162,12 @@
     if (btn) btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
   }
 
-  // ---- Element resolver ----
-
-  /**
-   * Resolve a DOM element by base ID, returning the v2-prefixed version
-   * when the new sidebar is active, or the legacy element otherwise.
-   * Example: el("varSelect") -> #v2-varSelect or #varSelect
-   */
-  function el(baseId) {
-    if (isActive()) {
-      return document.getElementById("v2-" + baseId) || document.getElementById(baseId);
-    }
-    return document.getElementById(baseId);
-  }
-
   // ---- Expose on App namespace ----
 
   App.sidebar = {
     addPanel: addPanel,
     removePanel: removePanel,
     toggle: toggle,
-    render: render,
-    isActive: isActive,
-    show: show,
-    hide: hide,
-    el: el
+    render: render
   };
 })();

@@ -36,108 +36,10 @@
           <button id="undo">Delete Last Feature</button>
           <button id="clear">Clear</button>
         </div>
-        <div id="sidebar-toggle-wrap">
-          <button id="sidebar-toggle" title="Switch between legacy and new sidebar">Sidebar v2</button>
-        </div>
       </div>
 
       <div id="main-content">
-      <!-- New sidebar (v2) — hidden by default during development -->
-      <div id="sidebar-v2" class="sb2-hidden"></div>
-
-      <div id="sidebar">
-        <h3>Station-area Data</h3>
-        <p class="muted">
-          Summaries are computed within the <b>dissolved union</b> of all station buffers (avoids double counting).
-          Set the buffer radius in the Features panel. For ACS, counts are area-apportioned; medians are shown as an area-weighted average estimate.
-        </p>
-
-        <label>
-          Geography level (ACS only)
-          <select id="geoLevel">
-            <option value="tract">Census Tracts (faster)</option>
-            <option value="bg">Block Groups (more detailed)</option>
-          </select>
-        </label>
-
-        <label>
-          Variable (ACS or LODES)
-          <select id="varSelect">
-            <optgroup label="Land Use (ACS: additive sums)">
-              <option value="B01003_001E">Total population (ACS B01003_001E)</option>
-              <option value="B11001_001E">Total households (ACS B11001_001E)</option>
-              <option value="B25001_001E">Total housing units (ACS B25001_001E)</option>
-              <option value="B25002_001E">Occupied housing units (ACS B25002_001E)</option>
-              <option value="B25002_003E">Vacant housing units (ACS B25002_003E)</option>
-            </optgroup>
-
-            <optgroup label="Land Use / Employment (LODES: additive sum)">
-              <option value="LODES_WAC_C000">Total existing employment (LODES WAC C000) — requires file upload</option>
-            </optgroup>
-
-            <optgroup label="Mobility / Transit-dependent (ACS: additive sums)">
-              <option value="B08201_002E">Zero-car households (ACS B08201_002E)</option>
-              <option value="B17001_002E">Persons below poverty level (ACS B17001_002E)</option>
-            </optgroup>
-
-            <optgroup label="Non-additive (ACS medians: area-weighted average estimate)">
-              <option value="B19013_001E">Median household income (ACS B19013_001E) ⚠</option>
-              <option value="B25064_001E">Median gross rent (ACS B25064_001E) ⚠</option>
-              <option value="B25077_001E">Median home value (ACS B25077_001E) ⚠</option>
-            </optgroup>
-          </select>
-        </label>
-
-        <label>
-          Year
-          <select id="yearSelect">
-            <option value="2023">2023</option>
-            <option value="2022">2022</option>
-            <option value="2021">2021</option>
-          </select>
-        </label>
-
-        <button id="run">Update summary</button>
-
-        <div id="aggWarning" class="warn" style="display:none;"></div>
-
-        <div class="card">
-          <div class="kv"><b>Intersecting geographies:</b> <span id="nGeos">0</span></div>
-          <div class="kv"><b>Aggregation method:</b> <span id="aggMethod">—</span></div>
-          <div class="kv"><b>Result in buffer union:</b></div>
-          <div id="total">—</div>
-          <div id="notes" class="tiny" style="margin-top:6px;"></div>
-        </div>
-
-        <!-- Project panel: injected by the active project's init -->
-        <div id="project-panel"></div>
-
-        <hr />
-
-        <h3>LODES (File-based workflow)</h3>
-        <p class="muted">
-          Download the official <code>.csv.gz</code> file and load it from your computer (avoids cross-site fetch issues).
-        </p>
-
-        <div class="card">
-          <div class="kv"><b>Detected state:</b> <span id="lodesState">—</span></div>
-          <div class="kv"><b>LODES file loaded:</b> <span id="lodesLoaded">No</span></div>
-        </div>
-
-        <button id="downloadLodes">Download LODES WAC (JT00, S000) for current state</button>
-
-        <label>
-          Load downloaded LODES file (.csv.gz)
-          <input id="lodesFile" type="file" accept=".gz,.csv.gz" />
-        </label>
-
-        <div id="lodesInfo" class="tiny" style="margin-top:6px;"></div>
-
-        <div class="warn">
-          <b>Prototype note:</b> Parsing statewide LODES files can be slow and memory-heavy. For production, use a backend
-          or preprocessed extracts/tiles.
-        </div>
-      </div>
+      <div id="sidebar"></div>
 
       <div id="map"></div>
 

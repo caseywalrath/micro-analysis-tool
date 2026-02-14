@@ -89,10 +89,8 @@
   function getMeta(code) { return VAR_META[code] || { source: "ACS", agg: "sum", fmt: "int" }; }
 
   function setAggUI(meta) {
-    // Use sidebar element resolver if available, fall back to direct lookup
-    var resolve = (App.sidebar && App.sidebar.el) ? App.sidebar.el : function (id) { return document.getElementById(id); };
-    var aggMethodEl = resolve("aggMethod");
-    var warnEl = resolve("aggWarning");
+    var aggMethodEl = document.getElementById("aggMethod");
+    var warnEl = document.getElementById("aggWarning");
 
     if (!aggMethodEl || !warnEl) return;
 
