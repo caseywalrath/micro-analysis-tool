@@ -62,8 +62,11 @@
   var LODES_UPLOADED_NAME = "";
 
   function setLodesLoadedUI(loaded, name, nRows) {
-    document.getElementById("lodesLoaded").textContent = loaded ? "Yes" : "No";
-    document.getElementById("lodesInfo").textContent = loaded
+    var resolve = (App.sidebar && App.sidebar.el) ? App.sidebar.el : function (id) { return document.getElementById(id); };
+    var loadedEl = resolve("lodesLoaded");
+    var infoEl = resolve("lodesInfo");
+    if (loadedEl) loadedEl.textContent = loaded ? "Yes" : "No";
+    if (infoEl) infoEl.textContent = loaded
       ? "Loaded " + name + " (" + nRows.toLocaleString() + " block rows)."
       : "";
   }

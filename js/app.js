@@ -73,6 +73,31 @@
       '<div id="v2-notes" class="sb2-tiny" style="margin-top:6px;"></div>' +
     '</div>';
 
+  // ---- LODES panel (v2 sidebar) ----
+
+  var LODES_PANEL_HTML =
+    '<p class="sb2-muted">' +
+      'Download the official <code>.csv.gz</code> file and load it from your computer (avoids cross-site fetch issues).' +
+    '</p>' +
+
+    '<div class="sb2-card">' +
+      '<div class="sb2-kv"><b>Detected state:</b> <span id="v2-lodesState">\u2014</span></div>' +
+      '<div class="sb2-kv"><b>LODES file loaded:</b> <span id="v2-lodesLoaded">No</span></div>' +
+    '</div>' +
+
+    '<button id="v2-downloadLodes">Download LODES WAC (JT00, S000) for current state</button>' +
+
+    '<label>Load downloaded LODES file (.csv.gz)' +
+      '<input id="v2-lodesFile" type="file" accept=".gz,.csv.gz" />' +
+    '</label>' +
+
+    '<div id="v2-lodesInfo" class="sb2-tiny" style="margin-top:6px;"></div>' +
+
+    '<div class="sb2-warn">' +
+      '<b>Prototype note:</b> Parsing statewide LODES files can be slow and memory-heavy. For production, use a backend ' +
+      'or preprocessed extracts/tiles.' +
+    '</div>';
+
   // ---- Project registry ----
 
   var _project = null;
@@ -283,8 +308,16 @@
       collapsed: false,
       order: 10
     });
+    App.sidebar.addPanel({
+      id: "lodes",
+      title: "LODES (File-based workflow)",
+      html: LODES_PANEL_HTML,
+      collapsed: true,
+      order: 30
+    });
     App.sidebar.render();
     wireV2StationDataEvents();
+    wireV2LodesEvents();
 
     // ---- Sidebar v2 toggle (development aid) ----
     var sidebarToggleBtn = document.getElementById("sidebar-toggle");
@@ -425,30 +458,30 @@
       }
     });
 
-    // LODES download
-    document.getElementById("downloadLodes").addEventListener("click", async function () {
+    // LODES download (shared logic)
+    async function handleLodesDownload() {
       try {
         App.setStatus("Determining state\u2026");
         var info = await App.getStateFromMapCenter();
-        document.getElementById("lodesState").textContent = info.abbr.toUpperCase() + " (FIPS " + info.stateFips + ")";
+        el("lodesState").textContent = info.abbr.toUpperCase() + " (FIPS " + info.stateFips + ")";
 
         var year = el("yearSelect").value;
         var url = "https://lehd.ces.census.gov/data/lodes/LODES8/" + info.abbr + "/wac/" + info.abbr + "_wac_S000_JT00_" + year + ".csv.gz";
         var filename = info.abbr + "_wac_S000_JT00_" + year + ".csv.gz";
 
-        document.getElementById("lodesInfo").textContent =
+        el("lodesInfo").textContent =
           "Downloading " + filename + ". After download completes, load it using the file picker below.";
         App.setStatus("Starting download\u2026");
         App.startDownload(url, filename);
         App.setStatus("Ready");
       } catch (e) {
         App.setStatus("Error");
-        document.getElementById("lodesInfo").textContent = String(e && e.message ? e.message : e);
+        el("lodesInfo").textContent = String(e && e.message ? e.message : e);
       }
-    });
+    }
 
-    // LODES file upload
-    document.getElementById("lodesFile").addEventListener("change", async function (e) {
+    // LODES file upload (shared logic)
+    async function handleLodesUpload(e) {
       var file = e.target.files && e.target.files[0];
       if (!file) return;
 
@@ -464,9 +497,21 @@
         App.lodesFileName = "";
         App.setLodesLoadedUI(false, "", 0);
         App.setStatus("Error");
-        document.getElementById("lodesInfo").textContent = String(err && err.message ? err.message : err);
+        el("lodesInfo").textContent = String(err && err.message ? err.message : err);
         notifyProject();
       }
-    });
+    }
+
+    // LODES events (legacy sidebar)
+    document.getElementById("downloadLodes").addEventListener("click", handleLodesDownload);
+    document.getElementById("lodesFile").addEventListener("change", handleLodesUpload);
+
+    // LODES events (v2 sidebar) — wired after panel render
+    function wireV2LodesEvents() {
+      var v2Download = document.getElementById("v2-downloadLodes");
+      var v2File = document.getElementById("v2-lodesFile");
+      if (v2Download) v2Download.addEventListener("click", handleLodesDownload);
+      if (v2File) v2File.addEventListener("change", handleLodesUpload);
+    }
   });
 })();
