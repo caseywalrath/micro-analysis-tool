@@ -264,13 +264,23 @@
   // ---- Load project panel HTML ----
 
   async function loadProjectPanel() {
-    if (!_project || !_project.panelHTML) return;
-    var panel = document.getElementById("project-panel");
-    if (!panel) return;
+    if (!_project) return;
     try {
-      var resp = await fetch(_project.panelHTML);
-      if (resp.ok) {
-        panel.innerHTML = await resp.text();
+      if (_project.panelHTML) {
+        var panel = document.getElementById("project-panel");
+        if (panel) {
+          var resp = await fetch(_project.panelHTML);
+          if (resp.ok) panel.innerHTML = await resp.text();
+        }
+      }
+      if (Array.isArray(_project.panels)) {
+        await Promise.all(_project.panels.map(async function (p) {
+          if (!p.htmlFile) return;
+          var el = document.getElementById(p.id + "-panel");
+          if (!el) return;
+          var resp = await fetch(p.htmlFile);
+          if (resp.ok) el.innerHTML = await resp.text();
+        }));
       }
     } catch (e) {
       console.warn("Could not load project panel:", e);
@@ -305,6 +315,17 @@
         collapsed: false,
         order: 20
       });
+      if (Array.isArray(_project.panels)) {
+        _project.panels.forEach(function (p) {
+          App.sidebar.addPanel({
+            id: p.id,
+            title: p.title,
+            html: '<div id="' + p.id + '-panel"></div>',
+            collapsed: p.collapsed !== false,
+            order: p.order || 100
+          });
+        });
+      }
     }
     App.sidebar.addPanel({
       id: "lodes",

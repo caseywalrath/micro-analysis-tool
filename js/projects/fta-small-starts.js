@@ -744,6 +744,12 @@
     name: "FTA Small Starts (Land Use)",
     panelHTML: "projects/fta-small-starts.html",
 
+    panels: [
+      { id: "fta-cre",  title: "Community Risk (CRE)", htmlFile: "projects/fta-cre.html",  collapsed: true, order: 22 },
+      { id: "fta-ess",  title: "Essential Services",    htmlFile: "projects/fta-ess.html",  collapsed: true, order: 24 },
+      { id: "fta-lbar", title: "LBAR Housing",          htmlFile: "projects/fta-lbar.html", collapsed: true, order: 26 }
+    ],
+
     init: function (_core) {
       init();
     },

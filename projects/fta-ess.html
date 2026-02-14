@@ -1,0 +1,22 @@
+<div class="card">
+  <div class="kv"><b>Essential Services Upload</b></div>
+  <div class="tiny" style="margin-top:6px;">
+    Upload GeoJSON points or CSV. Counted within <b>1-mile</b> of each station; averaged across stations.
+  </div>
+
+  <label>
+    Upload essential services (GeoJSON or CSV)
+    <input id="essFile" type="file" accept=".json,.geojson,.csv" />
+  </label>
+
+  <div class="twoCol">
+    <label>Latitude column (CSV)
+      <select id="essColLat" disabled></select>
+    </label>
+    <label>Longitude column (CSV)
+      <select id="essColLon" disabled></select>
+    </label>
+  </div>
+
+  <div class="tiny" id="essInfo">No file loaded.</div>
+</div>

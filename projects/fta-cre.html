@@ -1,0 +1,26 @@
+<div class="card">
+  <div class="kv"><b>Community Risk (CRE) Upload</b></div>
+  <div class="tiny" style="margin-top:6px;">
+    Upload tract CSV from Census (quoted commas are OK). Set: GEOID, POPUNI, and PRED3_E (or your chosen fields).
+  </div>
+
+  <label>
+    Upload CRE CSV (tract level)
+    <input id="creFile" type="file" accept=".csv" />
+  </label>
+
+  <div class="twoCol">
+    <label>GEOID column
+      <select id="creColGEOID" disabled></select>
+    </label>
+    <label>Total pop column
+      <select id="creColTotal" disabled></select>
+    </label>
+  </div>
+
+  <label>High-risk pop column
+    <select id="creColHigh" disabled></select>
+  </label>
+
+  <div class="tiny" id="creInfo">No file loaded.</div>
+</div>

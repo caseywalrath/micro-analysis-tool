@@ -122,7 +122,7 @@ Panel config: `{ id, title, html, collapsed (default false), order (default 100)
 
 ## Project System
 
-Projects are optional domain-specific analyses that plug into the core. A project is **two files**: a JS file and an HTML fragment.
+Projects are optional domain-specific analyses that plug into the core. A project is **at minimum two files**: a JS file and a main HTML fragment. Projects with complex workflows can declare additional sub-panels, each backed by their own HTML file.
 
 ### Registration
 
@@ -132,11 +132,19 @@ A project registers itself at load time by calling:
 App.registerProject({
   id: "my-project",
   name: "Human-readable Name",
-  panelHTML: "projects/my-project.html",   // sidebar HTML fragment path
+  panelHTML: "projects/my-project.html",   // main sidebar HTML fragment path
+
+  // Optional: additional collapsible sidebar panels for this project.
+  // Each panel's HTML is loaded from htmlFile (same fetch mechanism as panelHTML).
+  // Panels are inserted in order between the main project panel (order 20) and LODES (order 30).
+  panels: [
+    { id: "my-sub",  title: "Sub-panel Title", htmlFile: "projects/my-sub.html", collapsed: true, order: 22 }
+  ],
 
   init: function (core) {
-    // Called once after panelHTML is injected into #project-panel.
+    // Called once after panelHTML and all panel htmlFiles are injected into the DOM.
     // Wire up file upload listeners, build UI, etc.
+    // Sub-panel elements are accessible by their IDs at this point.
   },
 
   update: async function (core) {
@@ -172,9 +180,10 @@ The existing FTA project still accesses `App.*` directly in its internal functio
 ### How to add a new project
 
 1. Create `js/projects/my-project.js` with an `App.registerProject({...})` call
-2. Create `projects/my-project.html` with the sidebar panel markup
-3. Add `<script src="js/projects/my-project.js"></script>` to `index.html` (after `app.js`)
-4. Remove or comment out any other project script tag (one project at a time)
+2. Create `projects/my-project.html` with the main sidebar panel markup
+3. Optionally create additional `projects/my-sub.html` files for sub-panels and declare them in the `panels[]` array
+4. Add `<script src="js/projects/my-project.js"></script>` to `index.html` (after `app.js`)
+5. Remove or comment out any other project script tag (one project at a time)
 
 No core code needs to change.
 
