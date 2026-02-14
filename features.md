@@ -45,6 +45,17 @@ Expand `VAR_META` in utils.js with additional ACS variables (e.g., vehicle owner
 ### Multiple simultaneous census summaries — Priority To Be Determined
 Currently the results card shows one variable at a time. Allow selecting multiple variables and display a table of aggregated results. May require rethinking the results card UI.
 
+### FTA Small Starts as button-triggered popup analysis — Not started
+Currently the FTA Small Starts breakpoint ratings recalculate automatically on every data change (station added/removed, summary run, file upload). The intent is to move this analysis out of the persistent sidebar and into an on-demand popup triggered by a toolbar or sidebar button.
+
+**Motivation:** Separates data entry from analysis output. The sidebar panels (Station-area Data, LODES, CRE, ESS, LBAR) become pure data inputs. FTA Small Starts — and any future analyses — become on-demand outputs that users run explicitly, similar to how "Update Summary" works for the ACS/LODES summary card.
+
+**Behavior change:** The project `update()` hook would no longer fire automatically. Recalculation runs when the user opens the popup or clicks a Recalculate button inside it.
+
+**Precedent:** Establishes a pattern for multiple analysis types. Future frameworks (different scoring systems, custom threshold reports, etc.) can be added as additional buttons/popups without expanding the sidebar. Small Starts is the first of what may become a menu of analyses.
+
+**Implementation notes:** Requires a modal or panel overlay component, a trigger button (toolbar or top of sidebar), and decoupling the FTA `update()` call from the core `notifyProject()` event chain.
+
 ### Simplified LBAR Housing Inventory workflow — Not started
 The current LBAR workflow requires uploading a pre-formatted inventory file with lat/lon/units/county columns. A simpler flow might allow uploading a basic address list, geocoding it, and auto-detecting the county FIPS. Requires conceptual planning — the geocoding step is the main complexity (no backend, so would need a client-side or free API solution).
 
@@ -63,7 +74,7 @@ Export the full session (station coordinates, buffer settings, uploaded data ref
 ## UI & Layout
 
 ### Resizable sidebar — Low Priority
-Allow the user to drag the sidebar edge to resize it. Currently the sidebar is a fixed 520px width defined in CSS.
+Allow the user to drag the sidebar edge to resize it. Currently the sidebar is a fixed 310px width defined in `css/sidebar-v2.css`.
 
 ### Reorderable sidebar panels — Low Priority
 Allow the user to drag sidebar sections (Station-area Data, project panel, LODES) into a preferred order. Could use native drag-and-drop or a lightweight sortable library.

@@ -126,6 +126,26 @@ Replaced the legacy hardcoded sidebar with a new panel manager system. Built alo
 
 ---
 
+## 2026-02-14 — Sidebar narrowing, sub-panel extraction, reorder
+
+### Sidebar narrowed to 310px
+- `css/sidebar-v2.css` — width reduced from 520px to 310px; removed `min-width: 180px` from `.sb2-kv b` (too wide at new size)
+- `css/style.css` — `.bpGrid` and `.twoCol` changed from 2-column to 1-column grids to stack at the narrower width
+
+### CRE, ESS, LBAR extracted into separate collapsible panels
+Previously all three upload forms lived inside the single FTA Small Starts project panel. Each now has its own collapsible panel (collapsed by default).
+
+**New project API:** `App.registerProject()` now accepts an optional `panels[]` array. Each entry declares a sub-panel with `id`, `title`, `htmlFile` (path to an HTML fragment, fetched alongside `panelHTML`), `collapsed`, and `order`. `app.js` registers placeholder containers before `render()`, then fetches and injects HTML in `loadProjectPanel()`. `CLAUDE.md` updated to document the new API.
+
+**Files created:** `projects/fta-cre.html`, `projects/fta-ess.html`, `projects/fta-lbar.html`
+
+**Files changed:** `projects/fta-small-starts.html` (trimmed to breakpoints card only), `js/projects/fta-small-starts.js` (added `panels[]`), `js/app.js` (sub-panel registration + HTML fetch), `CLAUDE.md`
+
+### Panel order changed
+Station-area Data (10) → LODES (20) → Community Risk CRE (25) → Essential Services (26) → LBAR Housing (27) → FTA Small Starts (30)
+
+---
+
 ## Remaining items (not planned for current scope)
 
 - No Census API key (moderate: lower rate limits without one)
