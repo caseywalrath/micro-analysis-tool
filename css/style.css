@@ -88,6 +88,17 @@ button { cursor: pointer; }
   align-items: center;
   gap: 6px;
 }
+.fp-buffer-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+}
+.fp-buffer-label {
+  font-size: 12px;
+  color: var(--muted);
+  flex: 1;
+}
 .fp-radius-input {
   width: 56px;
   padding: 2px 4px;

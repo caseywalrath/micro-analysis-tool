@@ -7,9 +7,36 @@
 (function () {
   var App = window.App = window.App || {};
 
-  var lines = [];          // Saved GeoJSON LineString features
-  var currentCoords = [];  // Coordinates of the line currently being drawn
-  var SNAP_PIXELS = 15;    // Click must be within this many pixels of last waypoint to save
+  var lines = [];               // Saved GeoJSON LineString features
+  var lineBuffers = [];         // Buffer polygons, one per saved line
+  var lineBufferRadiusMiles = 0;
+  var currentCoords = [];       // Coordinates of the line currently being drawn
+  var SNAP_PIXELS = 15;         // Click must be within this many pixels of last waypoint to save
+
+  /* ---- Line buffer functions ---- */
+
+  function rebuildLineBuffers(radiusMiles) {
+    lineBufferRadiusMiles = radiusMiles;
+    lineBuffers.splice(0);
+    if (radiusMiles > 0) {
+      for (var i = 0; i < lines.length; i++) {
+        var buf = turf.buffer(lines[i], radiusMiles, { units: "miles", steps: 64 });
+        lineBuffers.push(buf);
+      }
+    }
+    renderLineLayers();
+  }
+
+  function lineBufferUnionPolygon() {
+    if (lineBuffers.length === 0) return null;
+    var u = lineBuffers[0];
+    for (var i = 1; i < lineBuffers.length; i++) u = turf.union(u, lineBuffers[i]);
+    return u;
+  }
+
+  function lineBuffersGeoJSON() {
+    return { type: "FeatureCollection", features: lineBuffers };
+  }
 
   /* ---- GeoJSON helpers ---- */
 
@@ -78,6 +105,25 @@
 
   function renderLineLayers() {
     var map = App.map;
+
+    // Line buffers (blue fill, rendered below the red line geometry)
+    if (!map.getSource("line-buffers")) {
+      map.addSource("line-buffers", { type: "geojson", data: lineBuffersGeoJSON() });
+      map.addLayer({
+        id: "line-buffers-fill",
+        type: "fill",
+        source: "line-buffers",
+        paint: { "fill-color": "#2b6cb0", "fill-opacity": 0.2 }
+      });
+      map.addLayer({
+        id: "line-buffers-line",
+        type: "line",
+        source: "line-buffers",
+        paint: { "line-color": "#2b6cb0", "line-width": 2, "line-opacity": 0.6 }
+      });
+    } else {
+      map.getSource("line-buffers").setData(lineBuffersGeoJSON());
+    }
 
     // Saved lines (solid)
     if (!map.getSource("lines")) {
@@ -190,7 +236,7 @@
     });
 
     currentCoords.length = 0;
-    renderLineLayers();
+    rebuildLineBuffers(lineBufferRadiusMiles);
     App.setStatus("Line " + idx + " saved (" + nWaypoints + " waypoints)");
   }
 
@@ -203,12 +249,13 @@
   function removeLine(index) {
     if (index < 0 || index >= lines.length) return;
     lines.splice(index, 1);
-    renderLineLayers();
+    rebuildLineBuffers(lineBufferRadiusMiles);
   }
 
   function clearLines() {
     lines.length = 0;
     currentCoords.length = 0;
+    lineBuffers.splice(0);
     renderLineLayers();
   }
 
@@ -234,6 +281,9 @@
   /* ---- Expose on App namespace ---- */
 
   App.lines = lines;
+  App.lineBuffers = lineBuffers;
+  App.rebuildLineBuffers = rebuildLineBuffers;
+  App.lineBufferUnionPolygon = lineBufferUnionPolygon;
   App.handleLineClick = handleLineClick;
   App.removeLine = removeLine;
   App.clearLines = clearLines;

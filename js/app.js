@@ -103,6 +103,16 @@
     _project = config;
   };
 
+  // Override bufferUnionPolygon to include line buffers alongside station buffers.
+  // Must happen before any user interaction; census.js and lodes.js call this at runtime.
+  var _stationUnion = App.bufferUnionPolygon;
+  App.bufferUnionPolygon = function () {
+    var su = _stationUnion();
+    var lu = App.lineBufferUnionPolygon ? App.lineBufferUnionPolygon() : null;
+    if (su && lu) return turf.union(su, lu);
+    return su || lu || null;
+  };
+
   // Build a core API object for passing to project hooks.
   // Rebuilt each call so values like lodesData are always current.
   function buildCore() {
@@ -380,11 +390,19 @@
       App.setAggUI(App.getMeta(e.target.value));
     });
 
-    // Buffer radius input
+    // Buffer radius input (stations)
     document.getElementById("bufferRadius").addEventListener("input", function () {
       var val = parseFloat(this.value);
       if (isNaN(val) || val < 0) val = 0;
       App.rebuildBuffers(val);
+      notifyProject();
+    });
+
+    // Buffer radius input (lines)
+    document.getElementById("lineBufferRadius").addEventListener("input", function () {
+      var val = parseFloat(this.value);
+      if (isNaN(val) || val < 0) val = 0;
+      App.rebuildLineBuffers(val);
       notifyProject();
     });
 
