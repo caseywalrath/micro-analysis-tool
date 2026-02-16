@@ -49,7 +49,7 @@ js/
     sidebar.js              Sidebar panel manager: addPanel, removePanel, toggle, render
     map.js                  MapLibre GL map instance (Carto basemap)
     stations.js             Station points, user-defined buffers, union polygon
-    lines.js                Line drawing (polylines with snap-to-close)
+    lines.js                Line drawing (polylines with snap-to-close), line buffers
     polygons.js             Polygon drawing (vertex-by-vertex with snap-to-close)
     features.js             Right-side feature panel: lists features, editable names, delete buttons
     census.js               TIGERweb geometry queries, ACS data fetch, area-weighted aggregation
@@ -77,7 +77,7 @@ utils.js    (no deps)
 sidebar.js  (needs App namespace from utils.js)
 map.js      (creates App.map)
 stations.js (needs App.map, turf)
-lines.js    (needs App.map)
+lines.js    (needs App.map, turf)
 polygons.js (needs App.map)
 features.js (needs App.stations, App.lines, App.polygons, App.removeStation, etc.)
 census.js   (needs App.map, App.bboxStringFromFeature, App.getMeta, turf)
@@ -103,7 +103,7 @@ Panel config: `{ id, title, html, collapsed (default false), order (default 100)
 `stations` (Point array), `buffers` (Polygon array), `addStationPoint(lon, lat)`, `rebuildBuffers(radiusMiles)`, `removeStation(index)`, `clearStations()`, `undoLastStation()`, `renderStationLayers()`, `bufferUnionPolygon()`, `getUnion()` (alias), `bboxStringFromFeature(feat)`
 
 ### lines.js
-`lines` (LineString array), `handleLineClick(lngLat)`, `removeLine(index)`, `clearLines()`, `undoLastLine()`, `cancelLineDrawing()`, `renderLineLayers()`
+`lines` (LineString array), `lineBuffers` (Polygon array), `handleLineClick(lngLat)`, `removeLine(index)`, `clearLines()`, `undoLastLine()`, `cancelLineDrawing()`, `renderLineLayers()`, `rebuildLineBuffers(radiusMiles)`, `lineBufferUnionPolygon()`
 
 ### polygons.js
 `polygons` (Polygon array), `handlePolygonClick(lngLat)`, `removePolygon(index)`, `clearPolygons()`, `undoLastPolygon()`, `cancelPolygonDrawing()`, `renderPolygonLayers()`
@@ -119,6 +119,8 @@ Panel config: `{ id, title, html, collapsed (default false), order (default 100)
 
 ### app.js
 `drawMode`, `registerProject(config)`, `onFeatureDelete()` (hook, see below)
+
+**Union override:** `app.js` redefines `App.bufferUnionPolygon` to dissolve station buffers and line buffers into a single union polygon. `census.js` and `lodes.js` call this at runtime and automatically get the combined area.
 
 ## Project System
 
@@ -209,7 +211,7 @@ The sidebar is an empty `<div id="sidebar">` populated at runtime by `App.sideba
 
 ```
 +-----------------------------+
-|  ▾ Station-area Data        |  Collapsible panel (order 10)
+|  ▾ Buffer-Area Data         |  Collapsible panel (order 10)
 |  Variable picker, year,     |  Geography level, ACS/LODES variable,
 |  [Update summary]           |  results card.
 +-----------------------------+
@@ -230,10 +232,12 @@ The sidebar is an empty `<div id="sidebar">` populated at runtime by `App.sideba
 |  STATIONS                   |  Per-station rows with editable
 |    Station 1         [DEL]  |  names and delete buttons.
 |    Station 2         [DEL]  |
-|  BUFFER  [__0__] mi        |  Radius input: 0 = no buffers.
 |  LINES                      |  Per-line rows.
 |  ROUTES                     |  (placeholder)
 |  POLYGONS                   |  Per-polygon rows.
+|  BUFFERS                    |  Per-geometry-type radius inputs.
+|    Stations [__0__] mi      |  Radius for station buffers.
+|    Lines    [__0__] mi      |  Radius for line buffers.
 |  [Import] [Export]          |  (disabled/placeholder)
 +-----------------------------+
 ```

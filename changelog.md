@@ -146,6 +146,33 @@ Station-area Data (10) → LODES (20) → Community Risk CRE (25) → Essential 
 
 ---
 
+## 2026-02-16 — Line buffers, UI renaming
+
+### Line buffer support
+Extended the buffer system to line geometries. Lines now support independent buffer radii that are visualized on the map and dissolved into the same union polygon used for all ACS and LODES analysis.
+
+**Architecture:**
+- `js/core/lines.js` — added `lineBuffers[]` state, `rebuildLineBuffers(radiusMiles)`, `lineBufferUnionPolygon()`, and two new map layers (`line-buffers-fill`, `line-buffers-line`) rendered in the same blue as station buffers, underneath the red line geometry. Buffers automatically rebuild on line save, delete, or clear.
+- `js/app.js` — overrides `App.bufferUnionPolygon` to dissolve station and line buffer unions together via `turf.union()`. Because `census.js` and `lodes.js` call this function at runtime, they get the combined study area with no code changes.
+- `census.js`, `lodes.js`, `stations.js`, `features.js`, and all project files — unchanged.
+
+### Buffers section in Feature Panel
+Removed the old solo "Buffer" section (between Stations and Lines). Added a new "Buffers" section below Polygons with labeled rows for Stations and Lines, each with an independent numeric radius input. A Routes row can be added in the future with a single `<div>`.
+
+**Files changed:** `index.html`, `css/style.css` (new `.fp-buffer-row`, `.fp-buffer-label` rules)
+
+### Page title renamed
+`<title>` changed from the long descriptive string to "Casey's Analysis Tool".
+
+### Sidebar panel renamed
+"Station-area Data" → "Buffer-Area Data". Description text updated to reflect that the union now encompasses all buffer types, not just station buffers.
+
+### Documentation
+- Updated `CLAUDE.md` — lines.js file description, dependency note (now needs turf), API exports, app.js union override note, sidebar wireframe, feature panel wireframe
+- Updated `changelog.md` (this entry)
+
+---
+
 ## Remaining items (not planned for current scope)
 
 - No Census API key (moderate: lower rate limits without one)
