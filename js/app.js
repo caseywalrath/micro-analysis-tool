@@ -11,12 +11,12 @@
 
   App.drawMode = null; // null | "station" | "line" | "route" | "polygon"
 
-  // ---- Station-area Data panel ----
+  // ---- Buffer-Area Data panel ----
 
   var STATION_DATA_PANEL_HTML =
     '<p class="sb2-muted">' +
-      'Summaries are computed within the <b>dissolved union</b> of all station buffers (avoids double counting). ' +
-      'Set the buffer radius in the Features panel. For ACS, counts are area-apportioned; medians are shown as an area-weighted average estimate.' +
+      'Summaries are computed within the <b>dissolved union</b> of all buffers. ' +
+      'Set the buffer radius in the Features panel. For ACS, counts are area-apportioned and medians are shown as an area-weighted average estimate.' +
     '</p>' +
 
     '<label>Geography level (ACS only)' +
@@ -312,7 +312,7 @@
     // ---- Register sidebar panels, render, then wire events ----
     App.sidebar.addPanel({
       id: "station-data",
-      title: "Station-area Data",
+      title: "Buffer-Area Data",
       html: STATION_DATA_PANEL_HTML,
       collapsed: false,
       order: 10
