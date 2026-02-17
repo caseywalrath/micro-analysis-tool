@@ -86,6 +86,32 @@
         </div>
       </div>
       </div><!-- #main-content -->
+
+      <!-- Results modal -->
+      <div id="results-modal" class="results-modal" style="display:none;">
+        <div class="results-modal-backdrop"></div>
+        <div class="results-modal-dialog">
+          <div class="results-modal-header">
+            <h3 class="results-modal-title">Buffer-Area Summary Results</h3>
+            <button class="results-modal-close" aria-label="Close">&times;</button>
+          </div>
+          <div class="results-modal-body">
+            <div id="results-progress" class="results-progress"></div>
+            <table id="results-table" class="results-table">
+              <thead>
+                <tr>
+                  <th>Census Category</th>
+                  <th>Variable</th>
+                  <th>Result</th>
+                  <th>Aggregation Method</th>
+                </tr>
+              </thead>
+              <tbody id="results-tbody"></tbody>
+            </table>
+            <div id="results-notes" class="results-notes"></div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Core modules (order matters) -->

@@ -71,19 +71,19 @@
   // --- Variable metadata ---
 
   var VAR_META = {
-    "B01003_001E": { source: "ACS", agg: "sum", fmt: "int" },
-    "B11001_001E": { source: "ACS", agg: "sum", fmt: "int" },
-    "B25001_001E": { source: "ACS", agg: "sum", fmt: "int" },
-    "B25002_001E": { source: "ACS", agg: "sum", fmt: "int" },
-    "B25002_003E": { source: "ACS", agg: "sum", fmt: "int" },
-    "B08201_002E": { source: "ACS", agg: "sum", fmt: "int" },
-    "B17001_002E": { source: "ACS", agg: "sum", fmt: "int" },
+    "B01003_001E": { source: "ACS", agg: "sum", fmt: "int", label: "Total population", category: "Land Use" },
+    "B11001_001E": { source: "ACS", agg: "sum", fmt: "int", label: "Total households", category: "Land Use" },
+    "B25001_001E": { source: "ACS", agg: "sum", fmt: "int", label: "Total housing units", category: "Land Use" },
+    "B25002_001E": { source: "ACS", agg: "sum", fmt: "int", label: "Occupied housing units", category: "Land Use" },
+    "B25002_003E": { source: "ACS", agg: "sum", fmt: "int", label: "Vacant housing units", category: "Land Use" },
+    "B08201_002E": { source: "ACS", agg: "sum", fmt: "int", label: "Zero-car households", category: "Mobility" },
+    "B17001_002E": { source: "ACS", agg: "sum", fmt: "int", label: "Persons below poverty level", category: "Mobility" },
 
-    "B19013_001E": { source: "ACS", agg: "avg", fmt: "usd" },
-    "B25064_001E": { source: "ACS", agg: "avg", fmt: "usd" },
-    "B25077_001E": { source: "ACS", agg: "avg", fmt: "usd" },
+    "B19013_001E": { source: "ACS", agg: "avg", fmt: "usd", label: "Median household income", category: "Non-additive Medians" },
+    "B25064_001E": { source: "ACS", agg: "avg", fmt: "usd", label: "Median gross rent", category: "Non-additive Medians" },
+    "B25077_001E": { source: "ACS", agg: "avg", fmt: "usd", label: "Median home value", category: "Non-additive Medians" },
 
-    "LODES_WAC_C000": { source: "LODES", agg: "sum", fmt: "int" }
+    "LODES_WAC_C000": { source: "LODES", agg: "sum", fmt: "int", label: "Total existing employment (LODES)", category: "Employment" }
   };
 
   function getMeta(code) { return VAR_META[code] || { source: "ACS", agg: "sum", fmt: "int" }; }
@@ -123,6 +123,15 @@
     return val.toLocaleString(undefined, { maximumFractionDigits: 0 });
   }
 
+  function getSelectedVars() {
+    var boxes = document.querySelectorAll('#varSelect input[type="checkbox"]:checked');
+    var codes = [];
+    for (var i = 0; i < boxes.length; i++) {
+      codes.push(boxes[i].value);
+    }
+    return codes;
+  }
+
   // --- Expose on App namespace ---
 
   App.setStatus = setStatus;
@@ -136,4 +145,5 @@
   App.getMeta = getMeta;
   App.setAggUI = setAggUI;
   App.formatValue = formatValue;
+  App.getSelectedVars = getSelectedVars;
 })();

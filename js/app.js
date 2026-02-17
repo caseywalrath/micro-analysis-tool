@@ -26,29 +26,33 @@
       '</select>' +
     '</label>' +
 
-    '<label>Variable (ACS or LODES)' +
-      '<select id="varSelect">' +
-        '<optgroup label="Land Use (ACS: additive sums)">' +
-          '<option value="B01003_001E">Total population (ACS B01003_001E)</option>' +
-          '<option value="B11001_001E">Total households (ACS B11001_001E)</option>' +
-          '<option value="B25001_001E">Total housing units (ACS B25001_001E)</option>' +
-          '<option value="B25002_001E">Occupied housing units (ACS B25002_001E)</option>' +
-          '<option value="B25002_003E">Vacant housing units (ACS B25002_003E)</option>' +
-        '</optgroup>' +
-        '<optgroup label="Land Use / Employment (LODES: additive sum)">' +
-          '<option value="LODES_WAC_C000">Total existing employment (LODES WAC C000) — requires file upload</option>' +
-        '</optgroup>' +
-        '<optgroup label="Mobility / Transit-dependent (ACS: additive sums)">' +
-          '<option value="B08201_002E">Zero-car households (ACS B08201_002E)</option>' +
-          '<option value="B17001_002E">Persons below poverty level (ACS B17001_002E)</option>' +
-        '</optgroup>' +
-        '<optgroup label="Non-additive (ACS medians: area-weighted average estimate)">' +
-          '<option value="B19013_001E">Median household income (ACS B19013_001E) ⚠</option>' +
-          '<option value="B25064_001E">Median gross rent (ACS B25064_001E) ⚠</option>' +
-          '<option value="B25077_001E">Median home value (ACS B25077_001E) ⚠</option>' +
-        '</optgroup>' +
-      '</select>' +
-    '</label>' +
+    '<div class="var-actions">' +
+      '<button type="button" id="varSelectAll" class="var-action-btn">Select all</button>' +
+      '<button type="button" id="varClearAll" class="var-action-btn">Clear all</button>' +
+    '</div>' +
+
+    '<fieldset id="varSelect" class="var-checklist">' +
+      '<legend>Variables (select one or more)</legend>' +
+
+      '<div class="var-group-label">Land Use (ACS: additive sums)</div>' +
+      '<label class="var-check"><input type="checkbox" value="B01003_001E"> Total population</label>' +
+      '<label class="var-check"><input type="checkbox" value="B11001_001E"> Total households</label>' +
+      '<label class="var-check"><input type="checkbox" value="B25001_001E"> Total housing units</label>' +
+      '<label class="var-check"><input type="checkbox" value="B25002_001E"> Occupied housing units</label>' +
+      '<label class="var-check"><input type="checkbox" value="B25002_003E"> Vacant housing units</label>' +
+
+      '<div class="var-group-label">Employment (LODES: additive sum)</div>' +
+      '<label class="var-check"><input type="checkbox" value="LODES_WAC_C000"> Total existing employment \u2014 requires file upload</label>' +
+
+      '<div class="var-group-label">Mobility / Transit-dependent (ACS: additive sums)</div>' +
+      '<label class="var-check"><input type="checkbox" value="B08201_002E"> Zero-car households</label>' +
+      '<label class="var-check"><input type="checkbox" value="B17001_002E"> Persons below poverty level</label>' +
+
+      '<div class="var-group-label">Non-additive (ACS medians: area-weighted avg estimate)</div>' +
+      '<label class="var-check"><input type="checkbox" value="B19013_001E"> Median household income \u26A0</label>' +
+      '<label class="var-check"><input type="checkbox" value="B25064_001E"> Median gross rent \u26A0</label>' +
+      '<label class="var-check"><input type="checkbox" value="B25077_001E"> Median home value \u26A0</label>' +
+    '</fieldset>' +
 
     '<label>Year' +
       '<select id="yearSelect">' +
@@ -60,14 +64,11 @@
 
     '<button id="run">Update summary</button>' +
 
-    '<div id="aggWarning" class="sb2-warn" style="display:none;"></div>' +
-
-    '<div class="sb2-card">' +
+    '<div id="summaryStatus" class="sb2-card" style="display:none;">' +
       '<div class="sb2-kv"><b>Intersecting geographies:</b> <span id="nGeos">0</span></div>' +
-      '<div class="sb2-kv"><b>Aggregation method:</b> <span id="aggMethod">\u2014</span></div>' +
-      '<div class="sb2-kv"><b>Result in buffer union:</b></div>' +
-      '<div id="total" style="font-size:22px;font-weight:700;margin-top:6px;">\u2014</div>' +
-      '<div id="notes" class="sb2-tiny" style="margin-top:6px;"></div>' +
+      '<div style="margin-top:6px;">' +
+        '<button id="viewResults" type="button">View Results Table</button>' +
+      '</div>' +
     '</div>';
 
   // ---- LODES panel ----
@@ -152,122 +153,192 @@
     }
   }
 
+  // ---- Results modal helpers ----
+
+  function openResultsModal() {
+    document.getElementById("results-modal").style.display = "flex";
+  }
+
+  function closeResultsModal() {
+    document.getElementById("results-modal").style.display = "none";
+  }
+
+  function aggDescription(meta) {
+    if (meta.source === "LODES") return "Sum (block internal points)";
+    if (meta.agg === "sum") return "Sum (area-apportioned)";
+    return "Area-weighted average";
+  }
+
   // ---- Summary runners ----
 
-  async function runLodesEmploymentSummary(year) {
-    var notesEl = document.getElementById("notes");
-    var totalEl = document.getElementById("total");
-    var nGeosEl = document.getElementById("nGeos");
-
-    notesEl.textContent = "";
-    totalEl.textContent = "\u2014";
-    nGeosEl.textContent = "0";
-
-    var unionFeat = App.bufferUnionPolygon();
-    if (!unionFeat) {
-      if (App.stations.length === 0) {
-        App.setStatus("No stations yet");
-        notesEl.textContent = "Add at least one station to compute employment served.";
-      } else {
-        App.setStatus("No buffers");
-        notesEl.textContent = "Set a buffer radius in the Features panel to define the analysis area.";
-      }
-      return;
-    }
-
-    if (!App.lodesData) {
-      App.setStatus("LODES file required");
-      notesEl.textContent = "Download the LODES file for your state, then load the .csv.gz using the file picker.";
-      return;
-    }
-
-    App.setStatus("Querying TIGERweb blocks\u2026");
-    var blocksInside = await App.fetchBlocksInternalPointsInUnion(unionFeat);
-    nGeosEl.textContent = String(blocksInside.size);
-
-    App.setStatus("Summing jobs within union\u2026");
-    var sum = 0;
-    var matched = 0;
-
-    for (var geoid of blocksInside) {
-      var v = App.lodesData.get(geoid);
-      if (v != null) { sum += v; matched++; }
-    }
-
-    totalEl.textContent = sum.toLocaleString(undefined, { maximumFractionDigits: 0 });
-    notesEl.textContent =
-      "LODES WAC C000 summed for " + matched.toLocaleString() + " matched blocks (of " +
-      blocksInside.size.toLocaleString() + " blocks in union); year " + year +
-      ". File: " + App.lodesFileName;
-
-    App.setStatus("Done");
-  }
-
-  async function runAcsSummary(varCode, year, geoLevel) {
-    var meta = App.getMeta(varCode);
-    var notesEl = document.getElementById("notes");
-    var totalEl = document.getElementById("total");
-    var nGeosEl = document.getElementById("nGeos");
-
-    notesEl.textContent = "";
-    totalEl.textContent = "\u2014";
-    nGeosEl.textContent = "0";
-
-    var unionFeat = App.bufferUnionPolygon();
-    if (!unionFeat) {
-      if (App.stations.length === 0) {
-        App.setStatus("No stations yet");
-        notesEl.textContent = "Add at least one station to compute a station-area estimate.";
-      } else {
-        App.setStatus("No buffers");
-        notesEl.textContent = "Set a buffer radius in the Features panel to define the analysis area.";
-      }
-      return;
-    }
-
-    App.setStatus("Querying TIGERweb\u2026");
-    var geos = await App.fetchTigerwebGeos(geoLevel, unionFeat);
-    nGeosEl.textContent = String(geos.length);
-    App.renderCensusOverlay(geos);
-
-    if (geos.length === 0) {
-      App.setStatus("Done");
-      notesEl.textContent = "No tracts/block groups intersect the station-area union (unexpected).";
-      return;
-    }
-
-    App.setStatus("Fetching ACS values\u2026");
-    var geoids = geos.map(function (f) { return f.properties.GEOID; }).filter(Boolean);
-    var valueMap = await App.fetchACSValues(geoLevel, year, varCode, geoids);
-
-    App.setStatus("Aggregating\u2026");
-    var result = App.aggregateWithinUnion(unionFeat, geos, valueMap, meta.agg);
-    totalEl.textContent = App.formatValue(result.value, meta);
-
-    var geoLabel = (geoLevel === "tract") ? "tracts" : "block groups";
-    if (meta.agg === "sum") {
-      notesEl.textContent = "Sum of area-apportioned counts using " + result.used + " intersecting " + geoLabel + "; ACS " + year + " 5-year.";
-    } else {
-      notesEl.textContent = "Area-weighted average estimate using " + result.used + " intersecting " + geoLabel + " (weight sum=" + result.weightSum.toFixed(2) + "); ACS " + year + " 5-year.";
-    }
-
-    App.setStatus("Done");
-  }
-
   async function runSummary() {
-    var varCode = document.getElementById("varSelect").value;
+    var selectedVars = App.getSelectedVars();
+    if (selectedVars.length === 0) {
+      App.setStatus("No variables selected");
+      return;
+    }
+
     var year = document.getElementById("yearSelect").value;
     var geoLevel = document.getElementById("geoLevel").value;
 
-    var meta = App.getMeta(varCode);
-    App.setAggUI(meta);
-
-    if (meta.source === "LODES") {
-      await runLodesEmploymentSummary(year);
-    } else {
-      await runAcsSummary(varCode, year, geoLevel);
+    // Separate ACS vs LODES selections
+    var acsVars = [];
+    var lodesVars = [];
+    for (var i = 0; i < selectedVars.length; i++) {
+      var meta = App.getMeta(selectedVars[i]);
+      if (meta.source === "LODES") {
+        lodesVars.push(selectedVars[i]);
+      } else {
+        acsVars.push(selectedVars[i]);
+      }
     }
 
+    // Initialize modal table with "pending" rows
+    var tbody = document.getElementById("results-tbody");
+    tbody.innerHTML = "";
+    var progressEl = document.getElementById("results-progress");
+    var notesEl = document.getElementById("results-notes");
+    notesEl.textContent = "";
+
+    var rowEls = {};
+    for (var j = 0; j < selectedVars.length; j++) {
+      var code = selectedVars[j];
+      var m = App.getMeta(code);
+      var tr = document.createElement("tr");
+      tr.className = "result-pending";
+      tr.innerHTML =
+        "<td>" + (m.category || "\u2014") + "</td>" +
+        "<td>" + (m.label || code) + "</td>" +
+        "<td>Computing\u2026</td>" +
+        "<td>" + aggDescription(m) + "</td>";
+      tbody.appendChild(tr);
+      rowEls[code] = tr;
+    }
+
+    openResultsModal();
+
+    // Check for buffer union
+    var unionFeat = App.bufferUnionPolygon();
+    if (!unionFeat) {
+      var errMsg = App.stations.length === 0 ? "No stations placed" : "No buffers set";
+      for (var k = 0; k < selectedVars.length; k++) {
+        var errRow = rowEls[selectedVars[k]];
+        errRow.className = "result-error";
+        errRow.children[2].textContent = errMsg;
+      }
+      progressEl.textContent = "";
+      App.setStatus("No buffers");
+      return;
+    }
+
+    var completed = 0;
+    var total = selectedVars.length;
+    var nGeosEl = document.getElementById("nGeos");
+    var statusCard = document.getElementById("summaryStatus");
+
+    function updateProgress() {
+      completed++;
+      if (completed < total) {
+        progressEl.textContent = "Computing: " + completed + " / " + total + " variables done\u2026";
+      } else {
+        progressEl.textContent = "All " + total + " variables computed.";
+      }
+    }
+
+    // Shared TIGERweb geometry fetch for all ACS variables
+    var geos = null;
+    if (acsVars.length > 0) {
+      App.setStatus("Querying TIGERweb\u2026");
+      progressEl.textContent = "Fetching census geometries\u2026";
+      geos = await App.fetchTigerwebGeos(geoLevel, unionFeat);
+      App.renderCensusOverlay(geos);
+
+      if (geos.length === 0) {
+        for (var gi = 0; gi < acsVars.length; gi++) {
+          var gRow = rowEls[acsVars[gi]];
+          gRow.className = "result-error";
+          gRow.children[2].textContent = "No intersecting geographies";
+          updateProgress();
+        }
+      } else {
+        var geoids = geos.map(function (f) { return f.properties.GEOID; }).filter(Boolean);
+
+        // Fetch + aggregate each ACS variable
+        for (var ai = 0; ai < acsVars.length; ai++) {
+          var varCode = acsVars[ai];
+          var varMeta = App.getMeta(varCode);
+          var row = rowEls[varCode];
+
+          try {
+            App.setStatus("Fetching ACS: " + (varMeta.label || varCode) + "\u2026");
+            progressEl.textContent = "Computing " + (varMeta.label || varCode) +
+              " (" + (completed + 1) + "/" + total + ")\u2026";
+
+            var valueMap = await App.fetchACSValues(geoLevel, year, varCode, geoids);
+            var result = App.aggregateWithinUnion(unionFeat, geos, valueMap, varMeta.agg);
+
+            row.className = "";
+            row.children[2].textContent = App.formatValue(result.value, varMeta);
+          } catch (e) {
+            row.className = "result-error";
+            row.children[2].textContent = "Error: " + (e.message || e);
+          }
+          updateProgress();
+        }
+      }
+    }
+
+    // LODES variables
+    for (var li = 0; li < lodesVars.length; li++) {
+      var lCode = lodesVars[li];
+      var lRow = rowEls[lCode];
+
+      if (!App.lodesData) {
+        lRow.className = "result-error";
+        lRow.children[2].textContent = "LODES file not loaded";
+        updateProgress();
+        continue;
+      }
+
+      try {
+        App.setStatus("Computing LODES employment\u2026");
+        progressEl.textContent = "Computing LODES employment (" + (completed + 1) + "/" + total + ")\u2026";
+
+        var blocksInside = await App.fetchBlocksInternalPointsInUnion(unionFeat);
+        var sum = 0;
+        var matched = 0;
+        for (var geoid of blocksInside) {
+          var v = App.lodesData.get(geoid);
+          if (v != null) { sum += v; matched++; }
+        }
+
+        lRow.className = "";
+        lRow.children[2].textContent = sum.toLocaleString(undefined, { maximumFractionDigits: 0 });
+      } catch (e) {
+        lRow.className = "result-error";
+        lRow.children[2].textContent = "Error: " + (e.message || e);
+      }
+      updateProgress();
+    }
+
+    // Build notes footer
+    var geoLabel = (geoLevel === "tract") ? "tracts" : "block groups";
+    var notesParts = [];
+    if (geos && geos.length > 0) {
+      notesParts.push("ACS " + year + " 5-year; " + geos.length + " intersecting " + geoLabel + ".");
+    }
+    if (lodesVars.length > 0 && App.lodesData) {
+      notesParts.push("LODES file: " + App.lodesFileName + ".");
+    }
+    notesEl.textContent = notesParts.join(" ");
+
+    // Update sidebar status card
+    if (geos && geos.length > 0) {
+      nGeosEl.textContent = String(geos.length);
+    }
+    statusCard.style.display = "";
+
+    App.setStatus("Done");
     await notifyProject();
   }
 
@@ -384,10 +455,24 @@
       });
     });
 
-    // Variable selector
-    App.setAggUI(App.getMeta(document.getElementById("varSelect").value));
-    document.getElementById("varSelect").addEventListener("change", function (e) {
-      App.setAggUI(App.getMeta(e.target.value));
+    // Variable checkbox list: select all / clear all
+    document.getElementById("varSelectAll").addEventListener("click", function () {
+      var boxes = document.querySelectorAll('#varSelect input[type="checkbox"]');
+      for (var i = 0; i < boxes.length; i++) boxes[i].checked = true;
+    });
+    document.getElementById("varClearAll").addEventListener("click", function () {
+      var boxes = document.querySelectorAll('#varSelect input[type="checkbox"]');
+      for (var i = 0; i < boxes.length; i++) boxes[i].checked = false;
+    });
+
+    // View Results button (re-opens modal)
+    document.getElementById("viewResults").addEventListener("click", openResultsModal);
+
+    // Results modal: close on X, backdrop click, or Escape
+    document.querySelector(".results-modal-close").addEventListener("click", closeResultsModal);
+    document.querySelector(".results-modal-backdrop").addEventListener("click", closeResultsModal);
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") closeResultsModal();
     });
 
     // Buffer radius input (stations)
@@ -427,8 +512,7 @@
       App.clearLines();
       App.clearPolygons();
       document.getElementById("nGeos").textContent = "0";
-      document.getElementById("total").textContent = "\u2014";
-      document.getElementById("notes").textContent = "";
+      document.getElementById("summaryStatus").style.display = "none";
       App.setStatus("Cleared");
       notifyProject();
     });
@@ -453,8 +537,7 @@
       try {
         await runSummary();
       } catch (e) {
-        App.setStatus("Error");
-        document.getElementById("notes").textContent = String(e && e.message ? e.message : e);
+        App.setStatus("Error: " + (e && e.message ? e.message : e));
       }
     });
 

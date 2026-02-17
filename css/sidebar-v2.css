@@ -167,3 +167,63 @@
   color: var(--muted);
   font-size: 13px;
 }
+
+/* ---- Variable checkbox list ---- */
+#sidebar .var-checklist {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: 8px 0;
+  max-height: 220px;
+  overflow-y: auto;
+  background: #fff;
+}
+#sidebar .var-checklist legend {
+  font-size: 13px;
+  color: #333;
+  padding: 0 4px;
+}
+#sidebar .var-group-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin: 8px 0 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+#sidebar .var-group-label:first-of-type {
+  border-top: none;
+  margin-top: 2px;
+}
+#sidebar .var-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 3px 0;
+  font-size: 12px;
+  line-height: 1.35;
+  cursor: pointer;
+}
+#sidebar .var-check input[type="checkbox"] {
+  width: auto;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+#sidebar .var-actions {
+  display: flex;
+  gap: 6px;
+  margin: 8px 0 0;
+}
+#sidebar .var-action-btn {
+  width: auto;
+  padding: 3px 8px;
+  margin-top: 0;
+  font-size: 11px;
+  color: #2b6cb0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+}
