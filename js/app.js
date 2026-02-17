@@ -370,7 +370,10 @@
 
   // ---- Feature delete hook (called by features.js) ----
 
-  App.onFeatureDelete = function () { notifyProject(); };
+  App.onFeatureDelete = function () {
+    if (typeof App.exitEditMode === "function") App.exitEditMode();
+    notifyProject();
+  };
 
   // ---- Map load: wire everything ----
 
@@ -379,6 +382,9 @@
     App.renderStationLayers();
     App.renderLineLayers();
     App.renderPolygonLayers();
+
+    // Initialize feature editing (station drag, vertex editing)
+    if (typeof App._initEditing === "function") App._initEditing();
 
     // ---- Register sidebar panels, render, then wire events ----
     App.sidebar.addPanel({
@@ -449,6 +455,17 @@
           App.cancelPolygonDrawing();
         }
 
+        // Clear any lingering preview coordinates
+        if (typeof App.setLinePreview === "function") App.setLinePreview(null);
+        if (typeof App.setPolygonPreview === "function") App.setPolygonPreview(null);
+
+        // Update cursor for draw mode
+        if (App.drawMode) {
+          App.map.getCanvas().style.cursor = "crosshair";
+        } else {
+          App.map.getCanvas().style.cursor = "grab";
+        }
+
         App.setStatus(App.drawMode
           ? App.drawMode.charAt(0).toUpperCase() + App.drawMode.slice(1) + " mode"
           : "Ready");
@@ -502,6 +519,15 @@
       } else if (App.drawMode === "polygon") {
         App.handlePolygonClick(e.lngLat);
         notifyProject();
+      }
+    });
+
+    // Map mousemove: rubber-band preview for line/polygon drawing
+    App.map.on("mousemove", function (e) {
+      if (App.drawMode === "line") {
+        App.setLinePreview(e.lngLat);
+      } else if (App.drawMode === "polygon") {
+        App.setPolygonPreview(e.lngLat);
       }
     });
 

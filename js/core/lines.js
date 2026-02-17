@@ -9,8 +9,9 @@
 
   var lines = [];               // Saved GeoJSON LineString features
   var lineBuffers = [];         // Buffer polygons, one per saved line
-  var lineBufferRadiusMiles = 0;
+  var lineBufferRadiusMiles = 0.5;
   var currentCoords = [];       // Coordinates of the line currently being drawn
+  var previewCoord = null;      // [lng, lat] or null — cursor position during drawing (rubber-band)
   var SNAP_PIXELS = 15;         // Click must be within this many pixels of last waypoint to save
 
   /* ---- Line buffer functions ---- */
@@ -45,7 +46,9 @@
   }
 
   function currentLineGeoJSON() {
-    if (currentCoords.length < 2) {
+    var coords = currentCoords.slice();
+    if (previewCoord && coords.length >= 1) coords.push(previewCoord);
+    if (coords.length < 2) {
       return { type: "FeatureCollection", features: [] };
     }
     return {
@@ -53,7 +56,7 @@
       features: [{
         type: "Feature",
         properties: {},
-        geometry: { type: "LineString", coordinates: currentCoords.slice() }
+        geometry: { type: "LineString", coordinates: coords }
       }]
     };
   }
@@ -190,6 +193,14 @@
     updateLinesPanel();
   }
 
+  /* ---- Rubber-band preview (updates drawing source only) ---- */
+
+  function setLinePreview(lngLat) {
+    previewCoord = lngLat ? [lngLat.lng, lngLat.lat] : null;
+    var src = App.map.getSource("lines-drawing");
+    if (src) src.setData(currentLineGeoJSON());
+  }
+
   /* ---- Click logic ---- */
 
   function isNearLastWaypoint(lngLat) {
@@ -223,6 +234,7 @@
   function saveLine() {
     if (currentCoords.length < 2) {
       currentCoords.length = 0;
+      previewCoord = null;
       renderLineLayers();
       return;
     }
@@ -236,13 +248,15 @@
     });
 
     currentCoords.length = 0;
+    previewCoord = null;
     rebuildLineBuffers(lineBufferRadiusMiles);
     App.setStatus("Line " + idx + " saved (" + nWaypoints + " waypoints)");
   }
 
   function cancelLineDrawing() {
-    if (currentCoords.length === 0) return;
+    if (currentCoords.length === 0 && !previewCoord) return;
     currentCoords.length = 0;
+    previewCoord = null;
     renderLineLayers();
   }
 
@@ -255,6 +269,7 @@
   function clearLines() {
     lines.length = 0;
     currentCoords.length = 0;
+    previewCoord = null;
     lineBuffers.splice(0);
     renderLineLayers();
   }
@@ -278,6 +293,16 @@
     }
   }
 
+  /* ---- Vertex editing support ---- */
+
+  function updateLineVertex(lineIndex, vertexIndex, lng, lat) {
+    if (lineIndex < 0 || lineIndex >= lines.length) return;
+    var coords = lines[lineIndex].geometry.coordinates;
+    if (vertexIndex < 0 || vertexIndex >= coords.length) return;
+    coords[vertexIndex] = [lng, lat];
+    rebuildLineBuffers(lineBufferRadiusMiles);
+  }
+
   /* ---- Expose on App namespace ---- */
 
   App.lines = lines;
@@ -290,4 +315,6 @@
   App.undoLastLine = undoLastLine;
   App.cancelLineDrawing = cancelLineDrawing;
   App.renderLineLayers = renderLineLayers;
+  App.setLinePreview = setLinePreview;
+  App.updateLineVertex = updateLineVertex;
 })();

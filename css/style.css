@@ -337,3 +337,57 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Libe
 .results-notes:empty {
   display: none;
 }
+
+/* ---- Basemap switcher ---- */
+.basemap-switcher {
+  position: relative;
+}
+.basemap-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 29px;
+  height: 29px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: #fff;
+  cursor: pointer;
+  color: #333;
+  border-radius: 4px;
+}
+.basemap-btn:hover {
+  background: #f0f0f0;
+}
+.basemap-dropdown {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  margin-bottom: 4px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  min-width: 140px;
+  overflow: hidden;
+  z-index: 10;
+}
+.basemap-option {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font-size: 13px;
+  cursor: pointer;
+  color: #333;
+}
+.basemap-option:hover {
+  background: #eef1f5;
+}
+.basemap-option.active {
+  font-weight: 600;
+  color: #2b6cb0;
+  background: #f0f5ff;
+}

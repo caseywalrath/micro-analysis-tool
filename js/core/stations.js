@@ -9,7 +9,7 @@
 
   var points = [];
   var buffers = [];
-  var bufferRadiusMiles = 0; // user-defined; 0 = no buffers
+  var bufferRadiusMiles = 0.5; // user-defined; 0 = no buffers
 
   function pointsGeoJSON() { return { type: "FeatureCollection", features: points }; }
   function buffersGeoJSON() { return { type: "FeatureCollection", features: buffers }; }
@@ -103,6 +103,12 @@
 
   function bboxStringFromFeature(feat) { return turf.bbox(feat).join(","); }
 
+  function moveStation(index, lng, lat) {
+    if (index < 0 || index >= points.length) return;
+    points[index].geometry.coordinates = [lng, lat];
+    rebuildBuffers(bufferRadiusMiles);
+  }
+
   function removeStation(index) {
     if (index < 0 || index >= points.length) return;
     points.splice(index, 1);
@@ -127,6 +133,7 @@
   App.buffers = buffers;
   App.addStationPoint = addStationPoint;
   App.rebuildBuffers = rebuildBuffers;
+  App.moveStation = moveStation;
   App.removeStation = removeStation;
   App.clearStations = clearStations;
   App.undoLastStation = undoLastStation;

@@ -9,6 +9,7 @@
 
   var polygons = [];       // Saved GeoJSON Polygon features
   var currentCoords = [];  // Vertices of the polygon being drawn
+  var previewCoord = null; // [lng, lat] or null — cursor position during drawing (rubber-band)
   var SNAP_PIXELS = 15;
 
   /* ---- GeoJSON helpers ---- */
@@ -50,12 +51,13 @@
   }
 
   // In-progress drawing: show as a closed outline once we have >= 3 points,
-  // otherwise show the open path so far.
+  // otherwise show the open path so far. Includes rubber-band preview to cursor.
   function currentDrawingGeoJSON() {
-    if (currentCoords.length < 2) {
+    var coords = currentCoords.slice();
+    if (previewCoord && coords.length >= 1) coords.push(previewCoord);
+    if (coords.length < 2) {
       return { type: "FeatureCollection", features: [] };
     }
-    var coords = currentCoords.slice();
     if (coords.length >= 3) {
       coords.push(coords[0]); // close the ring visually
     }
@@ -173,6 +175,14 @@
     updatePolygonPanel();
   }
 
+  /* ---- Rubber-band preview (updates drawing source only) ---- */
+
+  function setPolygonPreview(lngLat) {
+    previewCoord = lngLat ? [lngLat.lng, lngLat.lat] : null;
+    var src = App.map.getSource("polygons-drawing");
+    if (src) src.setData(currentDrawingGeoJSON());
+  }
+
   /* ---- Click logic ---- */
 
   function isNearLastWaypoint(lngLat) {
@@ -207,6 +217,7 @@
   function savePolygon() {
     if (currentCoords.length < 3) {
       currentCoords.length = 0;
+      previewCoord = null;
       renderPolygonLayers();
       return;
     }
@@ -223,13 +234,15 @@
     });
 
     currentCoords.length = 0;
+    previewCoord = null;
     renderPolygonLayers();
     App.setStatus("Polygon " + idx + " saved (" + nVertices + " vertices)");
   }
 
   function cancelPolygonDrawing() {
-    if (currentCoords.length === 0) return;
+    if (currentCoords.length === 0 && !previewCoord) return;
     currentCoords.length = 0;
+    previewCoord = null;
     renderPolygonLayers();
   }
 
@@ -242,6 +255,7 @@
   function clearPolygons() {
     polygons.length = 0;
     currentCoords.length = 0;
+    previewCoord = null;
     renderPolygonLayers();
   }
 
@@ -264,6 +278,20 @@
     }
   }
 
+  /* ---- Vertex editing support ---- */
+
+  function updatePolygonVertex(polyIndex, vertexIndex, lng, lat) {
+    if (polyIndex < 0 || polyIndex >= polygons.length) return;
+    var ring = polygons[polyIndex].geometry.coordinates[0];
+    if (vertexIndex < 0 || vertexIndex >= ring.length - 1) return;
+    ring[vertexIndex] = [lng, lat];
+    // If editing vertex 0, also update the closing vertex
+    if (vertexIndex === 0) {
+      ring[ring.length - 1] = [lng, lat];
+    }
+    renderPolygonLayers();
+  }
+
   /* ---- Expose on App namespace ---- */
 
   App.polygons = polygons;
@@ -273,4 +301,6 @@
   App.undoLastPolygon = undoLastPolygon;
   App.cancelPolygonDrawing = cancelPolygonDrawing;
   App.renderPolygonLayers = renderPolygonLayers;
+  App.setPolygonPreview = setPolygonPreview;
+  App.updatePolygonVertex = updatePolygonVertex;
 })();
