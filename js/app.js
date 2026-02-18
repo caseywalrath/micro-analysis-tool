@@ -14,11 +14,6 @@
   // ---- Buffer-Area Data panel ----
 
   var STATION_DATA_PANEL_HTML =
-    '<p class="sb2-muted">' +
-      'Summaries are computed within the <b>dissolved union</b> of all buffers. ' +
-      'Set the buffer radius in the Features panel. For ACS, counts are area-apportioned and medians are shown as an area-weighted average estimate.' +
-    '</p>' +
-
     '<label>Geography level (ACS only)' +
       '<select id="geoLevel">' +
         '<option value="tract">Census Tracts (faster)</option>' +
@@ -331,7 +326,8 @@
     if (lodesVars.length > 0 && App.lodesData) {
       notesParts.push("LODES file: " + App.lodesFileName + ".");
     }
-    notesEl.textContent = notesParts.join(" ");
+    var methodNote = 'Summaries are computed within the <b>dissolved union</b> of all buffers. Set the buffer radius in the Features panel. For ACS, counts are area-apportioned and medians are shown as an area-weighted average estimate.';
+    notesEl.innerHTML = (notesParts.length ? notesParts.join(" ") + "<br>" : "") + methodNote;
 
     // Update sidebar status card
     if (geos && geos.length > 0) {
