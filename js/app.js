@@ -636,6 +636,22 @@
       });
     }
 
+    // ---- Import / Export ----
+    document.getElementById("fp-export").addEventListener("click", function () {
+      if (typeof App.cache !== "undefined") App.cache.exportToFile();
+    });
+
+    var importFileInput = document.getElementById("fp-import-file");
+    document.getElementById("fp-import").addEventListener("click", function () {
+      importFileInput.value = "";   // allow re-importing same file
+      importFileInput.click();
+    });
+    importFileInput.addEventListener("change", function (e) {
+      var file = e.target.files && e.target.files[0];
+      if (!file) return;
+      if (typeof App.cache !== "undefined") App.cache.importFromFile(file);
+    });
+
     // Save on checkbox / dropdown changes
     document.querySelectorAll('#varSelect input[type="checkbox"]').forEach(function (cb) {
       cb.addEventListener("change", function () {

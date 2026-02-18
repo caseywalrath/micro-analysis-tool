@@ -45,46 +45,49 @@
       <div id="map"></div>
 
       <div id="feature-panel">
-        <h3>Features</h3>
+        <div class="fp-content">
+          <h3>Features</h3>
 
-        <div class="fp-section">
-          <div class="fp-section-header">Stations</div>
-          <div id="fp-stations" class="fp-list"></div>
-        </div>
-
-        <div class="fp-section">
-          <div class="fp-section-header">Lines</div>
-          <div id="fp-lines" class="fp-list"></div>
-        </div>
-
-        <div class="fp-section">
-          <div class="fp-section-header">Routes</div>
-          <div id="fp-routes" class="fp-list"></div>
-        </div>
-
-        <div class="fp-section">
-          <div class="fp-section-header">Polygons</div>
-          <div id="fp-polygons" class="fp-list"></div>
-        </div>
-
-        <div class="fp-section">
-          <div class="fp-section-header">Buffers</div>
-          <div class="fp-buffer-row">
-            <span class="fp-buffer-label">Stations</span>
-            <input id="bufferRadius" type="number" min="0" step="0.1" value="0.5" class="fp-radius-input" />
-            <span class="fp-radius-unit">mi</span>
+          <div class="fp-section">
+            <div class="fp-section-header">Stations</div>
+            <div id="fp-stations" class="fp-list"></div>
           </div>
-          <div class="fp-buffer-row">
-            <span class="fp-buffer-label">Lines</span>
-            <input id="lineBufferRadius" type="number" min="0" step="0.1" value="0.5" class="fp-radius-input" />
-            <span class="fp-radius-unit">mi</span>
+
+          <div class="fp-section">
+            <div class="fp-section-header">Lines</div>
+            <div id="fp-lines" class="fp-list"></div>
+          </div>
+
+          <div class="fp-section">
+            <div class="fp-section-header">Routes</div>
+            <div id="fp-routes" class="fp-list"></div>
+          </div>
+
+          <div class="fp-section">
+            <div class="fp-section-header">Polygons</div>
+            <div id="fp-polygons" class="fp-list"></div>
+          </div>
+
+          <div class="fp-section">
+            <div class="fp-section-header">Buffers</div>
+            <div class="fp-buffer-row">
+              <span class="fp-buffer-label">Stations</span>
+              <input id="bufferRadius" type="number" min="0" step="0.1" value="0.5" class="fp-radius-input" />
+              <span class="fp-radius-unit">mi</span>
+            </div>
+            <div class="fp-buffer-row">
+              <span class="fp-buffer-label">Lines</span>
+              <input id="lineBufferRadius" type="number" min="0" step="0.1" value="0.5" class="fp-radius-input" />
+              <span class="fp-radius-unit">mi</span>
+            </div>
           </div>
         </div>
 
         <div class="fp-actions">
-          <button id="fp-import" disabled>Import</button>
-          <button id="fp-export" disabled>Export</button>
+          <button id="fp-import">Import</button>
+          <button id="fp-export">Export</button>
         </div>
+        <input type="file" id="fp-import-file" accept=".json" style="display:none" />
       </div>
       </div><!-- #main-content -->
 

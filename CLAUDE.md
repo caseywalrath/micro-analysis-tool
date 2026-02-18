@@ -55,7 +55,7 @@ js/
     features.js             Right-side feature panel: lists features, editable names, delete buttons
     census.js               TIGERweb geometry queries, ACS data fetch, area-weighted aggregation
     lodes.js                LODES .csv.gz download/upload/parse, block-level employment
-    cache.js                Session cache: save/restore/reset via localStorage
+    cache.js                Session cache: save/restore/reset via localStorage; JSON import/export
   projects/
     fta-small-starts.js     FTA Small Starts: breakpoint classification, CRE/ESS/LBAR
 projects/
@@ -127,9 +127,11 @@ Basemap IDs: `"carto-light"` (default), `"carto-dark"`, `"osm"`, `"satellite"`
 `STATE_FIPS_TO_ABBR`, `getStateFromMapCenter()`, `startDownload(url, filename)`, `lodesData` (Map or null), `lodesFileName`, `setLodesLoadedUI(loaded, name, nRows)`, `parseLodesFromUploadedFile(file)`, `fetchBlocksInternalPointsInUnion(unionFeat)`, `computeEmploymentServedOnly()`
 
 ### cache.js
-`cache.save()`, `cache.restore()`, `cache.reset()`, `cache.STORAGE_KEY`
+`cache.save()`, `cache.restore()`, `cache.reset()`, `cache.exportToFile()`, `cache.importFromFile(file)`, `cache.STORAGE_KEY`
 
 Saves session state (stations, lines, polygons, buffer radii, form selections, LODES filename) to `localStorage` under key `"mat-session"`. Restore runs automatically at end of map load. Save is debounced (500ms) and called after every state mutation. Reset clears localStorage and all app state. LODES data is NOT cached (too large); only the filename is stored as a re-upload hint.
+
+`exportToFile()` serializes current state to a timestamped `.json` file and triggers a browser download. `importFromFile(file)` reads a JSON file (from a hidden `<input type="file">`), validates it, and applies the state — replacing all current features. Both use the same schema as localStorage (`version: 1`).
 
 ### app.js
 `drawMode`, `registerProject(config)`, `notifyProject()`, `onFeatureDelete()` (hook, see below)
@@ -256,7 +258,7 @@ The sidebar is an empty `<div id="sidebar">` populated at runtime by `App.sideba
 |  BUFFERS                    |
 |    Stations [_0.5_] mi      |  Radius input: default 0.5 mi.
 |    Lines    [_0.5_] mi      |  Separate buffer for line features.
-|  [Import] [Export]          |  (disabled/placeholder)
+|  [Import] [Export]          |  Anchored to bottom (flex footer).
 +-----------------------------+
 ```
 
