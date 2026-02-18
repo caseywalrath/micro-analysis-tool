@@ -152,6 +152,7 @@
       await _project.update(buildCore());
     }
   }
+  App.notifyProject = notifyProject;
 
   // ---- Results modal helpers ----
 
@@ -373,6 +374,7 @@
   App.onFeatureDelete = function () {
     if (typeof App.exitEditMode === "function") App.exitEditMode();
     notifyProject();
+    if (typeof App.cache !== "undefined") App.cache.save();
   };
 
   // ---- Map load: wire everything ----
@@ -476,10 +478,12 @@
     document.getElementById("varSelectAll").addEventListener("click", function () {
       var boxes = document.querySelectorAll('#varSelect input[type="checkbox"]');
       for (var i = 0; i < boxes.length; i++) boxes[i].checked = true;
+      if (typeof App.cache !== "undefined") App.cache.save();
     });
     document.getElementById("varClearAll").addEventListener("click", function () {
       var boxes = document.querySelectorAll('#varSelect input[type="checkbox"]');
       for (var i = 0; i < boxes.length; i++) boxes[i].checked = false;
+      if (typeof App.cache !== "undefined") App.cache.save();
     });
 
     // View Results button (re-opens modal)
@@ -498,6 +502,7 @@
       if (isNaN(val) || val < 0) val = 0;
       App.rebuildBuffers(val);
       notifyProject();
+      if (typeof App.cache !== "undefined") App.cache.save();
     });
 
     // Buffer radius input (lines)
@@ -506,6 +511,7 @@
       if (isNaN(val) || val < 0) val = 0;
       App.rebuildLineBuffers(val);
       notifyProject();
+      if (typeof App.cache !== "undefined") App.cache.save();
     });
 
     // Map click: dispatch based on draw mode
@@ -513,12 +519,15 @@
       if (App.drawMode === "station") {
         App.addStationPoint(e.lngLat.lng, e.lngLat.lat);
         notifyProject();
+        if (typeof App.cache !== "undefined") App.cache.save();
       } else if (App.drawMode === "line") {
         App.handleLineClick(e.lngLat);
         notifyProject();
+        if (typeof App.cache !== "undefined") App.cache.save();
       } else if (App.drawMode === "polygon") {
         App.handlePolygonClick(e.lngLat);
         notifyProject();
+        if (typeof App.cache !== "undefined") App.cache.save();
       }
     });
 
@@ -541,6 +550,7 @@
       document.getElementById("summaryStatus").style.display = "none";
       App.setStatus("Cleared");
       notifyProject();
+      if (typeof App.cache !== "undefined") App.cache.save();
     });
 
     // Undo last station
@@ -548,13 +558,16 @@
       if (App.drawMode === "line") {
         App.undoLastLine();
         notifyProject();
+        if (typeof App.cache !== "undefined") App.cache.save();
       } else if (App.drawMode === "polygon") {
         App.undoLastPolygon();
         notifyProject();
+        if (typeof App.cache !== "undefined") App.cache.save();
       } else if (App.stations.length > 0) {
         App.undoLastStation();
         App.setStatus("Updated");
         notifyProject();
+        if (typeof App.cache !== "undefined") App.cache.save();
       }
     });
 
@@ -601,6 +614,7 @@
         App.setLodesLoadedUI(true, file.name, jobsMap.size);
         App.setStatus("Ready");
         notifyProject();
+        if (typeof App.cache !== "undefined") App.cache.save();
       } catch (err) {
         App.lodesData = null;
         App.lodesFileName = "";
@@ -608,7 +622,37 @@
         App.setStatus("Error");
         document.getElementById("lodesInfo").textContent = String(err && err.message ? err.message : err);
         notifyProject();
+        if (typeof App.cache !== "undefined") App.cache.save();
       }
     });
+
+    // Reset session button: clear everything AND localStorage
+    var resetBtn = document.getElementById("reset");
+    if (resetBtn) {
+      resetBtn.addEventListener("click", function () {
+        if (!confirm("Reset session? This clears all features, settings, and saved data. This cannot be undone.")) return;
+        if (typeof App.cache !== "undefined") App.cache.reset();
+        notifyProject();
+      });
+    }
+
+    // Save on checkbox / dropdown changes
+    document.querySelectorAll('#varSelect input[type="checkbox"]').forEach(function (cb) {
+      cb.addEventListener("change", function () {
+        if (typeof App.cache !== "undefined") App.cache.save();
+      });
+    });
+    document.getElementById("geoLevel").addEventListener("change", function () {
+      if (typeof App.cache !== "undefined") App.cache.save();
+    });
+    document.getElementById("yearSelect").addEventListener("change", function () {
+      if (typeof App.cache !== "undefined") App.cache.save();
+    });
+
+    // Restore cached session (runs after sidebar, events, and project init are all ready)
+    if (typeof App.cache !== "undefined" && App.cache.restore()) {
+      App.setStatus("Session restored");
+      notifyProject();
+    }
   });
 })();

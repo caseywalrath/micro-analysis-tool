@@ -55,6 +55,7 @@ js/
     features.js             Right-side feature panel: lists features, editable names, delete buttons
     census.js               TIGERweb geometry queries, ACS data fetch, area-weighted aggregation
     lodes.js                LODES .csv.gz download/upload/parse, block-level employment
+    cache.js                Session cache: save/restore/reset via localStorage
   projects/
     fta-small-starts.js     FTA Small Starts: breakpoint classification, CRE/ESS/LBAR
 projects/
@@ -84,7 +85,8 @@ editing.js  (needs App.map, App.stations, App.lines, App.polygons, move/update f
 features.js (needs App.stations, App.lines, App.polygons, App.removeStation, etc.)
 census.js   (needs App.map, App.bboxStringFromFeature, App.getMeta, turf)
 lodes.js    (needs App.map, App.bboxStringFromFeature, App.bufferUnionPolygon, pako, turf)
-app.js      (wires everything; registers sidebar panels; defines App.registerProject)
+cache.js    (needs App.stations, App.lines, App.polygons, render/rebuild functions)
+app.js      (wires everything; registers sidebar panels; defines App.registerProject; calls cache.restore)
 <project>   (calls App.registerProject)
 ```
 
@@ -124,8 +126,13 @@ Basemap IDs: `"carto-light"` (default), `"carto-dark"`, `"osm"`, `"satellite"`
 ### lodes.js
 `STATE_FIPS_TO_ABBR`, `getStateFromMapCenter()`, `startDownload(url, filename)`, `lodesData` (Map or null), `lodesFileName`, `setLodesLoadedUI(loaded, name, nRows)`, `parseLodesFromUploadedFile(file)`, `fetchBlocksInternalPointsInUnion(unionFeat)`, `computeEmploymentServedOnly()`
 
+### cache.js
+`cache.save()`, `cache.restore()`, `cache.reset()`, `cache.STORAGE_KEY`
+
+Saves session state (stations, lines, polygons, buffer radii, form selections, LODES filename) to `localStorage` under key `"mat-session"`. Restore runs automatically at end of map load. Save is debounced (500ms) and called after every state mutation. Reset clears localStorage and all app state. LODES data is NOT cached (too large); only the filename is stored as a re-upload hint.
+
 ### app.js
-`drawMode`, `registerProject(config)`, `onFeatureDelete()` (hook, see below)
+`drawMode`, `registerProject(config)`, `notifyProject()`, `onFeatureDelete()` (hook, see below)
 
 ## Project System
 
@@ -203,7 +210,7 @@ Remove the project `<script>` tag from `index.html`. The core app (map, stations
 ```
 +---------------------------------------------------------------+
 |  Toolbar                                                      |
-|  [Station] [Line] [Route] [Polygon]   [Delete Last] [Clear]  |
+|  [Station] [Line] [Route] [Polygon]   [Delete Last] [Clear] [Reset Session] |
 +------------------+------------------------+-------------------+
 |  Sidebar (left)  |        Map (center)    | Feature Panel (R) |
 |  310px           |        flex            | 240px             |

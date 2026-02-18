@@ -318,6 +318,7 @@
         map.dragPan.enable();
         map.getCanvas().style.cursor = "grab";
         if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+        if (typeof App.cache !== "undefined") App.cache.save();
         return;
       }
 
@@ -339,6 +340,7 @@
         map.getCanvas().style.cursor = "move";
         showEditVertices(editState.featureType, editState.featureIndex);
         if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+        if (typeof App.cache !== "undefined") App.cache.save();
         return;
       }
     });

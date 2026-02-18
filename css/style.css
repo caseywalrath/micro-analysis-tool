@@ -43,6 +43,16 @@ body { margin: 0; font-family: system-ui, sans-serif; background: var(--bg); }
 #toolbar button:hover {
   background: #eef1f5;
 }
+#reset.reset-btn {
+  background: #fff5f5;
+  border-color: #fc8181;
+  color: #c53030;
+  margin-left: 12px;
+}
+#reset.reset-btn:hover {
+  background: #fed7d7;
+  border-color: #f56565;
+}
 .tool-btn.active {
   background: #2b6cb0 !important;
   color: #fff;
