@@ -77,6 +77,7 @@
   // Rebuild all buffers from current stations at the given radius.
   // If radius is 0, buffers are cleared (points remain on the map).
   function rebuildBuffers(radiusMiles) {
+    if (typeof App.clearCensusOverlay === "function") App.clearCensusOverlay();
     bufferRadiusMiles = radiusMiles;
     buffers.length = 0;
     if (radiusMiles > 0) {

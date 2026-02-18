@@ -17,6 +17,7 @@
   /* ---- Line buffer functions ---- */
 
   function rebuildLineBuffers(radiusMiles) {
+    if (typeof App.clearCensusOverlay === "function") App.clearCensusOverlay();
     lineBufferRadiusMiles = radiusMiles;
     lineBuffers.splice(0);
     if (radiusMiles > 0) {
@@ -267,6 +268,7 @@
   }
 
   function clearLines() {
+    if (typeof App.clearCensusOverlay === "function") App.clearCensusOverlay();
     lines.length = 0;
     currentCoords.length = 0;
     previewCoord = null;
@@ -288,6 +290,7 @@
     }
     // Otherwise remove the last saved line
     if (lines.length > 0) {
+      if (typeof App.clearCensusOverlay === "function") App.clearCensusOverlay();
       lines.pop();
       renderLineLayers();
     }

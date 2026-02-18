@@ -39,6 +39,12 @@
     }
   }
 
+  function clearCensusOverlay() {
+    var map = App.map;
+    if (!map || !map.getSource("census-geos")) return;
+    map.getSource("census-geos").setData({ type: "FeatureCollection", features: [] });
+  }
+
   // --- Paginated TIGERweb query (shared by census.js and lodes.js) ---
 
   async function fetchAllTigerwebFeatures(layerUrl, params) {
@@ -239,6 +245,7 @@
   // --- Expose on App namespace ---
 
   App.renderCensusOverlay = renderCensusOverlay;
+  App.clearCensusOverlay = clearCensusOverlay;
   App.fetchAllTigerwebFeatures = fetchAllTigerwebFeatures;
   App.fetchTigerwebGeos = fetchTigerwebGeos;
   App.parseGEOID = parseGEOID;

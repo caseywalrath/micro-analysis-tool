@@ -542,6 +542,7 @@
       App.clearStations();
       App.clearLines();
       App.clearPolygons();
+      if (typeof App.clearCensusOverlay === "function") App.clearCensusOverlay();
       document.getElementById("nGeos").textContent = "0";
       document.getElementById("summaryStatus").style.display = "none";
       App.setStatus("Cleared");
@@ -628,6 +629,7 @@
       resetBtn.addEventListener("click", function () {
         if (!confirm("Reset session? This clears all features, settings, and saved data. This cannot be undone.")) return;
         if (typeof App.cache !== "undefined") App.cache.reset();
+        if (typeof App.clearCensusOverlay === "function") App.clearCensusOverlay();
         notifyProject();
       });
     }
