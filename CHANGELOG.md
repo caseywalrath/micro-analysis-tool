@@ -68,6 +68,41 @@ Six improvements to map interaction, drawing tools, feature editing, and the bas
 
 ---
 
+### Local Cache with Reset
+
+Session state is now automatically saved to `localStorage` and restored when the page loads. A "Reset Session" button in the toolbar clears all features, settings, and cached data to return the app to a fresh state.
+
+**What changed:**
+- New `js/core/cache.js` module exposing `App.cache` with `save()`, `restore()`, and `reset()`
+- State saved: stations, lines, polygons, buffer radii, checked variables, geography level, year. LODES data is not cached (too large); only the filename is stored as a re-upload hint.
+- Auto-save (debounced 500ms) is triggered after every state mutation: station/line/polygon add, remove, drag, undo, clear, buffer radius change, LODES upload, and feature rename/delete
+- Restore runs once at the end of map load, after all DOM and event listeners are ready; shows "Session restored" in the status bar
+- "Reset Session" button added to the toolbar, styled in danger red
+- `App.notifyProject` exposed on the App namespace so external modules can trigger project updates
+- Two `App.cache.save()` calls added to `js/core/editing.js` after station drag and vertex drag operations complete
+
+**Files modified/created:** `js/core/cache.js` (new), `js/app.js`, `js/core/editing.js`, `index.html`, `css/style.css`
+
+---
+
+### JSON Import/Export with Anchored Buttons
+
+The Import and Export buttons in the Features panel are now functional. Export downloads the full session as a timestamped `.json` file. Import loads a `.json` file and replaces the current session (with a confirmation dialog if features exist). The buttons are anchored to the bottom of the panel and remain visible when the feature list scrolls.
+
+**What changed:**
+- `App.cache.exportToFile()`: serializes current state and triggers a browser download named `analysis-YYYY-MM-DD.json`
+- `App.cache.importFromFile(file)`: reads a JSON file via FileReader, validates schema version and structure, shows a confirmation dialog if features currently exist, applies the state, and persists to localStorage
+- `applyState(state)`: extracted from `restore()` as a shared private function used by both cache restore and file import, eliminating duplication
+- `validateState(state)`: validates imported JSON before applying (checks object type, schema version, array types)
+- Import button triggers a hidden `<input type="file" accept=".json">` picker programmatically; Export uses Blob + object URL download
+- Feature panel restructured: all content sections wrapped in `<div class="fp-content">` (scrollable), `.fp-actions` is now a flex-column footer (always visible at the bottom)
+- Both buttons enabled; previously `disabled`
+- Export file format is identical to the localStorage cache schema (`version: 1`)
+
+**Files modified:** `js/core/cache.js`, `js/app.js`, `index.html`, `css/style.css`
+
+---
+
 ## 2026-02-14
 
 ### Sidebar rebuild (Phases 1-6)

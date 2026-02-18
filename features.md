@@ -86,10 +86,12 @@ Allow the tool to simultanesly analyze variables that are only available at diff
 ## Persistence & Export
 
 ### Local cache with reset — Implemented
-Save the current session state (stations, uploaded files, settings) to `localStorage` or `IndexedDB`. Restore automatically on page load. Include a "Reset" button to clear cached state and start fresh.
+Session state (stations, lines, polygons, buffer radii, variable checkbox selections, geography level, year) is auto-saved to `localStorage` after every mutation (debounced 500ms) and restored automatically on page load. LODES data is not cached (too large to serialize); only the filename is stored as a re-upload hint.
+
+A "Reset Session" button in the toolbar clears all features and form settings, deletes the localStorage cache, and returns the app to factory defaults. Implemented in `js/core/cache.js` via `App.cache.save()`, `App.cache.restore()`, and `App.cache.reset()`.
 
 ### Export/import session data — Implemented
-Export the full session (station coordinates, buffer settings, uploaded data references, project state) as a JSON file. Import the same file to restore a session. Enables sharing analysis setups between users.
+Export downloads the full session as `analysis-YYYY-MM-DD.json`. Import loads a `.json` file and replaces the current session (with a confirmation dialog if features exist). File format is identical to the localStorage cache schema (`version: 1`), so exported files and cached sessions are interchangeable. Implemented via `App.cache.exportToFile()` and `App.cache.importFromFile(file)` in `js/core/cache.js`. Import/Export buttons in the Features panel (right sidebar) trigger the operations; buttons are anchored to the bottom of the panel.
 
 ### External Data Import
 Investigate possibility of importing external data such as .KML Files
