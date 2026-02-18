@@ -72,15 +72,26 @@ The current LBAR workflow requires uploading a pre-formatted inventory file with
 ### Clear census overlay on data change — Not started
 Census tract/block group overlays shown after running "Update summary" should disappear when the user clicks Clear or adjusts a buffer radius or draws/edits features that change the buffer union. Currently the overlay persists until the next summary run.
 
+### Additional Census Years - Medium Priority
+Investigate possibility of including more recent ACS data
+
+### Mixed-geography analysis - Medium Priority
+Allow the tool to simultanesly analyze variables that are only available at different geographies (eg, Census Tract vs Block Group) with proper documentation
+
 ---
 
 ## Persistence & Export
 
-### Local cache with reset — High Priority
+### Local cache with reset — Implemented
 Save the current session state (stations, uploaded files, settings) to `localStorage` or `IndexedDB`. Restore automatically on page load. Include a "Reset" button to clear cached state and start fresh.
 
-### Export/import session data — Medium Priority
+### Export/import session data — Implemented
 Export the full session (station coordinates, buffer settings, uploaded data references, project state) as a JSON file. Import the same file to restore a session. Enables sharing analysis setups between users.
+
+### External Data Import
+Investigate possibility of importing external data such as .KML Files
+
+
 
 ---
 
@@ -95,6 +106,9 @@ Bottom-right map control with a layers icon button. Click to open an upward drop
 - Cursor reverts to grab when draw mode is deactivated
 - Hover cursors show `move` over stations, `pointer` over lines/polygons during idle
 - Cursor state machine guards prevent conflicts between draw mode and editing
+
+### UI Cleanup — Medium Priority
+Remove or hide extraneous explanations on Bufffer-area data.
 
 ### Resizable sidebar — Low Priority
 Allow the user to drag the sidebar edge to resize it. Currently the sidebar is a fixed 310px width defined in `css/sidebar-v2.css`.
