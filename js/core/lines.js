@@ -290,9 +290,8 @@
     }
     // Otherwise remove the last saved line
     if (lines.length > 0) {
-      if (typeof App.clearCensusOverlay === "function") App.clearCensusOverlay();
       lines.pop();
-      renderLineLayers();
+      rebuildLineBuffers(lineBufferRadiusMiles);
     }
   }
 
