@@ -23,6 +23,9 @@ Lines have their own configurable buffer radius (separate from stations). The di
 ### Polygon drawing — Implemented
 Vertex-by-vertex polygon drawing with snap-to-close. Polygons render as green filled regions with outlines and vertex dots. Supports undo and clear.
 
+### Polygon Analysis — Implemented
+Ability to include polygons as units of analysis with area-apportioned selection similar to existing buffers.
+
 ### Rubber-band preview lines — Implemented
 During Line and Polygon drawing, a dashed preview line extends from the last placed waypoint to the cursor position. For polygons, the preview also shows the closing segment back to the first vertex. Implemented via `setLinePreview()` and `setPolygonPreview()` which only update the drawing source (lightweight).
 
