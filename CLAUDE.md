@@ -38,19 +38,20 @@ Browser-based geospatial analysis tool. Pure front-end (no build step, no backen
 ## File Structure
 
 ```
-index.html                  App shell: toolbar, sidebar container, map, feature panel, script tags
+index.html                  App shell: toolbar, sidebar container, map, feature panel, results modal, script tags
 css/
-  style.css                 Core layout, toolbar, feature panel, project-specific styles
-  sidebar-v2.css            Sidebar panel system styles (scoped under #sidebar)
+  style.css                 Core layout, toolbar, feature panel, results modal, basemap switcher styles
+  sidebar-v2.css            Sidebar panel system styles (scoped under #sidebar), variable checkbox list
 js/
-  app.js                    Startup, project registry, sidebar panel HTML, summary runners, event wiring
+  app.js                    Startup, project registry, sidebar panel HTML, multi-variable summary runner, results modal, event wiring
   core/
-    utils.js                CSV parsing, number formatting, GEOID normalization, VAR_META
+    utils.js                CSV parsing, number formatting, GEOID normalization, VAR_META (with label/category), getSelectedVars
     sidebar.js              Sidebar panel manager: addPanel, removePanel, toggle, render
-    map.js                  MapLibre GL map instance (Carto basemap)
-    stations.js             Station points, user-defined buffers, union polygon
-    lines.js                Line drawing (polylines with snap-to-close)
-    polygons.js             Polygon drawing (vertex-by-vertex with snap-to-close)
+    map.js                  MapLibre GL map instance, basemap registry + switcher control, cursor management
+    stations.js             Station points, user-defined buffers (default 0.5 mi), union polygon, station drag support
+    lines.js                Line drawing (polylines with snap-to-close), line buffers (default 0.5 mi), rubber-band preview, vertex editing
+    polygons.js             Polygon drawing (vertex-by-vertex with snap-to-close), rubber-band preview, vertex editing
+    editing.js              Feature editing: station click-drag, line/polygon vertex editing with orange handles
     features.js             Right-side feature panel: lists features, editable names, delete buttons
     census.js               TIGERweb geometry queries, ACS data fetch, area-weighted aggregation
     lodes.js                LODES .csv.gz download/upload/parse, block-level employment
@@ -75,10 +76,11 @@ Order matters because modules depend on earlier ones:
 ```
 utils.js    (no deps)
 sidebar.js  (needs App namespace from utils.js)
-map.js      (creates App.map)
+map.js      (creates App.map, basemap switcher, cursor handlers)
 stations.js (needs App.map, turf)
-lines.js    (needs App.map)
+lines.js    (needs App.map, turf)
 polygons.js (needs App.map)
+editing.js  (needs App.map, App.stations, App.lines, App.polygons, move/update functions)
 features.js (needs App.stations, App.lines, App.polygons, App.removeStation, etc.)
 census.js   (needs App.map, App.bboxStringFromFeature, App.getMeta, turf)
 lodes.js    (needs App.map, App.bboxStringFromFeature, App.bufferUnionPolygon, pako, turf)
@@ -89,7 +91,7 @@ app.js      (wires everything; registers sidebar panels; defines App.registerPro
 ## App Namespace (Public API)
 
 ### utils.js
-`setStatus(s)`, `parseCSV(text)`, `fillSelect(el, opts, placeholder)`, `enableSelect(el, bool)`, `toNumberSafe(v)`, `normalizeTractGEOID(raw)`, `guessHeader(headers, candidates)`, `VAR_META`, `getMeta(code)`, `setAggUI(meta)`, `formatValue(val, meta)`
+`setStatus(s)`, `parseCSV(text)`, `fillSelect(el, opts, placeholder)`, `enableSelect(el, bool)`, `toNumberSafe(v)`, `normalizeTractGEOID(raw)`, `guessHeader(headers, candidates)`, `VAR_META`, `getMeta(code)`, `setAggUI(meta)`, `formatValue(val, meta)`, `getSelectedVars()`
 
 ### sidebar.js
 `sidebar.addPanel(config)`, `sidebar.removePanel(id)`, `sidebar.toggle(id)`, `sidebar.render()`
@@ -97,16 +99,21 @@ app.js      (wires everything; registers sidebar panels; defines App.registerPro
 Panel config: `{ id, title, html, collapsed (default false), order (default 100) }`
 
 ### map.js
-`map` (MapLibre instance)
+`map` (MapLibre instance), `switchBasemap(basemapId)`
+
+Basemap IDs: `"carto-light"` (default), `"carto-dark"`, `"osm"`, `"satellite"`
 
 ### stations.js
-`stations` (Point array), `buffers` (Polygon array), `addStationPoint(lon, lat)`, `rebuildBuffers(radiusMiles)`, `removeStation(index)`, `clearStations()`, `undoLastStation()`, `renderStationLayers()`, `bufferUnionPolygon()`, `getUnion()` (alias), `bboxStringFromFeature(feat)`
+`stations` (Point array), `buffers` (Polygon array), `addStationPoint(lon, lat)`, `rebuildBuffers(radiusMiles)`, `moveStation(index, lng, lat)`, `removeStation(index)`, `clearStations()`, `undoLastStation()`, `renderStationLayers()`, `bufferUnionPolygon()`, `getUnion()` (alias), `bboxStringFromFeature(feat)`
 
 ### lines.js
-`lines` (LineString array), `handleLineClick(lngLat)`, `removeLine(index)`, `clearLines()`, `undoLastLine()`, `cancelLineDrawing()`, `renderLineLayers()`
+`lines` (LineString array), `lineBuffers` (Polygon array), `handleLineClick(lngLat)`, `rebuildLineBuffers(radiusMiles)`, `lineBufferUnionPolygon()`, `removeLine(index)`, `clearLines()`, `undoLastLine()`, `cancelLineDrawing()`, `renderLineLayers()`, `setLinePreview(lngLat)`, `updateLineVertex(lineIndex, vertexIndex, lng, lat)`
 
 ### polygons.js
-`polygons` (Polygon array), `handlePolygonClick(lngLat)`, `removePolygon(index)`, `clearPolygons()`, `undoLastPolygon()`, `cancelPolygonDrawing()`, `renderPolygonLayers()`
+`polygons` (Polygon array), `handlePolygonClick(lngLat)`, `removePolygon(index)`, `clearPolygons()`, `undoLastPolygon()`, `cancelPolygonDrawing()`, `renderPolygonLayers()`, `setPolygonPreview(lngLat)`, `updatePolygonVertex(polyIndex, vertexIndex, lng, lat)`
+
+### editing.js
+`_editing` (edit state or null), `exitEditMode()`, `_initEditing()` (called from app.js on map load)
 
 ### features.js
 `refreshFeaturePanel()`
@@ -199,7 +206,7 @@ Remove the project `<script>` tag from `index.html`. The core app (map, stations
 |  [Station] [Line] [Route] [Polygon]   [Delete Last] [Clear]  |
 +------------------+------------------------+-------------------+
 |  Sidebar (left)  |        Map (center)    | Feature Panel (R) |
-|  520px           |        flex            | 240px             |
+|  310px           |        flex            | 240px             |
 +------------------+------------------------+-------------------+
 ```
 
@@ -209,16 +216,20 @@ The sidebar is an empty `<div id="sidebar">` populated at runtime by `App.sideba
 
 ```
 +-----------------------------+
-|  ▾ Station-area Data        |  Collapsible panel (order 10)
-|  Variable picker, year,     |  Geography level, ACS/LODES variable,
-|  [Update summary]           |  results card.
+|  ▾ Buffer-Area Data         |  Collapsible panel (order 10)
+|  Geography level dropdown,  |  Select all / Clear all links,
+|  checkbox list of variables |  checkbox groups: Land Use, Employment,
+|  (11 ACS/LODES vars),      |  Mobility, Non-additive Medians.
+|  Year dropdown,             |  [Update summary] button opens results
+|  [Update summary]           |  popup modal with 4-col table.
+|  Status card + View Results |  "View Results" re-opens last results.
 +-----------------------------+
-|  ▾ Project Name             |  Collapsible panel (order 20)
+|  ▸ LODES (File-based)       |  Collapsible panel (order 20, starts collapsed)
+|  Download / Upload          |  Download button, file picker, status.
++-----------------------------+
+|  ▾ Project Name             |  Collapsible panel (order 30)
 |  #project-panel             |  Empty <div> filled by the active
 |  (injected by project)      |  project's HTML fragment.
-+-----------------------------+
-|  ▸ LODES (File-based)       |  Collapsible panel (order 30, starts collapsed)
-|  Download / Upload          |  Download button, file picker, status.
 +-----------------------------+
 ```
 
@@ -229,11 +240,15 @@ The sidebar is an empty `<div id="sidebar">` populated at runtime by `App.sideba
 |  Features                   |
 |  STATIONS                   |  Per-station rows with editable
 |    Station 1         [DEL]  |  names and delete buttons.
-|    Station 2         [DEL]  |
-|  BUFFER  [__0__] mi        |  Radius input: 0 = no buffers.
-|  LINES                      |  Per-line rows.
+|    Station 2         [DEL]  |  Stations can be dragged on the map.
+|  LINES                      |  Per-line rows. Click on map to
+|    Line 1            [DEL]  |  enter vertex editing mode.
 |  ROUTES                     |  (placeholder)
-|  POLYGONS                   |  Per-polygon rows.
+|  POLYGONS                   |  Per-polygon rows. Click on map to
+|    Polygon 1         [DEL]  |  enter vertex editing mode.
+|  BUFFERS                    |
+|    Stations [_0.5_] mi      |  Radius input: default 0.5 mi.
+|    Lines    [_0.5_] mi      |  Separate buffer for line features.
 |  [Import] [Export]          |  (disabled/placeholder)
 +-----------------------------+
 ```
