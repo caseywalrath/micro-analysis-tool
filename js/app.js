@@ -17,7 +17,7 @@
     '<label>Geography level (ACS only)' +
       '<select id="geoLevel">' +
         '<option value="tract">Census Tracts (faster)</option>' +
-        '<option value="bg">Block Groups (more detailed)</option>' +
+        '<option value="bg" selected>Block Groups (more detailed)</option>' +
       '</select>' +
     '</label>' +
 
