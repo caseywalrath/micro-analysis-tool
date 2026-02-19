@@ -18,9 +18,15 @@
   var routeBufferRadiusMiles = 0.5;
 
   // Current drawing state
-  var currentWaypoints = [];   // user click points (committed)
-  var currentRouteCoords = []; // resolved street geometry from OSRM (flattened)
-  var previewCoord = null;     // cursor [lng, lat] for straight-line preview
+  var currentWaypoints = [];     // user click points (committed)
+  var currentRouteCoords = [];   // resolved street geometry from OSRM (flattened)
+  var previewCoord = null;       // cursor [lng, lat] for straight-line preview
+
+  // Debounced snapped preview state
+  var previewSnappedCoords = null; // routed coords from last waypoint to cursor (null = use straight line)
+  var _previewTimer = null;        // setTimeout handle
+  var _previewController = null;   // AbortController for in-flight preview fetch
+  var _previewGen = 0;             // discard stale preview results
 
   // Generation counter to discard stale async fetch results
   var _fetchGen = 0;
@@ -75,17 +81,28 @@
     return { type: "FeatureCollection", features: routes };
   }
 
-  // In-progress drawing: resolved route coords + straight preview segment to cursor.
+  // In-progress drawing: resolved route coords + preview segment to cursor.
+  // If previewSnappedCoords is available (debounced fetch returned), that snapped
+  // segment is shown. Otherwise falls back to a straight dashed line to the cursor.
   function currentDrawingGeoJSON() {
     var coords = currentRouteCoords.slice();
 
     if (previewCoord && currentWaypoints.length >= 1) {
       if (coords.length < 2) {
-        // Only 1 waypoint so far — show straight line from it to cursor
-        coords = [currentWaypoints[currentWaypoints.length - 1], previewCoord];
+        // Only 1 waypoint so far — show snapped or straight line from it to cursor
+        if (previewSnappedCoords && previewSnappedCoords.length >= 2) {
+          coords = previewSnappedCoords;
+        } else {
+          coords = [currentWaypoints[currentWaypoints.length - 1], previewCoord];
+        }
       } else {
-        // Extend resolved route to cursor
-        coords = coords.concat([previewCoord]);
+        // Extend resolved route with snapped or straight preview segment.
+        // Skip the first point of the snapped segment to avoid duplicating the junction.
+        if (previewSnappedCoords && previewSnappedCoords.length >= 2) {
+          coords = coords.concat(previewSnappedCoords.slice(1));
+        } else {
+          coords = coords.concat([previewCoord]);
+        }
       }
     }
 
@@ -224,12 +241,71 @@
     if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
   }
 
-  /* ---- Rubber-band preview (straight line, no API calls) ---- */
+  /* ---- Preview state cleanup ---- */
+
+  function clearPreviewState() {
+    clearTimeout(_previewTimer);
+    _previewTimer = null;
+    if (_previewController) {
+      _previewController.abort();
+      _previewController = null;
+    }
+    previewSnappedCoords = null;
+    previewCoord = null;
+  }
+
+  /* ---- Rubber-band preview with 1-second debounced street snapping ---- */
 
   function setRoutePreview(lngLat) {
     previewCoord = lngLat ? [lngLat.lng, lngLat.lat] : null;
+
+    // Discard any pending snapped preview and cancel any in-flight fetch.
+    // The straight-line preview takes over immediately.
+    previewSnappedCoords = null;
+    clearTimeout(_previewTimer);
+    _previewTimer = null;
+    if (_previewController) {
+      _previewController.abort();
+      _previewController = null;
+    }
+
+    // Update drawing source immediately (straight line to cursor).
     var src = App.map.getSource("routes-drawing");
     if (src) src.setData(currentDrawingGeoJSON());
+
+    // No waypoints yet, or cursor cleared — nothing to snap.
+    if (!previewCoord || currentWaypoints.length === 0) return;
+
+    // After 1 second of no mouse movement, fetch the snapped preview for just
+    // the last segment (last committed waypoint → cursor). This is one short
+    // API call rather than a full multi-waypoint re-route.
+    var fromWp = currentWaypoints[currentWaypoints.length - 1];
+    var toCursor = previewCoord; // capture current value
+
+    _previewTimer = setTimeout(function () {
+      var gen = ++_previewGen;
+      var controller = new AbortController();
+      _previewController = controller;
+
+      var coordStr = fromWp[0] + "," + fromWp[1] + ";" + toCursor[0] + "," + toCursor[1];
+      fetch(OSRM_URL + coordStr + "?overview=full&geometries=geojson", { signal: controller.signal })
+        .then(function (res) {
+          if (!res.ok) throw new Error("OSRM HTTP " + res.status);
+          return res.json();
+        })
+        .then(function (data) {
+          if (gen !== _previewGen) return; // stale — a newer mousemove won
+          _previewController = null;
+          if (data.code !== "Ok" || !data.routes || data.routes.length === 0) return;
+          previewSnappedCoords = data.routes[0].geometry.coordinates;
+          var drawSrc = App.map.getSource("routes-drawing");
+          if (drawSrc) drawSrc.setData(currentDrawingGeoJSON());
+        })
+        .catch(function (e) {
+          if (e.name !== "AbortError") _previewController = null;
+          // On network error: straight-line preview remains
+        });
+    }, 1000);
   }
 
   /* ---- Snap-to-close detection ---- */
@@ -254,6 +330,10 @@
     }
 
     currentWaypoints.push([lngLat.lng, lngLat.lat]);
+
+    // Clear the snapped preview — it referenced the previous last waypoint.
+    // A fresh preview will build up on the next mousemove.
+    clearPreviewState();
 
     if (currentWaypoints.length === 1) {
       // First waypoint — nothing to route yet
@@ -307,7 +387,7 @@
     var nWp = currentWaypoints.length;
     currentWaypoints = [];
     currentRouteCoords = [];
-    previewCoord = null;
+    clearPreviewState();
     rebuildRouteBuffers(routeBufferRadiusMiles);
     App.setStatus("Route " + idx + " saved (" + nWp + " waypoints)");
   }
@@ -318,7 +398,7 @@
     if (currentWaypoints.length === 0 && !previewCoord) return;
     currentWaypoints = [];
     currentRouteCoords = [];
-    previewCoord = null;
+    clearPreviewState();
     renderRouteLayers();
   }
 
@@ -333,7 +413,7 @@
     routes.length = 0;
     currentWaypoints = [];
     currentRouteCoords = [];
-    previewCoord = null;
+    clearPreviewState();
     routeBuffers.splice(0);
     renderRouteLayers();
   }
