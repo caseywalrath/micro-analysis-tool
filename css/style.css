@@ -411,3 +411,179 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Libe
   color: #2b6cb0;
   background: #f0f5ff;
 }
+
+/* ---- Transit Propensity Index (TPI) ---- */
+
+/* Main panel */
+.tpi-intro { margin-bottom: 8px; }
+.tpi-controls { margin-top: 4px; }
+
+/* Status bar */
+.tpi-status {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  background: #f9f9f9;
+}
+.tpi-status-stale {
+  border-color: var(--warnbd);
+  background: var(--warnbg);
+  color: #92400e;
+}
+.tpi-status-done {
+  border-color: #a7f3d0;
+  background: #ecfdf5;
+  color: #065f46;
+}
+.tpi-status-error {
+  border-color: #fca5a5;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+/* Results card */
+.tpi-results-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  margin-top: 10px;
+  background: var(--cardbg);
+}
+.tpi-results-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.tpi-results-header b { font-size: 13px; }
+
+/* Factor summary rows */
+.tpi-factor-summary {
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+}
+.tpi-factor-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  font-size: 12px;
+}
+.tpi-factor-name {
+  flex: 1;
+  color: #333;
+}
+.tpi-factor-weight {
+  width: 36px;
+  text-align: right;
+  color: var(--muted);
+  font-size: 11px;
+}
+.tpi-factor-score {
+  width: 72px;
+  text-align: right;
+  font-weight: 600;
+}
+.tpi-factor-ok { color: #065f46; }
+.tpi-factor-na { color: var(--muted); font-style: italic; font-weight: 400; }
+
+/* Composite row */
+.tpi-composite-summary {
+  border-top: 1px solid var(--border);
+  margin-top: 6px;
+  padding-top: 6px;
+}
+.tpi-composite-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 0;
+  font-size: 13px;
+}
+.tpi-composite-label { color: #333; }
+.tpi-composite-value { font-weight: 600; color: #1a1a1a; }
+
+/* Weight sliders */
+.tpi-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+.tpi-slider-label {
+  width: 100px;
+  font-size: 12px;
+  color: #333;
+  flex-shrink: 0;
+  cursor: help;
+}
+.tpi-slider {
+  flex: 1;
+  height: 4px;
+  cursor: pointer;
+  accent-color: #2b6cb0;
+}
+.tpi-slider-value {
+  width: 28px;
+  text-align: right;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.tpi-weight-total {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+}
+.tpi-weight-warn {
+  font-size: 12px;
+  color: #e53e3e;
+  margin-top: 4px;
+}
+.tpi-weight-actions { margin-top: 6px; }
+
+/* Map legend (bottom-left of map) */
+.tpi-legend {
+  position: absolute;
+  bottom: 36px;
+  left: 10px;
+  background: rgba(255,255,255,0.92);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  z-index: 5;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+.tpi-legend-title {
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 4px;
+  color: #333;
+}
+.tpi-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 0;
+  color: #333;
+}
+.tpi-legend-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid rgba(0,0,0,0.15);
+  flex-shrink: 0;
+}

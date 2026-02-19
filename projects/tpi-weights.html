@@ -1,0 +1,25 @@
+<div class="tpi-weights">
+  <div class="tiny" style="margin-bottom:8px;">
+    Adjust factor weights (must sum to 100). The composite score is a weighted average
+    of per-factor quintile scores (1–5). Set a factor to 0 to exclude it.
+  </div>
+
+  <div id="tpiWeightSliders"></div>
+
+  <div id="tpiWeightTotal" class="tpi-weight-total">
+    <span>Total:</span>
+    <span id="tpiWeightSum">100</span><span>%</span>
+  </div>
+
+  <div id="tpiWeightWarn" class="tpi-weight-warn" style="display:none;">
+    Weights must sum to 100%. Adjust sliders before computing.
+  </div>
+
+  <div class="tpi-weight-actions">
+    <button id="tpiResetWeights" type="button">Reset to defaults</button>
+  </div>
+
+  <div id="tpiLodesNote" class="tiny" style="margin-top:6px;">
+    Employment factor requires a LODES file. If absent, its weight is redistributed automatically.
+  </div>
+</div>
