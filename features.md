@@ -72,8 +72,8 @@ Currently the FTA Small Starts breakpoint ratings recalculate automatically on e
 ### Simplified LBAR Housing Inventory workflow — Not started
 The current LBAR workflow requires uploading a pre-formatted inventory file with lat/lon/units/county columns. A simpler flow might allow uploading a basic address list, geocoding it, and auto-detecting the county FIPS. Requires conceptual planning — the geocoding step is the main complexity (no backend, so would need a client-side or free API solution).
 
-### Clear census overlay on data change — Not started
-Census tract/block group overlays shown after running "Update summary" should disappear when the user clicks Clear or adjusts a buffer radius or draws/edits features that change the buffer union. Currently the overlay persists until the next summary run.
+### Clear census overlay on data change — Implemented
+Census tract/block group overlays shown after running "Update summary" disappear when the user clicks Clear or adjusts a buffer radius or draws/edits features that change the buffer union. `clearCensusOverlay()` in `census.js` sets the `census-geos` source to an empty FeatureCollection (no-op if the overlay has never been rendered). Called from `rebuildBuffers()` in stations.js, `rebuildLineBuffers()` / `clearLines()` / `undoLastLine()` in lines.js, and the Clear and Reset Session handlers in app.js.
 
 ### Additional Census Years - Medium Priority
 Investigate possibility of including more recent ACS data
@@ -112,8 +112,8 @@ Bottom-right map control with a layers icon button. Click to open an upward drop
 - Hover cursors show `move` over stations, `pointer` over lines/polygons during idle
 - Cursor state machine guards prevent conflicts between draw mode and editing
 
-### UI Cleanup — Medium Priority
-Remove or hide extraneous explanations on Bufffer-area data.
+### UI Cleanup — Implemented
+Removed the methodology note from the Buffer-Area Data sidebar panel. The note ("Summaries are computed within the dissolved union of all buffers. Set the buffer radius in the Features panel. For ACS, counts are area-apportioned and medians are shown as an area-weighted average estimate.") now appears as small muted text at the bottom of the Buffer-Area Summary Results popup modal, where it is more contextually relevant.
 
 ### Resizable sidebar — Low Priority
 Allow the user to drag the sidebar edge to resize it. Currently the sidebar is a fixed 310px width defined in `css/sidebar-v2.css`.

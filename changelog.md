@@ -146,6 +146,34 @@ Station-area Data (10) → LODES (20) → Community Risk CRE (25) → Essential 
 
 ---
 
+## 2026-02-19 — UX improvements: overlay clearing, default geography, sidebar cleanup
+
+### Methodology note moved to results modal
+Removed the explanatory paragraph from the Buffer-Area Data sidebar panel. The note ("Summaries are computed within the dissolved union of all buffers…") now appears as small muted text at the bottom of the Buffer-Area Summary Results popup modal, where it is more contextually relevant. If ACS/LODES metadata lines are present they appear first, followed by the methodology note.
+
+**Files changed:** `js/app.js`
+
+### Block Groups set as default geography
+Changed the Geography Level dropdown default from Census Tracts to Block Groups.
+
+**Files changed:** `js/app.js`
+
+### Census overlay clears on data change
+Added `clearCensusOverlay()` to `js/core/census.js`. It sets the `census-geos` map source to an empty FeatureCollection (no-op if the overlay has never been rendered). The overlay now clears automatically when:
+- A station is added, removed, moved, or the station buffer radius changes — via `rebuildBuffers()` in `stations.js`
+- A line is added/completed, removed, its vertex edited, or the line buffer radius changes — via `rebuildLineBuffers()` in `lines.js`
+- A saved line is undone or all lines are cleared — via `undoLastLine()` / `clearLines()` in `lines.js`
+- The Clear or Reset Session buttons are clicked — `app.js`
+
+**Files changed:** `js/core/census.js`, `js/core/stations.js`, `js/core/lines.js`, `js/app.js`
+
+### Delete Last Feature now removes line buffers
+Fixed `undoLastLine()` in `lines.js`: when removing a saved line it now calls `rebuildLineBuffers()` instead of `renderLineLayers()`. Previously the deleted line's buffer polygon remained on the map until the next summary run or radius change. Matches the behaviour of `undoLastStation()` on the station side.
+
+**Files changed:** `js/core/lines.js`
+
+---
+
 ## Remaining items (not planned for current scope)
 
 - No Census API key (moderate: lower rate limits without one)
