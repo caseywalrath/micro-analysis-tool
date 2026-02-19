@@ -50,8 +50,9 @@ js/
     map.js                  MapLibre GL map instance, basemap registry + switcher control, cursor management
     stations.js             Station points, user-defined buffers (default 0.5 mi), union polygon, station drag support
     lines.js                Line drawing (polylines with snap-to-close), line buffers (default 0.5 mi), rubber-band preview, vertex editing
+    routes.js               Route drawing (OSRM street-snapped), route buffers (default 0.5 mi), throttled snapped preview, waypoint-only vertex editing
     polygons.js             Polygon drawing (vertex-by-vertex with snap-to-close), rubber-band preview, vertex editing
-    editing.js              Feature editing: station click-drag, line/polygon vertex editing with orange handles
+    editing.js              Feature editing: station click-drag, line/polygon/route vertex editing with orange handles
     features.js             Right-side feature panel: lists features, editable names, delete buttons
     census.js               TIGERweb geometry queries, ACS data fetch, area-weighted aggregation
     lodes.js                LODES .csv.gz download/upload/parse, block-level employment
@@ -80,12 +81,13 @@ sidebar.js  (needs App namespace from utils.js)
 map.js      (creates App.map, basemap switcher, cursor handlers)
 stations.js (needs App.map, turf)
 lines.js    (needs App.map, turf)
+routes.js   (needs App.map, turf, fetch/AbortController)
 polygons.js (needs App.map)
-editing.js  (needs App.map, App.stations, App.lines, App.polygons, move/update functions)
-features.js (needs App.stations, App.lines, App.polygons, App.removeStation, etc.)
+editing.js  (needs App.map, App.stations, App.lines, App.routes, App.polygons, move/update functions)
+features.js (needs App.stations, App.lines, App.routes, App.polygons, App.removeStation, etc.)
 census.js   (needs App.map, App.bboxStringFromFeature, App.getMeta, turf)
 lodes.js    (needs App.map, App.bboxStringFromFeature, App.bufferUnionPolygon, pako, turf)
-cache.js    (needs App.stations, App.lines, App.polygons, render/rebuild functions)
+cache.js    (needs App.stations, App.lines, App.routes, App.polygons, render/rebuild functions)
 app.js      (wires everything; registers sidebar panels; defines App.registerProject; calls cache.restore)
 <project>   (calls App.registerProject)
 ```
@@ -111,6 +113,11 @@ Basemap IDs: `"carto-light"` (default), `"carto-dark"`, `"osm"`, `"satellite"`
 ### lines.js
 `lines` (LineString array), `lineBuffers` (Polygon array), `handleLineClick(lngLat)`, `rebuildLineBuffers(radiusMiles)`, `lineBufferUnionPolygon()`, `removeLine(index)`, `clearLines()`, `undoLastLine()`, `cancelLineDrawing()`, `renderLineLayers()`, `setLinePreview(lngLat)`, `updateLineVertex(lineIndex, vertexIndex, lng, lat)`
 
+### routes.js
+`routes` (LineString array with `waypoints` property), `routeBuffers` (Polygon array), `handleRouteClick(lngLat)`, `setRoutePreview(lngLat)`, `rebuildRouteBuffers(radiusMiles)`, `routeBufferUnionPolygon()`, `removeRoute(index)`, `clearRoutes()`, `undoLastRoute()`, `cancelRouteDrawing()`, `renderRouteLayers()`, `updateRouteWaypoint(routeIndex, waypointIndex, lng, lat)`
+
+Route features store `properties.waypoints` (user click points) separately from the full street-snapped `geometry.coordinates`. Vertex editing shows handles on waypoints only. OSRM demo server used for routing (`https://router.project-osrm.org/route/v1/driving/`). Preview is throttled: straight line immediately, street-snapped after ~1s of mouse idle (AbortController used to cancel stale fetches).
+
 ### polygons.js
 `polygons` (Polygon array), `handlePolygonClick(lngLat)`, `removePolygon(index)`, `clearPolygons()`, `undoLastPolygon()`, `cancelPolygonDrawing()`, `renderPolygonLayers()`, `setPolygonPreview(lngLat)`, `updatePolygonVertex(polyIndex, vertexIndex, lng, lat)`
 
@@ -129,7 +136,7 @@ Basemap IDs: `"carto-light"` (default), `"carto-dark"`, `"osm"`, `"satellite"`
 ### cache.js
 `cache.save()`, `cache.restore()`, `cache.reset()`, `cache.exportToFile()`, `cache.importFromFile(file)`, `cache.STORAGE_KEY`
 
-Saves session state (stations, lines, polygons, buffer radii, form selections, LODES filename) to `localStorage` under key `"mat-session"`. Restore runs automatically at end of map load. Save is debounced (500ms) and called after every state mutation. Reset clears localStorage and all app state. LODES data is NOT cached (too large); only the filename is stored as a re-upload hint.
+Saves session state (stations, lines, routes, polygons, buffer radii, form selections, LODES filename) to `localStorage` under key `"mat-session"`. Routes store full geometry + waypoints; no re-routing needed on restore. Restore runs automatically at end of map load. Save is debounced (500ms) and called after every state mutation. Reset clears localStorage and all app state. LODES data is NOT cached (too large); only the filename is stored as a re-upload hint.
 
 `exportToFile()` serializes current state to a timestamped `.json` file and triggers a browser download. `importFromFile(file)` reads a JSON file (from a hidden `<input type="file">`), validates it, and applies the state — replacing all current features. Both use the same schema as localStorage (`version: 1`).
 
@@ -178,6 +185,8 @@ Passed to `init()` and `update()`. Provides the project with access to shared st
 |-----|------|-------------|
 | `stations` | Array | Current station Point features |
 | `buffers` | Array | Current buffer Polygon features |
+| `routes` | Array | Current route LineString features (with `properties.waypoints`) |
+| `routeBuffers` | Array | Current route buffer Polygon features |
 | `map` | MapLibre.Map | The map instance |
 | `lodesData` | Map or null | Parsed LODES data (w_geocode -> C000) |
 | `lodesFileName` | string | Current LODES file name |
@@ -252,12 +261,14 @@ The sidebar is an empty `<div id="sidebar">` populated at runtime by `App.sideba
 |    Station 2         [DEL]  |  Stations can be dragged on the map.
 |  LINES                      |  Per-line rows. Click on map to
 |    Line 1            [DEL]  |  enter vertex editing mode.
-|  ROUTES                     |  (placeholder)
+|  ROUTES                     |  Per-route rows. Click on map to
+|    Route 1           [DEL]  |  enter waypoint editing mode.
 |  POLYGONS                   |  Per-polygon rows. Click on map to
 |    Polygon 1         [DEL]  |  enter vertex editing mode.
 |  BUFFERS                    |
 |    Stations [_0.5_] mi      |  Radius input: default 0.5 mi.
 |    Lines    [_0.5_] mi      |  Separate buffer for line features.
+|    Routes   [_0.5_] mi      |  Separate buffer for route features.
 |  [Import] [Export]          |  Anchored to bottom (flex footer).
 +-----------------------------+
 ```

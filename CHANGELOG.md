@@ -4,6 +4,38 @@ All notable changes to this project are documented here. Entries are grouped by 
 
 ---
 
+## 2026-02-19
+
+### Route-following lines with street-snapped preview
+
+Added a new Route drawing mode that places waypoints and resolves the path between them against the real street network using the OSRM public routing API (driving profile, no API key required). Routes behave like lines in every way — buffer, feature panel, session cache, vertex editing — but their geometry follows actual streets instead of straight segments.
+
+**How it works:**
+- Click the **Route** button in the toolbar (was already a placeholder)
+- Click to place waypoints; after the second, OSRM is called and the route snaps to streets
+- Click the last waypoint again to save; route appears as a teal solid line
+- A dashed teal preview line shows while drawing — straight immediately, street-snapped after the mouse is still for ~1 second (throttled, max 1 OSRM call/sec)
+- **Delete Last** removes the most recent waypoint (or the last saved route if not drawing)
+- Click a saved route to enter vertex edit mode; orange handles appear on **waypoints only** (not every street coordinate); dragging a waypoint re-routes via OSRM on release
+
+**Buffer:**
+- Routes have their own **Routes** buffer radius input (default 0.5 mi) in the Features panel, separate from Lines
+- Route buffers fold into the dissolved union used by ACS/LODES summaries
+
+**Session persistence:**
+- Routes (geometry + waypoints) are saved in the session cache and restored on page load — no re-routing needed
+- Import/Export includes routes
+
+**Files modified/created:**
+- `js/core/routes.js` (new) — IIFE module following the `lines.js` pattern; OSRM fetch, waypoint management, throttled preview, buffers, layers, vertex editing support
+- `index.html` — `<script>` tag for `routes.js`, Routes buffer radius input in Features panel
+- `js/app.js` — `renderRouteLayers()` on load, click/mousemove/undo/clear dispatch, routeBufferRadius wiring, buffer union override updated to include routes, `buildCore()` updated
+- `js/core/features.js` — `fp-routes` list populated
+- `js/core/editing.js` — route case in vertex edit/drag/enter/exit; waypoint-only handles; async re-route on drag release
+- `js/core/cache.js` — `routes` array and `routeBufferRadius` in save/restore/reset/validate
+
+---
+
 ## 2026-02-18
 
 ### Multi-Select Census Variables with Results Popup

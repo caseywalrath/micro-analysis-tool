@@ -36,8 +36,19 @@ When no draw mode is active, features can be modified directly on the map:
 - Cursor changes contextually: `move` over stations, `pointer` over lines/polygons, `grabbing` during drags.
 - Implemented in `js/core/editing.js` with helper functions `moveStation()`, `updateLineVertex()`, `updatePolygonVertex()`.
 
-### Route-following lines — Medium Priority
-Like line drawing, but snapped to the underlying street network. Requires a routing engine (e.g., OSRM, Valhalla, or a hosted API). The resulting route geometry gets buffered like any other line.
+### Route-following lines — Implemented
+Waypoint-based line drawing that snaps to the street network via the OSRM public routing API (driving profile, no API key required). Routes appear as teal solid lines and behave like lines in every respect: separate buffer radius, feature panel listing, session cache, vertex editing.
+
+- Waypoints are placed by clicking; the routed path between them is fetched from OSRM after each click
+- A dashed teal preview shows while drawing — straight line immediately, street-snapped after ~1 second of no mouse movement (throttled, 1 API call/sec max)
+- Click the last waypoint again to save the route
+- Vertex edit mode (click a saved route) shows orange handles on **user waypoints only**, not every street coordinate; dragging a waypoint re-routes the affected segments via OSRM on release
+- Routes have their own buffer radius input in the Features panel; route buffers are included in the dissolved union for ACS/LODES analysis
+- Implemented in `js/core/routes.js` with integration in `app.js`, `editing.js`, `features.js`, and `cache.js`
+
+**Potential future improvements:**
+- Add a travel mode selector (walking, cycling) per route
+- Midpoint insertion: click along an existing route in vertex edit mode to insert a new waypoint between existing ones
 
 ### Walkshed polygons — Low Priority
 Compute an isochrone/walkshed polygon from a selected point (e.g., 10-minute walk). Requires a network analysis service. The walkshed polygon could replace or supplement the circular buffer.
