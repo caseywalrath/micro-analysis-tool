@@ -1,9 +1,9 @@
 // js/core/cache.js
 // Session cache: save/restore/reset via localStorage.
 // JSON import/export via file download/upload.
-// Depends on: App.stations, App.lines, App.polygons (stations.js, lines.js, polygons.js),
-//             App.rebuildBuffers, App.rebuildLineBuffers (stations.js, lines.js),
-//             App.renderPolygonLayers (polygons.js), App.refreshFeaturePanel (features.js).
+// Depends on: App.stations, App.lines, App.routes, App.polygons,
+//             App.rebuildBuffers, App.rebuildLineBuffers, App.rebuildRouteBuffers,
+//             App.renderPolygonLayers, App.clearRoutes, App.refreshFeaturePanel.
 // Exports: App.cache
 
 (function () {
@@ -21,9 +21,11 @@
       version: SCHEMA_VERSION,
       stations: App.stations.slice(),
       lines: App.lines.slice(),
+      routes: App.routes.slice(),
       polygons: App.polygons.slice(),
       bufferRadius: parseFloat(document.getElementById("bufferRadius").value) || 0.5,
       lineBufferRadius: parseFloat(document.getElementById("lineBufferRadius").value) || 0.5,
+      routeBufferRadius: parseFloat(document.getElementById("routeBufferRadius").value) || 0.5,
       lodesFileName: App.lodesFileName || ""
     };
 
@@ -51,6 +53,7 @@
     // 1. Clear all feature arrays unconditionally (in-place to preserve closure refs)
     App.stations.length = 0;
     App.lines.length = 0;
+    App.routes.length = 0;
     App.polygons.length = 0;
 
     // 2. Push features
@@ -59,6 +62,9 @@
     }
     if (Array.isArray(state.lines)) {
       for (var j = 0; j < state.lines.length; j++) App.lines.push(state.lines[j]);
+    }
+    if (Array.isArray(state.routes)) {
+      for (var r = 0; r < state.routes.length; r++) App.routes.push(state.routes[r]);
     }
     if (Array.isArray(state.polygons)) {
       for (var k = 0; k < state.polygons.length; k++) App.polygons.push(state.polygons[k]);
@@ -73,12 +79,18 @@
     if (lineBufRadEl && state.lineBufferRadius != null) {
       lineBufRadEl.value = state.lineBufferRadius;
     }
+    var routeBufRadEl = document.getElementById("routeBufferRadius");
+    if (routeBufRadEl && state.routeBufferRadius != null) {
+      routeBufRadEl.value = state.routeBufferRadius;
+    }
 
     // 4. Rebuild derived buffers and re-render map layers
     var stationRadius = parseFloat(bufRadEl ? bufRadEl.value : "0.5") || 0.5;
     var lineRadius = parseFloat(lineBufRadEl ? lineBufRadEl.value : "0.5") || 0.5;
+    var routeRadius = parseFloat(routeBufRadEl ? routeBufRadEl.value : "0.5") || 0.5;
     App.rebuildBuffers(stationRadius);
     App.rebuildLineBuffers(lineRadius);
+    App.rebuildRouteBuffers(routeRadius);
     App.renderPolygonLayers();
 
     // 5. Restore checkbox selections
@@ -142,7 +154,7 @@
       applyState(state);
 
       return (App.stations.length > 0 || App.lines.length > 0 ||
-              App.polygons.length > 0);
+              App.routes.length > 0 || App.polygons.length > 0);
     } catch (e) {
       console.warn("Cache restore failed:", e);
       return false;
@@ -162,6 +174,7 @@
     // 2. Clear all features
     App.clearStations();
     App.clearLines();
+    App.clearRoutes();
     App.clearPolygons();
 
     // 3. Reset buffer radii to defaults
@@ -169,6 +182,8 @@
     if (bufRadEl) bufRadEl.value = "0.5";
     var lineBufRadEl = document.getElementById("lineBufferRadius");
     if (lineBufRadEl) lineBufRadEl.value = "0.5";
+    var routeBufRadEl = document.getElementById("routeBufferRadius");
+    if (routeBufRadEl) routeBufRadEl.value = "0.5";
 
     // 4. Clear LODES state
     App.lodesData = null;
@@ -214,6 +229,9 @@
     }
     if (state.lines != null && !Array.isArray(state.lines)) {
       return "Invalid lines data.";
+    }
+    if (state.routes != null && !Array.isArray(state.routes)) {
+      return "Invalid routes data.";
     }
     if (state.polygons != null && !Array.isArray(state.polygons)) {
       return "Invalid polygons data.";
@@ -267,7 +285,7 @@
 
         // Confirm if replacing existing features
         var hasExisting = (App.stations.length > 0 || App.lines.length > 0 ||
-                           App.polygons.length > 0);
+                           App.routes.length > 0 || App.polygons.length > 0);
         if (hasExisting) {
           if (!confirm("Import will replace all current features and settings. Continue?")) {
             return;
@@ -282,7 +300,7 @@
 
         if (typeof App.notifyProject === "function") App.notifyProject();
 
-        var nFeatures = App.stations.length + App.lines.length + App.polygons.length;
+        var nFeatures = App.stations.length + App.lines.length + App.routes.length + App.polygons.length;
         App.setStatus("Imported " + nFeatures + " feature" + (nFeatures !== 1 ? "s" : ""));
       } catch (parseErr) {
         App.setStatus("Import failed");

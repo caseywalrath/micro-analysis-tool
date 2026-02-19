@@ -1,9 +1,10 @@
 // js/core/editing.js
-// Feature editing: station click-drag, line/polygon vertex editing.
-// Depends on: App.map, App.stations, App.lines, App.polygons,
+// Feature editing: station click-drag, line/polygon/route vertex editing.
+// Depends on: App.map, App.stations, App.lines, App.polygons, App.routes,
 //             App.moveStation, App.updateLineVertex, App.updatePolygonVertex,
+//             App.updateRouteWaypoint,
 //             App.renderStationLayers, App.renderLineLayers, App.renderPolygonLayers,
-//             App.refreshFeaturePanel.
+//             App.renderRouteLayers, App.refreshFeaturePanel.
 // Exports: App._editing, App.exitEditMode, App._initEditing
 
 (function () {
@@ -12,8 +13,8 @@
   // ---- Edit state ----
   // null when idle. Otherwise one of:
   //   { type: "station-drag", index: N }
-  //   { type: "vertex-edit", featureType: "line"|"polygon", featureIndex: N }
-  //   { type: "vertex-drag", featureType: "line"|"polygon", featureIndex: N, vertexIndex: N }
+  //   { type: "vertex-edit", featureType: "line"|"route"|"polygon", featureIndex: N }
+  //   { type: "vertex-drag", featureType: "line"|"route"|"polygon", featureIndex: N, vertexIndex: N }
 
   var editState = null;
   App._editing = null;
@@ -34,6 +35,17 @@
           type: "Feature",
           properties: { vertexIdx: i },
           geometry: { type: "Point", coordinates: c }
+        });
+      });
+    } else if (featureType === "route") {
+      // Show handles only on the user's waypoints, not every street-snapped coordinate.
+      var route = App.routes[featureIndex];
+      if (!route) return { type: "FeatureCollection", features: [] };
+      (route.properties.waypoints || []).forEach(function (wp, i) {
+        features.push({
+          type: "Feature",
+          properties: { vertexIdx: i },
+          geometry: { type: "Point", coordinates: wp }
         });
       });
     } else if (featureType === "polygon") {
@@ -108,6 +120,15 @@
     return -1;
   }
 
+  function findRouteIndex(hitFeature) {
+    var targetIdx = hitFeature.properties && hitFeature.properties.routeIdx;
+    if (targetIdx == null) return -1;
+    for (var i = 0; i < App.routes.length; i++) {
+      if (App.routes[i].properties.routeIdx == targetIdx) return i;
+    }
+    return -1;
+  }
+
   function findPolygonIndex(hitFeature) {
     var targetIdx = hitFeature.properties && hitFeature.properties.polyIdx;
     if (targetIdx == null) return -1;
@@ -174,8 +195,8 @@
         return;
       }
 
-      // Check lines and polygons
-      var featureHits = safeQuery(e.point, ["lines-layer", "polygons-fill"]);
+      // Check lines, routes, and polygons
+      var featureHits = safeQuery(e.point, ["lines-layer", "routes-layer", "polygons-fill"]);
       if (featureHits.length > 0) {
         map.getCanvas().style.cursor = "pointer";
         return;
@@ -263,6 +284,32 @@
               vertSrc.setData({ type: "FeatureCollection", features: vertFeatures });
             }
           }
+        } else if (editState.featureType === "route") {
+          // Move the waypoint and show straight lines between all waypoints during drag.
+          // The full street-snapped geometry is re-fetched from OSRM on mouseup.
+          var route = App.routes[editState.featureIndex];
+          if (route) {
+            var wps = route.properties.waypoints;
+            wps[editState.vertexIndex] = [lng, lat];
+            // Temporarily display straight lines between waypoints while dragging
+            route.geometry.coordinates = wps.slice();
+            var routeSrc = map.getSource("routes");
+            if (routeSrc) routeSrc.setData({ type: "FeatureCollection", features: App.routes });
+            var routeWpSrc = map.getSource("routes-waypoints-saved");
+            if (routeWpSrc) {
+              var rwpFeatures = [];
+              App.routes.forEach(function (r) {
+                (r.properties.waypoints || []).forEach(function (wp, wi) {
+                  rwpFeatures.push({
+                    type: "Feature",
+                    properties: { routeIdx: r.properties.routeIdx, waypointIdx: wi + 1 },
+                    geometry: { type: "Point", coordinates: wp }
+                  });
+                });
+              });
+              routeWpSrc.setData({ type: "FeatureCollection", features: rwpFeatures });
+            }
+          }
         } else if (editState.featureType === "polygon") {
           var poly = App.polygons[editState.featureIndex];
           if (poly) {
@@ -328,6 +375,15 @@
           App.updateLineVertex(editState.featureIndex, editState.vertexIndex, e.lngLat.lng, e.lngLat.lat);
         } else if (editState.featureType === "polygon") {
           App.updatePolygonVertex(editState.featureIndex, editState.vertexIndex, e.lngLat.lng, e.lngLat.lat);
+        } else if (editState.featureType === "route") {
+          // Async: re-route via OSRM after waypoint is moved. Chain post-update actions.
+          var _fi = editState.featureIndex;
+          var _vi = editState.vertexIndex;
+          App.updateRouteWaypoint(_fi, _vi, e.lngLat.lng, e.lngLat.lat).then(function () {
+            showEditVertices("route", _fi);
+            if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+            if (typeof App.cache !== "undefined") App.cache.save();
+          });
         }
         // Return to vertex-edit mode (keep handles shown)
         editState = {
@@ -356,7 +412,7 @@
         if (editHits.length > 0) return;
 
         // Check if click is on the same or another editable feature
-        var featureHits = safeQuery(e.point, ["lines-layer", "polygons-fill"]);
+        var featureHits = safeQuery(e.point, ["lines-layer", "routes-layer", "polygons-fill"]);
         if (featureHits.length > 0) {
           var hit = featureHits[0];
           var layerId = hit.layer.id;
@@ -365,6 +421,13 @@
             if (lineIdx >= 0) {
               exitEditMode();
               enterVertexEditMode("line", lineIdx);
+              return;
+            }
+          } else if (layerId === "routes-layer") {
+            var routeIdx = findRouteIndex(hit);
+            if (routeIdx >= 0) {
+              exitEditMode();
+              enterVertexEditMode("route", routeIdx);
               return;
             }
           } else if (layerId === "polygons-fill") {
@@ -382,12 +445,12 @@
         return;
       }
 
-      // Not in edit mode: check for click on lines or polygons to enter edit mode
+      // Not in edit mode: check for click on lines, routes, or polygons to enter edit mode
       // (Skip if click was on a station — stations are drag-only)
       var stationHits = safeQuery(e.point, ["stations-layer"]);
       if (stationHits.length > 0) return;
 
-      var linePolyHits = safeQuery(e.point, ["lines-layer", "polygons-fill"]);
+      var linePolyHits = safeQuery(e.point, ["lines-layer", "routes-layer", "polygons-fill"]);
       if (linePolyHits.length === 0) return;
 
       var hit2 = linePolyHits[0];
@@ -396,6 +459,11 @@
         var lineIdx2 = findLineIndex(hit2);
         if (lineIdx2 >= 0) {
           enterVertexEditMode("line", lineIdx2);
+        }
+      } else if (layerId2 === "routes-layer") {
+        var routeIdx2 = findRouteIndex(hit2);
+        if (routeIdx2 >= 0) {
+          enterVertexEditMode("route", routeIdx2);
         }
       } else if (layerId2 === "polygons-fill") {
         var polyIdx2 = findPolygonIndex(hit2);

@@ -99,14 +99,17 @@
     _project = config;
   };
 
-  // Override bufferUnionPolygon to include line buffers alongside station buffers.
+  // Override bufferUnionPolygon to include line and route buffers alongside station buffers.
   // Must happen before any user interaction; census.js and lodes.js call this at runtime.
   var _stationUnion = App.bufferUnionPolygon;
   App.bufferUnionPolygon = function () {
     var su = _stationUnion();
     var lu = App.lineBufferUnionPolygon ? App.lineBufferUnionPolygon() : null;
-    if (su && lu) return turf.union(su, lu);
-    return su || lu || null;
+    var ru = App.routeBufferUnionPolygon ? App.routeBufferUnionPolygon() : null;
+    var combined = su || null;
+    if (lu) combined = combined ? turf.union(combined, lu) : lu;
+    if (ru) combined = combined ? turf.union(combined, ru) : ru;
+    return combined;
   };
 
   // Build a core API object for passing to project hooks.
@@ -115,6 +118,8 @@
     return {
       stations: App.stations,
       buffers: App.buffers,
+      routes: App.routes,
+      routeBuffers: App.routeBuffers,
       map: App.map,
       lodesData: App.lodesData,
       lodesFileName: App.lodesFileName,
@@ -379,6 +384,7 @@
     App.setStatus("Ready");
     App.renderStationLayers();
     App.renderLineLayers();
+    App.renderRouteLayers();
     App.renderPolygonLayers();
 
     // Initialize feature editing (station drag, vertex editing)
@@ -449,12 +455,16 @@
         if (prevMode === "line" && App.drawMode !== "line") {
           App.cancelLineDrawing();
         }
+        if (prevMode === "route" && App.drawMode !== "route") {
+          App.cancelRouteDrawing();
+        }
         if (prevMode === "polygon" && App.drawMode !== "polygon") {
           App.cancelPolygonDrawing();
         }
 
         // Clear any lingering preview coordinates
         if (typeof App.setLinePreview === "function") App.setLinePreview(null);
+        if (typeof App.setRoutePreview === "function") App.setRoutePreview(null);
         if (typeof App.setPolygonPreview === "function") App.setPolygonPreview(null);
 
         // Update cursor for draw mode
@@ -510,6 +520,15 @@
       if (typeof App.cache !== "undefined") App.cache.save();
     });
 
+    // Buffer radius input (routes)
+    document.getElementById("routeBufferRadius").addEventListener("input", function () {
+      var val = parseFloat(this.value);
+      if (isNaN(val) || val < 0) val = 0;
+      App.rebuildRouteBuffers(val);
+      notifyProject();
+      if (typeof App.cache !== "undefined") App.cache.save();
+    });
+
     // Map click: dispatch based on draw mode
     App.map.on("click", function (e) {
       if (App.drawMode === "station") {
@@ -520,6 +539,11 @@
         App.handleLineClick(e.lngLat);
         notifyProject();
         if (typeof App.cache !== "undefined") App.cache.save();
+      } else if (App.drawMode === "route") {
+        App.handleRouteClick(e.lngLat).then(function () {
+          notifyProject();
+          if (typeof App.cache !== "undefined") App.cache.save();
+        });
       } else if (App.drawMode === "polygon") {
         App.handlePolygonClick(e.lngLat);
         notifyProject();
@@ -527,10 +551,12 @@
       }
     });
 
-    // Map mousemove: rubber-band preview for line/polygon drawing
+    // Map mousemove: rubber-band preview for line/route/polygon drawing
     App.map.on("mousemove", function (e) {
       if (App.drawMode === "line") {
         App.setLinePreview(e.lngLat);
+      } else if (App.drawMode === "route") {
+        App.setRoutePreview(e.lngLat);
       } else if (App.drawMode === "polygon") {
         App.setPolygonPreview(e.lngLat);
       }
@@ -541,6 +567,7 @@
       if (!confirm("Clear all features? This cannot be undone.")) return;
       App.clearStations();
       App.clearLines();
+      App.clearRoutes();
       App.clearPolygons();
       if (typeof App.clearCensusOverlay === "function") App.clearCensusOverlay();
       document.getElementById("nGeos").textContent = "0";
@@ -550,10 +577,14 @@
       if (typeof App.cache !== "undefined") App.cache.save();
     });
 
-    // Undo last station
+    // Undo last station/waypoint/feature
     document.getElementById("undo").addEventListener("click", function () {
       if (App.drawMode === "line") {
         App.undoLastLine();
+        notifyProject();
+        if (typeof App.cache !== "undefined") App.cache.save();
+      } else if (App.drawMode === "route") {
+        App.undoLastRoute();
         notifyProject();
         if (typeof App.cache !== "undefined") App.cache.save();
       } else if (App.drawMode === "polygon") {

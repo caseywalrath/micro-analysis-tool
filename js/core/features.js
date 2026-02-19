@@ -58,8 +58,8 @@
   function refreshFeaturePanel() {
     populateList("fp-stations", App.stations || [], App.removeStation || function () {});
     populateList("fp-lines", App.lines || [], App.removeLine || function () {});
+    populateList("fp-routes", App.routes || [], App.removeRoute || function () {});
     populateList("fp-polygons", App.polygons || [], App.removePolygon || function () {});
-    // Routes will populate once that tool is implemented
   }
 
   App.refreshFeaturePanel = refreshFeaturePanel;
