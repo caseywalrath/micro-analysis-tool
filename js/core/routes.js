@@ -254,58 +254,73 @@
     previewCoord = null;
   }
 
-  /* ---- Rubber-band preview with 1-second debounced street snapping ---- */
+  /* ---- Rubber-band preview with throttled street snapping (1 fetch/sec max) ---- */
 
-  function setRoutePreview(lngLat) {
-    previewCoord = lngLat ? [lngLat.lng, lngLat.lat] : null;
+  function doPreviewFetch() {
+    var from = currentWaypoints[currentWaypoints.length - 1];
+    var to = previewCoord;
+    if (!from || !to) return;
 
-    // Discard any pending snapped preview and cancel any in-flight fetch.
-    // The straight-line preview takes over immediately.
-    previewSnappedCoords = null;
-    clearTimeout(_previewTimer);
-    _previewTimer = null;
     if (_previewController) {
       _previewController.abort();
       _previewController = null;
     }
 
-    // Update drawing source immediately (straight line to cursor).
+    var gen = ++_previewGen;
+    var controller = new AbortController();
+    _previewController = controller;
+
+    var coordStr = from[0] + "," + from[1] + ";" + to[0] + "," + to[1];
+    fetch(OSRM_URL + coordStr + "?overview=full&geometries=geojson", { signal: controller.signal })
+      .then(function (res) {
+        if (!res.ok) throw new Error("OSRM HTTP " + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        if (gen !== _previewGen) return; // stale
+        _previewController = null;
+        if (data.code !== "Ok" || !data.routes || data.routes.length === 0) return;
+        previewSnappedCoords = data.routes[0].geometry.coordinates;
+        var drawSrc = App.map.getSource("routes-drawing");
+        if (drawSrc) drawSrc.setData(currentDrawingGeoJSON());
+      })
+      .catch(function (e) {
+        if (e.name !== "AbortError") _previewController = null;
+        // On network error: straight-line preview remains
+      });
+  }
+
+  function setRoutePreview(lngLat) {
+    previewCoord = lngLat ? [lngLat.lng, lngLat.lat] : null;
+
+    // Don't clear previewSnappedCoords here — let the most recent snapped
+    // preview persist on the map until the next throttled fetch replaces it.
+    // This avoids the flicker of clearing → straight line → snapped.
+
+    // Update drawing source (uses snapped preview if available, else straight line).
     var src = App.map.getSource("routes-drawing");
     if (src) src.setData(currentDrawingGeoJSON());
 
-    // No waypoints yet, or cursor cleared — nothing to snap.
-    if (!previewCoord || currentWaypoints.length === 0) return;
+    // No waypoints yet, or cursor left the map — clean up fully.
+    if (!previewCoord || currentWaypoints.length === 0) {
+      previewSnappedCoords = null;
+      clearTimeout(_previewTimer);
+      _previewTimer = null;
+      if (_previewController) {
+        _previewController.abort();
+        _previewController = null;
+      }
+      return;
+    }
 
-    // After 1 second of no mouse movement, fetch the snapped preview for just
-    // the last segment (last committed waypoint → cursor). This is one short
-    // API call rather than a full multi-waypoint re-route.
-    var fromWp = currentWaypoints[currentWaypoints.length - 1];
-    var toCursor = previewCoord; // capture current value
-
-    _previewTimer = setTimeout(function () {
-      var gen = ++_previewGen;
-      var controller = new AbortController();
-      _previewController = controller;
-
-      var coordStr = fromWp[0] + "," + fromWp[1] + ";" + toCursor[0] + "," + toCursor[1];
-      fetch(OSRM_URL + coordStr + "?overview=full&geometries=geojson", { signal: controller.signal })
-        .then(function (res) {
-          if (!res.ok) throw new Error("OSRM HTTP " + res.status);
-          return res.json();
-        })
-        .then(function (data) {
-          if (gen !== _previewGen) return; // stale — a newer mousemove won
-          _previewController = null;
-          if (data.code !== "Ok" || !data.routes || data.routes.length === 0) return;
-          previewSnappedCoords = data.routes[0].geometry.coordinates;
-          var drawSrc = App.map.getSource("routes-drawing");
-          if (drawSrc) drawSrc.setData(currentDrawingGeoJSON());
-        })
-        .catch(function (e) {
-          if (e.name !== "AbortError") _previewController = null;
-          // On network error: straight-line preview remains
-        });
-    }, 1000);
+    // Throttle: start a timer only if one isn't already running.
+    // When it fires it reads the CURRENT previewCoord, not a stale capture.
+    if (!_previewTimer) {
+      _previewTimer = setTimeout(function () {
+        _previewTimer = null;
+        doPreviewFetch();
+      }, 1000);
+    }
   }
 
   /* ---- Snap-to-close detection ---- */
