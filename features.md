@@ -91,6 +91,17 @@ Computes a composite Transit Propensity Index for all census tracts or block gro
 - Save/load weight configurations
 - Alternative normalization methods (z-scores, Jenks natural breaks)
 - Integration with ArcGIS Pro via GeoJSON export (current workflow) or direct ArcGIS REST API
+- Greater contrast on Index Cloropaths
+- Ability to draw from multiple census geographies (Block Groups + Tracts, where some data is only availabler at the tract level)
+- Change "Computer TPI Scores" to "Calculate"
+- Remove duplicate Low Income Poverty / LEP entries
+- User-editable index entries for local land use factors
+- Ability to filter cloropaths (top/bottom 50% and top/bottom 10%)
+- Show missing data in "Scoring Summary" column
+- Draggable Analysis tool pop-up
+- Methodology/inputs for manual land use scoring
+- Manual placement of destinations by type on map (possibly similar to Stations)
+
 
 ### More census categories — Priority To Be Determined
 Expand `VAR_META` in utils.js with additional ACS variables (e.g., vehicle ownership, commute mode, housing tenure, age distribution). Each entry needs a variable code, label, category, aggregation mode, and format.
