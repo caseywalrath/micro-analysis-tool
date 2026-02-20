@@ -1,19 +1,22 @@
 // js/projects/transit-propensity.js
-// Transit Propensity Index project: registers with App, builds weight sliders,
-// runs TPI scoring engine, displays results summary.
-// Depends on: App namespace, TPI namespace (tpi-scoring.js), turf (CDN).
-// Exports: none (self-registers via App.registerProject)
+// Transit Propensity Index project: registers as an analysis module,
+// opens in a popup with 3-column layout, renders choropleth + floating legend.
+// Depends on: App namespace, TPI namespace (tpi-scoring.js), App.popup (popup.js), turf (CDN).
+// Exports: none (self-registers via App.registerModule)
 
 (function () {
   "use strict";
   var App = window.App = window.App || {};
   var TPI = window.TPI;
 
-  // ---- Project-local state ----
+  // ---- Project-local state (persists across popup open/close) ----
 
   var _lastResult = null; // last TPI computation result
   var _weights = TPI.getDefaultWeights(); // current weight settings
   var _stale = false; // true when features changed since last compute
+  var _running = false;
+  var _rescoreTimer = null;
+  var _initialized = false; // true after first init() call
 
   function getTpiClass(score) {
     if (!Number.isFinite(score)) return "N/A";
@@ -22,6 +25,12 @@
     if (score < 4) return "Medium";
     if (score < 5) return "Medium-High";
     return "High";
+  }
+
+  // ---- DOM guard: only touch DOM when popup is open for this module ----
+
+  function isPopupVisible() {
+    return App.popup.isOpen() && App.popup.currentModuleId() === "transit-propensity";
   }
 
   // ---- Weight sliders ----
@@ -74,6 +83,9 @@
     for (var i = 0; i < factors.length; i++) {
       sum += (_weights[factors[i].id] || 0);
     }
+    // DOM guard: only update UI if popup is visible
+    if (!isPopupVisible()) return sum;
+
     var sumEl  = document.getElementById("tpiWeightSum");
     var warnEl = document.getElementById("tpiWeightWarn");
     var runBtn = document.getElementById("tpiRun");
@@ -107,19 +119,18 @@
   function markStale() {
     if (!_lastResult) return; // nothing computed yet
     _stale = true;
+    // DOM guard: only update UI if popup is visible
+    if (!isPopupVisible()) return;
     var statusEl = document.getElementById("tpiStatus");
     var textEl = document.getElementById("tpiStatusText");
     if (statusEl && textEl) {
       statusEl.style.display = "";
-      textEl.textContent = "Data has changed — re-run to update scores.";
+      textEl.textContent = "Data has changed \u2014 re-run to update scores.";
       statusEl.className = "tpi-status tpi-status-stale";
     }
   }
 
   // ---- Run TPI ----
-
-  var _running = false;
-  var _rescoreTimer = null;
 
   async function runTPI() {
     if (_running) return;
@@ -127,15 +138,15 @@
 
     var statusEl = document.getElementById("tpiStatus");
     var textEl = document.getElementById("tpiStatusText");
-    var resultsEl = document.getElementById("tpiResults");
     var runBtn = document.getElementById("tpiRun");
 
     if (runBtn) runBtn.disabled = true;
     if (statusEl) { statusEl.style.display = ""; statusEl.className = "tpi-status"; }
 
     try {
-      var geoLevel = document.getElementById("geoLevel").value;
-      var year = document.getElementById("yearSelect").value;
+      // Read geo level and year from TPI's own selectors in the popup
+      var geoLevel = document.getElementById("tpiGeoLevel").value;
+      var year = document.getElementById("tpiYearSelect").value;
 
       var result = await TPI.computeTPI({
         geoLevel: geoLevel,
@@ -154,8 +165,13 @@
       // Render census overlay with scored geographies
       App.renderCensusOverlay(result.geos);
 
-      // Render choropleth
+      // Render choropleth + floating legend
       renderChoropleth(result);
+      App.popup.showFloatingWidget("tpi-legend", "projects/tpi-legend.html", {
+        position: "bottom-left",
+        width: 160,
+        title: "TPI Legend"
+      });
 
       // Update results summary
       displayResults(result);
@@ -196,6 +212,8 @@
   // ---- Display results summary ----
 
   function displayResults(result) {
+    // DOM guard
+    if (!isPopupVisible()) return;
     var resultsEl = document.getElementById("tpiResults");
     if (!resultsEl) return;
     resultsEl.style.display = "";
@@ -203,7 +221,8 @@
     // Geography count
     var geoCountEl = document.getElementById("tpiGeoCount");
     if (geoCountEl) {
-      var geoLabel = (document.getElementById("geoLevel").value === "tract") ? "tracts" : "block groups";
+      var geoLevelEl = document.getElementById("tpiGeoLevel");
+      var geoLabel = (geoLevelEl && geoLevelEl.value === "tract") ? "tracts" : "block groups";
       geoCountEl.textContent = result.geoids.length + " " + geoLabel;
     }
 
@@ -255,7 +274,7 @@
         }
       }
       var compAvg = compCnt > 0 ? compSum / compCnt : NaN;
-      compositeAvgEl.textContent = Number.isFinite(compAvg) ? compAvg.toFixed(2) + " / 5" : "—";
+      compositeAvgEl.textContent = Number.isFinite(compAvg) ? compAvg.toFixed(2) + " / 5" : "\u2014";
     }
 
     if (scoredCountEl) {
@@ -273,7 +292,7 @@
         if (Number.isFinite(entry4.composite) && (isNaN(compMax) || entry4.composite > compMax))
           compMax = entry4.composite;
       }
-      compositeMaxEl.textContent = Number.isFinite(compMax) ? compMax.toFixed(2) + " / 5" : "—";
+      compositeMaxEl.textContent = Number.isFinite(compMax) ? compMax.toFixed(2) + " / 5" : "\u2014";
     }
   }
 
@@ -300,7 +319,6 @@
         properties: {
           GEOID: geoid,
           tpiScore: composite,
-          // Copy factor scores for tooltip
           factors: scoreData ? scoreData.factors : {}
         },
         geometry: geo.geometry
@@ -309,21 +327,20 @@
 
     var fc = { type: "FeatureCollection", features: features };
 
-    // Color ramp: ColorBrewer Blues (sequential), 1=lightest → 5=darkest
+    // Color ramp: ColorBrewer Blues (sequential), 1=lightest -> 5=darkest
     var colorExpr = [
       "interpolate", ["linear"], ["coalesce", ["get", "tpiScore"], 0],
-      0, "rgba(200,200,200,0.3)",  // no score -> light gray
-      1, "#eff3ff",                // low
+      0, "rgba(200,200,200,0.3)",
+      1, "#eff3ff",
       2, "#bdd7e7",
-      3, "#6baed6",               // mid
+      3, "#6baed6",
       4, "#3182bd",
-      5, "#08519c"                 // high
+      5, "#08519c"
     ];
 
     if (!map.getSource(TPI_SOURCE)) {
       map.addSource(TPI_SOURCE, { type: "geojson", data: fc });
 
-      // Insert fill below buffers-fill so buffers render on top
       var beforeLayer = map.getLayer("buffers-fill") ? "buffers-fill" : undefined;
 
       map.addLayer({
@@ -355,13 +372,12 @@
         if (e.features && e.features.length > 0) {
           var props = e.features[0].properties;
           var score = props.tpiScore;
-          var geoid = props.GEOID || "—";
+          var geoid2 = props.GEOID || "\u2014";
 
           var html = '<div style="font-size:12px;line-height:1.4;">';
-          html += '<b>GEOID:</b> ' + geoid + '<br>';
+          html += '<b>GEOID:</b> ' + geoid2 + '<br>';
           html += '<b>TPI Score:</b> ' + (score != null ? Number(score).toFixed(2) : 'N/A') + ' / 5';
 
-          // Factor breakdown
           var factors = null;
           try { factors = JSON.parse(props.factors); } catch (_) {}
           if (factors) {
@@ -402,10 +418,14 @@
   function clearChoropleth() {
     removeChoropleth();
     _lastResult = null; _stale = false;
-    var resultsEl = document.getElementById("tpiResults");
-    if (resultsEl) resultsEl.style.display = "none";
-    var statusEl = document.getElementById("tpiStatus");
-    if (statusEl) statusEl.style.display = "none";
+    App.popup.hideFloatingWidget("tpi-legend");
+    // DOM guard for popup elements
+    if (isPopupVisible()) {
+      var resultsEl = document.getElementById("tpiResults");
+      if (resultsEl) resultsEl.style.display = "none";
+      var statusEl = document.getElementById("tpiStatus");
+      if (statusEl) statusEl.style.display = "none";
+    }
     App.setStatus("TPI cleared");
   }
 
@@ -484,26 +504,35 @@
     _triggerDownload(rows.join("\n"), "text/csv", "tpi-export-" + _dateStamp() + ".csv");
   }
 
-  // ---- Project init ----
+  // ---- Project init (called once on first popup open) ----
 
   function init(core) {
+    if (_initialized) return;
+    _initialized = true;
+
     // Wire "Compute TPI" button
     var runBtn = document.getElementById("tpiRun");
-    if (runBtn) {
-      runBtn.addEventListener("click", function () {
-        runTPI();
-      });
-    }
+    if (runBtn) runBtn.addEventListener("click", function () { runTPI(); });
 
     // Wire reset weights button
     var resetBtn = document.getElementById("tpiResetWeights");
-    if (resetBtn) {
-      resetBtn.addEventListener("click", resetWeights);
-    }
+    if (resetBtn) resetBtn.addEventListener("click", resetWeights);
 
     // Wire clear choropleth button
     var clearBtn = document.getElementById("tpiClearChoropleth");
     if (clearBtn) clearBtn.addEventListener("click", clearChoropleth);
+
+    // Wire show legend button
+    var legendBtn = document.getElementById("tpiShowLegend");
+    if (legendBtn) {
+      legendBtn.addEventListener("click", function () {
+        App.popup.showFloatingWidget("tpi-legend", "projects/tpi-legend.html", {
+          position: "bottom-left",
+          width: 160,
+          title: "TPI Legend"
+        });
+      });
+    }
 
     // Wire export buttons
     var exportGeoJSONBtn = document.getElementById("tpiExportGeoJSON");
@@ -516,26 +545,52 @@
     buildWeightSliders();
   }
 
-  // ---- Project update (called on feature changes) ----
+  // ---- Popup lifecycle hooks ----
+
+  function onOpen(core) {
+    // Refresh display from current state each time popup opens
+    if (_lastResult) {
+      displayResults(_lastResult);
+    }
+    if (_stale) {
+      markStale();
+    }
+    updateWeightSum();
+  }
+
+  function onClose(core) {
+    // No cleanup needed — state persists in closure
+  }
+
+  // ---- Module update (called on feature changes, even when popup is closed) ----
 
   async function update(core) {
     markStale();
   }
 
-  // ---- Register project ----
+  // ---- Register as analysis module ----
 
-  App.registerProject({
+  App.registerModule({
     id: "transit-propensity",
     name: "Transit Propensity Index",
-    panelHTML: "projects/transit-propensity.html",
+    enabled: true,
+    popupWidth: 760,
+    popupHTML: "projects/transit-propensity-popup.html",
 
-    panels: [
-      { id: "tpi-weights", title: "TPI Weights", htmlFile: "projects/tpi-weights.html", collapsed: true,  order: 31 },
-      { id: "tpi-legend",  title: "TPI Legend",  htmlFile: "projects/tpi-legend.html",  collapsed: false, order: 32 }
+    floatingWidgets: [
+      { id: "tpi-legend", htmlFile: "projects/tpi-legend.html", position: "bottom-left", width: 160 }
     ],
 
     init: function (core) {
       init(core);
+    },
+
+    onOpen: function (core) {
+      onOpen(core);
+    },
+
+    onClose: function (core) {
+      onClose(core);
     },
 
     update: async function (core) {

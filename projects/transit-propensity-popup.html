@@ -1,0 +1,101 @@
+<div class="tpi-popup-layout">
+
+  <!-- Column 1: Weights -->
+  <div class="tpi-popup-weights">
+    <div class="tpi-popup-section-title">Factor Weights</div>
+    <div class="tiny" style="margin-bottom:8px;">
+      Adjust weights (must sum to 100). Set a factor to 0 to exclude it.
+    </div>
+
+    <div id="tpiWeightSliders"></div>
+
+    <div id="tpiWeightTotal" class="tpi-weight-total">
+      <span>Total:</span>
+      <span id="tpiWeightSum">100</span><span>%</span>
+    </div>
+
+    <div id="tpiWeightWarn" class="tpi-weight-warn" style="display:none;">
+      Weights must sum to 100%.
+    </div>
+
+    <div class="tpi-weight-actions">
+      <button id="tpiResetWeights" type="button">Reset to defaults</button>
+    </div>
+
+    <div id="tpiLodesNote" class="tiny" style="margin-top:6px;">
+      Employment factor requires a LODES file. If absent, its weight is redistributed automatically.
+    </div>
+  </div>
+
+  <!-- Column 2: Results -->
+  <div class="tpi-popup-results">
+    <div class="tpi-popup-section-title">Results</div>
+
+    <div id="tpiStatus" class="tpi-status" style="display:none;">
+      <span id="tpiStatusText">Ready</span>
+    </div>
+
+    <div id="tpiResults" class="tpi-results-card" style="display:none;">
+      <div class="tpi-results-header">
+        <b>Scoring Summary</b>
+        <span id="tpiGeoCount" class="tiny"></span>
+      </div>
+
+      <div id="tpiFactorSummary" class="tpi-factor-summary"></div>
+
+      <div class="tpi-composite-summary">
+        <div class="tpi-composite-row">
+          <span class="tpi-composite-label">Composite TPI (weighted avg)</span>
+          <span id="tpiCompositeAvg" class="tpi-composite-value">&mdash;</span>
+        </div>
+        <div class="tpi-composite-row">
+          <span class="tpi-composite-label">Max TPI score</span>
+          <span id="tpiCompositeMax" class="tpi-composite-value">&mdash;</span>
+        </div>
+        <div class="tpi-composite-row">
+          <span class="tpi-composite-label">Geographies scored</span>
+          <span id="tpiScoredCount" class="tpi-composite-value">&mdash;</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="tiny" style="margin-top:8px;">
+      Scores are normalized within the corridor using quintiles (1&ndash;5).
+      A &ldquo;5&rdquo; means highest propensity <em>relative to other geographies
+      in this study area</em>.
+    </div>
+  </div>
+
+  <!-- Column 3: Actions -->
+  <div class="tpi-popup-actions">
+    <div class="tpi-popup-section-title">Settings</div>
+
+    <label class="tiny" style="margin-bottom:2px;">Geography level</label>
+    <select id="tpiGeoLevel" style="width:100%;font-size:12px;padding:4px;">
+      <option value="tract">Tracts (faster)</option>
+      <option value="bg" selected>Block Groups</option>
+    </select>
+
+    <label class="tiny" style="margin-bottom:2px;margin-top:6px;">ACS Year</label>
+    <select id="tpiYearSelect" style="width:100%;font-size:12px;padding:4px;">
+      <option value="2023">2023</option>
+      <option value="2022">2022</option>
+      <option value="2021">2021</option>
+    </select>
+
+    <div style="margin-top:12px;">
+      <div class="tpi-popup-section-title">Actions</div>
+    </div>
+
+    <button id="tpiRun" type="button" class="tpi-action-primary">Compute TPI</button>
+    <button id="tpiClearChoropleth" type="button">Clear Map</button>
+    <button id="tpiShowLegend" type="button">Show Legend</button>
+
+    <div style="margin-top:auto; padding-top:12px; border-top:1px solid var(--border);">
+      <div class="tpi-popup-section-title">Export</div>
+      <button id="tpiExportGeoJSON" type="button">GeoJSON</button>
+      <button id="tpiExportCSV" type="button" style="margin-top:6px;">CSV</button>
+    </div>
+  </div>
+
+</div>

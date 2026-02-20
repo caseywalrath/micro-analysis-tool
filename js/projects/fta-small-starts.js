@@ -737,13 +737,15 @@
     updateBreakpointRatings();
   }
 
-  // ---- Register with App as a project ----
+  // ---- Register with App as an analysis module (currently disabled) ----
 
-  App.registerProject({
+  App.registerModule({
     id: "fta-small-starts",
     name: "FTA Small Starts (Land Use)",
-    panelHTML: "projects/fta-small-starts.html",
+    enabled: false, // Button shown but grayed out; popup UI not yet built
 
+    // Legacy fields kept for future migration to popup-based UI
+    panelHTML: "projects/fta-small-starts.html",
     panels: [
       { id: "fta-cre",  title: "Community Risk (CRE)", htmlFile: "projects/fta-cre.html",  collapsed: true, order: 25 },
       { id: "fta-ess",  title: "Essential Services",    htmlFile: "projects/fta-ess.html",  collapsed: true, order: 26 },

@@ -38,12 +38,12 @@ Browser-based geospatial analysis tool. Pure front-end (no build step, no backen
 ## File Structure
 
 ```
-index.html                  App shell: toolbar, sidebar container, map, feature panel, results modal, script tags
+index.html                  App shell: toolbar, sidebar, map, feature panel, results modal, module popup container, script tags
 css/
-  style.css                 Core layout, toolbar, feature panel, results modal, basemap switcher styles
+  style.css                 Core layout, toolbar, feature panel, results modal, module popup, floating widgets, basemap switcher, TPI styles
   sidebar-v2.css            Sidebar panel system styles (scoped under #sidebar), variable checkbox list
 js/
-  app.js                    Startup, project registry, sidebar panel HTML, multi-variable summary runner, results modal, event wiring
+  app.js                    Startup, module registry, sidebar panel HTML, multi-variable summary runner, results modal, event wiring
   core/
     utils.js                CSV parsing, number formatting, GEOID normalization, VAR_META (with label/category), getSelectedVars
     sidebar.js              Sidebar panel manager: addPanel, removePanel, toggle, render
@@ -57,23 +57,26 @@ js/
     census.js               TIGERweb geometry queries, ACS data fetch, area-weighted aggregation
     lodes.js                LODES .csv.gz download/upload/parse, block-level employment
     cache.js                Session cache: save/restore/reset via localStorage; JSON import/export
+    popup.js                Analysis popup manager: open/close module popups, floating map widgets (legend)
   projects/
-    fta-small-starts.js     FTA Small Starts: breakpoint classification, CRE/ESS/LBAR (currently commented out in index.html)
+    fta-small-starts.js     FTA Small Starts: breakpoint classification, CRE/ESS/LBAR (registered as disabled module)
     tpi-scoring.js          TPI scoring engine: 9-factor definitions, batch ACS fetch, LODES aggregation, quintile normalization, composite scoring
-    transit-propensity.js   TPI project registration: weight sliders, choropleth rendering, hover tooltips, legend panel, GeoJSON/CSV export, stale detection
+    transit-propensity.js   TPI module: popup-based UI with weight sliders, choropleth rendering, hover tooltips, floating legend, GeoJSON/CSV export, stale detection
 projects/
-  fta-small-starts.html     FTA sidebar HTML fragment (injected into #project-panel)
-  transit-propensity.html   TPI main sidebar panel: Compute button, results summary, Clear Map, export buttons
-  tpi-weights.html          TPI weight sliders sub-panel: 9 range inputs, sum validation, reset button
-  tpi-legend.html           TPI legend sub-panel: 5-class Blues color swatches
+  fta-small-starts.html     FTA sidebar HTML fragment (legacy, kept for future popup migration)
+  transit-propensity-popup.html  TPI popup body: 3-column layout (Weights | Results | Actions)
+  transit-propensity.html   TPI sidebar panel (legacy, replaced by popup version)
+  tpi-weights.html          TPI weight sliders (legacy, merged into popup)
+  tpi-legend.html           TPI legend: 5-class Blues color swatches (reused by floating widget)
 ```
 
 ## Conventions
 
 - **No build tools.** Plain `<script>` tags in dependency order. Anyone can read/edit the source directly.
 - **Global namespace.** All shared state and functions live on `window.App`. Each module IIFE reads `var App = window.App` and assigns its exports (e.g., `App.fetchTigerwebGeos = fetchTigerwebGeos`).
-- **Project-local state stays private.** Variables like `CRE_MAP`, `ESS_POINTS`, `LBAR_SITES` (FTA) and `_lastResult`, `_stale`, `_running` (TPI) are declared inside the project IIFE closure, not on `App`. The TPI scoring engine uses a separate `window.TPI` namespace for its public API.
+- **Module-local state stays private.** Variables like `CRE_MAP`, `ESS_POINTS`, `LBAR_SITES` (FTA) and `_lastResult`, `_stale`, `_running` (TPI) are declared inside the module IIFE closure, not on `App`. The TPI scoring engine uses a separate `window.TPI` namespace for its public API.
 - **Panel-based sidebar.** Sidebar content is registered via `App.sidebar.addPanel()` and rendered on map load. Panel HTML is defined as strings in `app.js`, not hardcoded in `index.html`. Call `render()` once after all panels are registered (avoids destroying event listeners).
+- **Analysis popups.** Analysis modules open in popup windows (not the sidebar). The popup system (`App.popup`) handles HTML loading, init/open/close lifecycle, and Escape key. Floating widgets (like the TPI legend) persist on the map independently of the popup.
 - **External libraries via CDN:** MapLibre GL JS, Turf.js, pako (gzip), PapaParse (CSV).
 
 ## Script Load Order
@@ -93,13 +96,15 @@ features.js (needs App.stations, App.lines, App.routes, App.polygons, App.remove
 census.js   (needs App.map, App.bboxStringFromFeature, App.getMeta, turf)
 lodes.js    (needs App.map, App.bboxStringFromFeature, App.bufferUnionPolygon, pako, turf)
 cache.js    (needs App.stations, App.lines, App.routes, App.polygons, render/rebuild functions)
-app.js              (wires everything; registers sidebar panels; defines App.registerProject; calls cache.restore)
-<project>           (calls App.registerProject)
+popup.js    (needs App namespace; defines App.popup)
+app.js              (wires everything; registers sidebar panels; defines App.registerModule; calls cache.restore)
+<modules>           (call App.registerModule)
+  fta-small-starts.js (needs App namespace; registers as disabled module)
   tpi-scoring.js    (needs App namespace, turf; defines window.TPI)
-  transit-propensity.js (needs TPI, App.registerProject, App.map, App.renderCensusOverlay)
+  transit-propensity.js (needs TPI, App.registerModule, App.popup, App.map, App.renderCensusOverlay)
 ```
 
-**Active project:** Transit Propensity Index (TPI). FTA Small Starts is commented out in `index.html` but not deleted.
+**Active modules:** All analysis modules load simultaneously. TPI is enabled (popup-based). FTA Small Starts is registered but disabled (button shown grayed out).
 
 ## App Namespace (Public API)
 
@@ -149,52 +154,62 @@ Saves session state (stations, lines, routes, polygons, buffer radii, form selec
 
 `exportToFile()` serializes current state to a timestamped `.json` file and triggers a browser download. `importFromFile(file)` reads a JSON file (from a hidden `<input type="file">`), validates it, and applies the state — replacing all current features. Both use the same schema as localStorage (`version: 1`).
 
+### popup.js
+`popup.open(moduleId, modules, buildCore)`, `popup.close()`, `popup.isOpen()`, `popup.currentModuleId()`, `popup.showFloatingWidget(id, htmlFile, options)`, `popup.hideFloatingWidget(id)`, `popup.removeFloatingWidget(id)`, `popup.wire(modules, buildCore)`
+
+Floating widget options: `{ position: "bottom-left"|"bottom-right"|"top-left"|"top-right", width: px, title: string }`
+
 ### app.js
-`drawMode`, `registerProject(config)`, `notifyProject()`, `onFeatureDelete()` (hook, see below)
+`drawMode`, `registerModule(config)`, `registerProject(config)` (alias for registerModule), `notifyProject()`, `onFeatureDelete()` (hook, see below)
 
 ### tpi-scoring.js (window.TPI namespace, not on App)
 `TPI.FACTORS` (9-factor array with id, label, weight, acsCodes, compute functions), `TPI.batchFetchACS(geoLevel, year, geoids)`, `TPI.aggregateLodesToGeo(lodesData, geoLevel, geoids)`, `TPI.computeQuintiles(values)`, `TPI.computeComposite(factorScores, weights)`, `TPI.computeTPI(options)` (full pipeline: fetch → normalize → score), `TPI.rescoreFromRaw(rawValues, weights, geoids)` (instant re-score from cached data)
 
-### transit-propensity.js (project plugin, no public API)
-Registers project `"transit-propensity"` with three sidebar panels (main, weights, legend). Internal functions: `runTPI()`, `runInstantRescore()`, `renderChoropleth(geos, scores)`, `clearChoropleth()`, `displayResults(result)`, `exportGeoJSON()`, `exportCSV()`, `markStale()`. All state is private to the IIFE closure.
+### transit-propensity.js (analysis module, no public API)
+Registers module `"transit-propensity"` as a popup-based analysis. Opens in a 3-column popup (Weights | Results | Actions) with its own geography/year selectors. Internal functions: `runTPI()`, `runInstantRescore()`, `renderChoropleth(result)`, `clearChoropleth()`, `displayResults(result)`, `exportGeoJSON()`, `exportCSV()`, `markStale()`. All state is private to the IIFE closure. DOM writes are guarded with `isPopupVisible()` so `update()` can safely fire when the popup is closed.
 
-## Project System
+## Analysis Module System
 
-Projects are optional domain-specific analyses that plug into the core. A project is **at minimum two files**: a JS file and a main HTML fragment. Projects with complex workflows can declare additional sub-panels, each backed by their own HTML file.
+Analysis modules are optional domain-specific analyses that plug into the core. Each module registers itself at load time and appears as a button in the "Analysis" sidebar panel. Multiple modules can be registered simultaneously. Clicking a module button opens its popup window.
 
 ### Registration
 
-A project registers itself at load time by calling:
+A module registers itself at load time by calling:
 
 ```js
-App.registerProject({
-  id: "my-project",
+App.registerModule({
+  id: "my-analysis",
   name: "Human-readable Name",
-  panelHTML: "projects/my-project.html",   // main sidebar HTML fragment path
-
-  // Optional: additional collapsible sidebar panels for this project.
-  // Each panel's HTML is loaded from htmlFile (same fetch mechanism as panelHTML).
-  // Panels are inserted in order between the main project panel (order 20) and LODES (order 30).
-  panels: [
-    { id: "my-sub",  title: "Sub-panel Title", htmlFile: "projects/my-sub.html", collapsed: true, order: 22 }
-  ],
+  enabled: true,                                  // false = button shown grayed out
+  popupWidth: 720,                                // dialog width in px
+  popupHTML: "projects/my-analysis-popup.html",   // popup body HTML fragment path
 
   init: function (core) {
-    // Called once after panelHTML and all panel htmlFiles are injected into the DOM.
-    // Wire up file upload listeners, build UI, etc.
-    // Sub-panel elements are accessible by their IDs at this point.
+    // Called once, the first time the popup opens (lazy init).
+    // Wire event listeners, build dynamic UI, etc.
+    // DOM elements from popupHTML are accessible at this point.
+  },
+
+  onOpen: function (core) {
+    // Called every time the popup opens. Refresh display from current state.
+  },
+
+  onClose: function (core) {
+    // Called when the popup closes. Cleanup is optional — state persists in closure.
   },
 
   update: async function (core) {
-    // Called whenever core data changes: station add/remove/clear,
-    // summary run, LODES file load/error.
+    // Called whenever core data changes (features, LODES, etc.).
+    // Fires even when popup is closed — guard DOM writes with App.popup.isOpen().
   }
 });
 ```
 
+`App.registerProject` is a backward-compat alias for `App.registerModule`.
+
 ### The `core` object
 
-Passed to `init()` and `update()`. Provides the project with access to shared state and functions without reaching into `App` directly:
+Passed to `init()`, `onOpen()`, `onClose()`, and `update()`. Provides the module with access to shared state and functions without reaching into `App` directly:
 
 | Key | Type | Description |
 |-----|------|-------------|
@@ -215,21 +230,20 @@ Passed to `init()` and `update()`. Provides the project with access to shared st
 | `fetchBlocksInternalPointsInUnion(union)` | Function | TIGERweb block internal points |
 | `utils.*` | Object | Shared helpers: `setStatus`, `parseCSV`, `toNumberSafe`, `normalizeTractGEOID`, `guessHeader`, `fillSelect`, `enableSelect`, `formatValue`, `getMeta`, `setAggUI` |
 
-The existing FTA project still accesses `App.*` directly in its internal functions. New projects should prefer `core.*` for cleaner dependency boundaries.
+The existing FTA module still accesses `App.*` directly in its internal functions. New modules should prefer `core.*` for cleaner dependency boundaries.
 
-### How to add a new project
+### How to add a new analysis module
 
-1. Create `js/projects/my-project.js` with an `App.registerProject({...})` call
-2. Create `projects/my-project.html` with the main sidebar panel markup
-3. Optionally create additional `projects/my-sub.html` files for sub-panels and declare them in the `panels[]` array
-4. Add `<script src="js/projects/my-project.js"></script>` to `index.html` (after `app.js`)
-5. Remove or comment out any other project script tag (one project at a time)
+1. Create `js/projects/my-analysis.js` with an `App.registerModule({...})` call
+2. Create `projects/my-analysis-popup.html` with the popup body markup
+3. Add `<script src="js/projects/my-analysis.js"></script>` to `index.html` (after `app.js`)
+4. The module button automatically appears in the Analysis sidebar panel
 
-No core code needs to change.
+Multiple modules can be active simultaneously. No core code needs to change.
 
-### How to run with no project
+### How to run with no modules
 
-Remove the project `<script>` tag from `index.html`. The core app (map, stations, ACS summaries, LODES) works independently.
+Remove all module `<script>` tags from `index.html`. The Analysis sidebar panel will not appear. The core app (map, stations, ACS summaries, LODES) works independently.
 
 ## Layout
 
@@ -245,7 +259,7 @@ Remove the project `<script>` tag from `index.html`. The core app (map, stations
 
 ### Sidebar (left, panel-based)
 
-The sidebar is an empty `<div id="sidebar">` populated at runtime by `App.sidebar`. Panels are registered in `app.js` on map load, then `render()` builds the DOM. Each panel has a collapsible header (click to toggle). Panel HTML strings live in `app.js` (station-data, lodes) or are fetched from a project HTML file.
+The sidebar is an empty `<div id="sidebar">` populated at runtime by `App.sidebar`. Panels are registered in `app.js` on map load, then `render()` builds the DOM. Each panel has a collapsible header (click to toggle). Panel HTML strings live in `app.js` (station-data, lodes) or are built from registered modules (analysis).
 
 ```
 +-----------------------------+
@@ -260,34 +274,13 @@ The sidebar is an empty `<div id="sidebar">` populated at runtime by `App.sideba
 |  ▸ LODES (File-based)       |  Collapsible panel (order 20, starts collapsed)
 |  Download / Upload          |  Download button, file picker, status.
 +-----------------------------+
-|  ▾ Project Name             |  Collapsible panel (order 30)
-|  #project-panel             |  Empty <div> filled by the active
-|  (injected by project)      |  project's HTML fragment.
+|  ▾ Analysis                 |  Collapsible panel (order 30)
+|  [Transit Propensity Index] |  Button: opens TPI popup (3-column layout)
+|  [FTA Small Starts] (gray)  |  Button: disabled (coming soon)
 +-----------------------------+
 ```
 
-With the TPI project active, the sidebar shows:
-
-```
-+-----------------------------+
-|  ▾ Buffer-Area Data         |  (order 10)
-+-----------------------------+
-|  ▸ LODES (File-based)       |  (order 20, collapsed)
-+-----------------------------+
-|  ▾ Transit Propensity Index |  (order 30) — main project panel
-|  [Compute TPI Scores]       |  Fetches ACS/LODES, scores geographies,
-|  [Clear Map]                |  renders choropleth. Results card shows
-|  Results summary card       |  per-factor scores, composite avg/max.
-|  [Export GeoJSON] [CSV]     |
-+-----------------------------+
-|  ▸ TPI Weights              |  (order 31, collapsed)
-|  9 weight sliders (0-100)   |  Must sum to 100%. Instant re-score
-|  Sum display + Reset button |  on change from cached data.
-+-----------------------------+
-|  ▸ TPI Legend               |  (order 32, collapsed)
-|  5-class Blues color legend  |  Scores ranked within corridor only.
-+-----------------------------+
-```
+Clicking an analysis module button opens a popup window over the map. The TPI popup has a 3-column layout (Weights | Results | Actions). A floating legend widget appears at bottom-left of the map when the choropleth is active.
 
 ### Feature Panel (right)
 

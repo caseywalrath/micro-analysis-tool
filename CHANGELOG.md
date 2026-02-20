@@ -6,6 +6,43 @@ All notable changes to this project are documented here. Entries are grouped by 
 
 ## 2026-02-20
 
+### Analysis Module Popup System
+
+Restructured how analysis tools are presented. Analysis modules (TPI, FTA Small Starts) now launch from buttons in a single "Analysis" sidebar panel and open in popup windows instead of occupying sidebar panels. This clears the sidebar for data-input panels only and creates a scalable pattern for future analysis modules.
+
+**Architecture changes:**
+- New module registry: `App.registerModule()` replaces single-project `App.registerProject()` (backward-compat alias kept). Multiple modules can register simultaneously.
+- New `js/core/popup.js`: generic popup manager with `open()`, `close()`, `isOpen()`, floating widget support
+- New `#module-popup` container in `index.html` (z-index 5000, below results modal at 9999)
+- Sidebar now shows: Buffer-Area Data (order 10), LODES (order 20), Analysis (order 30 — button list)
+
+**TPI migrated to popup:**
+- 3-column layout: Weights | Results | Actions
+- Own geography level and year selectors (independent from sidebar dropdowns)
+- Floating legend widget (bottom-left of map, persists when popup is closed)
+- DOM-guarded `update()` — `markStale()` and `displayResults()` check `isPopupVisible()` before touching DOM
+- Lazy init: `init()` deferred to first popup open; `onOpen()` refreshes display each time
+- "Show Legend" button in Actions column
+
+**FTA Small Starts:**
+- Registered as disabled module (button shown grayed out, "coming soon")
+- Script tag uncommented — both modules load simultaneously
+
+**Escape key priority:** Results modal closes first, then analysis popup. Floating widgets unaffected.
+
+**Files created:**
+- `js/core/popup.js` — Popup manager + floating widget system
+- `projects/transit-propensity-popup.html` — TPI 3-column popup body
+
+**Files modified:**
+- `js/app.js` — Multi-module registry, Analysis sidebar panel, `notifyProject()` iterates all modules, Escape priority chain
+- `js/projects/transit-propensity.js` — Popup registration, DOM guards, lifecycle hooks, floating legend
+- `js/projects/fta-small-starts.js` — Changed to `App.registerModule({ enabled: false })`
+- `css/style.css` — Module popup, floating widget, TPI popup layout, analysis button styles
+- `index.html` — popup.js script tag, #module-popup container, FTA script uncommented
+
+---
+
 ### Transit Propensity Index (TPI) — Full Implementation
 
 Added a new project plugin that computes a composite Transit Propensity Index for all census tracts or block groups intersecting the corridor buffer. The TPI scores geographies on 9 demographic/socioeconomic factors, normalizes within the study corridor using quintiles, and renders a choropleth map with interactive tooltips. Users can adjust factor weights via sliders and export scored geographies for use in ArcGIS Pro.

@@ -95,16 +95,11 @@ Computes a composite Transit Propensity Index for all census tracts or block gro
 ### More census categories — Priority To Be Determined
 Expand `VAR_META` in utils.js with additional ACS variables (e.g., vehicle ownership, commute mode, housing tenure, age distribution). Each entry needs a variable code, label, category, aggregation mode, and format.
 
-### FTA Small Starts as button-triggered popup analysis — Not started
-Currently the FTA Small Starts breakpoint ratings recalculate automatically on every data change (station added/removed, summary run, file upload). The intent is to move this analysis out of the persistent sidebar and into an on-demand popup triggered by a toolbar or sidebar button.
+### Analysis module popup system — Implemented
+Analysis modules now launch from buttons in a single "Analysis" sidebar panel and open in popup windows. This replaced the old one-project-at-a-time sidebar panel system. Multiple modules register simultaneously via `App.registerModule()`. The popup system (`js/core/popup.js`) handles HTML loading, init/open/close lifecycle, Escape key priority, and floating map widgets. TPI is the first module migrated; FTA Small Starts is registered but disabled.
 
-**Motivation:** Separates data entry from analysis output. The sidebar panels (Station-area Data, LODES, CRE, ESS, LBAR) become pure data inputs. FTA Small Starts — and any future analyses — become on-demand outputs that users run explicitly, similar to how "Update Summary" works for the ACS/LODES summary card.
-
-**Behavior change:** The project `update()` hook would no longer fire automatically. Recalculation runs when the user opens the popup or clicks a Recalculate button inside it.
-
-**Precedent:** Establishes a pattern for multiple analysis types. Future frameworks (different scoring systems, custom threshold reports, etc.) can be added as additional buttons/popups without expanding the sidebar. Small Starts is the first of what may become a menu of analyses.
-
-**Implementation notes:** Requires a modal or panel overlay component, a trigger button (toolbar or top of sidebar), and decoupling the FTA `update()` call from the core `notifyProject()` event chain. The results modal component (`#results-modal`) now exists and could serve as a pattern.
+### FTA Small Starts popup UI — Partial
+FTA Small Starts is registered as a disabled module (button shown grayed out in the Analysis panel). The popup infrastructure exists (`App.popup`, module registry), but the FTA popup HTML and popup-specific wiring have not been built yet. The original sidebar-based code (`fta-small-starts.js`) is still intact and will need to be adapted to the popup layout pattern (similar to how TPI was migrated).
 
 ### Simplified LBAR Housing Inventory workflow — Not started
 The current LBAR workflow requires uploading a pre-formatted inventory file with lat/lon/units/county columns. A simpler flow might allow uploading a basic address list, geocoding it, and auto-detecting the county FIPS. Requires conceptual planning — the geocoding step is the main complexity (no backend, so would need a client-side or free API solution).

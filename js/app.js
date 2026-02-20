@@ -91,13 +91,16 @@
       'or preprocessed extracts/tiles.' +
     '</div>';
 
-  // ---- Project registry ----
+  // ---- Module registry (replaces single-project system) ----
 
-  var _project = null;
+  var _modules = new Map(); // Map<id, moduleConfig>
 
-  App.registerProject = function (config) {
-    _project = config;
+  App.registerModule = function (config) {
+    _modules.set(config.id, config);
   };
+
+  // Backward-compat alias so existing project files still work during migration
+  App.registerProject = App.registerModule;
 
   // Override bufferUnionPolygon to include line and route buffers alongside station buffers.
   // Must happen before any user interaction; census.js and lodes.js call this at runtime.
@@ -146,10 +149,14 @@
     };
   }
 
-  // Notify the active project that data has changed.
+  // Notify all registered modules that data has changed.
+  // Called sequentially to avoid overwhelming Census API.
   async function notifyProject() {
-    if (_project && typeof _project.update === "function") {
-      await _project.update(buildCore());
+    var core = buildCore();
+    for (var entry of _modules.values()) {
+      if (typeof entry.update === "function") {
+        await entry.update(core);
+      }
     }
   }
   App.notifyProject = notifyProject;
@@ -344,30 +351,21 @@
     await notifyProject();
   }
 
-  // ---- Load project panel HTML ----
+  // ---- Build Analysis sidebar panel HTML ----
 
-  async function loadProjectPanel() {
-    if (!_project) return;
-    try {
-      if (_project.panelHTML) {
-        var panel = document.getElementById("project-panel");
-        if (panel) {
-          var resp = await fetch(_project.panelHTML);
-          if (resp.ok) panel.innerHTML = await resp.text();
-        }
-      }
-      if (Array.isArray(_project.panels)) {
-        await Promise.all(_project.panels.map(async function (p) {
-          if (!p.htmlFile) return;
-          var el = document.getElementById(p.id + "-panel");
-          if (!el) return;
-          var resp = await fetch(p.htmlFile);
-          if (resp.ok) el.innerHTML = await resp.text();
-        }));
-      }
-    } catch (e) {
-      console.warn("Could not load project panel:", e);
+  function buildAnalysisButtonsHTML() {
+    var html = '<div class="analysis-module-list">';
+    for (var entry of _modules.values()) {
+      var isEnabled = entry.enabled !== false;
+      var disabledAttr = isEnabled ? '' : ' disabled';
+      html += '<button class="analysis-module-btn"' +
+              ' data-module-id="' + entry.id + '"' + disabledAttr + '>' +
+              (entry.name || entry.id) +
+              (isEnabled ? '' : ' <span class="coming-soon">(coming soon)</span>') +
+              '</button>';
     }
+    html += '</div>';
+    return html;
   }
 
   // ---- Feature delete hook (called by features.js) ----
@@ -398,26 +396,6 @@
       collapsed: false,
       order: 10
     });
-    if (_project) {
-      App.sidebar.addPanel({
-        id: "project",
-        title: _project.name || "Project",
-        html: '<div id="project-panel"></div>',
-        collapsed: false,
-        order: 30
-      });
-      if (Array.isArray(_project.panels)) {
-        _project.panels.forEach(function (p) {
-          App.sidebar.addPanel({
-            id: p.id,
-            title: p.title,
-            html: '<div id="' + p.id + '-panel"></div>',
-            collapsed: p.collapsed !== false,
-            order: p.order || 100
-          });
-        });
-      }
-    }
     App.sidebar.addPanel({
       id: "lodes",
       title: "LODES (File-based workflow)",
@@ -425,14 +403,27 @@
       collapsed: true,
       order: 20
     });
+    if (_modules.size > 0) {
+      App.sidebar.addPanel({
+        id: "analysis",
+        title: "Analysis",
+        html: buildAnalysisButtonsHTML(),
+        collapsed: false,
+        order: 30
+      });
+    }
     App.sidebar.render();
 
-    // Load project panel HTML into #project-panel (now inside sidebar),
-    // then init its event handlers.
-    await loadProjectPanel();
-    if (_project && typeof _project.init === "function") {
-      _project.init(buildCore());
-    }
+    // Wire popup system and analysis module buttons
+    App.popup.wire(_modules, buildCore);
+
+    var moduleButtons = document.querySelectorAll(".analysis-module-btn");
+    moduleButtons.forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var moduleId = btn.getAttribute("data-module-id");
+        if (moduleId) App.popup.open(moduleId, _modules, buildCore);
+      });
+    });
 
     // ---- Toolbar: draw mode buttons ----
     var toolBtns = document.querySelectorAll(".tool-btn");
@@ -495,11 +486,19 @@
     // View Results button (re-opens modal)
     document.getElementById("viewResults").addEventListener("click", openResultsModal);
 
-    // Results modal: close on X, backdrop click, or Escape
+    // Results modal: close on X or backdrop click
     document.querySelector(".results-modal-close").addEventListener("click", closeResultsModal);
     document.querySelector(".results-modal-backdrop").addEventListener("click", closeResultsModal);
+
+    // Escape key: close in priority order (results modal first, then analysis popup)
     document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape") closeResultsModal();
+      if (e.key === "Escape") {
+        if (document.getElementById("results-modal").style.display !== "none") {
+          closeResultsModal();
+        } else if (App.popup.isOpen()) {
+          App.popup.close();
+        }
+      }
     });
 
     // Buffer radius input (stations)

@@ -121,6 +121,18 @@
           </div>
         </div>
       </div>
+
+      <!-- Analysis module popup (generic container, reused per-module) -->
+      <div id="module-popup" class="module-popup" style="display:none;">
+        <div class="module-popup-backdrop"></div>
+        <div class="module-popup-dialog">
+          <div class="module-popup-header">
+            <h3 class="module-popup-title"></h3>
+            <button class="module-popup-close" aria-label="Close">&times;</button>
+          </div>
+          <div class="module-popup-body"></div>
+        </div>
+      </div>
     </div>
 
     <!-- Core modules (order matters) -->
@@ -136,10 +148,11 @@
     <script src="js/core/census.js"></script>
     <script src="js/core/lodes.js"></script>
     <script src="js/core/cache.js"></script>
+    <script src="js/core/popup.js"></script>
     <script src="js/app.js"></script>
 
-    <!-- Active project (swap or remove this line) -->
-    <!-- <script src="js/projects/fta-small-starts.js"></script> -->
+    <!-- Analysis modules (all load simultaneously; disabled modules show grayed-out buttons) -->
+    <script src="js/projects/fta-small-starts.js"></script>
     <script src="js/projects/tpi-scoring.js"></script>
     <script src="js/projects/transit-propensity.js"></script>
   </body>
