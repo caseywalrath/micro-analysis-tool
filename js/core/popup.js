@@ -15,6 +15,13 @@
   var _container = null;          // cached #module-popup element
   var _floatingWidgets = {};      // { widgetId: DOM element }
 
+  // ---- Drag state ----
+  var _dragging = false;
+  var _dragStartX = 0;
+  var _dragStartY = 0;
+  var _offsetX = 0;
+  var _offsetY = 0;
+
   function getContainer() {
     if (!_container) _container = document.getElementById("module-popup");
     return _container;
@@ -71,6 +78,11 @@
         mod.init(buildCore());
       }
     }
+
+    // Reset drag offset so popup re-centers
+    _offsetX = 0;
+    _offsetY = 0;
+    dialog.style.transform = "";
 
     _currentModuleId = moduleId;
     el.style.display = "flex";
@@ -202,6 +214,46 @@
     delete _floatingWidgets[widgetId];
   }
 
+  // ---- Popup drag support ----
+
+  function initDrag() {
+    var el = getContainer();
+    if (!el) return;
+
+    var header = el.querySelector(".module-popup-header");
+    var dialog = el.querySelector(".module-popup-dialog");
+    if (!header || !dialog) return;
+
+    header.addEventListener("mousedown", function (e) {
+      if (e.target.closest(".module-popup-close")) return;
+
+      e.preventDefault();
+      _dragging = true;
+      _dragStartX = e.clientX - _offsetX;
+      _dragStartY = e.clientY - _offsetY;
+
+      header.classList.add("dragging");
+      dialog.classList.add("dragging");
+    });
+
+    document.addEventListener("mousemove", function (e) {
+      if (!_dragging) return;
+      e.preventDefault();
+
+      _offsetX = e.clientX - _dragStartX;
+      _offsetY = e.clientY - _dragStartY;
+      dialog.style.transform = "translate(" + _offsetX + "px, " + _offsetY + "px)";
+    });
+
+    document.addEventListener("mouseup", function () {
+      if (!_dragging) return;
+      _dragging = false;
+
+      header.classList.remove("dragging");
+      dialog.classList.remove("dragging");
+    });
+  }
+
   // ---- Wiring (called once from app.js on map load) ----
 
   function wire(modules, buildCore) {
@@ -219,6 +271,9 @@
 
     // Backdrop does NOT close (prevent accidental dismissal)
     // — intentional design decision per plan
+
+    // Initialize popup dragging
+    initDrag();
   }
 
   // ---- Public API ----

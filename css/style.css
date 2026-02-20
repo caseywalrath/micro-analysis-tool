@@ -451,6 +451,16 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Libe
   padding: 14px 18px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.module-popup-header.dragging {
+  cursor: grabbing;
+}
+.module-popup-dialog.dragging {
+  user-select: none;
+  -webkit-user-select: none;
 }
 .module-popup-title {
   margin: 0;
