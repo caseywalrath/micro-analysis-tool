@@ -161,6 +161,16 @@
   }
   App.notifyProject = notifyProject;
 
+  // Clear all module state (choropleths, legends, results).
+  // Called by Clear and Reset Session buttons.
+  function clearModules() {
+    for (var entry of _modules.values()) {
+      if (typeof entry.clear === "function") {
+        entry.clear();
+      }
+    }
+  }
+
   // ---- Results modal helpers ----
 
   function openResultsModal() {
@@ -572,6 +582,7 @@
       document.getElementById("nGeos").textContent = "0";
       document.getElementById("summaryStatus").style.display = "none";
       App.setStatus("Cleared");
+      clearModules();
       notifyProject();
       if (typeof App.cache !== "undefined") App.cache.save();
     });
@@ -660,6 +671,7 @@
         if (!confirm("Reset session? This clears all features, settings, and saved data. This cannot be undone.")) return;
         if (typeof App.cache !== "undefined") App.cache.reset();
         if (typeof App.clearCensusOverlay === "function") App.clearCensusOverlay();
+        clearModules();
         notifyProject();
       });
     }

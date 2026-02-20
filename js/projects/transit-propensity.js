@@ -593,6 +593,10 @@
       onClose(core);
     },
 
+    clear: function () {
+      clearChoropleth();
+    },
+
     update: async function (core) {
       await update(core);
     }
