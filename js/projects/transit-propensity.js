@@ -518,10 +518,6 @@
     var resetBtn = document.getElementById("tpiResetWeights");
     if (resetBtn) resetBtn.addEventListener("click", resetWeights);
 
-    // Wire clear choropleth button
-    var clearBtn = document.getElementById("tpiClearChoropleth");
-    if (clearBtn) clearBtn.addEventListener("click", clearChoropleth);
-
     // Wire show legend button
     var legendBtn = document.getElementById("tpiShowLegend");
     if (legendBtn) {
@@ -565,7 +561,11 @@
   // ---- Module update (called on feature changes, even when popup is closed) ----
 
   async function update(core) {
-    markStale();
+    if (_lastResult && !core.getUnion()) {
+      clearChoropleth();
+    } else {
+      markStale();
+    }
   }
 
   // ---- Register as analysis module ----
