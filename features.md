@@ -66,6 +66,32 @@ Allow the user to upload KML, KMZ, or GeoJSON files. Imported geometries appear 
 ### Multi-select census variables with results popup — Implemented
 Users can select multiple census categories simultaneously via a checkbox list in the Buffer-Area Data sidebar panel. Variables are grouped into Land Use, Employment, Mobility, and Non-additive Medians. "Update summary" runs analysis for all selected variables and displays results in a popup modal table with 4 columns: Census Category, Variable, Result, and Aggregation Method. TIGERweb geometry is fetched once and shared across all ACS variables.
 
+### Transit Propensity Index (TPI) — Implemented
+Computes a composite Transit Propensity Index for all census tracts or block groups intersecting the corridor buffer. Scores geographies on 9 demographic/socioeconomic factors using ACS and LODES data, normalizes within the study corridor using quintiles (1–5), and renders a choropleth map.
+
+**9 factors** (default weights sum to 100%): population density (15%), employment density via LODES (15%), zero-vehicle household % (12%), poverty rate % (12%), senior 65+ % (10%), disability % (10%), people of color % (10%), youth <18 % (8%), limited English proficiency % (8%).
+
+**Key features:**
+- Batch ACS fetch handles Census API's 49-variable limit via automatic chunking (53 variables total)
+- Corridor-only quintile normalization — scores are ranked within the study area, not nationally
+- Automatic weight redistribution when LODES data is absent
+- ColorBrewer Blues choropleth with hover tooltips showing GEOID and per-factor breakdown
+- 9 weight sliders (0–100, step 5) with real-time sum validation; Compute button disabled when sum ≠ 100%
+- Instant re-score from cached data (~300ms debounce) when sliders change — no new API calls
+- GeoJSON and CSV export with GEOID, composite score, class label, and all 9 factor raw/score columns
+- Clear Map button removes choropleth and resets results
+- Stale detection marks results outdated when features change
+
+**Files:** `js/projects/tpi-scoring.js`, `js/projects/transit-propensity.js`, `projects/transit-propensity.html`, `projects/tpi-weights.html`, `projects/tpi-legend.html`
+
+**Potential future enhancements:**
+- User-uploaded facility points (schools, health centers, transit stops) for proximity scoring
+- GTFS integration for existing transit service overlay
+- Custom factor upload for local datasets not available via Census APIs
+- Save/load weight configurations
+- Alternative normalization methods (z-scores, Jenks natural breaks)
+- Integration with ArcGIS Pro via GeoJSON export (current workflow) or direct ArcGIS REST API
+
 ### More census categories — Priority To Be Determined
 Expand `VAR_META` in utils.js with additional ACS variables (e.g., vehicle ownership, commute mode, housing tenure, age distribution). Each entry needs a variable code, label, category, aggregation mode, and format.
 

@@ -58,16 +58,21 @@ js/
     lodes.js                LODES .csv.gz download/upload/parse, block-level employment
     cache.js                Session cache: save/restore/reset via localStorage; JSON import/export
   projects/
-    fta-small-starts.js     FTA Small Starts: breakpoint classification, CRE/ESS/LBAR
+    fta-small-starts.js     FTA Small Starts: breakpoint classification, CRE/ESS/LBAR (currently commented out in index.html)
+    tpi-scoring.js          TPI scoring engine: 9-factor definitions, batch ACS fetch, LODES aggregation, quintile normalization, composite scoring
+    transit-propensity.js   TPI project registration: weight sliders, choropleth rendering, hover tooltips, legend panel, GeoJSON/CSV export, stale detection
 projects/
   fta-small-starts.html     FTA sidebar HTML fragment (injected into #project-panel)
+  transit-propensity.html   TPI main sidebar panel: Compute button, results summary, Clear Map, export buttons
+  tpi-weights.html          TPI weight sliders sub-panel: 9 range inputs, sum validation, reset button
+  tpi-legend.html           TPI legend sub-panel: 5-class Blues color swatches
 ```
 
 ## Conventions
 
 - **No build tools.** Plain `<script>` tags in dependency order. Anyone can read/edit the source directly.
 - **Global namespace.** All shared state and functions live on `window.App`. Each module IIFE reads `var App = window.App` and assigns its exports (e.g., `App.fetchTigerwebGeos = fetchTigerwebGeos`).
-- **Project-local state stays private.** Variables like `CRE_MAP`, `ESS_POINTS`, `LBAR_SITES` are declared inside the project IIFE closure, not on `App`.
+- **Project-local state stays private.** Variables like `CRE_MAP`, `ESS_POINTS`, `LBAR_SITES` (FTA) and `_lastResult`, `_stale`, `_running` (TPI) are declared inside the project IIFE closure, not on `App`. The TPI scoring engine uses a separate `window.TPI` namespace for its public API.
 - **Panel-based sidebar.** Sidebar content is registered via `App.sidebar.addPanel()` and rendered on map load. Panel HTML is defined as strings in `app.js`, not hardcoded in `index.html`. Call `render()` once after all panels are registered (avoids destroying event listeners).
 - **External libraries via CDN:** MapLibre GL JS, Turf.js, pako (gzip), PapaParse (CSV).
 
@@ -88,9 +93,13 @@ features.js (needs App.stations, App.lines, App.routes, App.polygons, App.remove
 census.js   (needs App.map, App.bboxStringFromFeature, App.getMeta, turf)
 lodes.js    (needs App.map, App.bboxStringFromFeature, App.bufferUnionPolygon, pako, turf)
 cache.js    (needs App.stations, App.lines, App.routes, App.polygons, render/rebuild functions)
-app.js      (wires everything; registers sidebar panels; defines App.registerProject; calls cache.restore)
-<project>   (calls App.registerProject)
+app.js              (wires everything; registers sidebar panels; defines App.registerProject; calls cache.restore)
+<project>           (calls App.registerProject)
+  tpi-scoring.js    (needs App namespace, turf; defines window.TPI)
+  transit-propensity.js (needs TPI, App.registerProject, App.map, App.renderCensusOverlay)
 ```
+
+**Active project:** Transit Propensity Index (TPI). FTA Small Starts is commented out in `index.html` but not deleted.
 
 ## App Namespace (Public API)
 
@@ -142,6 +151,12 @@ Saves session state (stations, lines, routes, polygons, buffer radii, form selec
 
 ### app.js
 `drawMode`, `registerProject(config)`, `notifyProject()`, `onFeatureDelete()` (hook, see below)
+
+### tpi-scoring.js (window.TPI namespace, not on App)
+`TPI.FACTORS` (9-factor array with id, label, weight, acsCodes, compute functions), `TPI.batchFetchACS(geoLevel, year, geoids)`, `TPI.aggregateLodesToGeo(lodesData, geoLevel, geoids)`, `TPI.computeQuintiles(values)`, `TPI.computeComposite(factorScores, weights)`, `TPI.computeTPI(options)` (full pipeline: fetch → normalize → score), `TPI.rescoreFromRaw(rawValues, weights, geoids)` (instant re-score from cached data)
+
+### transit-propensity.js (project plugin, no public API)
+Registers project `"transit-propensity"` with three sidebar panels (main, weights, legend). Internal functions: `runTPI()`, `runInstantRescore()`, `renderChoropleth(geos, scores)`, `clearChoropleth()`, `displayResults(result)`, `exportGeoJSON()`, `exportCSV()`, `markStale()`. All state is private to the IIFE closure.
 
 ## Project System
 
@@ -248,6 +263,29 @@ The sidebar is an empty `<div id="sidebar">` populated at runtime by `App.sideba
 |  ▾ Project Name             |  Collapsible panel (order 30)
 |  #project-panel             |  Empty <div> filled by the active
 |  (injected by project)      |  project's HTML fragment.
++-----------------------------+
+```
+
+With the TPI project active, the sidebar shows:
+
+```
++-----------------------------+
+|  ▾ Buffer-Area Data         |  (order 10)
++-----------------------------+
+|  ▸ LODES (File-based)       |  (order 20, collapsed)
++-----------------------------+
+|  ▾ Transit Propensity Index |  (order 30) — main project panel
+|  [Compute TPI Scores]       |  Fetches ACS/LODES, scores geographies,
+|  [Clear Map]                |  renders choropleth. Results card shows
+|  Results summary card       |  per-factor scores, composite avg/max.
+|  [Export GeoJSON] [CSV]     |
++-----------------------------+
+|  ▸ TPI Weights              |  (order 31, collapsed)
+|  9 weight sliders (0-100)   |  Must sum to 100%. Instant re-score
+|  Sum display + Reset button |  on change from cached data.
++-----------------------------+
+|  ▸ TPI Legend               |  (order 32, collapsed)
+|  5-class Blues color legend  |  Scores ranked within corridor only.
 +-----------------------------+
 ```
 

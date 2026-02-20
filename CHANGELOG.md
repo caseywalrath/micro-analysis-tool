@@ -4,6 +4,66 @@ All notable changes to this project are documented here. Entries are grouped by 
 
 ---
 
+## 2026-02-20
+
+### Transit Propensity Index (TPI) — Full Implementation
+
+Added a new project plugin that computes a composite Transit Propensity Index for all census tracts or block groups intersecting the corridor buffer. The TPI scores geographies on 9 demographic/socioeconomic factors, normalizes within the study corridor using quintiles, and renders a choropleth map with interactive tooltips. Users can adjust factor weights via sliders and export scored geographies for use in ArcGIS Pro.
+
+**9 scoring factors:**
+- Population density (ACS B01003)
+- Employment density (LODES WAC)
+- Zero-vehicle household % (ACS B08201/B11001)
+- Poverty rate % (ACS B17001/B01003)
+- Senior population 65+ % (ACS B01001 age bands)
+- Disability % (ACS B18101)
+- People of color % (ACS B03002)
+- Youth population <18 % (ACS B01001 age bands)
+- Limited English proficiency % (ACS C16001)
+
+**Scoring engine** (`js/projects/tpi-scoring.js`):
+- Batch ACS fetch with automatic chunking (49-variable Census API limit handled transparently)
+- LODES block-level data aggregated to tract or block group level
+- Corridor-only quintile normalization (scores 1–5 ranked within study area, not nationally)
+- Small-N fallback: equal-interval breaks when fewer than 5 geographies
+- Automatic weight redistribution when LODES data is absent
+- `TPI.rescoreFromRaw()` enables instant re-scoring from cached data without new API calls
+
+**Map visualization:**
+- ColorBrewer Blues choropleth (5-class sequential, lightest = score 1, darkest = score 5)
+- Choropleth inserted below buffer layers so buffers remain visible
+- Hover tooltips showing GEOID, composite TPI score, and per-factor quintile breakdown
+- TPI Legend sidebar panel with color swatches
+
+**Weight sliders:**
+- 9 range sliders (0–100, step 5) with real-time sum display
+- Compute button disabled when weights do not sum to 100%
+- Instant re-score (~300ms debounce) when sliders change and a prior result exists — zero API calls
+- Reset to defaults button
+
+**Export:**
+- GeoJSON export: full FeatureCollection with GEOID, tpiScore, tpiClass, and 9×raw/score columns
+- CSV export: same columns in tabular format
+- Files named `tpi-export-YYYY-MM-DD.{geojson,csv}`
+
+**Other features:**
+- Stale detection: yellow warning banner when features change after a TPI computation
+- Clear Map button removes choropleth and resets results
+- Results summary card showing per-factor scores, composite average, max score, and geography count
+
+**Files created:**
+- `js/projects/tpi-scoring.js` — Scoring engine (factors, batch fetch, normalization, composite)
+- `js/projects/transit-propensity.js` — Project registration, UI wiring, choropleth, exports
+- `projects/transit-propensity.html` — Main sidebar panel HTML
+- `projects/tpi-weights.html` — Weight sliders sub-panel HTML
+- `projects/tpi-legend.html` — Legend sub-panel HTML
+
+**Files modified:**
+- `css/style.css` — TPI-specific styles (status indicators, results cards, sliders, legend, export buttons)
+- `index.html` — Swapped FTA project for TPI (FTA commented out, not deleted)
+
+---
+
 ## 2026-02-19
 
 ### Route-following lines with street-snapped preview
