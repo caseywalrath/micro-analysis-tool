@@ -587,3 +587,14 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Libe
   border: 1px solid rgba(0,0,0,0.15);
   flex-shrink: 0;
 }
+
+.tpi-export-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.tpi-export-actions button {
+  flex: 1;
+  padding: 5px 0;
+  font-size: 12px;
+}

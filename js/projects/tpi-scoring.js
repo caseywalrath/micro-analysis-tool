@@ -41,24 +41,8 @@
         return areaSqMi > 0 ? pop / areaSqMi : NaN;
       },
       higherIsBetter: true,
-      defaultWeight: 20,
-      description: "Total population per square mile (ACS B01003_001E / geography area)"
-    },
-    {
-      id: "hu_density",
-      label: "Housing Unit Density",
-      category: "Demographics",
-      acsVars: ["B25001_001E"],
-      source: "ACS",
-      compute: function (vals, geoFeat) {
-        var hu = vals.get("B25001_001E");
-        if (!Number.isFinite(hu)) return NaN;
-        var areaSqMi = turf.area(geoFeat) / SQM_PER_SQMI;
-        return areaSqMi > 0 ? hu / areaSqMi : NaN;
-      },
-      higherIsBetter: true,
       defaultWeight: 15,
-      description: "Total housing units per square mile (ACS B25001_001E / geography area)"
+      description: "Total population per square mile (ACS B01003_001E / geography area)"
     },
     {
       id: "employment",
@@ -68,7 +52,7 @@
       source: "LODES",
       compute: null, // computed separately via LODES block aggregation
       higherIsBetter: true,
-      defaultWeight: 20,
+      defaultWeight: 15,
       description: "LODES WAC C000 jobs aggregated to geography, divided by area"
     },
     {
@@ -84,12 +68,12 @@
         return (zeroCar / totalHH) * 100;
       },
       higherIsBetter: true,
-      defaultWeight: 15,
+      defaultWeight: 12,
       description: "Percent of households with zero vehicles (ACS B08201_002E / B11001_001E)"
     },
     {
       id: "poverty",
-      label: "Poverty Rate",
+      label: "Low-Income % (Poverty)",
       category: "Transit Dependence",
       acsVars: ["B17001_002E", "B01003_001E"],
       source: "ACS",
@@ -100,22 +84,136 @@
         return (povPop / totalPop) * 100;
       },
       higherIsBetter: true,
-      defaultWeight: 15,
+      defaultWeight: 12,
       description: "Percent of persons below poverty level (ACS B17001_002E / B01003_001E)"
     },
     {
-      id: "median_income_inv",
-      label: "Low Income (inverse)",
-      category: "Transit Dependence",
-      acsVars: ["B19013_001E"],
+      id: "senior",
+      label: "Senior 65+ %",
+      category: "Equity",
+      acsVars: [
+        "B01001_020E","B01001_021E","B01001_022E","B01001_023E","B01001_024E","B01001_025E",
+        "B01001_044E","B01001_045E","B01001_046E","B01001_047E","B01001_048E","B01001_049E",
+        "B01003_001E"
+      ],
       source: "ACS",
       compute: function (vals) {
-        var income = vals.get("B19013_001E");
-        return Number.isFinite(income) ? income : NaN;
+        var totalPop = vals.get("B01003_001E");
+        if (!Number.isFinite(totalPop) || totalPop <= 0) return NaN;
+        var seniorCodes = [
+          "B01001_020E","B01001_021E","B01001_022E","B01001_023E","B01001_024E","B01001_025E",
+          "B01001_044E","B01001_045E","B01001_046E","B01001_047E","B01001_048E","B01001_049E"
+        ];
+        var seniorSum = 0;
+        for (var si = 0; si < seniorCodes.length; si++) {
+          var sv = vals.get(seniorCodes[si]);
+          if (Number.isFinite(sv)) seniorSum += sv;
+        }
+        return (seniorSum / totalPop) * 100;
       },
-      higherIsBetter: false, // lower income => higher transit propensity
-      defaultWeight: 15,
-      description: "Median household income — lower values score higher (ACS B19013_001E)"
+      higherIsBetter: true,
+      defaultWeight: 10,
+      description: "Percent of population age 65 and over (ACS B01001 males + females 65+ / B01003_001E)"
+    },
+    {
+      id: "disability",
+      label: "Disability %",
+      category: "Equity",
+      acsVars: [
+        "B18101_004E","B18101_007E","B18101_010E","B18101_013E","B18101_016E","B18101_019E",
+        "B18101_023E","B18101_026E","B18101_029E","B18101_032E","B18101_035E","B18101_038E",
+        "B18101_001E"
+      ],
+      source: "ACS",
+      compute: function (vals) {
+        var denom = vals.get("B18101_001E");
+        if (!Number.isFinite(denom) || denom <= 0) return NaN;
+        var disabCodes = [
+          "B18101_004E","B18101_007E","B18101_010E","B18101_013E","B18101_016E","B18101_019E",
+          "B18101_023E","B18101_026E","B18101_029E","B18101_032E","B18101_035E","B18101_038E"
+        ];
+        var disabSum = 0;
+        for (var di = 0; di < disabCodes.length; di++) {
+          var dv = vals.get(disabCodes[di]);
+          if (Number.isFinite(dv)) disabSum += dv;
+        }
+        return (disabSum / denom) * 100;
+      },
+      higherIsBetter: true,
+      defaultWeight: 10,
+      description: "Percent of civilian noninstitutionalized population with a disability (ACS B18101)"
+    },
+    {
+      id: "poc",
+      label: "People of Color %",
+      category: "Equity",
+      acsVars: ["B03002_001E", "B03002_003E"],
+      source: "ACS",
+      compute: function (vals) {
+        var total   = vals.get("B03002_001E");
+        var nhWhite = vals.get("B03002_003E");
+        if (!Number.isFinite(total) || !Number.isFinite(nhWhite) || total <= 0) return NaN;
+        return ((total - nhWhite) / total) * 100;
+      },
+      higherIsBetter: true,
+      defaultWeight: 10,
+      description: "Percent of population who are people of color (ACS B03002: total minus NH White alone)"
+    },
+    {
+      id: "youth",
+      label: "Youth <18 %",
+      category: "Equity",
+      acsVars: [
+        "B01001_003E","B01001_004E","B01001_005E","B01001_006E",
+        "B01001_027E","B01001_028E","B01001_029E","B01001_030E",
+        "B01003_001E"
+      ],
+      source: "ACS",
+      compute: function (vals) {
+        var totalPop = vals.get("B01003_001E");
+        if (!Number.isFinite(totalPop) || totalPop <= 0) return NaN;
+        var youthCodes = [
+          "B01001_003E","B01001_004E","B01001_005E","B01001_006E",
+          "B01001_027E","B01001_028E","B01001_029E","B01001_030E"
+        ];
+        var youthSum = 0;
+        for (var yi = 0; yi < youthCodes.length; yi++) {
+          var yv = vals.get(youthCodes[yi]);
+          if (Number.isFinite(yv)) youthSum += yv;
+        }
+        return (youthSum / totalPop) * 100;
+      },
+      higherIsBetter: true,
+      defaultWeight: 8,
+      description: "Percent of population under 18 years old (ACS B01001 males + females under 18 / B01003_001E)"
+    },
+    {
+      id: "lep",
+      label: "LEP %",
+      category: "Equity",
+      acsVars: [
+        "C16001_005E","C16001_008E","C16001_011E","C16001_014E","C16001_017E","C16001_020E",
+        "C16001_023E","C16001_026E","C16001_029E","C16001_032E","C16001_035E","C16001_038E",
+        "C16001_001E"
+      ],
+      source: "ACS",
+      compute: function (vals) {
+        var denom = vals.get("C16001_001E");
+        if (!Number.isFinite(denom) || denom <= 0) return NaN;
+        var lepCodes = [
+          "C16001_005E","C16001_008E","C16001_011E","C16001_014E","C16001_017E","C16001_020E",
+          "C16001_023E","C16001_026E","C16001_029E","C16001_032E","C16001_035E","C16001_038E"
+        ];
+        var lepSum = 0;
+        for (var li = 0; li < lepCodes.length; li++) {
+          var lv = vals.get(lepCodes[li]);
+          if (Number.isFinite(lv)) lepSum += lv;
+        }
+        return (lepSum / denom) * 100;
+      },
+      higherIsBetter: true,
+      defaultWeight: 8,
+      description: "Percent of population age 5+ who speak English less than very well (ACS C16001)"
     }
   ];
 
@@ -146,6 +244,13 @@
   async function batchFetchACS(geoLevel, year, geoids, varCodes) {
     if (varCodes.length === 0 || geoids.length === 0) return new Map();
 
+    // Census API allows max 50 columns per request; NAME always uses one slot.
+    var CHUNK_SIZE = 49;
+    var chunks = [];
+    for (var ci = 0; ci < varCodes.length; ci += CHUNK_SIZE) {
+      chunks.push(varCodes.slice(ci, ci + CHUNK_SIZE));
+    }
+
     // Group geoids by state-county
     var groups = new Map();
     for (var gi = 0; gi < geoids.length; gi++) {
@@ -160,9 +265,6 @@
     var result = new Map();
     var base = "https://api.census.gov/data/" + year + "/acs/acs5";
 
-    // Fetch all variables in a single API call per state-county group
-    var varList = varCodes.join(",");
-
     for (var entry of groups.values()) {
       var forClause, inClause;
       if (geoLevel === "tract") {
@@ -173,36 +275,40 @@
         inClause = "state:" + entry.state + "%20county:" + entry.county + "%20tract:*";
       }
 
-      var url = base + "?get=NAME," + encodeURIComponent(varList) + "&for=" + forClause + "&in=" + inClause;
-      var resp = await fetch(url);
-      if (!resp.ok) throw new Error("ACS batch error " + resp.status + " for state " + entry.state + " county " + entry.county);
-      var rows = await resp.json();
+      // Fetch each chunk sequentially; merge into the same Map per GEOID
+      for (var chi = 0; chi < chunks.length; chi++) {
+        var chunk = chunks[chi];
+        var url = base + "?get=NAME," + encodeURIComponent(chunk.join(",")) + "&for=" + forClause + "&in=" + inClause;
+        var resp = await fetch(url);
+        if (!resp.ok) throw new Error("ACS batch error " + resp.status + " for state " + entry.state + " county " + entry.county + " (chunk " + (chi + 1) + ")");
+        var rows = await resp.json();
 
-      var header = rows[0];
-      // Find indices for each variable code
-      var varIndices = {};
-      for (var vi = 0; vi < varCodes.length; vi++) {
-        var idx = header.indexOf(varCodes[vi]);
-        if (idx !== -1) varIndices[varCodes[vi]] = idx;
-      }
-
-      for (var ri = 1; ri < rows.length; ri++) {
-        var r = rows[ri];
-        var gid;
-        if (geoLevel === "tract") {
-          gid = r[header.indexOf("state")] + r[header.indexOf("county")] + r[header.indexOf("tract")];
-        } else {
-          gid = r[header.indexOf("state")] + r[header.indexOf("county")] + r[header.indexOf("tract")] + r[header.indexOf("block group")];
+        var header = rows[0];
+        var varIndices = {};
+        for (var vi = 0; vi < chunk.length; vi++) {
+          var idx = header.indexOf(chunk[vi]);
+          if (idx !== -1) varIndices[chunk[vi]] = idx;
         }
 
-        var valMap = new Map();
-        for (var vc in varIndices) {
-          var raw = r[varIndices[vc]];
-          if (raw === null || raw === undefined || raw === "") continue;
-          var val = Number(raw);
-          if (Number.isFinite(val)) valMap.set(vc, val);
+        for (var ri = 1; ri < rows.length; ri++) {
+          var r = rows[ri];
+          var gid;
+          if (geoLevel === "tract") {
+            gid = r[header.indexOf("state")] + r[header.indexOf("county")] + r[header.indexOf("tract")];
+          } else {
+            gid = r[header.indexOf("state")] + r[header.indexOf("county")] + r[header.indexOf("tract")] + r[header.indexOf("block group")];
+          }
+
+          // Create Map for this GEOID on first chunk; reuse on subsequent chunks (merge)
+          if (!result.has(gid)) result.set(gid, new Map());
+          var valMap = result.get(gid);
+          for (var vc in varIndices) {
+            var raw = r[varIndices[vc]];
+            if (raw === null || raw === undefined || raw === "") continue;
+            var val = Number(raw);
+            if (Number.isFinite(val)) valMap.set(vc, val);
+          }
         }
-        result.set(gid, valMap);
       }
     }
     return result;
@@ -345,6 +451,42 @@
     return result;
   }
   TPI.computeComposite = computeComposite;
+
+  // =========================================================================
+  // Re-score from cached rawValues (no API calls)
+  // =========================================================================
+  // rawValues: Map(factorId -> Map(geoid -> rawValue))  — from a prior computeTPI result
+  // weights:   { factorId -> weight }
+  // geoids:    string[]
+  // Returns:   { scores, factorScores, effectiveWeights }  (same shape as computeTPI return)
+
+  function rescoreFromRaw(rawValues, weights, geoids) {
+    var effectiveWeights = {};
+    for (var wi = 0; wi < FACTORS.length; wi++) {
+      var fid = FACTORS[wi].id;
+      effectiveWeights[fid] = (weights[fid] != null) ? weights[fid] : FACTORS[wi].defaultWeight;
+    }
+
+    var factorScores = new Map();
+    for (var ni = 0; ni < FACTORS.length; ni++) {
+      var nf = FACTORS[ni];
+      if (effectiveWeights[nf.id] === 0) continue;
+      var rawMap = rawValues.get(nf.id);
+      if (!rawMap || rawMap.size === 0) continue;
+      var valArray = [];
+      for (var entry of rawMap.entries()) {
+        valArray.push({ geoid: entry[0], rawValue: entry[1] });
+      }
+      factorScores.set(nf.id, normalizeQuintiles(computeQuintiles(valArray), nf.higherIsBetter));
+    }
+
+    return {
+      scores: computeComposite(factorScores, effectiveWeights, geoids),
+      factorScores: factorScores,
+      effectiveWeights: effectiveWeights
+    };
+  }
+  TPI.rescoreFromRaw = rescoreFromRaw;
 
   // =========================================================================
   // Main orchestrator: run full TPI computation

@@ -8,7 +8,10 @@
   </div>
 
   <div class="tpi-controls">
-    <button id="tpiRun" type="button">Compute TPI Scores</button>
+    <div class="btnRow">
+      <button id="tpiRun" type="button">Compute TPI Scores</button>
+      <button id="tpiClearChoropleth" type="button">Clear Map</button>
+    </div>
   </div>
 
   <div id="tpiStatus" class="tpi-status" style="display:none;">
@@ -29,9 +32,18 @@
         <span id="tpiCompositeAvg" class="tpi-composite-value">—</span>
       </div>
       <div class="tpi-composite-row">
+        <span class="tpi-composite-label">Max TPI score</span>
+        <span id="tpiCompositeMax" class="tpi-composite-value">—</span>
+      </div>
+      <div class="tpi-composite-row">
         <span class="tpi-composite-label">Geographies scored</span>
         <span id="tpiScoredCount" class="tpi-composite-value">—</span>
       </div>
+    </div>
+
+    <div class="tpi-export-actions">
+      <button id="tpiExportGeoJSON" type="button">Export GeoJSON</button>
+      <button id="tpiExportCSV" type="button">Export CSV</button>
     </div>
 
     <div class="tpi-note tiny" style="margin-top:8px;">
