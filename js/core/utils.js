@@ -76,10 +76,10 @@
     "B25001_001E": { source: "ACS", agg: "sum", fmt: "int", label: "Total housing units", category: "Land Use" },
     "B25002_001E": { source: "ACS", agg: "sum", fmt: "int", label: "Occupied housing units", category: "Land Use" },
     "B25002_003E": { source: "ACS", agg: "sum", fmt: "int", label: "Vacant housing units", category: "Land Use" },
-    "B08201_002E": { source: "ACS", agg: "sum", fmt: "int", label: "Zero-car households", category: "Mobility" },
+    "B08201_002E": { source: "ACS", agg: "sum", fmt: "int", label: "Zero-car households", category: "Mobility", tractOnly: true },
     "B17001_002E": { source: "ACS", agg: "sum", fmt: "int", label: "Persons below poverty level", category: "Mobility" },
 
-    "B19013_001E": { source: "ACS", agg: "avg", fmt: "usd", label: "Median household income", category: "Non-additive Medians" },
+    "B19013_001E": { source: "ACS", agg: "avg", fmt: "usd", label: "Median household income", category: "Non-additive Medians", tractOnly: true },
     "B25064_001E": { source: "ACS", agg: "avg", fmt: "usd", label: "Median gross rent", category: "Non-additive Medians" },
     "B25077_001E": { source: "ACS", agg: "avg", fmt: "usd", label: "Median home value", category: "Non-additive Medians" },
 
@@ -87,6 +87,7 @@
   };
 
   function getMeta(code) { return VAR_META[code] || { source: "ACS", agg: "sum", fmt: "int" }; }
+  function isTractOnly(code) { var m = VAR_META[code]; return !!(m && m.tractOnly); }
 
   function setAggUI(meta) {
     var aggMethodEl = document.getElementById("aggMethod");
@@ -143,6 +144,7 @@
   App.guessHeader = guessHeader;
   App.VAR_META = VAR_META;
   App.getMeta = getMeta;
+  App.isTractOnly = isTractOnly;
   App.setAggUI = setAggUI;
   App.formatValue = formatValue;
   App.getSelectedVars = getSelectedVars;

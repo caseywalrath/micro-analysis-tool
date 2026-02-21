@@ -265,6 +265,7 @@
 
     // Shared TIGERweb geometry fetch for all ACS variables
     var geos = null;
+    var tractGeosForFallback = null; // fetched lazily when any tract-only var is encountered at BG level
     if (acsVars.length > 0) {
       App.setStatus("Querying TIGERweb\u2026");
       progressEl.textContent = "Fetching census geometries\u2026";
@@ -286,17 +287,37 @@
           var varCode = acsVars[ai];
           var varMeta = App.getMeta(varCode);
           var row = rowEls[varCode];
+          var useTractFallback = (geoLevel === "bg" && varMeta.tractOnly);
 
           try {
             App.setStatus("Fetching ACS: " + (varMeta.label || varCode) + "\u2026");
             progressEl.textContent = "Computing " + (varMeta.label || varCode) +
               " (" + (completed + 1) + "/" + total + ")\u2026";
 
-            var valueMap = await App.fetchACSValues(geoLevel, year, varCode, geoids);
-            var result = App.aggregateWithinUnion(unionFeat, geos, valueMap, varMeta.agg);
+            var fetchGeoLevel, fetchGeos, fetchGeoids;
+            if (useTractFallback) {
+              // Lazy-fetch tract geometries once for all tract-only variables
+              if (!tractGeosForFallback) {
+                progressEl.textContent = "Fetching tract geometries for tract-level variables\u2026";
+                tractGeosForFallback = await App.fetchTigerwebGeos("tract", unionFeat);
+              }
+              fetchGeoLevel = "tract";
+              fetchGeos = tractGeosForFallback;
+              fetchGeoids = tractGeosForFallback.map(function (f) { return f.properties.GEOID; }).filter(Boolean);
+            } else {
+              fetchGeoLevel = geoLevel;
+              fetchGeos = geos;
+              fetchGeoids = geoids;
+            }
+
+            var valueMap = await App.fetchACSValues(fetchGeoLevel, year, varCode, fetchGeoids);
+            var result = App.aggregateWithinUnion(unionFeat, fetchGeos, valueMap, varMeta.agg);
 
             row.className = "";
             row.children[2].textContent = App.formatValue(result.value, varMeta);
+            if (useTractFallback) {
+              row.children[3].textContent += " \u2014 Tract-level data (not available at block group)";
+            }
           } catch (e) {
             row.className = "result-error";
             row.children[2].textContent = "Error: " + (e.message || e);
@@ -344,6 +365,9 @@
     var notesParts = [];
     if (geos && geos.length > 0) {
       notesParts.push("ACS " + year + " 5-year; " + geos.length + " intersecting " + geoLabel + ".");
+    }
+    if (tractGeosForFallback && tractGeosForFallback.length > 0) {
+      notesParts.push(tractGeosForFallback.length + " tract(s) used for variables not available at block group level.");
     }
     if (lodesVars.length > 0 && App.lodesData) {
       notesParts.push("LODES file: " + App.lodesFileName + ".");

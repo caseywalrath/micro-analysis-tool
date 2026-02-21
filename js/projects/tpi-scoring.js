@@ -60,6 +60,7 @@
       label: "Zero-Vehicle Households",
       category: "Transit Dependence",
       acsVars: ["B08201_002E", "B11001_001E"],
+      tractOnly: true,
       source: "ACS",
       compute: function (vals) {
         var zeroCar = vals.get("B08201_002E");
@@ -196,6 +197,7 @@
         "C16001_023E","C16001_026E","C16001_029E","C16001_032E","C16001_035E","C16001_038E",
         "C16001_001E"
       ],
+      tractOnly: true,
       source: "ACS",
       compute: function (vals) {
         var denom = vals.get("C16001_001E");
@@ -535,10 +537,58 @@
 
     var geoids = geos.map(function (f) { return f.properties.GEOID; }).filter(Boolean);
 
-    // 3. Batch fetch all required ACS variables
-    var acsVars = getRequiredAcsVars(effectiveWeights);
-    onProgress("Fetching ACS data (" + acsVars.length + " variables)...");
-    var acsData = await batchFetchACS(geoLevel, year, geoids, acsVars);
+    // 3. Batch fetch all required ACS variables, with tract-level fallback for tract-only tables
+    var allAcsVars = getRequiredAcsVars(effectiveWeights);
+    var tractFallbackFactors = []; // factor ids that used tract-level data when BG was requested
+
+    var acsData; // Map(geoid -> Map(varCode -> value)), keyed by the requested geoLevel GEOID
+
+    if (geoLevel === "bg") {
+      // Identify which vars belong to tract-only factors
+      var tractOnlyVarSet = new Set();
+      for (var tfi = 0; tfi < FACTORS.length; tfi++) {
+        var tf = FACTORS[tfi];
+        if (tf.tractOnly && effectiveWeights[tf.id] !== 0 && tf.acsVars) {
+          for (var tvi = 0; tvi < tf.acsVars.length; tvi++) tractOnlyVarSet.add(tf.acsVars[tvi]);
+          tractFallbackFactors.push(tf.id);
+        }
+      }
+
+      var bgVars = allAcsVars.filter(function (v) { return !tractOnlyVarSet.has(v); });
+      var tractOnlyVars = allAcsVars.filter(function (v) { return tractOnlyVarSet.has(v); });
+
+      onProgress("Fetching ACS data (" + allAcsVars.length + " variables)...");
+
+      // Fetch BG-level vars
+      acsData = await batchFetchACS("bg", year, geoids, bgVars);
+
+      // Fetch tract-level vars if any, then map values down to BG GEOIDs
+      if (tractOnlyVars.length > 0) {
+        // Derive unique tract GEOIDs from BG GEOIDs (first 11 chars)
+        var tractGeoidSet = new Set();
+        for (var bgi = 0; bgi < geoids.length; bgi++) tractGeoidSet.add(geoids[bgi].slice(0, 11));
+        var tractGeoids = Array.from(tractGeoidSet);
+
+        onProgress("Fetching tract-level data for " + tractFallbackFactors.join(", ") + "...");
+        var tractData = await batchFetchACS("tract", year, tractGeoids, tractOnlyVars);
+
+        // Copy tract values into each BG's entry, keyed by the BG GEOID
+        for (var bgi2 = 0; bgi2 < geoids.length; bgi2++) {
+          var bgGeo = geoids[bgi2];
+          var parentTract = bgGeo.slice(0, 11);
+          var tractVals = tractData.get(parentTract) || new Map();
+          if (!acsData.has(bgGeo)) acsData.set(bgGeo, new Map());
+          var bgEntry = acsData.get(bgGeo);
+          for (var tractEntry of tractVals.entries()) {
+            bgEntry.set(tractEntry[0], tractEntry[1]);
+          }
+        }
+      }
+    } else {
+      // Tract level: no fallback needed, all vars available natively
+      onProgress("Fetching ACS data (" + allAcsVars.length + " variables)...");
+      acsData = await batchFetchACS("tract", year, geoids, allAcsVars);
+    }
 
     // 4. Aggregate LODES to geo level (if available and weighted)
     var lodesAgg = null;
@@ -611,7 +661,8 @@
       scores: scores,
       factorScores: factorScores,
       rawValues: rawValues,
-      effectiveWeights: effectiveWeights
+      effectiveWeights: effectiveWeights,
+      tractFallbackFactors: tractFallbackFactors
     };
   }
   TPI.computeTPI = computeTPI;

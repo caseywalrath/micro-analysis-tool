@@ -713,6 +713,8 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Libe
 }
 .tpi-factor-ok { color: #065f46; }
 .tpi-factor-na { color: var(--muted); font-style: italic; font-weight: 400; }
+.tpi-tract-marker { color: #888; font-size: 10px; cursor: help; }
+.tpi-footnote { font-size: 11px; color: #888; margin-top: 6px; font-style: italic; line-height: 1.4; }
 
 /* Composite row */
 .tpi-composite-summary {

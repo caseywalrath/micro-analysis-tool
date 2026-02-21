@@ -231,6 +231,8 @@
     if (summaryEl) {
       var html = "";
       var factors = TPI.FACTORS;
+      var fallbackSet = result.tractFallbackFactors || [];
+      var anyFallback = false;
       for (var i = 0; i < factors.length; i++) {
         var f = factors[i];
         var w = result.effectiveWeights[f.id] || 0;
@@ -251,12 +253,19 @@
           ? "avg " + avgScore.toFixed(1) + " / 5"
           : "N/A";
 
+        var isFallback = fallbackSet.indexOf(f.id) !== -1;
+        if (isFallback) anyFallback = true;
+        var labelHtml = f.label + (isFallback ? ' <sup class="tpi-tract-marker" title="Tract-level data applied to block groups">\u2020</sup>' : "");
+
         html +=
           '<div class="tpi-factor-row">' +
-            '<span class="tpi-factor-name">' + f.label + '</span>' +
+            '<span class="tpi-factor-name">' + labelHtml + '</span>' +
             '<span class="tpi-factor-weight">' + Math.round(w) + '%</span>' +
             '<span class="tpi-factor-score ' + statusClass + '">' + statusLabel + '</span>' +
           '</div>';
+      }
+      if (anyFallback) {
+        html += '<div class="tpi-footnote">\u2020 Only available at Census Tract level. Tract values applied to all block groups within each tract.</div>';
       }
       summaryEl.innerHTML = html;
     }
@@ -383,10 +392,12 @@
           if (factors) {
             html += '<br><span style="color:#666;font-size:11px;">';
             var fNames = TPI.FACTORS;
+            var fallbackIds = (_lastResult && _lastResult.tractFallbackFactors) ? _lastResult.tractFallbackFactors : [];
             for (var fi = 0; fi < fNames.length; fi++) {
               var fval = factors[fNames[fi].id];
               if (fval != null) {
-                html += fNames[fi].label + ': ' + fval + '/5<br>';
+                var isFb = fallbackIds.indexOf(fNames[fi].id) !== -1;
+                html += fNames[fi].label + ': ' + fval + '/5' + (isFb ? ' <span style="color:#aaa">(T)</span>' : '') + '<br>';
               }
             }
             html += '</span>';
