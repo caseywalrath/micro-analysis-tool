@@ -51,13 +51,15 @@
       row.innerHTML =
         '<label class="tpi-slider-label" title="' + f.description + '">' + f.label + '</label>' +
         '<input type="range" class="tpi-slider" min="0" max="100" step="5" value="' + w + '" data-factor="' + f.id + '" />' +
-        '<span class="tpi-slider-value" id="tpiW_' + f.id + '">' + w + '</span>';
+        '<input type="number" class="tpi-slider-value" id="tpiW_' + f.id + '" value="' + w + '" min="0" max="100" step="1" data-factor="' + f.id + '" />';
 
       container.appendChild(row);
 
-      // Wire slider input
+      // Wire slider and number input
       var slider = row.querySelector("input[type=range]");
       slider.addEventListener("input", onSliderChange);
+      var numInput = row.querySelector("input[type=number]");
+      numInput.addEventListener("change", onNumberChange);
     }
 
     updateWeightSum();
@@ -66,8 +68,25 @@
   function onSliderChange(e) {
     var factorId = e.target.getAttribute("data-factor");
     _weights[factorId] = parseInt(e.target.value, 10);
-    var label = document.getElementById("tpiW_" + factorId);
-    if (label) label.textContent = String(_weights[factorId]);
+    var numInput = document.getElementById("tpiW_" + factorId);
+    if (numInput) numInput.value = String(_weights[factorId]);
+    var sum = updateWeightSum();
+    if (_lastResult && sum === 100) {
+      clearTimeout(_rescoreTimer);
+      _rescoreTimer = setTimeout(runInstantRescore, 300);
+    } else {
+      markStale();
+    }
+  }
+
+  function onNumberChange(e) {
+    var factorId = e.target.getAttribute("data-factor");
+    var raw = parseInt(e.target.value, 10);
+    var clamped = isNaN(raw) ? 0 : Math.max(0, Math.min(100, raw));
+    e.target.value = String(clamped);
+    _weights[factorId] = clamped;
+    var slider = document.querySelector('.tpi-slider[data-factor="' + factorId + '"]');
+    if (slider) slider.value = String(clamped);
     var sum = updateWeightSum();
     if (_lastResult && sum === 100) {
       clearTimeout(_rescoreTimer);
@@ -107,8 +126,8 @@
       var f = factors[i];
       var slider = document.querySelector('.tpi-slider[data-factor="' + f.id + '"]');
       if (slider) slider.value = String(f.defaultWeight);
-      var label = document.getElementById("tpiW_" + f.id);
-      if (label) label.textContent = String(f.defaultWeight);
+      var numInput = document.getElementById("tpiW_" + f.id);
+      if (numInput) numInput.value = String(f.defaultWeight);
     }
     updateWeightSum();
     markStale();
@@ -585,7 +604,7 @@
     id: "transit-propensity",
     name: "Transit Propensity Index",
     enabled: true,
-    popupWidth: 760,
+    popupWidth: 912,
     popupHTML: "projects/transit-propensity-popup.html",
 
     floatingWidgets: [
