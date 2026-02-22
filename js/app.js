@@ -36,9 +36,6 @@
       '<label class="var-check"><input type="checkbox" value="B25002_001E"> Occupied housing units</label>' +
       '<label class="var-check"><input type="checkbox" value="B25002_003E"> Vacant housing units</label>' +
 
-      '<div class="var-group-label">Employment (LODES: additive sum)</div>' +
-      '<label class="var-check"><input type="checkbox" value="LODES_WAC_C000"> Total existing employment \u2014 requires file upload</label>' +
-
       '<div class="var-group-label">Mobility / Transit-dependent (ACS: additive sums)</div>' +
       '<label class="var-check"><input type="checkbox" value="B08201_002E"> Zero-car households</label>' +
       '<label class="var-check"><input type="checkbox" value="B17001_002E"> Persons below poverty level</label>' +
@@ -47,6 +44,17 @@
       '<label class="var-check"><input type="checkbox" value="B19013_001E"> Median household income \u26A0</label>' +
       '<label class="var-check"><input type="checkbox" value="B25064_001E"> Median gross rent \u26A0</label>' +
       '<label class="var-check"><input type="checkbox" value="B25077_001E"> Median home value \u26A0</label>' +
+
+      '<div class="var-group-label">Employment (LODES: additive sum)</div>' +
+      '<label class="var-check"><input type="checkbox" value="LODES_WAC_C000"> Total existing employment \u2014 requires file upload</label>' +
+      '<div class="lodes-actions">' +
+        '<button type="button" id="downloadLodes">Download</button>' +
+        '<button type="button" id="lodesOpenFile">Open</button>' +
+      '</div>' +
+      '<input id="lodesFile" type="file" accept=".gz,.csv.gz" style="display:none" />' +
+      '<div id="lodesInfo" class="sb2-tiny" style="margin-top:4px;"></div>' +
+      '<span id="lodesState" style="display:none"></span>' +
+      '<span id="lodesLoaded" style="display:none"></span>' +
     '</fieldset>' +
 
     '<label>Year' +
@@ -64,31 +72,6 @@
       '<div style="margin-top:6px;">' +
         '<button id="viewResults" type="button">View Results Table</button>' +
       '</div>' +
-    '</div>';
-
-  // ---- LODES panel ----
-
-  var LODES_PANEL_HTML =
-    '<p class="sb2-muted">' +
-      'Download the official <code>.csv.gz</code> file and load it from your computer (avoids cross-site fetch issues).' +
-    '</p>' +
-
-    '<div class="sb2-card">' +
-      '<div class="sb2-kv"><b>Detected state:</b> <span id="lodesState">\u2014</span></div>' +
-      '<div class="sb2-kv"><b>LODES file loaded:</b> <span id="lodesLoaded">No</span></div>' +
-    '</div>' +
-
-    '<button id="downloadLodes">Download LODES WAC (JT00, S000) for current state</button>' +
-
-    '<label>Load downloaded LODES file (.csv.gz)' +
-      '<input id="lodesFile" type="file" accept=".gz,.csv.gz" />' +
-    '</label>' +
-
-    '<div id="lodesInfo" class="sb2-tiny" style="margin-top:6px;"></div>' +
-
-    '<div class="sb2-warn">' +
-      '<b>Prototype note:</b> Parsing statewide LODES files can be slow and memory-heavy. For production, use a backend ' +
-      'or preprocessed extracts/tiles.' +
     '</div>';
 
   // ---- Module registry (replaces single-project system) ----
@@ -430,13 +413,6 @@
       collapsed: false,
       order: 10
     });
-    App.sidebar.addPanel({
-      id: "lodes",
-      title: "LODES (File-based workflow)",
-      html: LODES_PANEL_HTML,
-      collapsed: true,
-      order: 20
-    });
     if (_modules.size > 0) {
       App.sidebar.addPanel({
         id: "analysis",
@@ -662,6 +638,11 @@
         App.setStatus("Error");
         document.getElementById("lodesInfo").textContent = String(e && e.message ? e.message : e);
       }
+    });
+
+    // LODES "Open" button — triggers the hidden file input
+    document.getElementById("lodesOpenFile").addEventListener("click", function () {
+      document.getElementById("lodesFile").click();
     });
 
     // LODES file upload
