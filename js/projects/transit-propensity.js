@@ -111,7 +111,7 @@
     if (sumEl) sumEl.textContent = String(sum);
     var valid = (sum === 100);
     if (warnEl) {
-      warnEl.style.display = valid ? "none" : "";
+      warnEl.style.visibility = valid ? "hidden" : "visible";
       if (sumEl) sumEl.style.color = valid ? "" : "#e53e3e";
     }
     if (runBtn && !_running) runBtn.disabled = !valid;
