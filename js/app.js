@@ -46,10 +46,10 @@
       '<label class="var-check"><input type="checkbox" value="B25077_001E"> Median home value \u26A0</label>' +
 
       '<div class="var-group-label">Employment (LODES: additive sum)</div>' +
-      '<label class="var-check"><input type="checkbox" value="LODES_WAC_C000"> Total existing employment \u2014 requires file upload</label>' +
+      '<label class="var-check"><input type="checkbox" value="LODES_WAC_C000"> Total existing employment \u2014 file required</label>' +
       '<div class="lodes-actions">' +
         '<button type="button" id="downloadLodes">Download</button>' +
-        '<button type="button" id="lodesOpenFile">Open</button>' +
+        '<button type="button" id="lodesOpenFile">Add</button>' +
       '</div>' +
       '<input id="lodesFile" type="file" accept=".gz,.csv.gz" style="display:none" />' +
       '<div id="lodesInfo" class="sb2-tiny" style="margin-top:4px;"></div>' +
@@ -630,7 +630,7 @@
         var filename = info.abbr + "_wac_S000_JT00_" + year + ".csv.gz";
 
         document.getElementById("lodesInfo").textContent =
-          "Downloading " + filename + ". After download completes, load it using the file picker below.";
+          "Downloading " + filename + ". Click Add to load into map data.";
         App.setStatus("Starting download\u2026");
         App.startDownload(url, filename);
         App.setStatus("Ready");
@@ -649,6 +649,16 @@
     document.getElementById("lodesFile").addEventListener("change", async function (e) {
       var file = e.target.files && e.target.files[0];
       if (!file) return;
+
+      if (App.lodesData) {
+        var confirmed = confirm(
+          "A LODES file is already loaded (" + App.lodesFileName + ").\n\nLoad \"" + file.name + "\" and replace the existing data?"
+        );
+        if (!confirmed) {
+          this.value = "";
+          return;
+        }
+      }
 
       try {
         var jobsMap = await App.parseLodesFromUploadedFile(file);
