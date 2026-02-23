@@ -60,7 +60,6 @@
       label: "Zero-Vehicle Households",
       category: "Transit Dependence",
       acsVars: ["B08201_002E", "B11001_001E"],
-      tractOnly: true,
       source: "ACS",
       compute: function (vals) {
         var zeroCar = vals.get("B08201_002E");
@@ -628,6 +627,74 @@
       }
 
       rawValues.set(factor.id, raw);
+    }
+
+    // 5b. Dynamic tract fallback: if any ACS factor produced zero finite values at BG level,
+    //     retry those vars at tract level and map values down to BG GEOIDs.
+    if (geoLevel === "bg") {
+      var dynamicFallbackVars = [];
+      var dynamicFallbackFactorIds = [];
+
+      for (var di = 0; di < FACTORS.length; di++) {
+        var df = FACTORS[di];
+        if (df.source !== "ACS" || !df.compute || !df.acsVars || effectiveWeights[df.id] === 0) continue;
+        if (tractFallbackFactors.indexOf(df.id) !== -1) continue; // already handled statically
+
+        var dfRawMap = rawValues.get(df.id);
+        var hasFinite = false;
+        if (dfRawMap) {
+          for (var dfEntry of dfRawMap.values()) {
+            if (Number.isFinite(dfEntry)) { hasFinite = true; break; }
+          }
+        }
+
+        if (!hasFinite) {
+          for (var dvi = 0; dvi < df.acsVars.length; dvi++) {
+            if (dynamicFallbackVars.indexOf(df.acsVars[dvi]) === -1) {
+              dynamicFallbackVars.push(df.acsVars[dvi]);
+            }
+          }
+          dynamicFallbackFactorIds.push(df.id);
+        }
+      }
+
+      if (dynamicFallbackVars.length > 0) {
+        var dynTractGeoidSet = new Set();
+        for (var bgi3 = 0; bgi3 < geoids.length; bgi3++) dynTractGeoidSet.add(geoids[bgi3].slice(0, 11));
+        var dynTractGeoids = Array.from(dynTractGeoidSet);
+
+        onProgress("Fetching tract-level fallback for " + dynamicFallbackFactorIds.join(", ") + "...");
+        var dynTractData = await batchFetchACS("tract", year, dynTractGeoids, dynamicFallbackVars);
+
+        // Map tract values into each BG's acsData entry
+        for (var bgi4 = 0; bgi4 < geoids.length; bgi4++) {
+          var bgGeo2 = geoids[bgi4];
+          var parentTract2 = bgGeo2.slice(0, 11);
+          var tVals2 = dynTractData.get(parentTract2) || new Map();
+          if (!acsData.has(bgGeo2)) acsData.set(bgGeo2, new Map());
+          var bgEntry2 = acsData.get(bgGeo2);
+          for (var tEntry of tVals2.entries()) bgEntry2.set(tEntry[0], tEntry[1]);
+        }
+
+        // Re-compute raw values and register each dynamic fallback factor
+        for (var dfi = 0; dfi < dynamicFallbackFactorIds.length; dfi++) {
+          var dfactor = null;
+          for (var dff = 0; dff < FACTORS.length; dff++) {
+            if (FACTORS[dff].id === dynamicFallbackFactorIds[dfi]) { dfactor = FACTORS[dff]; break; }
+          }
+          if (!dfactor) continue;
+
+          var newRaw = new Map();
+          for (var gIdx3 = 0; gIdx3 < geos.length; gIdx3++) {
+            var gf3 = geos[gIdx3];
+            var gid3 = gf3.properties.GEOID;
+            var geoVals3 = acsData.get(gid3) || new Map();
+            newRaw.set(gid3, dfactor.compute(geoVals3, gf3, unionFeat));
+          }
+          rawValues.set(dfactor.id, newRaw);
+          tractFallbackFactors.push(dfactor.id);
+        }
+      }
     }
 
     // 6. Quintile normalize each factor
