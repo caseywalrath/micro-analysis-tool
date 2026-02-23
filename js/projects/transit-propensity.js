@@ -255,7 +255,6 @@
       for (var i = 0; i < factors.length; i++) {
         var f = factors[i];
         var w = result.effectiveWeights[f.id] || 0;
-        if (w === 0) continue;
 
         var scoreMap = result.factorScores.get(f.id);
         var avgScore = NaN;
@@ -270,7 +269,7 @@
         var statusClass = scoreMap && scoreMap.size > 0 ? "tpi-factor-ok" : "tpi-factor-na";
         var statusLabel = scoreMap && scoreMap.size > 0
           ? "avg " + avgScore.toFixed(1) + " / 5"
-          : "N/A";
+          : "No Data";
 
         var isFallback = fallbackSet.indexOf(f.id) !== -1;
         if (isFallback) anyFallback = true;
