@@ -1,0 +1,322 @@
+// js/core/lines.js
+// Line drawing and management, map layer rendering.
+// Depends on: App.map (map.js).
+// Exports: lines, handleLineClick, clearLines, undoLastLine,
+//          cancelLineDrawing, renderLineLayers
+
+(function () {
+  var App = window.App = window.App || {};
+
+  var lines = [];               // Saved GeoJSON LineString features
+  var lineBuffers = [];         // Buffer polygons, one per saved line
+  var lineBufferRadiusMiles = 0.5;
+  var currentCoords = [];       // Coordinates of the line currently being drawn
+  var previewCoord = null;      // [lng, lat] or null — cursor position during drawing (rubber-band)
+  var SNAP_PIXELS = 15;         // Click must be within this many pixels of last waypoint to save
+
+  /* ---- Line buffer functions ---- */
+
+  function rebuildLineBuffers(radiusMiles) {
+    if (typeof App.clearCensusOverlay === "function") App.clearCensusOverlay();
+    lineBufferRadiusMiles = radiusMiles;
+    lineBuffers.splice(0);
+    if (radiusMiles > 0) {
+      for (var i = 0; i < lines.length; i++) {
+        var buf = turf.buffer(lines[i], radiusMiles, { units: "miles", steps: 64 });
+        lineBuffers.push(buf);
+      }
+    }
+    renderLineLayers();
+  }
+
+  function lineBufferUnionPolygon() {
+    if (lineBuffers.length === 0) return null;
+    var u = lineBuffers[0];
+    for (var i = 1; i < lineBuffers.length; i++) u = turf.union(u, lineBuffers[i]);
+    return u;
+  }
+
+  function lineBuffersGeoJSON() {
+    return { type: "FeatureCollection", features: lineBuffers };
+  }
+
+  /* ---- GeoJSON helpers ---- */
+
+  function linesGeoJSON() {
+    return { type: "FeatureCollection", features: lines };
+  }
+
+  function currentLineGeoJSON() {
+    var coords = currentCoords.slice();
+    if (previewCoord && coords.length >= 1) coords.push(previewCoord);
+    if (coords.length < 2) {
+      return { type: "FeatureCollection", features: [] };
+    }
+    return {
+      type: "FeatureCollection",
+      features: [{
+        type: "Feature",
+        properties: {},
+        geometry: { type: "LineString", coordinates: coords }
+      }]
+    };
+  }
+
+  function currentWaypointsGeoJSON() {
+    return {
+      type: "FeatureCollection",
+      features: currentCoords.map(function (c, i) {
+        return {
+          type: "Feature",
+          properties: { idx: i + 1 },
+          geometry: { type: "Point", coordinates: c }
+        };
+      })
+    };
+  }
+
+  function savedVerticesGeoJSON() {
+    var features = [];
+    lines.forEach(function (line) {
+      line.geometry.coordinates.forEach(function (c, i) {
+        features.push({
+          type: "Feature",
+          properties: { lineIdx: line.properties.lineIdx, waypointIdx: i + 1 },
+          geometry: { type: "Point", coordinates: c }
+        });
+      });
+    });
+    return { type: "FeatureCollection", features: features };
+  }
+
+  /* ---- Sidebar panel update ---- */
+
+  function updateLinesPanel() {
+    var drawingEl = document.getElementById("lineDrawing");
+    if (drawingEl) {
+      if (currentCoords.length > 0) {
+        drawingEl.textContent = "Drawing: " + currentCoords.length +
+          " waypoint" + (currentCoords.length !== 1 ? "s" : "") +
+          " placed — click last point again to save";
+      } else {
+        drawingEl.textContent = "";
+      }
+    }
+    if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+  }
+
+  /* ---- Map layer rendering ---- */
+
+  function renderLineLayers() {
+    var map = App.map;
+
+    // Line buffers (blue fill, rendered below the red line geometry)
+    if (!map.getSource("line-buffers")) {
+      map.addSource("line-buffers", { type: "geojson", data: lineBuffersGeoJSON() });
+      map.addLayer({
+        id: "line-buffers-fill",
+        type: "fill",
+        source: "line-buffers",
+        paint: { "fill-color": "#2b6cb0", "fill-opacity": 0.2 }
+      });
+      map.addLayer({
+        id: "line-buffers-line",
+        type: "line",
+        source: "line-buffers",
+        paint: { "line-color": "#2b6cb0", "line-width": 2, "line-opacity": 0.6 }
+      });
+    } else {
+      map.getSource("line-buffers").setData(lineBuffersGeoJSON());
+    }
+
+    // Saved lines (solid)
+    if (!map.getSource("lines")) {
+      map.addSource("lines", { type: "geojson", data: linesGeoJSON() });
+      map.addLayer({
+        id: "lines-layer",
+        type: "line",
+        source: "lines",
+        paint: { "line-color": "#e53e3e", "line-width": 3, "line-opacity": 0.8 }
+      });
+    } else {
+      map.getSource("lines").setData(linesGeoJSON());
+    }
+
+    // Saved line vertices (small dots)
+    if (!map.getSource("lines-vertices")) {
+      map.addSource("lines-vertices", { type: "geojson", data: savedVerticesGeoJSON() });
+      map.addLayer({
+        id: "lines-vertices-layer",
+        type: "circle",
+        source: "lines-vertices",
+        paint: {
+          "circle-radius": 3,
+          "circle-color": "#e53e3e",
+          "circle-stroke-width": 1,
+          "circle-stroke-color": "#ffffff"
+        }
+      });
+    } else {
+      map.getSource("lines-vertices").setData(savedVerticesGeoJSON());
+    }
+
+    // In-progress line (dashed)
+    if (!map.getSource("lines-drawing")) {
+      map.addSource("lines-drawing", { type: "geojson", data: currentLineGeoJSON() });
+      map.addLayer({
+        id: "lines-drawing-layer",
+        type: "line",
+        source: "lines-drawing",
+        paint: { "line-color": "#e53e3e", "line-width": 2, "line-opacity": 0.6, "line-dasharray": [3, 2] }
+      });
+    } else {
+      map.getSource("lines-drawing").setData(currentLineGeoJSON());
+    }
+
+    // In-progress waypoints (clickable-sized dots)
+    if (!map.getSource("lines-waypoints")) {
+      map.addSource("lines-waypoints", { type: "geojson", data: currentWaypointsGeoJSON() });
+      map.addLayer({
+        id: "lines-waypoints-layer",
+        type: "circle",
+        source: "lines-waypoints",
+        paint: {
+          "circle-radius": 6,
+          "circle-color": "#e53e3e",
+          "circle-stroke-width": 2,
+          "circle-stroke-color": "#ffffff"
+        }
+      });
+    } else {
+      map.getSource("lines-waypoints").setData(currentWaypointsGeoJSON());
+    }
+
+    updateLinesPanel();
+  }
+
+  /* ---- Rubber-band preview (updates drawing source only) ---- */
+
+  function setLinePreview(lngLat) {
+    previewCoord = lngLat ? [lngLat.lng, lngLat.lat] : null;
+    var src = App.map.getSource("lines-drawing");
+    if (src) src.setData(currentLineGeoJSON());
+  }
+
+  /* ---- Click logic ---- */
+
+  function isNearLastWaypoint(lngLat) {
+    if (currentCoords.length === 0) return false;
+    var last = currentCoords[currentCoords.length - 1];
+    var lastPx = App.map.project(last);
+    var clickPx = App.map.project([lngLat.lng, lngLat.lat]);
+    var dx = lastPx.x - clickPx.x;
+    var dy = lastPx.y - clickPx.y;
+    return Math.sqrt(dx * dx + dy * dy) < SNAP_PIXELS;
+  }
+
+  function handleLineClick(lngLat) {
+    // If drawing and click is near last waypoint → save
+    if (currentCoords.length >= 2 && isNearLastWaypoint(lngLat)) {
+      saveLine();
+      return;
+    }
+
+    // Otherwise add a waypoint
+    currentCoords.push([lngLat.lng, lngLat.lat]);
+    renderLineLayers();
+
+    if (currentCoords.length === 1) {
+      App.setStatus("Line started — click to add waypoints, click last point to save");
+    } else {
+      App.setStatus(currentCoords.length + " waypoints — click last point to save");
+    }
+  }
+
+  function saveLine() {
+    if (currentCoords.length < 2) {
+      currentCoords.length = 0;
+      previewCoord = null;
+      renderLineLayers();
+      return;
+    }
+
+    var idx = lines.length + 1;
+    var nWaypoints = currentCoords.length;
+    lines.push({
+      type: "Feature",
+      properties: { name: "Line " + idx, lineIdx: idx, waypoints: nWaypoints },
+      geometry: { type: "LineString", coordinates: currentCoords.slice() }
+    });
+
+    currentCoords.length = 0;
+    previewCoord = null;
+    rebuildLineBuffers(lineBufferRadiusMiles);
+    App.setStatus("Line " + idx + " saved (" + nWaypoints + " waypoints)");
+  }
+
+  function cancelLineDrawing() {
+    if (currentCoords.length === 0 && !previewCoord) return;
+    currentCoords.length = 0;
+    previewCoord = null;
+    renderLineLayers();
+  }
+
+  function removeLine(index) {
+    if (index < 0 || index >= lines.length) return;
+    lines.splice(index, 1);
+    rebuildLineBuffers(lineBufferRadiusMiles);
+  }
+
+  function clearLines() {
+    if (typeof App.clearCensusOverlay === "function") App.clearCensusOverlay();
+    lines.length = 0;
+    currentCoords.length = 0;
+    previewCoord = null;
+    lineBuffers.splice(0);
+    renderLineLayers();
+  }
+
+  function undoLastLine() {
+    // If currently drawing, remove the last waypoint
+    if (currentCoords.length > 0) {
+      currentCoords.pop();
+      renderLineLayers();
+      if (currentCoords.length === 0) {
+        App.setStatus("Line drawing cancelled");
+      } else {
+        App.setStatus(currentCoords.length + " waypoints — click last point to save");
+      }
+      return;
+    }
+    // Otherwise remove the last saved line
+    if (lines.length > 0) {
+      lines.pop();
+      rebuildLineBuffers(lineBufferRadiusMiles);
+    }
+  }
+
+  /* ---- Vertex editing support ---- */
+
+  function updateLineVertex(lineIndex, vertexIndex, lng, lat) {
+    if (lineIndex < 0 || lineIndex >= lines.length) return;
+    var coords = lines[lineIndex].geometry.coordinates;
+    if (vertexIndex < 0 || vertexIndex >= coords.length) return;
+    coords[vertexIndex] = [lng, lat];
+    rebuildLineBuffers(lineBufferRadiusMiles);
+  }
+
+  /* ---- Expose on App namespace ---- */
+
+  App.lines = lines;
+  App.lineBuffers = lineBuffers;
+  App.rebuildLineBuffers = rebuildLineBuffers;
+  App.lineBufferUnionPolygon = lineBufferUnionPolygon;
+  App.handleLineClick = handleLineClick;
+  App.removeLine = removeLine;
+  App.clearLines = clearLines;
+  App.undoLastLine = undoLastLine;
+  App.cancelLineDrawing = cancelLineDrawing;
+  App.renderLineLayers = renderLineLayers;
+  App.setLinePreview = setLinePreview;
+  App.updateLineVertex = updateLineVertex;
+})();

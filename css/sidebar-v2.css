@@ -1,0 +1,238 @@
+/* ============================================================
+   sidebar-v2.css
+   Styles for the sidebar panel system.
+   All rules scoped under #sidebar.
+   ============================================================ */
+
+/* ---- Container ---- */
+#sidebar {
+  width: 310px;
+  border-right: 1px solid var(--border);
+  padding: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
+  background: var(--bg);
+  flex-shrink: 0;
+}
+/* ---- Panel system ---- */
+#sidebar .sb2-panel {
+  border-bottom: 1px solid var(--border);
+}
+
+#sidebar .sb2-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  cursor: pointer;
+  user-select: none;
+  background: var(--panel);
+  transition: background 0.12s;
+}
+#sidebar .sb2-panel-header:hover {
+  background: #eef1f5;
+}
+
+#sidebar .sb2-panel-title {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #1a1a1a;
+}
+
+#sidebar .sb2-panel-toggle {
+  width: auto;
+  margin: 0;
+  padding: 0 4px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1;
+  transition: transform 0.15s;
+}
+#sidebar .sb2-panel.sb2-collapsed .sb2-panel-toggle {
+  transform: rotate(-90deg);
+}
+
+#sidebar .sb2-panel-body {
+  padding: 10px 14px 14px;
+}
+#sidebar .sb2-panel.sb2-collapsed .sb2-panel-body {
+  display: none;
+}
+
+/* ---- Typography ---- */
+#sidebar h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+#sidebar .sb2-muted {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+  margin: 0 0 8px;
+}
+
+#sidebar .sb2-tiny {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* ---- Form controls (scoped — won't inherit legacy width:100%) ---- */
+#sidebar label {
+  display: block;
+  margin: 8px 0;
+  font-size: 13px;
+  color: #333;
+}
+
+#sidebar select,
+#sidebar input[type="text"],
+#sidebar input[type="number"],
+#sidebar input[type="file"] {
+  width: 100%;
+  padding: 7px 9px;
+  margin-top: 4px;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+}
+#sidebar select:focus,
+#sidebar input[type="text"]:focus,
+#sidebar input[type="number"]:focus {
+  outline: none;
+  border-color: #2b6cb0;
+  box-shadow: 0 0 0 2px rgba(43, 108, 176, 0.15);
+}
+
+#sidebar button {
+  width: 100%;
+  padding: 8px 12px;
+  margin-top: 6px;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  transition: background 0.12s;
+}
+#sidebar button:hover {
+  background: #eef1f5;
+}
+#sidebar .lodes-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+#sidebar .lodes-actions button {
+  flex: 1;
+  margin-top: 0;
+}
+
+/* ---- Cards ---- */
+#sidebar .sb2-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  margin-top: 8px;
+  background: var(--cardbg);
+}
+
+#sidebar .sb2-kv {
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+#sidebar .sb2-kv b {
+  display: inline-block;
+}
+
+/* ---- Warnings ---- */
+#sidebar .sb2-warn {
+  border: 1px solid var(--warnbd);
+  background: var(--warnbg);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+/* ---- Empty state ---- */
+#sidebar .sb2-empty {
+  padding: 32px 14px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* ---- Variable checkbox list ---- */
+#sidebar .var-checklist {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: 8px 0;
+  max-height: 220px;
+  overflow-y: auto;
+  background: #fff;
+}
+#sidebar .var-checklist legend {
+  font-size: 13px;
+  color: #333;
+  padding: 0 4px;
+}
+#sidebar .var-group-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin: 8px 0 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+#sidebar .var-group-label:first-of-type {
+  border-top: none;
+  margin-top: 2px;
+}
+#sidebar .var-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 3px 0;
+  font-size: 12px;
+  line-height: 1.35;
+  cursor: pointer;
+}
+#sidebar .var-check input[type="checkbox"] {
+  width: auto;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+#sidebar .var-actions {
+  display: flex;
+  gap: 6px;
+  margin: 8px 0 0;
+}
+#sidebar .var-action-btn {
+  width: auto;
+  padding: 3px 8px;
+  margin-top: 0;
+  font-size: 11px;
+  color: #2b6cb0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+}

@@ -1,0 +1,54 @@
+<div class="tpi-main">
+  <div class="tpi-intro">
+    <div class="tiny">
+      Computes a composite Transit Propensity Index (1–5) for each census geography
+      within the buffer area. Scores are normalized within the corridor — a "5" means
+      highest propensity <em>relative to other geographies in this study area</em>.
+    </div>
+  </div>
+
+  <div class="tpi-controls">
+    <div class="btnRow">
+      <button id="tpiRun" type="button">Compute TPI Scores</button>
+      <button id="tpiClearChoropleth" type="button">Clear Map</button>
+    </div>
+  </div>
+
+  <div id="tpiStatus" class="tpi-status" style="display:none;">
+    <span id="tpiStatusText">Ready</span>
+  </div>
+
+  <div id="tpiResults" class="tpi-results-card" style="display:none;">
+    <div class="tpi-results-header">
+      <b>Results</b>
+      <span id="tpiGeoCount" class="tiny"></span>
+    </div>
+
+    <div id="tpiFactorSummary" class="tpi-factor-summary"></div>
+
+    <div class="tpi-composite-summary">
+      <div class="tpi-composite-row">
+        <span class="tpi-composite-label">Composite TPI (weighted avg)</span>
+        <span id="tpiCompositeAvg" class="tpi-composite-value">—</span>
+      </div>
+      <div class="tpi-composite-row">
+        <span class="tpi-composite-label">Max TPI score</span>
+        <span id="tpiCompositeMax" class="tpi-composite-value">—</span>
+      </div>
+      <div class="tpi-composite-row">
+        <span class="tpi-composite-label">Geographies scored</span>
+        <span id="tpiScoredCount" class="tpi-composite-value">—</span>
+      </div>
+    </div>
+
+    <div class="tpi-export-actions">
+      <button id="tpiExportGeoJSON" type="button">Export GeoJSON</button>
+      <button id="tpiExportCSV" type="button">Export CSV</button>
+    </div>
+
+    <div class="tpi-note tiny" style="margin-top:8px;">
+      Normalization: corridor-only quintiles (rank within study area).
+      Weights can be adjusted in the Weights panel below.
+    </div>
+  </div>
+</div>

@@ -1,0 +1,42 @@
+<div class="card">
+  <div class="kv"><b>LBAR Housing Inventory Upload</b></div>
+  <div class="tiny" style="margin-top:6px;">
+    Upload GeoJSON points (properties.units, optional properties.county) or CSV (lat/lon/units, optional county FIPS).
+    Enter project counties as comma-separated 5-digit FIPS.
+  </div>
+
+  <label>
+    Upload LBAR inventory (GeoJSON or CSV)
+    <input id="lbarFile" type="file" accept=".json,.geojson,.csv" />
+  </label>
+
+  <div class="twoCol">
+    <label>Latitude column (CSV)
+      <select id="lbarColLat" disabled></select>
+    </label>
+    <label>Longitude column (CSV)
+      <select id="lbarColLon" disabled></select>
+    </label>
+  </div>
+
+  <div class="twoCol">
+    <label>Units column
+      <select id="lbarColUnits" disabled></select>
+    </label>
+    <label>County FIPS column (optional)
+      <select id="lbarColCounty" disabled></select>
+    </label>
+  </div>
+
+  <label>
+    Project counties (comma-separated 5-digit county FIPS)
+    <input id="lbarCounties" type="text" placeholder="e.g., 06075,06081" />
+  </label>
+
+  <label style="display:flex;align-items:center;gap:10px;margin-top:10px;">
+    <input id="toggleLbarLayer" type="checkbox" style="width:auto;margin:0;" />
+    Show LBAR points on map
+  </label>
+
+  <div class="tiny" id="lbarInfo">No file loaded.</div>
+</div>
