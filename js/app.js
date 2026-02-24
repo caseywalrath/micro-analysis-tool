@@ -66,7 +66,7 @@
       '</select>' +
     '</label>' +
 
-    '<button id="run">Update summary</button>' +
+    '<button id="run">Calculate summary</button>' +
 
     '<div id="summaryStatus" class="sb2-card" style="display:none;">' +
       '<div class="sb2-kv"><b>Intersecting geographies:</b> <span id="nGeos">0</span></div>' +
