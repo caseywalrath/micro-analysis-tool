@@ -1,0 +1,347 @@
+<!-- Ridership Forecasting Module: 4-tab popup layout -->
+<div class="rf-popup-layout">
+
+  <!-- Tab navigation -->
+  <div class="rf-tabs">
+    <button class="rf-tab rf-tab-active" data-tab="demand">Demand</button>
+    <button class="rf-tab" data-tab="calibrate">Calibrate</button>
+    <button class="rf-tab" data-tab="elasticity">Elasticity</button>
+    <button class="rf-tab" data-tab="scenarios">Scenarios</button>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- Tab 1: Corridor Demand -->
+  <!-- ================================================================ -->
+  <div class="rf-tab-content rf-tab-visible" data-tab="demand">
+    <div class="rf-tab-body">
+
+      <div class="rf-section-row">
+        <!-- Left: Settings -->
+        <div class="rf-settings-col">
+          <div class="rf-section-title">Settings</div>
+
+          <label class="tiny">Geography level</label>
+          <select id="rfGeoLevel" class="rf-select">
+            <option value="tract">Tracts (faster)</option>
+            <option value="bg" selected>Block Groups</option>
+          </select>
+
+          <label class="tiny" style="margin-top:6px;">ACS Year</label>
+          <select id="rfYearSelect" class="rf-select">
+            <option value="2024">2024</option>
+            <option value="2023">2023</option>
+            <option value="2022">2022</option>
+            <option value="2021">2021</option>
+          </select>
+
+          <label class="tiny" style="margin-top:6px;">Segment length (mi)</label>
+          <div class="rf-input-row">
+            <input id="rfSegmentLength" type="number" min="0" max="10" step="0.25" value="0.5" class="rf-number-input" />
+            <span class="tiny" style="color:var(--muted);">0 = no segments</span>
+          </div>
+
+          <label class="rf-toggle-row" style="margin-top:8px;">
+            <input type="checkbox" id="rfApportionByArea">
+            <span>Apportion by Area</span>
+          </label>
+
+          <button id="rfRunDemand" type="button" class="rf-action-primary" style="margin-top:12px;">
+            Analyze Demand
+          </button>
+        </div>
+
+        <!-- Right: Results -->
+        <div class="rf-results-col">
+          <div class="rf-section-title">Corridor Demand Index</div>
+
+          <div id="rfDemandStatus" class="rf-status" style="display:none;">
+            <span id="rfDemandStatusText">Ready</span>
+          </div>
+
+          <div id="rfDemandResults" style="display:none;">
+            <div class="rf-cdi-card">
+              <div class="rf-cdi-score">
+                <span class="rf-cdi-label">CDI Score</span>
+                <span id="rfCDIValue" class="rf-cdi-value">&mdash;</span>
+                <span class="rf-cdi-scale">/ 5</span>
+              </div>
+              <div class="rf-cdi-class">
+                <span id="rfCDIClass" class="rf-cdi-badge">&mdash;</span>
+              </div>
+            </div>
+
+            <div class="rf-stats-grid">
+              <div class="rf-stat">
+                <span class="rf-stat-label">Geographies</span>
+                <span id="rfGeoCount" class="rf-stat-value">&mdash;</span>
+              </div>
+              <div class="rf-stat">
+                <span class="rf-stat-label">Scored</span>
+                <span id="rfScoredCount" class="rf-stat-value">&mdash;</span>
+              </div>
+              <div class="rf-stat">
+                <span class="rf-stat-label">Route Length</span>
+                <span id="rfRouteLength" class="rf-stat-value">&mdash;</span>
+              </div>
+              <div class="rf-stat">
+                <span class="rf-stat-label">Segments</span>
+                <span id="rfSegmentCount" class="rf-stat-value">&mdash;</span>
+              </div>
+            </div>
+
+            <!-- Segment breakdown -->
+            <div id="rfSegmentBreakdown" style="display:none;">
+              <div class="rf-section-title" style="margin-top:12px;">Segment Breakdown</div>
+              <div id="rfSegmentList" class="rf-segment-list"></div>
+            </div>
+
+            <!-- Factor summary (reuses TPI factor display) -->
+            <div class="rf-section-title" style="margin-top:12px;">Factor Scores</div>
+            <div id="rfFactorSummary" class="tpi-factor-summary"></div>
+          </div>
+
+          <div class="rf-export-row" style="margin-top:12px;">
+            <button id="rfExportDemandGeoJSON" type="button" class="rf-btn-sm" disabled>GeoJSON</button>
+            <button id="rfExportDemandCSV" type="button" class="rf-btn-sm" disabled>CSV</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="rf-next-step" id="rfNextStep1" style="display:none;">
+        Demand analysis complete. Continue to <a href="#" id="rfGoToElasticity">Elasticity</a> to estimate ridership, or <a href="#" id="rfGoToCalibrate">Calibrate</a> with observed data first.
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- Tab 2: Calibration -->
+  <!-- ================================================================ -->
+  <div class="rf-tab-content" data-tab="calibrate">
+    <div class="rf-tab-body">
+
+      <div class="rf-section-title">Observed Ridership Data</div>
+      <div class="tiny" style="margin-bottom:8px;">
+        Upload a CSV with observed ridership data to calibrate forecasts against real performance.
+        Expected columns: route name, daily ridership or boardings/hour, frequency (headway), service type.
+      </div>
+
+      <div class="rf-upload-row">
+        <button id="rfUploadCalibCSV" type="button" class="rf-btn-sm">Upload CSV</button>
+        <input type="file" id="rfCalibFile" accept=".csv,.txt" style="display:none" />
+        <span id="rfCalibFileName" class="tiny" style="color:var(--muted);">No file loaded</span>
+      </div>
+
+      <div id="rfCalibMapping" style="display:none; margin-top:12px;">
+        <div class="rf-section-title">Column Mapping</div>
+        <div class="rf-mapping-grid">
+          <label class="tiny">Route Name</label>
+          <select id="rfCalibColName" class="rf-select"></select>
+
+          <label class="tiny">Daily Ridership</label>
+          <select id="rfCalibColRidership" class="rf-select"></select>
+
+          <label class="tiny">Peak Headway (min)</label>
+          <select id="rfCalibColHeadway" class="rf-select"></select>
+
+          <label class="tiny">Service Type</label>
+          <select id="rfCalibColServiceType" class="rf-select"></select>
+        </div>
+      </div>
+
+      <div style="margin-top:16px;">
+        <div class="rf-section-title">Calibration Method</div>
+        <div class="rf-radio-group">
+          <label class="rf-radio-label">
+            <input type="radio" name="rfCalibMethod" value="ratio" checked /> Ratio-based (recommended)
+          </label>
+          <label class="rf-radio-label">
+            <input type="radio" name="rfCalibMethod" value="regression" /> Simple regression
+          </label>
+        </div>
+      </div>
+
+      <div id="rfCalibResults" style="display:none; margin-top:12px;">
+        <div class="rf-section-title">Calibration Results</div>
+        <div class="rf-cdi-card">
+          <div class="rf-stat">
+            <span class="rf-stat-label">Calibration Factor</span>
+            <span id="rfCalibFactor" class="rf-stat-value">&mdash;</span>
+          </div>
+          <div class="rf-stat">
+            <span class="rf-stat-label">R-squared</span>
+            <span id="rfCalibRSquared" class="rf-stat-value">&mdash;</span>
+          </div>
+          <div class="rf-stat">
+            <span class="rf-stat-label">Sample Size</span>
+            <span id="rfCalibSampleSize" class="rf-stat-value">&mdash;</span>
+          </div>
+        </div>
+        <div id="rfCalibWarning" class="rf-warning" style="display:none;"></div>
+      </div>
+
+      <div class="rf-export-row" style="margin-top:12px;">
+        <button id="rfExportCalibJSON" type="button" class="rf-btn-sm" disabled>Export Coefficients</button>
+        <button id="rfImportCalibJSON" type="button" class="rf-btn-sm">Import Coefficients</button>
+        <input type="file" id="rfCalibImportFile" accept=".json" style="display:none" />
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- Tab 3: Service Elasticity -->
+  <!-- ================================================================ -->
+  <div class="rf-tab-content" data-tab="elasticity">
+    <div class="rf-tab-body">
+
+      <div class="rf-section-row">
+        <!-- Left: Parameters -->
+        <div class="rf-settings-col">
+          <div class="rf-section-title">Service Parameters</div>
+
+          <label class="tiny">Service Type</label>
+          <select id="rfServiceType" class="rf-select">
+            <option value="local_bus">Local Bus (Baseline)</option>
+            <option value="enhanced_bus">Enhanced Bus</option>
+            <option value="limited_stop">Limited-Stop Express</option>
+            <option value="brt">BRT-Style</option>
+          </select>
+
+          <label class="tiny" style="margin-top:8px;">Baseline Headway (min)</label>
+          <input id="rfBaseHeadway" type="number" min="1" max="120" value="30" class="rf-number-input" />
+
+          <label class="tiny" style="margin-top:6px;">Proposed Headway (min)</label>
+          <input id="rfNewHeadway" type="number" min="1" max="120" value="15" class="rf-number-input" />
+
+          <div class="rf-section-title" style="margin-top:12px;">Elasticity</div>
+
+          <label class="tiny">Frequency Elasticity</label>
+          <div class="rf-slider-row">
+            <input id="rfFreqElastSlider" type="range" min="0.1" max="1.0" step="0.05" value="0.50" class="rf-slider" />
+            <input id="rfFreqElastValue" type="number" min="0.1" max="1.0" step="0.05" value="0.50" class="rf-number-input-sm" />
+          </div>
+          <div class="tiny" style="color:var(--muted);">Typical range: 0.3-0.6 (TCRP)</div>
+        </div>
+
+        <!-- Right: Results -->
+        <div class="rf-results-col">
+          <div class="rf-section-title">Service Type Premiums</div>
+
+          <div id="rfPremiumDisplay" class="rf-premium-grid">
+            <!-- Filled dynamically -->
+          </div>
+
+          <div class="rf-section-title" style="margin-top:16px;">Ridership Multiplier</div>
+          <div id="rfElasticityNoCDI" class="rf-info-box">
+            Run Demand analysis first to see ridership estimates.
+          </div>
+
+          <div id="rfElasticityResults" style="display:none;">
+            <div class="rf-range-card">
+              <div class="rf-range-row">
+                <span class="rf-range-label">Conservative</span>
+                <span id="rfElastLow" class="rf-range-value">&mdash;</span>
+              </div>
+              <div class="rf-range-row rf-range-mid">
+                <span class="rf-range-label">Moderate</span>
+                <span id="rfElastMid" class="rf-range-value">&mdash;</span>
+              </div>
+              <div class="rf-range-row">
+                <span class="rf-range-label">Optimistic</span>
+                <span id="rfElastHigh" class="rf-range-value">&mdash;</span>
+              </div>
+            </div>
+
+            <div class="rf-stats-grid" style="margin-top:8px;">
+              <div class="rf-stat">
+                <span class="rf-stat-label">Frequency Effect</span>
+                <span id="rfFreqEffect" class="rf-stat-value">&mdash;</span>
+              </div>
+              <div class="rf-stat">
+                <span class="rf-stat-label">Base CDI</span>
+                <span id="rfBaseCDI" class="rf-stat-value">&mdash;</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- Tab 4: Scenarios -->
+  <!-- ================================================================ -->
+  <div class="rf-tab-content" data-tab="scenarios">
+    <div class="rf-tab-body">
+
+      <div class="rf-section-title">Service Scenarios</div>
+      <div class="tiny" style="margin-bottom:8px;">
+        Define operating characteristics for each service type to compare ridership, cost, and productivity.
+      </div>
+
+      <!-- Scenario sub-tabs -->
+      <div class="rf-scenario-tabs">
+        <button class="rf-scenario-tab rf-scenario-tab-active" data-scenario="0">Scenario A</button>
+        <button class="rf-scenario-tab" data-scenario="1">Scenario B</button>
+        <button class="rf-scenario-tab" data-scenario="2">Scenario C</button>
+        <button class="rf-scenario-tab" data-scenario="3">Scenario D</button>
+      </div>
+
+      <!-- Scenario input form (shared, values swap per active scenario) -->
+      <div class="rf-scenario-form">
+        <div class="rf-scenario-grid">
+          <label class="tiny">Scenario Name</label>
+          <input id="rfScenName" type="text" value="Scenario A" class="rf-text-input" />
+
+          <label class="tiny">Service Type</label>
+          <select id="rfScenServiceType" class="rf-select">
+            <option value="local_bus">Local Bus</option>
+            <option value="enhanced_bus">Enhanced Bus</option>
+            <option value="limited_stop">Limited-Stop Express</option>
+            <option value="brt">BRT-Style</option>
+          </select>
+
+          <label class="tiny">Peak Headway (min)</label>
+          <input id="rfScenHeadway" type="number" min="1" max="120" value="30" class="rf-number-input" />
+
+          <label class="tiny">Service Span (hrs/day)</label>
+          <input id="rfScenSpan" type="number" min="1" max="24" value="14" class="rf-number-input" />
+
+          <label class="tiny">Average Speed (mph)</label>
+          <input id="rfScenSpeed" type="number" min="1" max="80" value="15" class="rf-number-input" />
+
+          <label class="tiny">Cost per Revenue Hour ($)</label>
+          <input id="rfScenCostPerHr" type="number" min="1" max="500" value="150" class="rf-number-input" />
+
+          <label class="tiny">Service Days per Year</label>
+          <select id="rfScenServiceDays" class="rf-select">
+            <option value="260">260 (Weekday only)</option>
+            <option value="302">302 (Weekday + Saturday)</option>
+            <option value="312">312 (Daily except holidays)</option>
+            <option value="365">365 (Daily)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Comparison table -->
+      <div class="rf-section-title" style="margin-top:16px;">Comparison</div>
+
+      <div id="rfScenarioNoCDI" class="rf-info-box">
+        Run Demand analysis first to generate scenario comparisons.
+      </div>
+
+      <div id="rfComparisonTable" style="display:none; overflow-x:auto;">
+        <table class="rf-compare-table">
+          <thead id="rfCompareHead"></thead>
+          <tbody id="rfCompareBody"></tbody>
+        </table>
+      </div>
+
+      <div class="rf-export-row" style="margin-top:12px;">
+        <button id="rfBuildScenarios" type="button" class="rf-action-primary">Build Scenarios</button>
+        <button id="rfExportScenariosCSV" type="button" class="rf-btn-sm" disabled>Export CSV</button>
+        <button id="rfExportScenariosJSON" type="button" class="rf-btn-sm" disabled>Export JSON</button>
+      </div>
+    </div>
+  </div>
+
+</div>

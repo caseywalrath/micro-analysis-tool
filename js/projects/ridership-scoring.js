@@ -1,0 +1,617 @@
+// js/projects/ridership-scoring.js
+// Ridership Forecasting computation engine.
+// Wraps TPI scoring for corridor demand, adds service elasticity,
+// scenario building, and calibration logic.
+// Depends on: TPI namespace (tpi-scoring.js), App namespace, turf (CDN).
+// Exports: window.RidershipModel namespace
+
+(function () {
+  "use strict";
+
+  var RM = window.RidershipModel = {};
+  var TPI = window.TPI;
+
+  var SQM_PER_SQMI = 2589988.110336;
+
+  // =========================================================================
+  // Service type presets (literature-based defaults)
+  // Each service type has low/mid/high multiplier ranges
+  // =========================================================================
+
+  var SERVICE_TYPES = [
+    {
+      id: "local_bus",
+      label: "Local Bus (Baseline)",
+      frequencyPremium:  { low: 0, mid: 0, high: 0 },
+      speedPremium:      { low: 0, mid: 0, high: 0 },
+      modePremium:       { low: 0, mid: 0, high: 0 },
+      defaultSpeed: 12,    // mph
+      defaultHeadway: 30,  // minutes
+      defaultSpan: 14,     // hours
+      defaultStopSpacing: 0.125 // miles (1/8 mi)
+    },
+    {
+      id: "enhanced_bus",
+      label: "Enhanced Bus",
+      frequencyPremium:  { low: 0.10, mid: 0.15, high: 0.20 },
+      speedPremium:      { low: 0.05, mid: 0.10, high: 0.15 },
+      modePremium:       { low: 0.15, mid: 0.22, high: 0.30 },
+      defaultSpeed: 14,
+      defaultHeadway: 20,
+      defaultSpan: 16,
+      defaultStopSpacing: 0.20
+    },
+    {
+      id: "limited_stop",
+      label: "Limited-Stop Express",
+      frequencyPremium:  { low: 0.05, mid: 0.10, high: 0.15 },
+      speedPremium:      { low: 0.10, mid: 0.15, high: 0.20 },
+      modePremium:       { low: 0.10, mid: 0.15, high: 0.20 },
+      defaultSpeed: 18,
+      defaultHeadway: 15,
+      defaultSpan: 16,
+      defaultStopSpacing: 0.50
+    },
+    {
+      id: "brt",
+      label: "BRT-Style",
+      frequencyPremium:  { low: 0.15, mid: 0.25, high: 0.35 },
+      speedPremium:      { low: 0.15, mid: 0.25, high: 0.35 },
+      modePremium:       { low: 0.25, mid: 0.37, high: 0.50 },
+      defaultSpeed: 22,
+      defaultHeadway: 10,
+      defaultSpan: 18,
+      defaultStopSpacing: 0.50
+    }
+  ];
+
+  RM.SERVICE_TYPES = SERVICE_TYPES;
+
+  function getServiceType(id) {
+    for (var i = 0; i < SERVICE_TYPES.length; i++) {
+      if (SERVICE_TYPES[i].id === id) return SERVICE_TYPES[i];
+    }
+    return SERVICE_TYPES[0]; // default to local bus
+  }
+  RM.getServiceType = getServiceType;
+
+  // =========================================================================
+  // Layer 1: Corridor Demand Potential
+  // Wraps TPI.computeTPI(), adds segment analysis and CDI aggregate
+  // =========================================================================
+
+  // computeCorridorDemand(options)
+  // options: {
+  //   geoLevel, year, weights, lodesData, apportionByArea, onProgress,
+  //   segmentMiles  (e.g. 0.5 — length of each corridor segment)
+  // }
+  // Returns: { tpiResult, corridorCDI, segments: [ { geometry, cdi, geoCount } ], classification }
+
+  async function computeCorridorDemand(options) {
+    var onProgress = options.onProgress || function () {};
+
+    // Step 1: Run TPI across entire corridor buffer union
+    onProgress("Running demand analysis...");
+    var tpiResult = await TPI.computeTPI({
+      geoLevel: options.geoLevel || "bg",
+      year: options.year || "2024",
+      weights: options.weights || {},
+      lodesData: options.lodesData || null,
+      apportionByArea: !!options.apportionByArea,
+      onProgress: onProgress
+    });
+
+    // Step 2: Compute corridor-level CDI (population-weighted average of composite scores)
+    onProgress("Computing corridor demand index...");
+    var corridorCDI = computeCorridorCDI(tpiResult);
+
+    // Step 3: Segment analysis (if routes exist and segmentMiles > 0)
+    var segments = [];
+    var segmentMiles = options.segmentMiles || 0;
+
+    if (segmentMiles > 0) {
+      onProgress("Analyzing corridor segments...");
+      segments = computeSegments(tpiResult, segmentMiles);
+    }
+
+    // Step 4: Classification
+    var classification = classifyCDI(corridorCDI);
+
+    return {
+      tpiResult: tpiResult,
+      corridorCDI: corridorCDI,
+      segments: segments,
+      classification: classification,
+      geoLevel: options.geoLevel || "bg",
+      year: options.year || "2024"
+    };
+  }
+  RM.computeCorridorDemand = computeCorridorDemand;
+
+  // Corridor-level CDI: population-weighted average of all geography composite scores
+  function computeCorridorCDI(tpiResult) {
+    var popRaw = tpiResult.rawValues.get("pop_density");
+    var totalPop = 0;
+    var weightedSum = 0;
+    var scored = 0;
+
+    for (var i = 0; i < tpiResult.geoids.length; i++) {
+      var geoid = tpiResult.geoids[i];
+      var scoreData = tpiResult.scores.get(geoid);
+      if (!scoreData || !Number.isFinite(scoreData.composite)) continue;
+
+      // Use population density * area as population proxy
+      var popDens = popRaw ? popRaw.get(geoid) : null;
+      var geo = tpiResult.geos[i];
+      var areaSqMi = geo ? turf.area(geo) / SQM_PER_SQMI : 1;
+      var pop = (popDens && Number.isFinite(popDens)) ? popDens * areaSqMi : 1;
+
+      weightedSum += scoreData.composite * pop;
+      totalPop += pop;
+      scored++;
+    }
+
+    return {
+      value: totalPop > 0 ? weightedSum / totalPop : NaN,
+      scored: scored,
+      total: tpiResult.geoids.length
+    };
+  }
+
+  // Segment analysis: split routes into equal chunks, compute CDI per segment
+  function computeSegments(tpiResult, segmentMiles) {
+    var routes = App.routes || [];
+    if (routes.length === 0) return [];
+
+    // Combine all routes into one LineString (or use first route for simplicity)
+    var segments = [];
+
+    for (var ri = 0; ri < routes.length; ri++) {
+      var route = routes[ri];
+      if (!route || !route.geometry) continue;
+
+      var chunks;
+      try {
+        chunks = turf.lineChunk(route, segmentMiles, { units: "miles" });
+      } catch (_) { continue; }
+
+      if (!chunks || !chunks.features) continue;
+
+      for (var ci = 0; ci < chunks.features.length; ci++) {
+        var chunk = chunks.features[ci];
+        var segBuffer;
+        try {
+          segBuffer = turf.buffer(chunk, 0.5, { units: "miles" });
+        } catch (_) { continue; }
+
+        if (!segBuffer) continue;
+
+        // Intersect segment buffer with TPI geographies
+        var segScoreSum = 0;
+        var segPopSum = 0;
+        var segGeoCount = 0;
+        var popRaw = tpiResult.rawValues.get("pop_density");
+
+        for (var gi = 0; gi < tpiResult.geos.length; gi++) {
+          var geo = tpiResult.geos[gi];
+          var geoid = geo.properties && geo.properties.GEOID;
+          var scoreData = geoid ? tpiResult.scores.get(geoid) : null;
+          if (!scoreData || !Number.isFinite(scoreData.composite)) continue;
+
+          // Quick check: does this geography intersect the segment buffer?
+          var intersects;
+          try { intersects = turf.booleanIntersects(geo, segBuffer); } catch (_) { continue; }
+          if (!intersects) continue;
+
+          // Compute overlap fraction
+          var inter;
+          try { inter = turf.intersect(geo, segBuffer); } catch (_) { continue; }
+          if (!inter) continue;
+
+          var overlapArea = turf.area(inter);
+          var geoArea = turf.area(geo);
+          var frac = geoArea > 0 ? Math.min(1, overlapArea / geoArea) : 0;
+          if (frac <= 0) continue;
+
+          var popDens = popRaw ? popRaw.get(geoid) : null;
+          var areaSqMi = geoArea / SQM_PER_SQMI;
+          var pop = (popDens && Number.isFinite(popDens)) ? popDens * areaSqMi * frac : frac;
+
+          segScoreSum += scoreData.composite * pop;
+          segPopSum += pop;
+          segGeoCount++;
+        }
+
+        var segCDI = segPopSum > 0 ? segScoreSum / segPopSum : NaN;
+
+        segments.push({
+          routeIndex: ri,
+          segmentIndex: ci,
+          geometry: chunk.geometry,
+          bufferGeometry: segBuffer.geometry,
+          cdi: segCDI,
+          classification: classifyCDI({ value: segCDI }).label,
+          geoCount: segGeoCount,
+          lengthMiles: segmentMiles
+        });
+      }
+    }
+
+    return segments;
+  }
+
+  // CDI classification
+  function classifyCDI(cdi) {
+    var val = (cdi && cdi.value != null) ? cdi.value : cdi;
+    if (!Number.isFinite(val)) return { label: "N/A", level: 0 };
+    if (val >= 4.0) return { label: "High", level: 3 };
+    if (val >= 3.0) return { label: "Medium", level: 2 };
+    if (val >= 2.0) return { label: "Low-Medium", level: 1 };
+    return { label: "Low", level: 0 };
+  }
+  RM.classifyCDI = classifyCDI;
+
+  // Re-score demand from cached TPI raw values (no API calls)
+  function rescoreDemand(lastResult, weights, segmentMiles) {
+    if (!lastResult || !lastResult.tpiResult) return null;
+    var tpi = lastResult.tpiResult;
+    var rawToUse = (tpi.apportionByArea && tpi.apportionedRawValues)
+      ? tpi.apportionedRawValues : tpi.rawValues;
+
+    var rescored = TPI.rescoreFromRaw(rawToUse, weights, tpi.geoids);
+    tpi.scores = rescored.scores;
+    tpi.factorScores = rescored.factorScores;
+    tpi.effectiveWeights = rescored.effectiveWeights;
+
+    var corridorCDI = computeCorridorCDI(tpi);
+    var segments = segmentMiles > 0 ? computeSegments(tpi, segmentMiles) : [];
+
+    return {
+      tpiResult: tpi,
+      corridorCDI: corridorCDI,
+      segments: segments,
+      classification: classifyCDI(corridorCDI),
+      geoLevel: lastResult.geoLevel,
+      year: lastResult.year
+    };
+  }
+  RM.rescoreDemand = rescoreDemand;
+
+  // =========================================================================
+  // Layer 3: Service Elasticity
+  // Applies literature-based multipliers to convert demand into ridership estimates
+  // =========================================================================
+
+  // Frequency elasticity: ridership_change = (new_freq / old_freq) ^ elasticity
+  // elasticity is typically 0.3-0.6, default 0.5
+  function computeFrequencyEffect(baseHeadway, newHeadway, elasticity) {
+    if (!baseHeadway || !newHeadway || baseHeadway <= 0 || newHeadway <= 0) return 1;
+    // Convert headway to frequency: freq = 60 / headway
+    var baseFreq = 60 / baseHeadway;
+    var newFreq = 60 / newHeadway;
+    return Math.pow(newFreq / baseFreq, elasticity || 0.5);
+  }
+  RM.computeFrequencyEffect = computeFrequencyEffect;
+
+  // Apply elasticity multipliers to produce low/mid/high ridership estimates
+  // params: {
+  //   serviceTypeId,
+  //   baseHeadway, newHeadway, freqElasticity,
+  //   customFreqPremium, customSpeedPremium, customModePremium (optional overrides)
+  // }
+  function applyElasticity(baseDemandCDI, params) {
+    var st = getServiceType(params.serviceTypeId || "local_bus");
+
+    // Frequency effect from headway change
+    var freqEffect = computeFrequencyEffect(
+      params.baseHeadway || 30,
+      params.newHeadway || st.defaultHeadway,
+      params.freqElasticity || 0.5
+    );
+
+    // Service type premiums (use custom if provided, otherwise preset)
+    var freqPrem = params.customFreqPremium != null ? params.customFreqPremium : st.frequencyPremium;
+    var speedPrem = params.customSpeedPremium != null ? params.customSpeedPremium : st.speedPremium;
+    var modePrem = params.customModePremium != null ? params.customModePremium : st.modePremium;
+
+    // Combined multiplier for each scenario (low/mid/high)
+    function calcMultiplier(level) {
+      var fp = (typeof freqPrem === "object") ? freqPrem[level] : freqPrem;
+      var sp = (typeof speedPrem === "object") ? speedPrem[level] : speedPrem;
+      var mp = (typeof modePrem === "object") ? modePrem[level] : modePrem;
+      return freqEffect * (1 + fp) * (1 + sp) * (1 + mp);
+    }
+
+    return {
+      low:  baseDemandCDI * calcMultiplier("low"),
+      mid:  baseDemandCDI * calcMultiplier("mid"),
+      high: baseDemandCDI * calcMultiplier("high"),
+      freqEffect: freqEffect,
+      serviceType: st
+    };
+  }
+  RM.applyElasticity = applyElasticity;
+
+  // =========================================================================
+  // Layer 4: Scenario Builder
+  // Computes operating metrics for a service scenario
+  // =========================================================================
+
+  // buildScenario(params)
+  // params: {
+  //   name, serviceTypeId,
+  //   routeLengthMiles,        // corridor length
+  //   headway,                 // minutes (peak)
+  //   span,                    // hours of service per day
+  //   avgSpeed,                // mph
+  //   costPerRevenueHour,      // $/hr
+  //   serviceDaysPerYear,      // default 260 (weekday) or 302 (w/ Sat) or 312 (daily)
+  //   baseDemandCDI,           // from Layer 1
+  //   elasticityResult,        // from Layer 3 (low/mid/high)
+  //   calibrationFactor        // from Layer 2 (optional, default 1)
+  // }
+
+  function buildScenario(params) {
+    var routeLength = params.routeLengthMiles || 0;
+    var headway = params.headway || 30;
+    var span = params.span || 14;
+    var avgSpeed = params.avgSpeed || 15;
+    var costPerRevHr = params.costPerRevenueHour || 150;
+    var serviceDays = params.serviceDaysPerYear || 260;
+    var calibFactor = params.calibrationFactor || 1;
+
+    // One-way trip time (hours)
+    var tripTimeHrs = routeLength / avgSpeed;
+
+    // Round trips per day = span / (2 * tripTime) -- simplified
+    var roundTripTime = tripTimeHrs * 2;
+    var tripsPerHour = 60 / headway;
+
+    // Revenue hours per day = trips per day * trip time per trip
+    // vehicles needed = ceil(roundTripTime / (headway/60))
+    var vehiclesNeeded = Math.max(1, Math.ceil(roundTripTime / (headway / 60)));
+    var revenueHoursPerDay = vehiclesNeeded * span;
+
+    // Annual revenue hours
+    var annualRevenueHours = revenueHoursPerDay * serviceDays;
+
+    // Annual operating cost
+    var annualCost = annualRevenueHours * costPerRevHr;
+
+    // Ridership from elasticity result or demand CDI
+    var elast = params.elasticityResult;
+    var dailyRidership, annualRidership;
+
+    if (elast) {
+      dailyRidership = {
+        low:  elast.low * calibFactor,
+        mid:  elast.mid * calibFactor,
+        high: elast.high * calibFactor
+      };
+    } else {
+      var base = (params.baseDemandCDI || 0) * calibFactor;
+      dailyRidership = { low: base * 0.8, mid: base, high: base * 1.2 };
+    }
+
+    annualRidership = {
+      low:  dailyRidership.low * serviceDays,
+      mid:  dailyRidership.mid * serviceDays,
+      high: dailyRidership.high * serviceDays
+    };
+
+    // Boardings per revenue hour
+    var boardingsPerRevHr = {
+      low:  annualRidership.low / annualRevenueHours,
+      mid:  annualRidership.mid / annualRevenueHours,
+      high: annualRidership.high / annualRevenueHours
+    };
+
+    // Cost per boarding
+    var costPerBoarding = {
+      low:  annualRidership.high > 0 ? annualCost / annualRidership.high : Infinity,
+      mid:  annualRidership.mid > 0 ? annualCost / annualRidership.mid : Infinity,
+      high: annualRidership.low > 0 ? annualCost / annualRidership.low : Infinity
+    };
+
+    return {
+      name: params.name || "Unnamed",
+      serviceTypeId: params.serviceTypeId || "local_bus",
+      routeLengthMiles: routeLength,
+      headway: headway,
+      span: span,
+      avgSpeed: avgSpeed,
+      costPerRevenueHour: costPerRevHr,
+      serviceDaysPerYear: serviceDays,
+      vehiclesNeeded: vehiclesNeeded,
+      revenueHoursPerDay: revenueHoursPerDay,
+      annualRevenueHours: annualRevenueHours,
+      annualOperatingCost: annualCost,
+      dailyRidership: dailyRidership,
+      annualRidership: annualRidership,
+      boardingsPerRevHr: boardingsPerRevHr,
+      costPerBoarding: costPerBoarding
+    };
+  }
+  RM.buildScenario = buildScenario;
+
+  // Compare multiple scenarios
+  function compareScenarios(scenarios) {
+    return {
+      scenarios: scenarios,
+      count: scenarios.length,
+      headers: [
+        "Scenario", "Service Type", "Headway (min)", "Span (hrs)", "Avg Speed (mph)",
+        "Vehicles", "Rev-Hrs/Day", "Annual Rev-Hrs", "Annual Cost",
+        "Daily Ridership (Low)", "Daily Ridership (Mid)", "Daily Ridership (High)",
+        "Annual Ridership (Mid)", "Boardings/Rev-Hr (Mid)", "Cost/Boarding (Mid)"
+      ]
+    };
+  }
+  RM.compareScenarios = compareScenarios;
+
+  // Format scenario as row for comparison table
+  function scenarioToRow(s) {
+    var st = getServiceType(s.serviceTypeId);
+    return [
+      s.name,
+      st.label,
+      s.headway,
+      s.span,
+      s.avgSpeed,
+      s.vehiclesNeeded,
+      s.revenueHoursPerDay.toFixed(1),
+      Math.round(s.annualRevenueHours).toLocaleString(),
+      "$" + Math.round(s.annualOperatingCost).toLocaleString(),
+      Math.round(s.dailyRidership.low).toLocaleString(),
+      Math.round(s.dailyRidership.mid).toLocaleString(),
+      Math.round(s.dailyRidership.high).toLocaleString(),
+      Math.round(s.annualRidership.mid).toLocaleString(),
+      s.boardingsPerRevHr.mid.toFixed(1),
+      "$" + s.costPerBoarding.mid.toFixed(2)
+    ];
+  }
+  RM.scenarioToRow = scenarioToRow;
+
+  // =========================================================================
+  // Layer 2: Calibration
+  // Ratio-based and simple regression calibration
+  // =========================================================================
+
+  // Ratio-based calibration: calibFactor = observedRidership / demandIndex
+  function calibrateRatio(observedData) {
+    // observedData: array of { ridership, demandIndex }
+    if (!observedData || observedData.length === 0) return { factor: 1, n: 0, rSquared: null };
+
+    var sumRatio = 0;
+    var n = 0;
+    for (var i = 0; i < observedData.length; i++) {
+      var d = observedData[i];
+      if (d.demandIndex > 0 && Number.isFinite(d.ridership)) {
+        sumRatio += d.ridership / d.demandIndex;
+        n++;
+      }
+    }
+
+    var factor = n > 0 ? sumRatio / n : 1;
+
+    // Compute R-squared for the ratio model
+    var rSquared = null;
+    if (n >= 2) {
+      var predicted = [];
+      var actual = [];
+      for (var j = 0; j < observedData.length; j++) {
+        if (observedData[j].demandIndex > 0 && Number.isFinite(observedData[j].ridership)) {
+          predicted.push(factor * observedData[j].demandIndex);
+          actual.push(observedData[j].ridership);
+        }
+      }
+      rSquared = computeRSquared(actual, predicted);
+    }
+
+    return { factor: factor, n: n, rSquared: rSquared };
+  }
+  RM.calibrateRatio = calibrateRatio;
+
+  // Simple OLS regression: y = a + b*x
+  function calibrateRegression(observedData) {
+    if (!observedData || observedData.length < 3) {
+      return { intercept: 0, slope: 1, rSquared: null, n: observedData ? observedData.length : 0, warning: "Need at least 3 data points" };
+    }
+
+    var xs = [];
+    var ys = [];
+    for (var i = 0; i < observedData.length; i++) {
+      var d = observedData[i];
+      if (Number.isFinite(d.demandIndex) && Number.isFinite(d.ridership)) {
+        xs.push(d.demandIndex);
+        ys.push(d.ridership);
+      }
+    }
+
+    var n = xs.length;
+    if (n < 3) return { intercept: 0, slope: 1, rSquared: null, n: n, warning: "Need at least 3 valid data points" };
+
+    var sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+    for (var j = 0; j < n; j++) {
+      sumX += xs[j];
+      sumY += ys[j];
+      sumXY += xs[j] * ys[j];
+      sumX2 += xs[j] * xs[j];
+    }
+
+    var denom = n * sumX2 - sumX * sumX;
+    if (denom === 0) return { intercept: sumY / n, slope: 0, rSquared: 0, n: n };
+
+    var slope = (n * sumXY - sumX * sumY) / denom;
+    var intercept = (sumY - slope * sumX) / n;
+
+    var predicted = xs.map(function (x) { return intercept + slope * x; });
+    var rSquared = computeRSquared(ys, predicted);
+
+    return {
+      intercept: intercept,
+      slope: slope,
+      rSquared: rSquared,
+      n: n,
+      warning: n < 10 ? "Small sample size (" + n + " points) — interpret with caution" : null
+    };
+  }
+  RM.calibrateRegression = calibrateRegression;
+
+  function computeRSquared(actual, predicted) {
+    var n = actual.length;
+    if (n < 2) return null;
+    var meanY = 0;
+    for (var i = 0; i < n; i++) meanY += actual[i];
+    meanY /= n;
+
+    var ssTot = 0, ssRes = 0;
+    for (var j = 0; j < n; j++) {
+      ssTot += (actual[j] - meanY) * (actual[j] - meanY);
+      ssRes += (actual[j] - predicted[j]) * (actual[j] - predicted[j]);
+    }
+
+    return ssTot > 0 ? 1 - (ssRes / ssTot) : 0;
+  }
+
+  // Import/export calibration coefficients
+  function exportCoefficients(calibResult) {
+    return JSON.stringify({
+      type: "ridership-calibration",
+      version: 1,
+      calibration: calibResult,
+      exportedAt: new Date().toISOString()
+    }, null, 2);
+  }
+  RM.exportCoefficients = exportCoefficients;
+
+  function importCoefficients(jsonStr) {
+    try {
+      var data = JSON.parse(jsonStr);
+      if (data.type !== "ridership-calibration" || !data.calibration) {
+        return { error: "Invalid calibration file format" };
+      }
+      return data.calibration;
+    } catch (e) {
+      return { error: "Could not parse calibration file: " + e.message };
+    }
+  }
+  RM.importCoefficients = importCoefficients;
+
+  // =========================================================================
+  // Route length utility
+  // =========================================================================
+
+  function getRouteLength() {
+    var routes = App.routes || [];
+    var totalLength = 0;
+    for (var i = 0; i < routes.length; i++) {
+      if (routes[i] && routes[i].geometry) {
+        totalLength += turf.length(routes[i], { units: "miles" });
+      }
+    }
+    return totalLength;
+  }
+  RM.getRouteLength = getRouteLength;
+
+})();
