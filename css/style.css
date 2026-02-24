@@ -840,3 +840,14 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Libe
   padding: 5px 0;
   font-size: 12px;
 }
+
+.tpi-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  margin: 8px 0;
+}
+.tpi-toggle-row input[type="checkbox"] { margin: 0; cursor: pointer; }
+.tpi-toggle-row span { user-select: none; }

@@ -490,10 +490,64 @@
   TPI.rescoreFromRaw = rescoreFromRaw;
 
   // =========================================================================
+  // Area apportionment: compute buffer-overlap fractions and clipped geometries
+  // =========================================================================
+
+  function computeAreaFractions(geos, unionFeat) {
+    var fractions = new Map();
+    var clippedGeos = [];
+
+    for (var i = 0; i < geos.length; i++) {
+      var f = geos[i];
+      var geoid = f.properties && f.properties.GEOID;
+      if (!geoid) continue;
+
+      var inter;
+      try { inter = turf.intersect(f, unionFeat); } catch (_) { inter = null; }
+
+      if (!inter) {
+        fractions.set(geoid, 0);
+        continue;
+      }
+
+      var aInter = turf.area(inter);
+      var aGeo = turf.area(f);
+      var frac = aGeo > 0 ? Math.min(1, Math.max(0, aInter / aGeo)) : 0;
+      fractions.set(geoid, frac);
+
+      clippedGeos.push({
+        type: "Feature",
+        properties: { GEOID: geoid },
+        geometry: inter.geometry
+      });
+    }
+
+    return { fractions: fractions, clippedGeos: clippedGeos };
+  }
+
+  function apportionRawValues(rawValues, fractions) {
+    var apportioned = new Map();
+    for (var entry of rawValues.entries()) {
+      var factorId = entry[0];
+      var rawMap = entry[1];
+      var aMap = new Map();
+      for (var gEntry of rawMap.entries()) {
+        var geoid = gEntry[0];
+        var val = gEntry[1];
+        var frac = fractions.get(geoid);
+        if (frac == null) frac = 1;
+        aMap.set(geoid, Number.isFinite(val) ? val * frac : val);
+      }
+      apportioned.set(factorId, aMap);
+    }
+    return apportioned;
+  }
+
+  // =========================================================================
   // Main orchestrator: run full TPI computation
   // =========================================================================
-  // options: { geoLevel, year, weights, lodesData, onProgress }
-  // Returns { geos, geoids, scores, factorScores, rawValues }
+  // options: { geoLevel, year, weights, lodesData, onProgress, apportionByArea }
+  // Returns { geos, geoids, scores, factorScores, rawValues, ... }
 
   async function computeTPI(options) {
     var geoLevel = options.geoLevel || "bg";
@@ -501,6 +555,7 @@
     var weights = options.weights || {};
     var lodesData = options.lodesData || null;
     var onProgress = options.onProgress || function () {};
+    var apportionByArea = !!options.apportionByArea;
 
     // Build effective weights: use defaults where not overridden
     var effectiveWeights = {};
@@ -629,9 +684,23 @@
       rawValues.set(factor.id, raw);
     }
 
-    // 5b. Dynamic tract fallback: if any ACS factor produced zero finite values at BG level,
+    // 5b. Area apportionment: compute fractions and apportioned raw values
+    var areaFractions = null;       // Map(geoid -> frac), only when apportionByArea
+    var apportionedRawValues = null; // Map(factorId -> Map(geoid -> rawValue*frac))
+    var clippedGeos = null;         // Array of clipped GeoJSON features
+
+    if (apportionByArea) {
+      onProgress("Computing area fractions...");
+      var areaResult = computeAreaFractions(geos, unionFeat);
+      areaFractions = areaResult.fractions;
+      clippedGeos = areaResult.clippedGeos;
+      apportionedRawValues = apportionRawValues(rawValues, areaFractions);
+    }
+
+    // 5c. Dynamic tract fallback: if any ACS factor produced zero finite values at BG level,
     //     retry those vars at tract level and map values down to BG GEOIDs.
-    if (geoLevel === "bg") {
+    //     Skipped when area apportionment is on (fractions make the spatial weighting accurate).
+    if (geoLevel === "bg" && !apportionByArea) {
       var dynamicFallbackVars = [];
       var dynamicFallbackFactorIds = [];
 
@@ -698,13 +767,15 @@
     }
 
     // 6. Quintile normalize each factor
+    //    When area apportionment is on, normalize from apportioned values.
     onProgress("Normalizing scores...");
+    var scoringValues = apportionByArea ? apportionedRawValues : rawValues;
     var factorScores = new Map(); // Map(factorId -> Map(geoid -> 1-5))
 
     for (var ni = 0; ni < FACTORS.length; ni++) {
       var nf = FACTORS[ni];
       if (effectiveWeights[nf.id] === 0) continue;
-      var rawMap = rawValues.get(nf.id);
+      var rawMap = scoringValues.get(nf.id);
       if (!rawMap || rawMap.size === 0) continue;
 
       // Build values array for quintile computation
@@ -722,15 +793,24 @@
     onProgress("Computing composite scores...");
     var scores = computeComposite(factorScores, effectiveWeights, geoids);
 
-    return {
+    var result = {
       geos: geos,
       geoids: geoids,
       scores: scores,
       factorScores: factorScores,
       rawValues: rawValues,
       effectiveWeights: effectiveWeights,
-      tractFallbackFactors: tractFallbackFactors
+      tractFallbackFactors: tractFallbackFactors,
+      apportionByArea: apportionByArea
     };
+
+    if (apportionByArea) {
+      result.apportionedRawValues = apportionedRawValues;
+      result.areaFractions = areaFractions;
+      result.clippedGeos = clippedGeos;
+    }
+
+    return result;
   }
   TPI.computeTPI = computeTPI;
 

@@ -17,6 +17,7 @@
   var _running = false;
   var _rescoreTimer = null;
   var _initialized = false; // true after first init() call
+  var _apportionByArea = false; // true when "Apportion by Area" toggle is checked
 
   function getTpiClass(score) {
     if (!Number.isFinite(score)) return "N/A";
@@ -172,6 +173,7 @@
         year: year,
         weights: _weights,
         lodesData: App.lodesData,
+        apportionByArea: _apportionByArea,
         onProgress: function (msg) {
           if (textEl) textEl.textContent = msg;
           App.setStatus(msg);
@@ -181,8 +183,8 @@
       _lastResult = result;
       _stale = false;
 
-      // Render census overlay with scored geographies
-      App.renderCensusOverlay(result.geos);
+      // Render census overlay (clipped when area apportionment is on)
+      App.renderCensusOverlay(result.apportionByArea && result.clippedGeos ? result.clippedGeos : result.geos);
 
       // Render choropleth + floating legend
       renderChoropleth(result);
@@ -212,7 +214,10 @@
 
   function runInstantRescore() {
     if (!_lastResult) return;
-    var rescored = TPI.rescoreFromRaw(_lastResult.rawValues, _weights, _lastResult.geoids);
+    var rawToUse = (_apportionByArea && _lastResult.apportionedRawValues)
+      ? _lastResult.apportionedRawValues
+      : _lastResult.rawValues;
+    var rescored = TPI.rescoreFromRaw(rawToUse, _weights, _lastResult.geoids);
     _lastResult.scores           = rescored.scores;
     _lastResult.factorScores     = rescored.factorScores;
     _lastResult.effectiveWeights = rescored.effectiveWeights;
@@ -251,6 +256,7 @@
       var html = "";
       var factors = TPI.FACTORS;
       var fallbackSet = result.tractFallbackFactors || [];
+      var suppressDagger = !!result.apportionByArea; // area apportionment makes tract-to-BG mapping accurate
       var anyFallback = false;
       for (var i = 0; i < factors.length; i++) {
         var f = factors[i];
@@ -272,8 +278,8 @@
           : "No Data";
 
         var isFallback = fallbackSet.indexOf(f.id) !== -1;
-        if (isFallback) anyFallback = true;
-        var labelHtml = f.label + (isFallback ? ' <sup class="tpi-tract-marker" title="Tract-level data applied to block groups">\u2020</sup>' : "");
+        if (isFallback && !suppressDagger) anyFallback = true;
+        var labelHtml = f.label + (isFallback && !suppressDagger ? ' <sup class="tpi-tract-marker" title="Tract-level data applied to block groups">\u2020</sup>' : "");
 
         html +=
           '<div class="tpi-factor-row">' +
@@ -284,6 +290,9 @@
       }
       if (anyFallback) {
         html += '<div class="tpi-footnote">\u2020 Only available at Census Tract level. Tract values applied to all block groups within each tract.</div>';
+      }
+      if (result.apportionByArea) {
+        html += '<div class="tpi-footnote">Area apportionment active: values scaled by buffer overlap fraction.</div>';
       }
       summaryEl.innerHTML = html;
     }
@@ -333,6 +342,19 @@
     var map = App.map;
     if (!map || !result) return;
 
+    // When area apportionment is on, use clipped geometries for the choropleth
+    var useClipped = result.apportionByArea && result.clippedGeos;
+    var clippedLookup = null;
+    if (useClipped) {
+      clippedLookup = {};
+      for (var ci = 0; ci < result.clippedGeos.length; ci++) {
+        var cg = result.clippedGeos[ci];
+        if (cg.properties && cg.properties.GEOID) {
+          clippedLookup[cg.properties.GEOID] = cg.geometry;
+        }
+      }
+    }
+
     // Build GeoJSON with composite score as property
     var features = [];
     for (var i = 0; i < result.geos.length; i++) {
@@ -341,6 +363,8 @@
       var scoreData = geoid ? result.scores.get(geoid) : null;
       var composite = (scoreData && Number.isFinite(scoreData.composite)) ? scoreData.composite : null;
 
+      var geom = (clippedLookup && geoid && clippedLookup[geoid]) ? clippedLookup[geoid] : geo.geometry;
+
       features.push({
         type: "Feature",
         properties: {
@@ -348,7 +372,7 @@
           tpiScore: composite,
           factors: scoreData ? scoreData.factors : {}
         },
-        geometry: geo.geometry
+        geometry: geom
       });
     }
 
@@ -479,6 +503,18 @@
   function exportGeoJSON() {
     if (!_lastResult) return;
     var factors = TPI.FACTORS;
+    var isApportioned = _lastResult.apportionByArea && _lastResult.apportionedRawValues;
+
+    // Build clipped geometry lookup when apportioned
+    var clippedLookup = null;
+    if (isApportioned && _lastResult.clippedGeos) {
+      clippedLookup = {};
+      for (var ci = 0; ci < _lastResult.clippedGeos.length; ci++) {
+        var cg = _lastResult.clippedGeos[ci];
+        if (cg.properties && cg.properties.GEOID) clippedLookup[cg.properties.GEOID] = cg.geometry;
+      }
+    }
+
     var features = _lastResult.geos.map(function (geo) {
       var geoid = geo.properties && geo.properties.GEOID;
       var sd = geoid ? _lastResult.scores.get(geoid) : null;
@@ -488,15 +524,25 @@
         tpiScore: composite != null ? parseFloat(composite.toFixed(4)) : null,
         tpiClass: composite != null ? getTpiClass(composite) : "N/A"
       };
+      if (isApportioned && _lastResult.areaFractions) {
+        var frac = _lastResult.areaFractions.get(geoid);
+        props.areaFraction = frac != null ? parseFloat(frac.toFixed(6)) : null;
+      }
       factors.forEach(function (f) {
         var rawMap = _lastResult.rawValues.get(f.id) || new Map();
         var raw = rawMap.get(geoid);
         props[f.id + "_raw"] = (raw != null && Number.isFinite(raw)) ? parseFloat(raw.toFixed(6)) : null;
+        if (isApportioned) {
+          var aMap = _lastResult.apportionedRawValues.get(f.id) || new Map();
+          var aVal = aMap.get(geoid);
+          props[f.id + "_raw_apportioned"] = (aVal != null && Number.isFinite(aVal)) ? parseFloat(aVal.toFixed(6)) : null;
+        }
         var scoreMap = _lastResult.factorScores.get(f.id) || new Map();
         var sc = scoreMap.get(geoid);
         props[f.id + "_score"] = sc != null ? sc : null;
       });
-      return { type: "Feature", properties: props, geometry: geo.geometry };
+      var geom = (clippedLookup && geoid && clippedLookup[geoid]) ? clippedLookup[geoid] : geo.geometry;
+      return { type: "Feature", properties: props, geometry: geom };
     });
     _triggerDownload(
       JSON.stringify({ type: "FeatureCollection", features: features }, null, 2),
@@ -508,8 +554,15 @@
   function exportCSV() {
     if (!_lastResult) return;
     var factors = TPI.FACTORS;
+    var isApportioned = _lastResult.apportionByArea && _lastResult.apportionedRawValues;
+
     var header = ["GEOID", "tpiScore", "tpiClass"];
-    factors.forEach(function (f) { header.push(f.id + "_raw", f.id + "_score"); });
+    if (isApportioned) header.push("areaFraction");
+    factors.forEach(function (f) {
+      header.push(f.id + "_raw");
+      if (isApportioned) header.push(f.id + "_raw_apportioned");
+      header.push(f.id + "_score");
+    });
     var rows = [header.join(",")];
 
     _lastResult.geoids.forEach(function (geoid) {
@@ -520,10 +573,19 @@
         composite != null ? composite.toFixed(4) : "",
         composite != null ? getTpiClass(composite) : ""
       ];
+      if (isApportioned && _lastResult.areaFractions) {
+        var frac = _lastResult.areaFractions.get(geoid);
+        row.push(frac != null ? frac.toFixed(6) : "");
+      }
       factors.forEach(function (f) {
         var rawMap = _lastResult.rawValues.get(f.id) || new Map();
         var raw = rawMap.get(geoid);
         row.push((raw != null && Number.isFinite(raw)) ? raw.toFixed(6) : "");
+        if (isApportioned) {
+          var aMap = _lastResult.apportionedRawValues.get(f.id) || new Map();
+          var aVal = aMap.get(geoid);
+          row.push((aVal != null && Number.isFinite(aVal)) ? aVal.toFixed(6) : "");
+        }
         var scoreMap = _lastResult.factorScores.get(f.id) || new Map();
         var sc = scoreMap.get(geoid);
         row.push(sc != null ? String(sc) : "");
@@ -566,6 +628,16 @@
     var exportCSVBtn = document.getElementById("tpiExportCSV");
     if (exportCSVBtn) exportCSVBtn.addEventListener("click", exportCSV);
 
+    // Wire "Apportion by Area" toggle
+    var apportionCb = document.getElementById("tpiApportionByArea");
+    if (apportionCb) {
+      apportionCb.checked = _apportionByArea;
+      apportionCb.addEventListener("change", function () {
+        _apportionByArea = apportionCb.checked;
+        markStale();
+      });
+    }
+
     // Build weight sliders
     buildWeightSliders();
   }
@@ -573,6 +645,10 @@
   // ---- Popup lifecycle hooks ----
 
   function onOpen(core) {
+    // Sync toggle checkbox state
+    var apportionCb = document.getElementById("tpiApportionByArea");
+    if (apportionCb) apportionCb.checked = _apportionByArea;
+
     // Refresh display from current state each time popup opens
     if (_lastResult) {
       displayResults(_lastResult);
