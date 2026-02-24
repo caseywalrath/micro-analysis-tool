@@ -14,10 +14,10 @@
   // ---- Buffer-Area Data panel ----
 
   var STATION_DATA_PANEL_HTML =
-    '<label>Geography level (ACS only)' +
+    '<label>Geography level' +
       '<select id="geoLevel">' +
-        '<option value="tract">Census Tracts (faster)</option>' +
-        '<option value="bg" selected>Block Groups (more detailed)</option>' +
+        '<option value="tract">Census Tracts</option>' +
+        '<option value="bg" selected>Block Groups</option>' +
       '</select>' +
     '</label>' +
 
@@ -59,10 +59,10 @@
 
     '<label>Year' +
       '<select id="yearSelect">' +
-        '<option value="2024">2024</option>' +
-        '<option value="2023">2023</option>' +
-        '<option value="2022">2022</option>' +
-        '<option value="2021">2021</option>' +
+        '<option value="2024">2024 ACS</option>' +
+        '<option value="2023">2023 ACS</option>' +
+        '<option value="2022">2022 ACS</option>' +
+        '<option value="2021">2021 ACS</option>' +
       '</select>' +
     '</label>' +
 
