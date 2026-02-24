@@ -551,7 +551,7 @@
 
   async function computeTPI(options) {
     var geoLevel = options.geoLevel || "bg";
-    var year = options.year || "2023";
+    var year = options.year || "2024";
     var weights = options.weights || {};
     var lodesData = options.lodesData || null;
     var onProgress = options.onProgress || function () {};
