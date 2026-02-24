@@ -61,13 +61,23 @@
           <div id="rfDemandResults" style="display:none;">
             <div class="rf-cdi-card">
               <div class="rf-cdi-score">
-                <span class="rf-cdi-label">CDI Score</span>
+                <span class="rf-cdi-label">
+                  CDI Score
+                  <button id="rfCDIInfoBtn" class="rf-info-btn" type="button" aria-label="What is the CDI Score?">&#9432;</button>
+                </span>
                 <span id="rfCDIValue" class="rf-cdi-value">&mdash;</span>
                 <span class="rf-cdi-scale">/ 5</span>
               </div>
               <div class="rf-cdi-class">
                 <span id="rfCDIClass" class="rf-cdi-badge">&mdash;</span>
               </div>
+            </div>
+
+            <div id="rfCDITooltip" class="rf-cdi-tooltip" style="display:none;">
+              <strong>Corridor Demand Index (CDI)</strong>
+              <p>A composite score (1&ndash;5) summarizing transit demand potential across all census geographies within the corridor buffer.</p>
+              <p><strong>How it&rsquo;s calculated:</strong> The CDI is a population-weighted average of the Transit Propensity Index (TPI) scores for each block group or tract in the study area. TPI scores combine nine factors&mdash;population density, employment density, zero-vehicle households, poverty, seniors, disability, people of color, youth, and limited English proficiency&mdash;each ranked by quintile within the corridor (1&nbsp;=&nbsp;lowest, 5&nbsp;=&nbsp;highest).</p>
+              <p><strong>What it means:</strong> A CDI of 4&ndash;5 indicates strong latent demand for transit. Scores are relative to your study corridor only, not a national benchmark.</p>
             </div>
 
             <div class="rf-stats-grid">

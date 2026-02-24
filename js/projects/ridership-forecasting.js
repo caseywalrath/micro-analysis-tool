@@ -871,6 +871,15 @@
       });
     }
 
+    // CDI info button toggle
+    var cdiInfoBtn = document.getElementById("rfCDIInfoBtn");
+    var cdiTooltip = document.getElementById("rfCDITooltip");
+    if (cdiInfoBtn && cdiTooltip) {
+      cdiInfoBtn.addEventListener("click", function () {
+        cdiTooltip.style.display = cdiTooltip.style.display === "none" ? "" : "none";
+      });
+    }
+
     // Next step links
     var goElast = document.getElementById("rfGoToElasticity");
     if (goElast) goElast.addEventListener("click", function (e) { e.preventDefault(); switchTab("elasticity"); });

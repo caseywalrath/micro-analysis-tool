@@ -1041,6 +1041,42 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Libe
 .rf-cdi-lowmedium { background: #fed7aa; color: #7b341e; }
 .rf-cdi-low { background: #fed7d7; color: #742a2a; }
 
+/* CDI info button */
+.rf-info-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  margin-left: 4px;
+  font-size: 13px;
+  line-height: 1;
+  color: #4a90d9;
+  background: none;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  vertical-align: middle;
+  opacity: 0.8;
+  transition: opacity 0.15s;
+}
+.rf-info-btn:hover { opacity: 1; color: #2b6cb0; }
+
+/* CDI tooltip box */
+.rf-cdi-tooltip {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: #ebf4ff;
+  border: 1px solid #bee3f8;
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #1a365d;
+}
+.rf-cdi-tooltip p { margin: 6px 0 0; }
+.rf-cdi-tooltip p:first-of-type { margin-top: 4px; }
+
 /* Stats grid */
 .rf-stats-grid {
   display: grid;
