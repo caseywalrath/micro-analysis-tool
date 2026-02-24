@@ -279,7 +279,7 @@
       // Fetch each chunk sequentially; merge into the same Map per GEOID
       for (var chi = 0; chi < chunks.length; chi++) {
         var chunk = chunks[chi];
-        var url = base + "?get=NAME," + encodeURIComponent(chunk.join(",")) + "&for=" + forClause + "&in=" + inClause;
+        var url = base + "?get=NAME," + encodeURIComponent(chunk.join(",")) + "&for=" + forClause + "&in=" + inClause + (App.CENSUS_API_KEY ? "&key=" + App.CENSUS_API_KEY : "");
         var resp = await fetch(url);
         if (!resp.ok) throw new Error("ACS batch error " + resp.status + " for state " + entry.state + " county " + entry.county + " (chunk " + (chi + 1) + ")");
         var rows = await resp.json();

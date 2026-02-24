@@ -127,7 +127,7 @@
         inClause = "state:" + entry.state + "%20county:" + entry.county + "%20tract:*";
       }
 
-      var url = base + "?get=NAME," + encodeURIComponent(varCode) + "&for=" + forClause + "&in=" + inClause;
+      var url = base + "?get=NAME," + encodeURIComponent(varCode) + "&for=" + forClause + "&in=" + inClause + (App.CENSUS_API_KEY ? "&key=" + App.CENSUS_API_KEY : "");
       var resp = await fetch(url);
       if (!resp.ok) throw new Error("ACS API error " + resp.status + " for state " + entry.state + " county " + entry.county);
       var rows = await resp.json();
@@ -176,7 +176,7 @@
     for (var entry of byState.entries()) {
       var stateFips = entry[0];
       var counties = entry[1];
-      var url = base + "?get=NAME," + encodeURIComponent(varCode) + "&for=county:*&in=state:" + stateFips;
+      var url = base + "?get=NAME," + encodeURIComponent(varCode) + "&for=county:*&in=state:" + stateFips + (App.CENSUS_API_KEY ? "&key=" + App.CENSUS_API_KEY : "");
       var resp = await fetch(url);
       if (!resp.ok) throw new Error("ACS county fetch failed " + resp.status + " for state " + stateFips);
       var rows = await resp.json();

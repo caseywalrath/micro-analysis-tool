@@ -7,6 +7,9 @@
 (function () {
   var App = window.App = window.App || {};
 
+  // --- Census API key (removes ~500 req/day rate limit) ---
+  App.CENSUS_API_KEY = "84dd46873ff2d6d2d41d42c6e9cebfa41214fd14";
+
   // --- Status ---
 
   function setStatus(s) { var el = document.getElementById("status"); if (el) el.textContent = s; }

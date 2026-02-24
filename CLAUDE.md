@@ -308,5 +308,4 @@ Clicking an analysis module button opens a popup window over the map. The TPI po
 
 See `REVIEW.md` for the full code review. Remaining items not yet addressed:
 
-- No Census API key (moderate: rate-limited without one)
 - No subresource integrity (SRI) hashes on CDN script tags
