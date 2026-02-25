@@ -62,15 +62,15 @@ js/
     fta-small-starts.js     FTA Small Starts: breakpoint classification, CRE/ESS/LBAR (registered as disabled module)
     tpi-scoring.js          TPI scoring engine: 9-factor definitions, batch ACS fetch, LODES aggregation, quintile normalization, composite scoring
     transit-propensity.js   TPI module: popup-based UI with weight sliders, choropleth rendering, hover tooltips, floating legend, GeoJSON/CSV export, stale detection
-    ridership-scoring.js    Ridership scoring engine: corridor CDI computation, segment analysis, service type presets, elasticity formulas, scenario builder, ratio/OLS calibration (window.RidershipModel namespace)
-    ridership-forecasting.js  Ridership Forecasting module: 4-tab popup (Demand | Calibrate | Elasticity | Scenarios), choropleth + segment map, CSV calibration upload, scenario comparison table, GeoJSON/CSV/JSON export
+    ridership-scoring.js    Ridership scoring engine: corridor CDI computation, per-route CDI extraction, system-wide demand orchestration, CSV route matching, segment analysis, service type presets, elasticity formulas, scenario builder, ratio/OLS calibration (window.RidershipModel namespace)
+    ridership-forecasting.js  Ridership Forecasting module: 4-tab popup (Calibrate | Demand | Elasticity | Scenarios), 3-step calibration workflow, corridor dropdown, choropleth + segment map, scenario comparison table, GeoJSON/CSV/JSON export
 projects/
   fta-small-starts.html     FTA sidebar HTML fragment (legacy, kept for future popup migration)
   transit-propensity-popup.html  TPI popup body: 3-column layout (Weights | Results | Actions)
   transit-propensity.html   TPI sidebar panel (legacy, replaced by popup version)
   tpi-weights.html          TPI weight sliders (legacy, merged into popup)
   tpi-legend.html           TPI legend: 5-class Blues color swatches (reused by floating widget)
-  ridership-forecasting-popup.html  RF popup body: 4-tab layout with CDI info button (ⓘ toggle), segment breakdown, calibration column mapping, elasticity sliders, scenario sub-tabs, comparison table
+  ridership-forecasting-popup.html  RF popup body: 4-tab layout (Calibrate first), 3-step calibration workflow UI (system analysis → CSV upload → match/calibrate), corridor dropdown in Demand tab, CDI info button (ⓘ toggle), segment breakdown, elasticity sliders, scenario sub-tabs, comparison table
   ridership-legend.html     RF demand legend: 5-class Blues swatches for CDI score (High → Low)
 docs/
   ridership-forecasting-plan.md  Strategic evaluation and implementation plan for the ridership forecasting tool
@@ -205,18 +205,26 @@ Segment objects: `{ cdi, classification, geoCount, bufferGeometry }`. Segments a
 
 `RidershipModel.calibrateRegression(rows, demandColKey, ridershipColKey)` — OLS regression: `ridership = intercept + slope × CDI`. Returns `{ factor (=slope), intercept, n, rSquared, method: "regression" }`. Requires n ≥ 3.
 
+`RidershipModel.computePerRouteCDI(tpiResult)` — Takes a system-wide TPI result and extracts a CDI score for each individual drawn route and line. Uses population-weighted intersection (same pattern as segment analysis) against each feature's own buffer polygon. Returns array of `{ name, featureType ("route"|"line"), featureIndex, cdi, classification, geoCount }`. Enables meaningful CDI variation across corridors (urban routes score high, suburban routes score low), which is required for valid calibration.
+
+`RidershipModel.computeSystemDemand(options)` — Orchestrator that runs `TPI.computeTPI()` once across all drawn features with shared quintile normalization, then computes both the system-wide CDI and per-route CDI array. Options: `{ geoLevel, year, weights, lodesData, apportionByArea, onProgress }`. Returns `{ tpiResult, systemCDI, routeCDIs, geoLevel, year }`.
+
+`RidershipModel.matchRoutesToCSV(routeCDIs, csvRows, nameCol)` — Case-insensitive exact name matching between drawn features (from `computePerRouteCDI`) and CSV rows. Returns `{ matched: [{ csvRow, routeCDI, csvRowIndex }], unmatched: [...], duplicateWarnings: [] }`. Used in the Calibrate tab "Match Routes" step.
+
 ### ridership-forecasting.js (analysis module, no public API)
 Registers module `"ridership-forecasting"` as a popup-based analysis. Opens in a 4-tab popup (960px wide). All state is private to the IIFE closure. DOM writes are guarded with `isPopupVisible()`.
 
-**Tab 1 – Demand**: Calls `RidershipModel.computeCorridorDemand()`, renders CDI choropleth on map using the same Blues color ramp as TPI, renders segment overlay as a separate fill+line layer, shows floating legend widget (`projects/ridership-legend.html`). CDI info button (ⓘ) toggles an inline explanation box. GeoJSON and CSV export enabled after analysis.
+**Tab 1 – Calibrate** (now first): 3-step gated workflow. Step 1: "Analyze System" — geography/year settings + button; calls `RidershipModel.computeSystemDemand()` and shows a per-route CDI score table. Step 2: "Upload CSV" — file picker, auto-column detection via `App.guessHeader()`, "Match Routes" button; calls `RidershipModel.matchRoutesToCSV()` and shows green/red match results. Step 3: "Run Calibration" — uses matched (CDI, ridership) pairs (one per route) for ratio-based or OLS regression calibration. Each step is unlocked by completing the previous one. Calibration factor persists across tabs.
 
-**Tab 2 – Calibrate**: CSV file upload with auto-column detection via `App.guessHeader()`. Supports ratio-based (default) and OLS regression methods via `RidershipModel.calibrateRatio/calibrateRegression()`. JSON export/import of calibration coefficients. Calibration factor persists across tabs and scales elasticity/scenario outputs.
+**Tab 2 – Demand**: Corridor dropdown ("Analyze corridor") populated from per-route CDI data lets the user select a specific route/line or the system-wide CDI. If calibration has been run, the displayed CDI reflects that corridor's score relative to the shared quintile normalization. If calibration has not been run, an uncalibrated warning banner is shown but analysis still works. Renders CDI choropleth on map (Blues color ramp), segment overlay, and floating legend widget (`projects/ridership-legend.html`). CDI info button (ⓘ) toggles inline explanation. GeoJSON and CSV export enabled after analysis.
 
-**Tab 3 – Elasticity**: Service type dropdown, baseline/proposed headway inputs, frequency elasticity slider (0.1–1.0, default 0.5). Calls `RidershipModel.applyElasticity()` and displays Conservative / Moderate / Optimistic ridership ranges. Recalculates instantly on any input change (no API calls).
+**Tab 3 – Elasticity**: Service type dropdown, baseline/proposed headway inputs, frequency elasticity slider (0.1–1.0, default 0.5). Uses `getActiveCDI()` (see below) so the CDI automatically reflects the selected corridor. Calls `RidershipModel.applyElasticity()` and displays Conservative / Moderate / Optimistic ridership ranges. Recalculates instantly on any input change (no API calls).
 
-**Tab 4 – Scenarios**: 4 sub-tabs (A–D) sharing one input form (state saved/restored on tab switch). "Build Scenarios" calls `RidershipModel.buildScenario()` for each and renders a comparison table with mid rows highlighted. CSV and JSON export enabled after build.
+**Tab 4 – Scenarios**: 4 sub-tabs (A–D) sharing one input form (state saved/restored on tab switch). Uses `getActiveCDI()` for the active corridor CDI. "Build Scenarios" calls `RidershipModel.buildScenario()` for each and renders a comparison table with mid rows highlighted. CSV and JSON export enabled after build.
 
-**Module-local state**: `_lastResult` (demand result), `_calibration` (calibration coefficients), `_calibData` (uploaded CSV rows), `_scenarios` (array of 4 scenario param sets), `_activeScenario`, `_stale`, `_running`, `_initialized`, `_apportionByArea`, `_activeTab`.
+**`getActiveCDI()`** (internal helper): Returns the CDI value for the currently selected corridor. Checks `_selectedCorridor` against `_perRouteCDI`; falls back to `_systemResult.systemCDI.value`, then `_lastResult.corridorCDI.value`. Replaces all hardcoded `_lastResult.corridorCDI.value` references in Elasticity and Scenarios tabs, so they automatically update when the corridor selection changes.
+
+**Module-local state**: `_lastResult` (legacy demand result from Demand tab), `_systemResult` (result from `computeSystemDemand()`), `_perRouteCDI` (per-route CDI array), `_matchResult` (CSV match result), `_selectedCorridor` ("all" or "route:N"/"line:N"), `_calibration` (calibration coefficients), `_calibData` (uploaded CSV rows), `_scenarios` (array of 4 scenario param sets), `_activeScenario`, `_stale`, `_running`, `_initialized`, `_apportionByArea`, `_activeTab`.
 
 ## Analysis Module System
 
@@ -331,7 +339,7 @@ The sidebar is an empty `<div id="sidebar">` populated at runtime by `App.sideba
 +-----------------------------+
 ```
 
-Clicking an analysis module button opens a popup window over the map. The TPI popup has a 3-column layout (Weights | Results | Actions). The Ridership Forecasting popup has a 4-tab layout (Demand | Calibrate | Elasticity | Scenarios). Each active choropleth shows a floating legend widget at bottom-left of the map.
+Clicking an analysis module button opens a popup window over the map. The TPI popup has a 3-column layout (Weights | Results | Actions). The Ridership Forecasting popup has a 4-tab layout (Calibrate | Demand | Elasticity | Scenarios). Each active choropleth shows a floating legend widget at bottom-left of the map.
 
 ### Feature Panel (right)
 
