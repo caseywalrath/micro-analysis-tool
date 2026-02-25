@@ -23,7 +23,13 @@
   var _calibData = null;        // parsed CSV rows
   var _scenarios = [{}, {}, {}, {}]; // 4 scenario parameter sets
   var _activeScenario = 0;
-  var _activeTab = "demand";
+  var _activeTab = "calibrate";
+
+  // System-wide calibration state
+  var _systemResult = null;      // result from RM.computeSystemDemand()
+  var _perRouteCDI = null;       // array from RM.computePerRouteCDI()
+  var _matchResult = null;       // result from RM.matchRoutesToCSV()
+  var _selectedCorridor = "all"; // "all" or "route:N" / "line:N"
 
   // Default scenario names
   var SCENARIO_NAMES = ["Scenario A", "Scenario B", "Scenario C", "Scenario D"];
@@ -88,23 +94,97 @@
     if (runBtn) runBtn.disabled = true;
     if (statusEl) { statusEl.style.display = ""; statusEl.className = "rf-status"; }
 
+    // Show/hide uncalibrated warning
+    var uncalibWarn = document.getElementById("rfUncalibratedWarning");
+    if (uncalibWarn) uncalibWarn.style.display = _systemResult ? "none" : "";
+
     try {
       var geoLevel = document.getElementById("rfGeoLevel").value;
       var year = document.getElementById("rfYearSelect").value;
       var segLen = parseFloat(document.getElementById("rfSegmentLength").value) || 0;
 
-      var result = await RM.computeCorridorDemand({
-        geoLevel: geoLevel,
-        year: year,
-        weights: _weights,
-        lodesData: App.lodesData,
-        apportionByArea: _apportionByArea,
-        segmentMiles: segLen,
-        onProgress: function (msg) {
-          if (textEl) textEl.textContent = msg;
-          App.setStatus(msg);
+      var result;
+
+      if (_systemResult && _systemResult.tpiResult) {
+        // Calibrated mode: reuse system TPI, compute corridor CDI and segments
+        if (textEl) textEl.textContent = "Using system analysis data...";
+        App.setStatus("Computing corridor demand from system data...");
+
+        var tpiResult = _systemResult.tpiResult;
+
+        // Determine CDI to display
+        var displayCDI;
+        if (_selectedCorridor !== "all" && _perRouteCDI) {
+          // Use the per-route CDI for the selected corridor
+          var parts = _selectedCorridor.split(":");
+          var selType = parts[0];
+          var selIdx = parseInt(parts[1], 10);
+          for (var pi = 0; pi < _perRouteCDI.length; pi++) {
+            if (_perRouteCDI[pi].featureType === selType && _perRouteCDI[pi].featureIndex === selIdx) {
+              displayCDI = { value: _perRouteCDI[pi].cdi, scored: _perRouteCDI[pi].geoCount, total: tpiResult.geoids.length };
+              break;
+            }
+          }
         }
-      });
+        if (!displayCDI) {
+          displayCDI = _systemResult.systemCDI;
+        }
+
+        // Compute segments using the system-wide TPI (no new API calls)
+        var segments = [];
+        if (segLen > 0 && RM.computeCorridorDemand) {
+          // Use internal segment computation by building a result-like object
+          // We call computeCorridorDemand just for segments, but we already have TPI
+          if (textEl) textEl.textContent = "Computing segments...";
+          // Temporarily construct a result from the existing TPI
+          result = {
+            tpiResult: tpiResult,
+            corridorCDI: displayCDI,
+            segments: [],
+            classification: RM.classifyCDI(displayCDI),
+            geoLevel: geoLevel,
+            year: year
+          };
+          // Run fresh demand to get segments (reuses TPI cache if geoLevel/year match)
+          var freshResult = await RM.computeCorridorDemand({
+            geoLevel: geoLevel,
+            year: year,
+            weights: _weights,
+            lodesData: App.lodesData,
+            apportionByArea: _apportionByArea,
+            segmentMiles: segLen,
+            onProgress: function (msg) {
+              if (textEl) textEl.textContent = msg;
+              App.setStatus(msg);
+            }
+          });
+          result.segments = freshResult.segments;
+          result.tpiResult = freshResult.tpiResult;
+        } else {
+          result = {
+            tpiResult: tpiResult,
+            corridorCDI: displayCDI,
+            segments: [],
+            classification: RM.classifyCDI(displayCDI),
+            geoLevel: geoLevel,
+            year: year
+          };
+        }
+      } else {
+        // Uncalibrated mode: run fresh TPI (current behavior)
+        result = await RM.computeCorridorDemand({
+          geoLevel: geoLevel,
+          year: year,
+          weights: _weights,
+          lodesData: App.lodesData,
+          apportionByArea: _apportionByArea,
+          segmentMiles: segLen,
+          onProgress: function (msg) {
+            if (textEl) textEl.textContent = msg;
+            App.setStatus(msg);
+          }
+        });
+      }
 
       _lastResult = result;
       _stale = false;
@@ -382,17 +462,168 @@
     _stale = false;
     _calibration = null;
     _calibData = null;
+    _systemResult = null;
+    _perRouteCDI = null;
+    _matchResult = null;
+    _selectedCorridor = "all";
     App.popup.hideFloatingWidget("rf-legend");
     if (isPopupVisible()) {
       var el = document.getElementById("rfDemandResults");
       if (el) el.style.display = "none";
       var statusEl = document.getElementById("rfDemandStatus");
       if (statusEl) statusEl.style.display = "none";
+      var sysEl = document.getElementById("rfSystemResults");
+      if (sysEl) sysEl.style.display = "none";
+      var sysStatusEl = document.getElementById("rfSystemStatus");
+      if (sysStatusEl) sysStatusEl.style.display = "none";
+      // Reset calibrate step gates
+      var step2 = document.getElementById("rfCalibStep2");
+      if (step2) { step2.style.opacity = "0.5"; step2.style.pointerEvents = "none"; }
+      var step3 = document.getElementById("rfCalibStep3");
+      if (step3) { step3.style.opacity = "0.5"; step3.style.pointerEvents = "none"; }
     }
     App.setStatus("Ridership analysis cleared");
   }
 
-  // ---- Layer 2: Calibration ----
+  // ---- Calibration helpers ----
+
+  // Get the CDI value for the currently selected corridor
+  function getActiveCDI() {
+    // If a specific corridor is selected and we have per-route data, use its CDI
+    if (_selectedCorridor !== "all" && _perRouteCDI) {
+      var parts = _selectedCorridor.split(":");
+      var type = parts[0];
+      var idx = parseInt(parts[1], 10);
+      for (var i = 0; i < _perRouteCDI.length; i++) {
+        if (_perRouteCDI[i].featureType === type && _perRouteCDI[i].featureIndex === idx) {
+          return _perRouteCDI[i].cdi;
+        }
+      }
+    }
+    // Fall back to system CDI from calibration, then to corridor CDI from demand
+    if (_systemResult && _systemResult.systemCDI) return _systemResult.systemCDI.value;
+    if (_lastResult && _lastResult.corridorCDI) return _lastResult.corridorCDI.value;
+    return NaN;
+  }
+
+  function populateCorridorDropdown() {
+    var sel = document.getElementById("rfCorridorSelect");
+    if (!sel) return;
+    sel.innerHTML = '<option value="all">All corridors (system-wide)</option>';
+    if (!_perRouteCDI) return;
+    for (var i = 0; i < _perRouteCDI.length; i++) {
+      var pr = _perRouteCDI[i];
+      var opt = document.createElement("option");
+      opt.value = pr.featureType + ":" + pr.featureIndex;
+      opt.textContent = pr.name + " (CDI: " + (Number.isFinite(pr.cdi) ? pr.cdi.toFixed(2) : "N/A") + ")";
+      sel.appendChild(opt);
+    }
+  }
+
+  // ---- Layer 2: Calibration (system analysis + CSV matching) ----
+
+  async function runSystemAnalysis() {
+    if (_running) return;
+    _running = true;
+
+    var statusEl = document.getElementById("rfSystemStatus");
+    var textEl = document.getElementById("rfSystemStatusText");
+    var runBtn = document.getElementById("rfRunSystemAnalysis");
+    if (runBtn) runBtn.disabled = true;
+    if (statusEl) { statusEl.style.display = ""; statusEl.className = "rf-status"; }
+
+    try {
+      var geoLevel = document.getElementById("rfCalibGeoLevel").value;
+      var year = document.getElementById("rfCalibYearSelect").value;
+      var apportionCb = document.getElementById("rfCalibApportionByArea");
+      var apportion = apportionCb ? apportionCb.checked : false;
+      _apportionByArea = apportion;
+
+      var result = await RM.computeSystemDemand({
+        geoLevel: geoLevel,
+        year: year,
+        weights: _weights,
+        lodesData: App.lodesData,
+        apportionByArea: apportion,
+        onProgress: function (msg) {
+          if (textEl) textEl.textContent = msg;
+          App.setStatus(msg);
+        }
+      });
+
+      _systemResult = result;
+      _perRouteCDI = result.routeCDIs;
+      _stale = false;
+
+      // Render choropleth
+      var tpi = result.tpiResult;
+      App.renderCensusOverlay(tpi.apportionByArea && tpi.clippedGeos ? tpi.clippedGeos : tpi.geos);
+      renderChoropleth({ tpiResult: tpi, corridorCDI: result.systemCDI });
+
+      // Show legend
+      App.popup.showFloatingWidget("rf-legend", "projects/ridership-legend.html", {
+        position: "bottom-left",
+        width: 170,
+        title: "Demand Legend"
+      });
+
+      // Display per-route CDI results
+      displaySystemResults(result);
+
+      // Populate the Demand tab corridor dropdown
+      populateCorridorDropdown();
+
+      // Enable Step 2
+      var step2 = document.getElementById("rfCalibStep2");
+      if (step2) { step2.style.opacity = "1"; step2.style.pointerEvents = "auto"; }
+
+      if (textEl) textEl.textContent = "System analysis complete.";
+      if (statusEl) statusEl.className = "rf-status rf-status-done";
+      App.setStatus("System analysis complete");
+
+    } catch (err) {
+      console.error("System analysis error:", err);
+      if (textEl) textEl.textContent = "Error: " + (err.message || err);
+      if (statusEl) statusEl.className = "rf-status rf-status-error";
+      App.setStatus("System analysis error");
+    } finally {
+      _running = false;
+      if (runBtn) runBtn.disabled = false;
+    }
+  }
+
+  function displaySystemResults(result) {
+    if (!isPopupVisible()) return;
+    var el = document.getElementById("rfSystemResults");
+    if (el) el.style.display = "";
+
+    // System CDI
+    var sysEl = document.getElementById("rfSystemCDI");
+    if (sysEl) sysEl.textContent = Number.isFinite(result.systemCDI.value)
+      ? result.systemCDI.value.toFixed(2) : "\u2014";
+
+    // Feature count
+    var countEl = document.getElementById("rfSystemFeatureCount");
+    if (countEl) countEl.textContent = String(result.routeCDIs.length);
+
+    // Per-route score list
+    var listEl = document.getElementById("rfRouteScoreList");
+    if (listEl && result.routeCDIs.length > 0) {
+      var html = "";
+      for (var i = 0; i < result.routeCDIs.length; i++) {
+        var r = result.routeCDIs[i];
+        var cdi = Number.isFinite(r.cdi) ? r.cdi.toFixed(2) : "N/A";
+        var typeLabel = r.featureType === "route" ? "Route" : "Line";
+        html += '<div class="rf-route-score-row">' +
+          '<span class="rf-route-score-name">' + typeLabel + ': ' + r.name + '</span>' +
+          '<span class="rf-route-score-cdi">' + cdi + '</span>' +
+          '<span class="rf-cdi-badge rf-cdi-' + r.classification.toLowerCase().replace(/[^a-z]/g, "") + '">' + r.classification + '</span>' +
+          '<span class="rf-route-score-geos tiny">' + r.geoCount + ' geos</span>' +
+          '</div>';
+      }
+      listEl.innerHTML = html;
+    }
+  }
 
   function handleCalibUpload(file) {
     if (!file) return;
@@ -439,8 +670,78 @@
     reader.readAsText(file);
   }
 
+  function runMatchRoutes() {
+    if (!_calibData || !_perRouteCDI) return;
+
+    var colName = document.getElementById("rfCalibColName").value;
+    if (!colName) { alert("Please select the Route Name column."); return; }
+
+    _matchResult = RM.matchRoutesToCSV(_perRouteCDI, _calibData.data, colName);
+
+    // Display match results
+    var listEl = document.getElementById("rfMatchList");
+    var resultsEl = document.getElementById("rfMatchResults");
+    if (resultsEl) resultsEl.style.display = "";
+
+    if (listEl) {
+      var html = "";
+      // Matched rows
+      for (var m = 0; m < _matchResult.matched.length; m++) {
+        var match = _matchResult.matched[m];
+        var csvName = match.csvRow[colName] || "";
+        var cdi = Number.isFinite(match.routeCDI.cdi) ? match.routeCDI.cdi.toFixed(2) : "N/A";
+        html += '<div class="rf-match-row rf-match-ok">' +
+          '<span class="rf-match-icon">&#10003;</span>' +
+          '<span class="rf-match-csv-name">' + csvName + '</span>' +
+          '<span class="rf-match-arrow">&rarr;</span>' +
+          '<span class="rf-match-feature">' + match.routeCDI.name + '</span>' +
+          '<span class="rf-match-cdi">CDI: ' + cdi + '</span>' +
+          '</div>';
+      }
+      // Unmatched rows
+      for (var u = 0; u < _matchResult.unmatched.length; u++) {
+        var unm = _matchResult.unmatched[u];
+        var uName = unm.csvRow[colName] || "(empty)";
+        html += '<div class="rf-match-row rf-match-fail">' +
+          '<span class="rf-match-icon">&#10007;</span>' +
+          '<span class="rf-match-csv-name">' + uName + '</span>' +
+          '<span class="rf-match-reason tiny">' + unm.reason + '</span>' +
+          '</div>';
+      }
+      listEl.innerHTML = html;
+    }
+
+    // Show warnings
+    var warnEl = document.getElementById("rfMatchWarnings");
+    if (warnEl) {
+      var warnings = [];
+      if (_matchResult.duplicateWarnings.length > 0) {
+        warnings = warnings.concat(_matchResult.duplicateWarnings);
+      }
+      if (_matchResult.matched.length < 3) {
+        warnings.push("Only " + _matchResult.matched.length + " route(s) matched. Recommend 3+ for reliable calibration.");
+      }
+      if (warnings.length > 0) {
+        warnEl.style.display = "";
+        warnEl.textContent = warnings.join(" ");
+      } else {
+        warnEl.style.display = "none";
+      }
+    }
+
+    // Enable Step 3 if we have at least 2 matches
+    var step3 = document.getElementById("rfCalibStep3");
+    if (step3 && _matchResult.matched.length >= 2) {
+      step3.style.opacity = "1";
+      step3.style.pointerEvents = "auto";
+    }
+  }
+
   function runCalibration() {
-    if (!_calibData || !_lastResult) return;
+    if (!_matchResult || _matchResult.matched.length < 2) {
+      alert("Need at least 2 matched routes to calibrate.");
+      return;
+    }
 
     var colRidership = document.getElementById("rfCalibColRidership").value;
     if (!colRidership) { alert("Please select the ridership column."); return; }
@@ -448,14 +749,20 @@
     var method = document.querySelector('input[name="rfCalibMethod"]:checked');
     var methodVal = method ? method.value : "ratio";
 
-    // Build observation array
+    // Build observation array using per-route CDI (the core fix)
     var obs = [];
-    var rows = _calibData.data;
-    for (var i = 0; i < rows.length; i++) {
-      var r = rows[i];
-      var ridership = parseFloat(r[colRidership]);
+    for (var i = 0; i < _matchResult.matched.length; i++) {
+      var match = _matchResult.matched[i];
+      var ridership = parseFloat(match.csvRow[colRidership]);
       if (!Number.isFinite(ridership)) continue;
-      obs.push({ ridership: ridership, demandIndex: _lastResult.corridorCDI.value });
+      var routeCDI = match.routeCDI.cdi;
+      if (!Number.isFinite(routeCDI) || routeCDI <= 0) continue;
+      obs.push({ ridership: ridership, demandIndex: routeCDI });
+    }
+
+    if (obs.length < 2) {
+      alert("Not enough valid data points (need 2+ with valid ridership and CDI).");
+      return;
     }
 
     var calibResult;
@@ -482,8 +789,8 @@
 
     var warnEl = document.getElementById("rfCalibWarning");
     if (warnEl) {
-      var warning = calibResult.warning;
-      if (_calibration.n < 5) warning = (warning || "") + " Very small sample size.";
+      var warning = calibResult.warning || "";
+      if (_calibration.n < 5) warning += (warning ? " " : "") + "Small sample size (" + _calibration.n + " routes).";
       if (warning) {
         warnEl.style.display = "";
         warnEl.textContent = warning;
@@ -494,6 +801,10 @@
 
     var expBtn = document.getElementById("rfExportCalibJSON");
     if (expBtn) expBtn.disabled = false;
+
+    // Show next step
+    var nextStep = document.getElementById("rfCalibNextStep");
+    if (nextStep) nextStep.style.display = "";
   }
 
   // ---- Layer 3: Elasticity ----
@@ -520,7 +831,7 @@
     var noCDI = document.getElementById("rfElasticityNoCDI");
     var resultsEl = document.getElementById("rfElasticityResults");
 
-    if (!_lastResult) {
+    if (!Number.isFinite(getActiveCDI())) {
       if (noCDI) noCDI.style.display = "";
       if (resultsEl) resultsEl.style.display = "none";
       return;
@@ -534,7 +845,7 @@
     var freqElast = parseFloat(document.getElementById("rfFreqElastValue").value) || 0.5;
 
     var calibFactor = (_calibration && _calibration.factor) ? _calibration.factor : 1;
-    var baseCDI = _lastResult.corridorCDI.value * calibFactor;
+    var baseCDI = getActiveCDI() * calibFactor;
 
     var elast = RM.applyElasticity(baseCDI, {
       serviceTypeId: stId,
@@ -607,14 +918,15 @@
   function buildAndCompareScenarios() {
     saveScenarioForm(); // save current form first
 
-    if (!_lastResult) {
-      alert("Run Demand analysis first.");
+    var activeCDI = getActiveCDI();
+    if (!Number.isFinite(activeCDI)) {
+      alert("Run Demand or Calibrate analysis first.");
       return;
     }
 
     var routeLength = RM.getRouteLength();
     var calibFactor = (_calibration && _calibration.factor) ? _calibration.factor : 1;
-    var baseCDI = _lastResult.corridorCDI.value;
+    var baseCDI = activeCDI;
 
     var builtScenarios = [];
 
@@ -858,7 +1170,54 @@
       });
     }
 
-    // Demand tab
+    // ---- Calibrate tab ----
+    var sysBtn = document.getElementById("rfRunSystemAnalysis");
+    if (sysBtn) sysBtn.addEventListener("click", runSystemAnalysis);
+
+    var calibApportionCb = document.getElementById("rfCalibApportionByArea");
+    if (calibApportionCb) {
+      calibApportionCb.checked = _apportionByArea;
+      calibApportionCb.addEventListener("change", function () {
+        _apportionByArea = calibApportionCb.checked;
+        // Sync to demand tab checkbox
+        var demandCb = document.getElementById("rfApportionByArea");
+        if (demandCb) demandCb.checked = _apportionByArea;
+        markStale();
+      });
+    }
+
+    var uploadBtn = document.getElementById("rfUploadCalibCSV");
+    var fileInput = document.getElementById("rfCalibFile");
+    if (uploadBtn && fileInput) {
+      uploadBtn.addEventListener("click", function () { fileInput.click(); });
+      fileInput.addEventListener("change", function () {
+        if (fileInput.files.length > 0) handleCalibUpload(fileInput.files[0]);
+      });
+    }
+
+    var matchBtn = document.getElementById("rfMatchRoutes");
+    if (matchBtn) matchBtn.addEventListener("click", runMatchRoutes);
+
+    var calibBtn = document.getElementById("rfRunCalibration");
+    if (calibBtn) calibBtn.addEventListener("click", runCalibration);
+
+    // Calibration export/import
+    var expCalib = document.getElementById("rfExportCalibJSON");
+    if (expCalib) expCalib.addEventListener("click", exportCalibJSON);
+    var impCalibBtn = document.getElementById("rfImportCalibJSON");
+    var impCalibFile = document.getElementById("rfCalibImportFile");
+    if (impCalibBtn && impCalibFile) {
+      impCalibBtn.addEventListener("click", function () { impCalibFile.click(); });
+      impCalibFile.addEventListener("change", function () {
+        if (impCalibFile.files.length > 0) handleCalibImport(impCalibFile.files[0]);
+      });
+    }
+
+    // Next step link from calibrate
+    var goDemand = document.getElementById("rfGoToDemand");
+    if (goDemand) goDemand.addEventListener("click", function (e) { e.preventDefault(); switchTab("demand"); });
+
+    // ---- Demand tab ----
     var runBtn = document.getElementById("rfRunDemand");
     if (runBtn) runBtn.addEventListener("click", runDemand);
 
@@ -867,7 +1226,17 @@
       apportionCb.checked = _apportionByArea;
       apportionCb.addEventListener("change", function () {
         _apportionByArea = apportionCb.checked;
+        // Sync to calibrate tab checkbox
+        var calibCb = document.getElementById("rfCalibApportionByArea");
+        if (calibCb) calibCb.checked = _apportionByArea;
         markStale();
+      });
+    }
+
+    var corridorSel = document.getElementById("rfCorridorSelect");
+    if (corridorSel) {
+      corridorSel.addEventListener("change", function () {
+        _selectedCorridor = corridorSel.value;
       });
     }
 
@@ -883,42 +1252,12 @@
     // Next step links
     var goElast = document.getElementById("rfGoToElasticity");
     if (goElast) goElast.addEventListener("click", function (e) { e.preventDefault(); switchTab("elasticity"); });
-    var goCalib = document.getElementById("rfGoToCalibrate");
-    if (goCalib) goCalib.addEventListener("click", function (e) { e.preventDefault(); switchTab("calibrate"); });
 
     // Export demand
     var expGJ = document.getElementById("rfExportDemandGeoJSON");
     if (expGJ) expGJ.addEventListener("click", exportDemandGeoJSON);
     var expCSV = document.getElementById("rfExportDemandCSV");
     if (expCSV) expCSV.addEventListener("click", exportDemandCSV);
-
-    // Calibration tab
-    var uploadBtn = document.getElementById("rfUploadCalibCSV");
-    var fileInput = document.getElementById("rfCalibFile");
-    if (uploadBtn && fileInput) {
-      uploadBtn.addEventListener("click", function () { fileInput.click(); });
-      fileInput.addEventListener("change", function () {
-        if (fileInput.files.length > 0) handleCalibUpload(fileInput.files[0]);
-      });
-    }
-
-    // Calibration method change triggers recalc
-    var methodRadios = document.querySelectorAll('input[name="rfCalibMethod"]');
-    for (var mi = 0; mi < methodRadios.length; mi++) {
-      methodRadios[mi].addEventListener("change", function () { if (_calibData && _lastResult) runCalibration(); });
-    }
-
-    // Calibration export/import
-    var expCalib = document.getElementById("rfExportCalibJSON");
-    if (expCalib) expCalib.addEventListener("click", exportCalibJSON);
-    var impCalibBtn = document.getElementById("rfImportCalibJSON");
-    var impCalibFile = document.getElementById("rfCalibImportFile");
-    if (impCalibBtn && impCalibFile) {
-      impCalibBtn.addEventListener("click", function () { impCalibFile.click(); });
-      impCalibFile.addEventListener("change", function () {
-        if (impCalibFile.files.length > 0) handleCalibImport(impCalibFile.files[0]);
-      });
-    }
 
     // Elasticity tab
     var stSelect = document.getElementById("rfServiceType");
@@ -964,12 +1303,37 @@
   // ---- Popup lifecycle hooks ----
 
   function onOpen(core) {
+    // Sync apportion checkboxes
     var apportionCb = document.getElementById("rfApportionByArea");
     if (apportionCb) apportionCb.checked = _apportionByArea;
+    var calibApportionCb = document.getElementById("rfCalibApportionByArea");
+    if (calibApportionCb) calibApportionCb.checked = _apportionByArea;
 
+    // Restore system analysis state
+    if (_systemResult) {
+      displaySystemResults(_systemResult);
+      populateCorridorDropdown();
+      var step2 = document.getElementById("rfCalibStep2");
+      if (step2) { step2.style.opacity = "1"; step2.style.pointerEvents = "auto"; }
+    }
+    if (_matchResult && _matchResult.matched.length >= 2) {
+      var step3 = document.getElementById("rfCalibStep3");
+      if (step3) { step3.style.opacity = "1"; step3.style.pointerEvents = "auto"; }
+    }
+
+    // Restore demand results
     if (_lastResult) {
       displayDemandResults(_lastResult);
     }
+
+    // Restore corridor dropdown selection
+    var corridorSel = document.getElementById("rfCorridorSelect");
+    if (corridorSel && _selectedCorridor) corridorSel.value = _selectedCorridor;
+
+    // Show uncalibrated warning if needed
+    var uncalibWarn = document.getElementById("rfUncalibratedWarning");
+    if (uncalibWarn) uncalibWarn.style.display = _systemResult ? "none" : (_lastResult ? "" : "none");
+
     if (_stale) markStale();
 
     // Restore active tab

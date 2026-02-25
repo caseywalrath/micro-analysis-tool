@@ -1192,6 +1192,61 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Libe
   margin-top: 6px;
 }
 
+/* Per-route CDI score list (Calibrate tab) */
+.rf-route-score-list {
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fafbfc;
+}
+.rf-route-score-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.rf-route-score-row:last-child { border-bottom: none; }
+.rf-route-score-name { flex: 1; font-weight: 500; }
+.rf-route-score-cdi { font-weight: 600; min-width: 36px; text-align: right; }
+.rf-route-score-geos { color: var(--muted); min-width: 50px; text-align: right; }
+
+/* Match results list (Calibrate tab) */
+.rf-match-list {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.rf-match-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.rf-match-row:last-child { border-bottom: none; }
+.rf-match-ok { background: #f0fdf4; }
+.rf-match-fail { background: #fef9ee; }
+.rf-match-icon { font-size: 14px; min-width: 16px; text-align: center; }
+.rf-match-ok .rf-match-icon { color: #16a34a; }
+.rf-match-fail .rf-match-icon { color: #d97706; }
+.rf-match-csv-name { font-weight: 500; }
+.rf-match-arrow { color: var(--muted); }
+.rf-match-feature { color: #2b6cb0; }
+.rf-match-cdi { margin-left: auto; font-weight: 600; font-size: 11px; }
+.rf-match-reason { margin-left: auto; color: var(--muted); font-style: italic; }
+
+/* Divider between calibrate sections */
+.rf-divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 16px 0;
+}
+
 /* Scenario sub-tabs */
 .rf-scenario-tabs {
   display: flex;

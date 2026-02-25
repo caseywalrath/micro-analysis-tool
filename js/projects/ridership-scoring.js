@@ -158,6 +158,159 @@
     };
   }
 
+  // Per-route/line CDI: extract individual route CDI from system-wide TPI result.
+  // Uses the same population-weighted intersection logic as computeSegments(),
+  // but operates on full route/line buffers instead of segment chunks.
+  // This enables the "snapshot" approach: TPI is run once across ALL features
+  // with shared quintile normalization, then per-route CDI is extracted by
+  // aggregating only the geographies overlapping each individual buffer.
+  function computePerRouteCDI(tpiResult) {
+    var results = [];
+    var popRaw = tpiResult.rawValues.get("pop_density");
+
+    // Collect routes + lines with their buffers
+    var features = [];
+    var routes = App.routes || [];
+    var routeBuffers = App.routeBuffers || [];
+    for (var ri = 0; ri < routes.length; ri++) {
+      if (ri < routeBuffers.length && routeBuffers[ri]) {
+        features.push({
+          name: (routes[ri].properties && routes[ri].properties.name) || ("Route " + (ri + 1)),
+          type: "route",
+          index: ri,
+          buffer: routeBuffers[ri]
+        });
+      }
+    }
+    var lines = App.lines || [];
+    var lineBuffers = App.lineBuffers || [];
+    for (var li = 0; li < lines.length; li++) {
+      if (li < lineBuffers.length && lineBuffers[li]) {
+        features.push({
+          name: (lines[li].properties && lines[li].properties.name) || ("Line " + (li + 1)),
+          type: "line",
+          index: li,
+          buffer: lineBuffers[li]
+        });
+      }
+    }
+
+    // For each feature, compute population-weighted CDI from overlapping TPI geos
+    for (var fi = 0; fi < features.length; fi++) {
+      var feat = features[fi];
+      var weightedSum = 0, totalPop = 0, geoCount = 0;
+
+      for (var gi = 0; gi < tpiResult.geos.length; gi++) {
+        var geo = tpiResult.geos[gi];
+        var geoid = geo.properties && geo.properties.GEOID;
+        var scoreData = geoid ? tpiResult.scores.get(geoid) : null;
+        if (!scoreData || !Number.isFinite(scoreData.composite)) continue;
+
+        var intersects;
+        try { intersects = turf.booleanIntersects(geo, feat.buffer); } catch (_) { continue; }
+        if (!intersects) continue;
+
+        var inter;
+        try { inter = turf.intersect(geo, feat.buffer); } catch (_) { continue; }
+        if (!inter) continue;
+
+        var overlapArea = turf.area(inter);
+        var geoArea = turf.area(geo);
+        var frac = geoArea > 0 ? Math.min(1, overlapArea / geoArea) : 0;
+        if (frac <= 0) continue;
+
+        var popDens = popRaw ? popRaw.get(geoid) : null;
+        var areaSqMi = geoArea / SQM_PER_SQMI;
+        var pop = (popDens && Number.isFinite(popDens)) ? popDens * areaSqMi * frac : frac;
+
+        weightedSum += scoreData.composite * pop;
+        totalPop += pop;
+        geoCount++;
+      }
+
+      var cdi = totalPop > 0 ? weightedSum / totalPop : NaN;
+      results.push({
+        name: feat.name,
+        featureType: feat.type,
+        featureIndex: feat.index,
+        cdi: cdi,
+        classification: classifyCDI({ value: cdi }).label,
+        geoCount: geoCount
+      });
+    }
+
+    return results;
+  }
+  RM.computePerRouteCDI = computePerRouteCDI;
+
+  // System-wide demand: runs TPI across all drawn features, then extracts per-route CDI.
+  // Returns: { tpiResult, systemCDI, routeCDIs[], geoLevel, year }
+  async function computeSystemDemand(options) {
+    var onProgress = options.onProgress || function () {};
+
+    onProgress("Running system-wide demand analysis...");
+    var tpiResult = await TPI.computeTPI({
+      geoLevel: options.geoLevel || "bg",
+      year: options.year || "2024",
+      weights: options.weights || {},
+      lodesData: options.lodesData || null,
+      apportionByArea: !!options.apportionByArea,
+      onProgress: onProgress
+    });
+
+    onProgress("Computing system-wide demand index...");
+    var systemCDI = computeCorridorCDI(tpiResult);
+
+    onProgress("Computing per-route demand indices...");
+    var routeCDIs = computePerRouteCDI(tpiResult);
+
+    return {
+      tpiResult: tpiResult,
+      systemCDI: systemCDI,
+      routeCDIs: routeCDIs,
+      geoLevel: options.geoLevel || "bg",
+      year: options.year || "2024"
+    };
+  }
+  RM.computeSystemDemand = computeSystemDemand;
+
+  // Match CSV rows to drawn routes/lines by name (case-insensitive exact match).
+  // Returns: { matched: [{ csvRow, routeCDI, csvRowIndex }], unmatched: [...], duplicateWarnings: [] }
+  function matchRoutesToCSV(routeCDIs, csvRows, nameCol) {
+    var matched = [];
+    var unmatched = [];
+    var duplicateWarnings = [];
+
+    // Build lookup: lowercase name -> routeCDI entry (first match wins)
+    var lookup = {};
+    for (var i = 0; i < routeCDIs.length; i++) {
+      var key = (routeCDIs[i].name || "").trim().toLowerCase();
+      if (lookup[key]) {
+        duplicateWarnings.push('Duplicate feature name: "' + routeCDIs[i].name + '" — first match used.');
+      } else {
+        lookup[key] = routeCDIs[i];
+      }
+    }
+
+    for (var r = 0; r < csvRows.length; r++) {
+      var row = csvRows[r];
+      var csvName = (row[nameCol] || "").trim().toLowerCase();
+      if (!csvName) {
+        unmatched.push({ csvRow: row, csvRowIndex: r, reason: "Empty name" });
+        continue;
+      }
+      var match = lookup[csvName];
+      if (match) {
+        matched.push({ csvRow: row, routeCDI: match, csvRowIndex: r });
+      } else {
+        unmatched.push({ csvRow: row, csvRowIndex: r, reason: "No matching feature" });
+      }
+    }
+
+    return { matched: matched, unmatched: unmatched, duplicateWarnings: duplicateWarnings };
+  }
+  RM.matchRoutesToCSV = matchRoutesToCSV;
+
   // Segment analysis: split routes into equal chunks, compute CDI per segment
   function computeSegments(tpiResult, segmentMiles) {
     var routes = App.routes || [];

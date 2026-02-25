@@ -1,26 +1,195 @@
 <!-- Ridership Forecasting Module: 4-tab popup layout -->
 <div class="rf-popup-layout">
 
-  <!-- Tab navigation -->
+  <!-- Tab navigation (Calibrate first) -->
   <div class="rf-tabs">
-    <button class="rf-tab rf-tab-active" data-tab="demand">Demand</button>
-    <button class="rf-tab" data-tab="calibrate">Calibrate</button>
+    <button class="rf-tab rf-tab-active" data-tab="calibrate">Calibrate</button>
+    <button class="rf-tab" data-tab="demand">Demand</button>
     <button class="rf-tab" data-tab="elasticity">Elasticity</button>
     <button class="rf-tab" data-tab="scenarios">Scenarios</button>
   </div>
 
   <!-- ================================================================ -->
-  <!-- Tab 1: Corridor Demand -->
+  <!-- Tab 1: Calibration (system analysis + CSV matching) -->
   <!-- ================================================================ -->
-  <div class="rf-tab-content rf-tab-visible" data-tab="demand">
+  <div class="rf-tab-content rf-tab-visible" data-tab="calibrate">
     <div class="rf-tab-body">
+
+      <!-- Step 1: System Analysis -->
+      <div class="rf-section-title">Step 1: Analyze System Demand</div>
+      <div class="tiny" style="margin-bottom:8px;">
+        Draw routes/lines on the map and name them to match your observed ridership data.
+        This step computes a Corridor Demand Index (CDI) for each route, normalized across the entire system.
+      </div>
+
+      <div class="rf-section-row">
+        <div class="rf-settings-col">
+          <label class="tiny">Geography level</label>
+          <select id="rfCalibGeoLevel" class="rf-select">
+            <option value="tract">Tracts (faster)</option>
+            <option value="bg" selected>Block Groups</option>
+          </select>
+
+          <label class="tiny" style="margin-top:6px;">ACS Year</label>
+          <select id="rfCalibYearSelect" class="rf-select">
+            <option value="2024">2024</option>
+            <option value="2023">2023</option>
+            <option value="2022">2022</option>
+            <option value="2021">2021</option>
+          </select>
+
+          <label class="rf-toggle-row" style="margin-top:8px;">
+            <input type="checkbox" id="rfCalibApportionByArea">
+            <span>Apportion by Area</span>
+          </label>
+
+          <button id="rfRunSystemAnalysis" type="button" class="rf-action-primary" style="margin-top:12px;">
+            Analyze System
+          </button>
+        </div>
+
+        <div class="rf-results-col">
+          <div id="rfSystemStatus" class="rf-status" style="display:none;">
+            <span id="rfSystemStatusText">Ready</span>
+          </div>
+
+          <div id="rfSystemResults" style="display:none;">
+            <div class="rf-section-title">Per-Route CDI Scores</div>
+            <div class="tiny" style="margin-bottom:4px;">
+              Scores are relative to the entire system &mdash; routes in high-demand areas score higher.
+            </div>
+            <div id="rfRouteScoreList" class="rf-route-score-list"></div>
+            <div class="rf-stats-grid" style="margin-top:8px;">
+              <div class="rf-stat">
+                <span class="rf-stat-label">System CDI</span>
+                <span id="rfSystemCDI" class="rf-stat-value">&mdash;</span>
+              </div>
+              <div class="rf-stat">
+                <span class="rf-stat-label">Routes / Lines</span>
+                <span id="rfSystemFeatureCount" class="rf-stat-value">&mdash;</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <hr class="rf-divider" />
+
+      <!-- Step 2: Upload Observed Data -->
+      <div id="rfCalibStep2" style="opacity:0.5; pointer-events:none;">
+        <div class="rf-section-title">Step 2: Upload Observed Ridership</div>
+        <div class="tiny" style="margin-bottom:8px;">
+          Upload a CSV with route names and observed daily ridership. Route names must match
+          the names assigned to your drawn features (case-insensitive).
+        </div>
+
+        <div class="rf-upload-row">
+          <button id="rfUploadCalibCSV" type="button" class="rf-btn-sm">Upload CSV</button>
+          <input type="file" id="rfCalibFile" accept=".csv,.txt" style="display:none" />
+          <span id="rfCalibFileName" class="tiny" style="color:var(--muted);">No file loaded</span>
+        </div>
+
+        <div id="rfCalibMapping" style="display:none; margin-top:12px;">
+          <div class="rf-section-title">Column Mapping</div>
+          <div class="rf-mapping-grid">
+            <label class="tiny">Route Name</label>
+            <select id="rfCalibColName" class="rf-select"></select>
+
+            <label class="tiny">Daily Ridership</label>
+            <select id="rfCalibColRidership" class="rf-select"></select>
+
+            <label class="tiny">Peak Headway (min)</label>
+            <select id="rfCalibColHeadway" class="rf-select"></select>
+
+            <label class="tiny">Service Type</label>
+            <select id="rfCalibColServiceType" class="rf-select"></select>
+          </div>
+
+          <button id="rfMatchRoutes" type="button" class="rf-btn-sm" style="margin-top:10px;">
+            Match Routes
+          </button>
+        </div>
+
+        <!-- Match results -->
+        <div id="rfMatchResults" style="display:none; margin-top:12px;">
+          <div class="rf-section-title">Match Results</div>
+          <div id="rfMatchList" class="rf-match-list"></div>
+          <div id="rfMatchWarnings" class="rf-warning" style="display:none;"></div>
+        </div>
+
+        <hr class="rf-divider" />
+
+        <!-- Step 3: Calibrate -->
+        <div id="rfCalibStep3" style="opacity:0.5; pointer-events:none;">
+          <div class="rf-section-title">Step 3: Run Calibration</div>
+
+          <div class="rf-radio-group">
+            <label class="rf-radio-label">
+              <input type="radio" name="rfCalibMethod" value="ratio" checked /> Ratio-based (recommended)
+            </label>
+            <label class="rf-radio-label">
+              <input type="radio" name="rfCalibMethod" value="regression" /> Simple regression (needs 3+ routes)
+            </label>
+          </div>
+
+          <button id="rfRunCalibration" type="button" class="rf-action-primary" style="margin-top:8px;">
+            Run Calibration
+          </button>
+
+          <div id="rfCalibResults" style="display:none; margin-top:12px;">
+            <div class="rf-section-title">Calibration Results</div>
+            <div class="rf-cdi-card">
+              <div class="rf-stat">
+                <span class="rf-stat-label">Calibration Factor</span>
+                <span id="rfCalibFactor" class="rf-stat-value">&mdash;</span>
+              </div>
+              <div class="rf-stat">
+                <span class="rf-stat-label">R-squared</span>
+                <span id="rfCalibRSquared" class="rf-stat-value">&mdash;</span>
+              </div>
+              <div class="rf-stat">
+                <span class="rf-stat-label">Sample Size</span>
+                <span id="rfCalibSampleSize" class="rf-stat-value">&mdash;</span>
+              </div>
+            </div>
+            <div id="rfCalibWarning" class="rf-warning" style="display:none;"></div>
+          </div>
+
+          <div class="rf-export-row" style="margin-top:12px;">
+            <button id="rfExportCalibJSON" type="button" class="rf-btn-sm" disabled>Export Coefficients</button>
+            <button id="rfImportCalibJSON" type="button" class="rf-btn-sm">Import Coefficients</button>
+            <input type="file" id="rfCalibImportFile" accept=".json" style="display:none" />
+          </div>
+        </div>
+      </div>
+
+      <div class="rf-next-step" id="rfCalibNextStep" style="display:none;">
+        Calibration complete. Continue to <a href="#" id="rfGoToDemand">Demand</a> to analyze a specific corridor.
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- Tab 2: Corridor Demand -->
+  <!-- ================================================================ -->
+  <div class="rf-tab-content" data-tab="demand">
+    <div class="rf-tab-body">
+
+      <div id="rfUncalibratedWarning" class="rf-warning" style="display:none; margin-bottom:10px;">
+        Running in uncalibrated mode. For more reliable forecasts, complete the Calibrate step first.
+      </div>
 
       <div class="rf-section-row">
         <!-- Left: Settings -->
         <div class="rf-settings-col">
           <div class="rf-section-title">Settings</div>
 
-          <label class="tiny">Geography level</label>
+          <label class="tiny">Corridor to analyze</label>
+          <select id="rfCorridorSelect" class="rf-select">
+            <option value="all">All corridors (system-wide)</option>
+          </select>
+
+          <label class="tiny" style="margin-top:6px;">Geography level</label>
           <select id="rfGeoLevel" class="rf-select">
             <option value="tract">Tracts (faster)</option>
             <option value="bg" selected>Block Groups</option>
@@ -118,81 +287,7 @@
       </div>
 
       <div class="rf-next-step" id="rfNextStep1" style="display:none;">
-        Demand analysis complete. Continue to <a href="#" id="rfGoToElasticity">Elasticity</a> to estimate ridership, or <a href="#" id="rfGoToCalibrate">Calibrate</a> with observed data first.
-      </div>
-    </div>
-  </div>
-
-  <!-- ================================================================ -->
-  <!-- Tab 2: Calibration -->
-  <!-- ================================================================ -->
-  <div class="rf-tab-content" data-tab="calibrate">
-    <div class="rf-tab-body">
-
-      <div class="rf-section-title">Observed Ridership Data</div>
-      <div class="tiny" style="margin-bottom:8px;">
-        Upload a CSV with observed ridership data to calibrate forecasts against real performance.
-        Expected columns: route name, daily ridership or boardings/hour, frequency (headway), service type.
-      </div>
-
-      <div class="rf-upload-row">
-        <button id="rfUploadCalibCSV" type="button" class="rf-btn-sm">Upload CSV</button>
-        <input type="file" id="rfCalibFile" accept=".csv,.txt" style="display:none" />
-        <span id="rfCalibFileName" class="tiny" style="color:var(--muted);">No file loaded</span>
-      </div>
-
-      <div id="rfCalibMapping" style="display:none; margin-top:12px;">
-        <div class="rf-section-title">Column Mapping</div>
-        <div class="rf-mapping-grid">
-          <label class="tiny">Route Name</label>
-          <select id="rfCalibColName" class="rf-select"></select>
-
-          <label class="tiny">Daily Ridership</label>
-          <select id="rfCalibColRidership" class="rf-select"></select>
-
-          <label class="tiny">Peak Headway (min)</label>
-          <select id="rfCalibColHeadway" class="rf-select"></select>
-
-          <label class="tiny">Service Type</label>
-          <select id="rfCalibColServiceType" class="rf-select"></select>
-        </div>
-      </div>
-
-      <div style="margin-top:16px;">
-        <div class="rf-section-title">Calibration Method</div>
-        <div class="rf-radio-group">
-          <label class="rf-radio-label">
-            <input type="radio" name="rfCalibMethod" value="ratio" checked /> Ratio-based (recommended)
-          </label>
-          <label class="rf-radio-label">
-            <input type="radio" name="rfCalibMethod" value="regression" /> Simple regression
-          </label>
-        </div>
-      </div>
-
-      <div id="rfCalibResults" style="display:none; margin-top:12px;">
-        <div class="rf-section-title">Calibration Results</div>
-        <div class="rf-cdi-card">
-          <div class="rf-stat">
-            <span class="rf-stat-label">Calibration Factor</span>
-            <span id="rfCalibFactor" class="rf-stat-value">&mdash;</span>
-          </div>
-          <div class="rf-stat">
-            <span class="rf-stat-label">R-squared</span>
-            <span id="rfCalibRSquared" class="rf-stat-value">&mdash;</span>
-          </div>
-          <div class="rf-stat">
-            <span class="rf-stat-label">Sample Size</span>
-            <span id="rfCalibSampleSize" class="rf-stat-value">&mdash;</span>
-          </div>
-        </div>
-        <div id="rfCalibWarning" class="rf-warning" style="display:none;"></div>
-      </div>
-
-      <div class="rf-export-row" style="margin-top:12px;">
-        <button id="rfExportCalibJSON" type="button" class="rf-btn-sm" disabled>Export Coefficients</button>
-        <button id="rfImportCalibJSON" type="button" class="rf-btn-sm">Import Coefficients</button>
-        <input type="file" id="rfCalibImportFile" accept=".json" style="display:none" />
+        Demand analysis complete. Continue to <a href="#" id="rfGoToElasticity">Elasticity</a> to estimate ridership.
       </div>
     </div>
   </div>
