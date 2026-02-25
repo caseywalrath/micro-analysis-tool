@@ -673,6 +673,10 @@
     }
   }
 
+  // ---- Expose current TPI weights for other modules (e.g. "Copy From TPI" in RF) ----
+
+  App.getTpiWeights = function () { return Object.assign({}, _weights); };
+
   // ---- Register as analysis module ----
 
   App.registerModule({

@@ -52,6 +52,113 @@
     return App.popup.isOpen() && App.popup.currentModuleId() === "ridership-forecasting";
   }
 
+  // ---- Weight modal (Adjust Weights) ----
+
+  var _pendingWeights = null; // temporary weight copy while modal is open
+
+  function buildRFWeightSliders(weights) {
+    var container = document.getElementById("rfWeightSliders");
+    if (!container) return;
+    container.innerHTML = "";
+
+    var factors = TPI.FACTORS;
+    for (var i = 0; i < factors.length; i++) {
+      var f = factors[i];
+      var w = weights[f.id] != null ? weights[f.id] : f.defaultWeight;
+
+      var row = document.createElement("div");
+      row.className = "tpi-slider-row";
+      row.innerHTML =
+        '<label class="tpi-slider-label" title="' + f.description + '">' + f.label + '</label>' +
+        '<input type="range" class="tpi-slider rf-w-slider" min="0" max="100" step="5" value="' + w + '" data-factor="' + f.id + '" />' +
+        '<input type="number" class="tpi-slider-value" id="rfW_' + f.id + '" value="' + w + '" min="0" max="100" step="1" data-factor="' + f.id + '" />';
+      container.appendChild(row);
+
+      var slider = row.querySelector("input[type=range]");
+      slider.addEventListener("input", onRFSliderChange);
+      var numInput = row.querySelector("input[type=number]");
+      numInput.addEventListener("change", onRFNumberChange);
+    }
+
+    updateRFWeightSum();
+  }
+
+  function onRFSliderChange(e) {
+    if (!_pendingWeights) return;
+    var factorId = e.target.getAttribute("data-factor");
+    _pendingWeights[factorId] = parseInt(e.target.value, 10);
+    var numInput = document.getElementById("rfW_" + factorId);
+    if (numInput) numInput.value = String(_pendingWeights[factorId]);
+    updateRFWeightSum();
+  }
+
+  function onRFNumberChange(e) {
+    if (!_pendingWeights) return;
+    var factorId = e.target.getAttribute("data-factor");
+    var raw = parseInt(e.target.value, 10);
+    var clamped = isNaN(raw) ? 0 : Math.max(0, Math.min(100, raw));
+    e.target.value = String(clamped);
+    _pendingWeights[factorId] = clamped;
+    var slider = document.querySelector('.rf-w-slider[data-factor="' + factorId + '"]');
+    if (slider) slider.value = String(clamped);
+    updateRFWeightSum();
+  }
+
+  function updateRFWeightSum() {
+    if (!_pendingWeights) return;
+    var sum = 0;
+    var factors = TPI.FACTORS;
+    for (var i = 0; i < factors.length; i++) {
+      sum += (_pendingWeights[factors[i].id] || 0);
+    }
+    var sumEl  = document.getElementById("rfWeightSum");
+    var warnEl = document.getElementById("rfWeightWarn");
+    var confirmBtn = document.getElementById("rfWeightsConfirm");
+    if (sumEl) {
+      sumEl.textContent = String(sum);
+      sumEl.style.color = (sum === 100) ? "" : "#e53e3e";
+    }
+    var valid = (sum === 100);
+    if (warnEl) warnEl.style.visibility = valid ? "hidden" : "visible";
+    if (confirmBtn) confirmBtn.disabled = !valid;
+    return sum;
+  }
+
+  function applyWeightsToModalSliders(weights) {
+    var factors = TPI.FACTORS;
+    for (var i = 0; i < factors.length; i++) {
+      var f = factors[i];
+      var w = weights[f.id] != null ? weights[f.id] : f.defaultWeight;
+      _pendingWeights[f.id] = w;
+      var slider = document.querySelector('.rf-w-slider[data-factor="' + f.id + '"]');
+      if (slider) slider.value = String(w);
+      var numInput = document.getElementById("rfW_" + f.id);
+      if (numInput) numInput.value = String(w);
+    }
+    updateRFWeightSum();
+  }
+
+  function openWeightsModal() {
+    _pendingWeights = Object.assign({}, _weights);
+    var modal = document.getElementById("rfWeightsModal");
+    if (!modal) return;
+    // Build sliders if not yet built (first open)
+    var container = document.getElementById("rfWeightSliders");
+    if (!container || container.innerHTML === "") {
+      buildRFWeightSliders(_pendingWeights);
+    } else {
+      // Sync existing sliders to current _weights
+      applyWeightsToModalSliders(_pendingWeights);
+    }
+    modal.style.display = "";
+  }
+
+  function closeWeightsModal() {
+    var modal = document.getElementById("rfWeightsModal");
+    if (modal) modal.style.display = "none";
+    _pendingWeights = null;
+  }
+
   // ---- Tab management ----
 
   function switchTab(tabId) {
@@ -1197,6 +1304,47 @@
     }
 
     // ---- Calibrate tab ----
+
+    // "Adjust Weights" button opens the weight modal
+    var adjBtn = document.getElementById("rfAdjustWeights");
+    if (adjBtn) adjBtn.addEventListener("click", openWeightsModal);
+
+    // Modal: Confirm saves pending weights
+    var confirmBtn = document.getElementById("rfWeightsConfirm");
+    if (confirmBtn) {
+      confirmBtn.addEventListener("click", function () {
+        if (!_pendingWeights) return;
+        _weights = Object.assign({}, _pendingWeights);
+        closeWeightsModal();
+        markStale();
+      });
+    }
+
+    // Modal: Cancel discards changes
+    var cancelBtn = document.getElementById("rfWeightsCancel");
+    if (cancelBtn) cancelBtn.addEventListener("click", closeWeightsModal);
+
+    // Modal: Reset to defaults
+    var resetBtn = document.getElementById("rfResetWeights");
+    if (resetBtn) {
+      resetBtn.addEventListener("click", function () {
+        if (!_pendingWeights) return;
+        applyWeightsToModalSliders(TPI.getDefaultWeights());
+      });
+    }
+
+    // Modal: Copy From TPI (reads TPI's current live weights)
+    var copyBtn = document.getElementById("rfCopyFromTPI");
+    if (copyBtn) {
+      copyBtn.addEventListener("click", function () {
+        if (typeof App.getTpiWeights === "function") {
+          applyWeightsToModalSliders(App.getTpiWeights());
+        } else {
+          alert("Open the Transit Propensity Index tool first to copy its weights.");
+        }
+      });
+    }
+
     var sysBtn = document.getElementById("rfRunSystemAnalysis");
     if (sysBtn) sysBtn.addEventListener("click", runSystemAnalysis);
 

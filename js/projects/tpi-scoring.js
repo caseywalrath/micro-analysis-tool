@@ -41,7 +41,7 @@
         return areaSqMi > 0 ? pop / areaSqMi : NaN;
       },
       higherIsBetter: true,
-      defaultWeight: 15,
+      defaultWeight: 35,
       description: "Total population per square mile (ACS B01003_001E / geography area)"
     },
     {
@@ -52,7 +52,7 @@
       source: "LODES",
       compute: null, // computed separately via LODES block aggregation
       higherIsBetter: true,
-      defaultWeight: 15,
+      defaultWeight: 35,
       description: "LODES WAC C000 jobs aggregated to geography, divided by area"
     },
     {
@@ -68,7 +68,7 @@
         return (zeroCar / totalHH) * 100;
       },
       higherIsBetter: true,
-      defaultWeight: 12,
+      defaultWeight: 0,
       description: "Percent of households with zero vehicles (ACS B08201_002E / B11001_001E)"
     },
     {
@@ -84,7 +84,7 @@
         return (povPop / totalPop) * 100;
       },
       higherIsBetter: true,
-      defaultWeight: 12,
+      defaultWeight: 6,
       description: "Percent of persons below poverty level (ACS B17001_002E / B01003_001E)"
     },
     {
@@ -112,7 +112,7 @@
         return (seniorSum / totalPop) * 100;
       },
       higherIsBetter: true,
-      defaultWeight: 10,
+      defaultWeight: 6,
       description: "Percent of population age 65 and over (ACS B01001 males + females 65+ / B01003_001E)"
     },
     {
@@ -140,7 +140,7 @@
         return (disabSum / denom) * 100;
       },
       higherIsBetter: true,
-      defaultWeight: 10,
+      defaultWeight: 6,
       description: "Percent of civilian noninstitutionalized population with a disability (ACS B18101)"
     },
     {
@@ -156,7 +156,7 @@
         return ((total - nhWhite) / total) * 100;
       },
       higherIsBetter: true,
-      defaultWeight: 10,
+      defaultWeight: 6,
       description: "Percent of population who are people of color (ACS B03002: total minus NH White alone)"
     },
     {
@@ -184,7 +184,7 @@
         return (youthSum / totalPop) * 100;
       },
       higherIsBetter: true,
-      defaultWeight: 8,
+      defaultWeight: 0,
       description: "Percent of population under 18 years old (ACS B01001 males + females under 18 / B01003_001E)"
     },
     {
@@ -213,7 +213,7 @@
         return (lepSum / denom) * 100;
       },
       higherIsBetter: true,
-      defaultWeight: 8,
+      defaultWeight: 6,
       description: "Percent of population age 5+ who speak English less than very well (ACS C16001)"
     }
   ];
