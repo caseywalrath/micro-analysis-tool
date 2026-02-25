@@ -40,7 +40,7 @@ Browser-based geospatial analysis tool. Pure front-end (no build step, no backen
 ```
 index.html                  App shell: toolbar, sidebar, map, feature panel, results modal, module popup container, script tags
 css/
-  style.css                 Core layout, toolbar, feature panel, results modal, module popup, floating widgets, basemap switcher, TPI styles
+  style.css                 Core layout, toolbar, feature panel, results modal, module popup, floating widgets, basemap switcher, TPI styles, RF styles (.rf- prefix)
   sidebar-v2.css            Sidebar panel system styles (scoped under #sidebar), variable checkbox list
 js/
   app.js                    Startup, module registry, sidebar panel HTML, multi-variable summary runner, results modal, event wiring
@@ -62,21 +62,31 @@ js/
     fta-small-starts.js     FTA Small Starts: breakpoint classification, CRE/ESS/LBAR (registered as disabled module)
     tpi-scoring.js          TPI scoring engine: 9-factor definitions, batch ACS fetch, LODES aggregation, quintile normalization, composite scoring
     transit-propensity.js   TPI module: popup-based UI with weight sliders, choropleth rendering, hover tooltips, floating legend, GeoJSON/CSV export, stale detection
+    ridership-scoring.js    Ridership scoring engine: corridor CDI computation, segment analysis, service type presets, elasticity formulas, scenario builder, ratio/OLS calibration (window.RidershipModel namespace)
+    ridership-forecasting.js  Ridership Forecasting module: 4-tab popup (Demand | Calibrate | Elasticity | Scenarios), choropleth + segment map, CSV calibration upload, scenario comparison table, GeoJSON/CSV/JSON export
 projects/
   fta-small-starts.html     FTA sidebar HTML fragment (legacy, kept for future popup migration)
   transit-propensity-popup.html  TPI popup body: 3-column layout (Weights | Results | Actions)
   transit-propensity.html   TPI sidebar panel (legacy, replaced by popup version)
   tpi-weights.html          TPI weight sliders (legacy, merged into popup)
   tpi-legend.html           TPI legend: 5-class Blues color swatches (reused by floating widget)
+  ridership-forecasting-popup.html  RF popup body: 4-tab layout with CDI info button (ⓘ toggle), segment breakdown, calibration column mapping, elasticity sliders, scenario sub-tabs, comparison table
+  ridership-legend.html     RF demand legend: 5-class Blues swatches for CDI score (High → Low)
+docs/
+  ridership-forecasting-plan.md  Strategic evaluation and implementation plan for the ridership forecasting tool
+Ridership_Forecast_Readme.md    User-facing documentation for the Ridership Forecasting module (plain-language, transit professional audience)
 ```
 
 ## Conventions
 
 - **No build tools.** Plain `<script>` tags in dependency order. Anyone can read/edit the source directly.
 - **Global namespace.** All shared state and functions live on `window.App`. Each module IIFE reads `var App = window.App` and assigns its exports (e.g., `App.fetchTigerwebGeos = fetchTigerwebGeos`).
-- **Module-local state stays private.** Variables like `CRE_MAP`, `ESS_POINTS`, `LBAR_SITES` (FTA) and `_lastResult`, `_stale`, `_running` (TPI) are declared inside the module IIFE closure, not on `App`. The TPI scoring engine uses a separate `window.TPI` namespace for its public API.
+- **Module-local state stays private.** Variables like `CRE_MAP`, `ESS_POINTS`, `LBAR_SITES` (FTA) and `_lastResult`, `_stale`, `_running` (TPI, RF) are declared inside the module IIFE closure, not on `App`. Scoring engines use separate window namespaces: `window.TPI` (TPI scoring), `window.RidershipModel` (ridership scoring).
 - **Panel-based sidebar.** Sidebar content is registered via `App.sidebar.addPanel()` and rendered on map load. Panel HTML is defined as strings in `app.js`, not hardcoded in `index.html`. Call `render()` once after all panels are registered (avoids destroying event listeners).
-- **Analysis popups.** Analysis modules open in popup windows (not the sidebar). The popup system (`App.popup`) handles HTML loading, init/open/close lifecycle, and Escape key. Floating widgets (like the TPI legend) persist on the map independently of the popup.
+- **Analysis popups.** Analysis modules open in popup windows (not the sidebar). The popup system (`App.popup`) handles HTML loading, init/open/close lifecycle, and Escape key. Floating widgets (like the TPI and RF legends) persist on the map independently of the popup.
+- **Tabbed popup layout.** Multi-step analysis modules (e.g., Ridership Forecasting) use a tab bar (`<div class="rf-tabs">` with `[data-tab]` buttons) and tab content panels (`<div class="rf-tab-content" data-tab="...">`) toggled via a `switchTab(id)` function in the module JS. State is saved to closure variables on tab switch; the form is not reset.
+- **Inline info buttons.** Contextual help uses a small `<button class="rf-info-btn">ⓘ</button>` element adjacent to the label, wired in `init()` to toggle a sibling explanation `<div>` via `style.display`. No tooltip libraries needed.
+- **CSS namespacing.** TPI styles use `.tpi-` prefix. Ridership Forecasting styles use `.rf-` prefix. Both live in `css/style.css`.
 - **External libraries via CDN:** MapLibre GL JS, Turf.js, pako (gzip), PapaParse (CSV).
 
 ## Script Load Order
@@ -99,12 +109,14 @@ cache.js    (needs App.stations, App.lines, App.routes, App.polygons, render/reb
 popup.js    (needs App namespace; defines App.popup)
 app.js              (wires everything; registers sidebar panels; defines App.registerModule; calls cache.restore)
 <modules>           (call App.registerModule)
-  fta-small-starts.js (needs App namespace; registers as disabled module)
-  tpi-scoring.js    (needs App namespace, turf; defines window.TPI)
+  fta-small-starts.js   (needs App namespace; registers as disabled module)
+  tpi-scoring.js        (needs App namespace, turf; defines window.TPI)
   transit-propensity.js (needs TPI, App.registerModule, App.popup, App.map, App.renderCensusOverlay)
+  ridership-scoring.js  (needs window.TPI, App namespace, turf; defines window.RidershipModel)
+  ridership-forecasting.js (needs RidershipModel, TPI, App.registerModule, App.popup, App.map, App.renderCensusOverlay)
 ```
 
-**Active modules:** All analysis modules load simultaneously. TPI is enabled (popup-based). FTA Small Starts is registered but disabled (button shown grayed out).
+**Active modules:** TPI is enabled (popup-based). Ridership Forecasting is enabled (popup-based, 4-tab). FTA Small Starts is registered but disabled (button shown grayed out).
 
 ## App Namespace (Public API)
 
@@ -167,6 +179,44 @@ Floating widget options: `{ position: "bottom-left"|"bottom-right"|"top-left"|"t
 
 ### transit-propensity.js (analysis module, no public API)
 Registers module `"transit-propensity"` as a popup-based analysis. Opens in a 3-column popup (Weights | Results | Actions) with its own geography/year selectors. Internal functions: `runTPI()`, `runInstantRescore()`, `renderChoropleth(result)`, `clearChoropleth()`, `displayResults(result)`, `exportGeoJSON()`, `exportCSV()`, `markStale()`. All state is private to the IIFE closure. DOM writes are guarded with `isPopupVisible()` so `update()` can safely fire when the popup is closed.
+
+### ridership-scoring.js (window.RidershipModel namespace, not on App)
+Scoring engine for the Ridership Forecasting module. Depends on `window.TPI` for demand computation.
+
+`RidershipModel.SERVICE_TYPES` — array of 4 service type presets (local_bus, enhanced_bus, limited_stop, brt), each with `id`, `label`, default operating parameters (`defaultSpeed`, `defaultHeadway`, `defaultSpan`, `defaultStopSpacingMi`), and premium ranges (`freqPremium`, `speedPremium`, `modePremium` each as `{ low, mid, high }` fractions).
+
+`RidershipModel.getServiceType(id)` — returns a service type preset by id.
+
+`RidershipModel.computeCorridorDemand(options)` — wraps `TPI.computeTPI()`, then computes the Corridor Demand Index (CDI) as a population-weighted average of TPI composite scores. Options: `{ geoLevel, year, weights, lodesData, apportionByArea, segmentLengthMiles, onProgress }`. Returns `{ tpiResult, corridorCDI: { value, scored, total }, segments: [...], classification }`.
+
+Segment objects: `{ cdi, classification, geoCount, bufferGeometry }`. Segments are produced by chunking all route geometries with `turf.lineChunk()`, buffering each chunk, and re-aggregating TPI geographies by overlap fraction — no additional Census API calls.
+
+`RidershipModel.classifyCDI(score)` — returns `{ label, level, cssClass }` for a numeric CDI (High ≥4, Medium 3–3.9, Low-Medium 2–2.9, Low <2).
+
+`RidershipModel.getRouteLength()` — returns total length in miles of all drawn routes via `turf.length()`.
+
+`RidershipModel.applyElasticity(baseCDI, params)` — applies frequency elasticity and service type premiums to produce `{ low, mid, high }` ridership multipliers. Frequency effect formula: `(newFreq / oldFreq) ^ elasticity` where `freq = 60 / headwayMinutes`. Combined multiplier: `freqEffect × (1 + freqPremium) × (1 + speedPremium) × (1 + modePremium)`. Returns `{ low, mid, high, freqEffect, serviceType }`.
+
+`RidershipModel.buildScenario(params)` — computes operating metrics for one scenario. Key formulas: `vehiclesNeeded = ceil(2 × routeLength / avgSpeed / (headway/60))`, `revHoursPerDay = vehiclesNeeded × span`, `annualRevHours = revHoursPerDay × serviceDays`, `annualCost = annualRevHours × costPerRevHour`. Ridership uses elasticity result scaled by optional calibration factor. Returns full scenario object with low/mid/high ridership, cost/boarding, boardings/rev-hr.
+
+`RidershipModel.compareScenarios(scenarios[])` — builds scenario objects for up to 4 scenarios; returns array.
+
+`RidershipModel.calibrateRatio(rows, demandColKey, ridershipColKey)` — ratio-based calibration: `factor = mean(observed / CDI)`. Returns `{ factor, n, rSquared, method: "ratio" }`.
+
+`RidershipModel.calibrateRegression(rows, demandColKey, ridershipColKey)` — OLS regression: `ridership = intercept + slope × CDI`. Returns `{ factor (=slope), intercept, n, rSquared, method: "regression" }`. Requires n ≥ 3.
+
+### ridership-forecasting.js (analysis module, no public API)
+Registers module `"ridership-forecasting"` as a popup-based analysis. Opens in a 4-tab popup (960px wide). All state is private to the IIFE closure. DOM writes are guarded with `isPopupVisible()`.
+
+**Tab 1 – Demand**: Calls `RidershipModel.computeCorridorDemand()`, renders CDI choropleth on map using the same Blues color ramp as TPI, renders segment overlay as a separate fill+line layer, shows floating legend widget (`projects/ridership-legend.html`). CDI info button (ⓘ) toggles an inline explanation box. GeoJSON and CSV export enabled after analysis.
+
+**Tab 2 – Calibrate**: CSV file upload with auto-column detection via `App.guessHeader()`. Supports ratio-based (default) and OLS regression methods via `RidershipModel.calibrateRatio/calibrateRegression()`. JSON export/import of calibration coefficients. Calibration factor persists across tabs and scales elasticity/scenario outputs.
+
+**Tab 3 – Elasticity**: Service type dropdown, baseline/proposed headway inputs, frequency elasticity slider (0.1–1.0, default 0.5). Calls `RidershipModel.applyElasticity()` and displays Conservative / Moderate / Optimistic ridership ranges. Recalculates instantly on any input change (no API calls).
+
+**Tab 4 – Scenarios**: 4 sub-tabs (A–D) sharing one input form (state saved/restored on tab switch). "Build Scenarios" calls `RidershipModel.buildScenario()` for each and renders a comparison table with mid rows highlighted. CSV and JSON export enabled after build.
+
+**Module-local state**: `_lastResult` (demand result), `_calibration` (calibration coefficients), `_calibData` (uploaded CSV rows), `_scenarios` (array of 4 scenario param sets), `_activeScenario`, `_stale`, `_running`, `_initialized`, `_apportionByArea`, `_activeTab`.
 
 ## Analysis Module System
 
@@ -276,11 +326,12 @@ The sidebar is an empty `<div id="sidebar">` populated at runtime by `App.sideba
 +-----------------------------+
 |  ▾ Analysis                 |  Collapsible panel (order 30)
 |  [Transit Propensity Index] |  Button: opens TPI popup (3-column layout)
+|  [Ridership Forecasting]    |  Button: opens RF popup (4-tab layout)
 |  [FTA Small Starts] (gray)  |  Button: disabled (coming soon)
 +-----------------------------+
 ```
 
-Clicking an analysis module button opens a popup window over the map. The TPI popup has a 3-column layout (Weights | Results | Actions). A floating legend widget appears at bottom-left of the map when the choropleth is active.
+Clicking an analysis module button opens a popup window over the map. The TPI popup has a 3-column layout (Weights | Results | Actions). The Ridership Forecasting popup has a 4-tab layout (Demand | Calibrate | Elasticity | Scenarios). Each active choropleth shows a floating legend widget at bottom-left of the map.
 
 ### Feature Panel (right)
 
