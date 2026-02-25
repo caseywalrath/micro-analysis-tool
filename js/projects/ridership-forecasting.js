@@ -238,46 +238,23 @@
           displayCDI = _systemResult.systemCDI;
         }
 
-        // Compute segments using the system-wide TPI (no new API calls)
+        // Compute segments using cached TPI data — no Census API calls.
+        // Scoped to the selected corridor if one is chosen; all features otherwise.
         var segments = [];
-        if (segLen > 0 && RM.computeCorridorDemand) {
-          // Use internal segment computation by building a result-like object
-          // We call computeCorridorDemand just for segments, but we already have TPI
+        if (segLen > 0 && RM.computeSegments) {
           if (textEl) textEl.textContent = "Computing segments...";
-          // Temporarily construct a result from the existing TPI
-          result = {
-            tpiResult: tpiResult,
-            corridorCDI: displayCDI,
-            segments: [],
-            classification: RM.classifyCDI(displayCDI),
-            geoLevel: geoLevel,
-            year: year
-          };
-          // Run fresh demand to get segments (reuses TPI cache if geoLevel/year match)
-          var freshResult = await RM.computeCorridorDemand({
-            geoLevel: geoLevel,
-            year: year,
-            weights: _weights,
-            lodesData: App.lodesData,
-            apportionByArea: _apportionByArea,
-            segmentMiles: segLen,
-            onProgress: function (msg) {
-              if (textEl) textEl.textContent = msg;
-              App.setStatus(msg);
-            }
-          });
-          result.segments = freshResult.segments;
-          result.tpiResult = freshResult.tpiResult;
-        } else {
-          result = {
-            tpiResult: tpiResult,
-            corridorCDI: displayCDI,
-            segments: [],
-            classification: RM.classifyCDI(displayCDI),
-            geoLevel: geoLevel,
-            year: year
-          };
+          App.setStatus("Computing segments...");
+          segments = RM.computeSegments(tpiResult, segLen, _selectedCorridor);
         }
+
+        result = {
+          tpiResult: tpiResult,
+          corridorCDI: displayCDI,
+          segments: segments,
+          classification: RM.classifyCDI(displayCDI),
+          geoLevel: geoLevel,
+          year: year
+        };
       } else {
         // Uncalibrated mode: run fresh TPI (current behavior)
         result = await RM.computeCorridorDemand({

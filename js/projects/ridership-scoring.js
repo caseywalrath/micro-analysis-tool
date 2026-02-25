@@ -318,21 +318,49 @@
   }
   RM.matchRoutesToCSV = matchRoutesToCSV;
 
-  // Segment analysis: split routes into equal chunks, compute CDI per segment
-  function computeSegments(tpiResult, segmentMiles) {
+  // Segment analysis: split routes/lines into equal chunks, compute CDI per segment.
+  // selectedCorridor: "all" or falsy = process all routes + lines;
+  //                   "route:N" or "line:N" = only that feature (faster single-corridor view).
+  function computeSegments(tpiResult, segmentMiles, selectedCorridor) {
     var routes = App.routes || [];
-    if (routes.length === 0) return [];
+    var lines  = App.lines  || [];
 
-    // Combine all routes into one LineString (or use first route for simplicity)
+    // Build the list of features to segment based on corridor selection
+    var toProcess = [];
+    if (selectedCorridor && selectedCorridor !== "all") {
+      var parts   = selectedCorridor.split(":");
+      var selType = parts[0];
+      var selIdx  = parseInt(parts[1], 10);
+      if (selType === "route" && routes[selIdx] && routes[selIdx].geometry) {
+        toProcess.push({ feature: routes[selIdx], type: "route", index: selIdx });
+      } else if (selType === "line" && lines[selIdx] && lines[selIdx].geometry) {
+        toProcess.push({ feature: lines[selIdx], type: "line", index: selIdx });
+      }
+    } else {
+      // System-wide: all routes and lines
+      for (var ri = 0; ri < routes.length; ri++) {
+        if (routes[ri] && routes[ri].geometry) {
+          toProcess.push({ feature: routes[ri], type: "route", index: ri });
+        }
+      }
+      for (var li = 0; li < lines.length; li++) {
+        if (lines[li] && lines[li].geometry) {
+          toProcess.push({ feature: lines[li], type: "line", index: li });
+        }
+      }
+    }
+
+    if (toProcess.length === 0) return [];
+
     var segments = [];
+    var popRaw = tpiResult.rawValues.get("pop_density");
 
-    for (var ri = 0; ri < routes.length; ri++) {
-      var route = routes[ri];
-      if (!route || !route.geometry) continue;
+    for (var fi = 0; fi < toProcess.length; fi++) {
+      var item = toProcess[fi];
 
       var chunks;
       try {
-        chunks = turf.lineChunk(route, segmentMiles, { units: "miles" });
+        chunks = turf.lineChunk(item.feature, segmentMiles, { units: "miles" });
       } catch (_) { continue; }
 
       if (!chunks || !chunks.features) continue;
@@ -348,9 +376,8 @@
 
         // Intersect segment buffer with TPI geographies
         var segScoreSum = 0;
-        var segPopSum = 0;
+        var segPopSum   = 0;
         var segGeoCount = 0;
-        var popRaw = tpiResult.rawValues.get("pop_density");
 
         for (var gi = 0; gi < tpiResult.geos.length; gi++) {
           var geo = tpiResult.geos[gi];
@@ -369,7 +396,7 @@
           if (!inter) continue;
 
           var overlapArea = turf.area(inter);
-          var geoArea = turf.area(geo);
+          var geoArea     = turf.area(geo);
           var frac = geoArea > 0 ? Math.min(1, overlapArea / geoArea) : 0;
           if (frac <= 0) continue;
 
@@ -378,21 +405,22 @@
           var pop = (popDens && Number.isFinite(popDens)) ? popDens * areaSqMi * frac : frac;
 
           segScoreSum += scoreData.composite * pop;
-          segPopSum += pop;
+          segPopSum   += pop;
           segGeoCount++;
         }
 
         var segCDI = segPopSum > 0 ? segScoreSum / segPopSum : NaN;
 
         segments.push({
-          routeIndex: ri,
-          segmentIndex: ci,
-          geometry: chunk.geometry,
+          featureType:    item.type,
+          routeIndex:     item.index,
+          segmentIndex:   ci,
+          geometry:       chunk.geometry,
           bufferGeometry: segBuffer.geometry,
-          cdi: segCDI,
+          cdi:            segCDI,
           classification: classifyCDI({ value: segCDI }).label,
-          geoCount: segGeoCount,
-          lengthMiles: segmentMiles
+          geoCount:       segGeoCount,
+          lengthMiles:    segmentMiles
         });
       }
     }
@@ -773,5 +801,7 @@
     return totalLength;
   }
   RM.getRouteLength = getRouteLength;
+
+  RM.computeSegments = computeSegments;
 
 })();
