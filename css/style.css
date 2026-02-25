@@ -1247,29 +1247,30 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Libe
   margin: 16px 0;
 }
 
-/* Scenario sub-tabs */
-.rf-scenario-tabs {
-  display: flex;
-  gap: 0;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 12px;
-}
-.rf-scenario-tab {
-  padding: 5px 12px;
-  font-size: 12px;
-  border: none;
-  background: none;
-  color: var(--muted);
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-}
-.rf-scenario-tab-active { color: #2b6cb0; border-bottom-color: #2b6cb0; font-weight: 600; }
-.rf-scenario-grid {
+/* Scenario 4-column layout */
+.rf-scenario-columns {
   display: grid;
-  grid-template-columns: 140px 1fr;
-  gap: 6px 10px;
-  align-items: center;
+  grid-template-columns: repeat(4, 1fr);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+.rf-scenario-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  border-right: 1px solid var(--border);
+}
+.rf-scenario-col:last-child { border-right: none; }
+.rf-scenario-col-header {
+  font-size: 12px;
+  font-weight: 600;
+  color: #2b6cb0;
+  padding-bottom: 6px;
+  border-bottom: 2px solid #2b6cb0;
+  margin-bottom: 4px;
 }
 
 /* Comparison table */

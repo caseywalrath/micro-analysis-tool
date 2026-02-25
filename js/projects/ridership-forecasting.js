@@ -187,7 +187,6 @@
 
     // Refresh active tab content
     if (tabId === "elasticity") refreshElasticity();
-    if (tabId === "scenarios") loadScenarioForm(_activeScenario);
   }
 
   // ---- Layer 1: Demand ----
@@ -982,51 +981,41 @@
 
   // ---- Layer 4: Scenarios ----
 
-  function saveScenarioForm() {
-    var s = _scenarios[_activeScenario];
-    var nameEl = document.getElementById("rfScenName");
-    if (nameEl) s.name = nameEl.value;
-    s.serviceTypeId = (document.getElementById("rfScenServiceType") || {}).value || "local_bus";
-    s.headway = parseFloat((document.getElementById("rfScenHeadway") || {}).value) || 30;
-    s.span = parseFloat((document.getElementById("rfScenSpan") || {}).value) || 14;
-    s.avgSpeed = parseFloat((document.getElementById("rfScenSpeed") || {}).value) || 15;
-    s.costPerRevenueHour = parseFloat((document.getElementById("rfScenCostPerHr") || {}).value) || 150;
-    s.serviceDaysPerYear = parseInt((document.getElementById("rfScenServiceDays") || {}).value, 10) || 260;
+  function saveAllScenarioForms() {
+    for (var i = 0; i < 4; i++) {
+      var s = _scenarios[i];
+      var nameEl = document.getElementById("rfScenName_" + i);
+      if (nameEl) s.name = nameEl.value;
+      s.serviceTypeId = (document.getElementById("rfScenServiceType_" + i) || {}).value || "local_bus";
+      s.headway = parseFloat((document.getElementById("rfScenHeadway_" + i) || {}).value) || 30;
+      s.span = parseFloat((document.getElementById("rfScenSpan_" + i) || {}).value) || 14;
+      s.avgSpeed = parseFloat((document.getElementById("rfScenSpeed_" + i) || {}).value) || 15;
+      s.costPerRevenueHour = parseFloat((document.getElementById("rfScenCostPerHr_" + i) || {}).value) || 150;
+      s.serviceDaysPerYear = parseInt((document.getElementById("rfScenServiceDays_" + i) || {}).value, 10) || 260;
+    }
   }
 
-  function loadScenarioForm(idx) {
-    _activeScenario = idx;
-    var s = _scenarios[idx];
-
-    // Update sub-tab active state
-    var tabs = document.querySelectorAll(".rf-scenario-tab");
-    for (var i = 0; i < tabs.length; i++) {
-      if (parseInt(tabs[i].getAttribute("data-scenario"), 10) === idx) {
-        tabs[i].classList.add("rf-scenario-tab-active");
-      } else {
-        tabs[i].classList.remove("rf-scenario-tab-active");
-      }
+  function loadAllScenarioForms() {
+    for (var i = 0; i < 4; i++) {
+      var s = _scenarios[i];
+      var nameEl = document.getElementById("rfScenName_" + i);
+      if (nameEl) nameEl.value = s.name || SCENARIO_NAMES[i];
+      var stEl = document.getElementById("rfScenServiceType_" + i);
+      if (stEl) stEl.value = s.serviceTypeId || "local_bus";
+      var hwEl = document.getElementById("rfScenHeadway_" + i);
+      if (hwEl) hwEl.value = String(s.headway || 30);
+      var spanEl = document.getElementById("rfScenSpan_" + i);
+      if (spanEl) spanEl.value = String(s.span || 14);
+      var speedEl = document.getElementById("rfScenSpeed_" + i);
+      if (speedEl) speedEl.value = String(s.avgSpeed || 15);
+      var costEl = document.getElementById("rfScenCostPerHr_" + i);
+      if (costEl) costEl.value = String(s.costPerRevenueHour || 150);
+      var daysEl = document.getElementById("rfScenServiceDays_" + i);
+      if (daysEl) daysEl.value = String(s.serviceDaysPerYear || 260);
     }
-
-    var nameEl = document.getElementById("rfScenName");
-    if (nameEl) nameEl.value = s.name || SCENARIO_NAMES[idx];
-    var stEl = document.getElementById("rfScenServiceType");
-    if (stEl) stEl.value = s.serviceTypeId || "local_bus";
-    var hwEl = document.getElementById("rfScenHeadway");
-    if (hwEl) hwEl.value = String(s.headway || 30);
-    var spanEl = document.getElementById("rfScenSpan");
-    if (spanEl) spanEl.value = String(s.span || 14);
-    var speedEl = document.getElementById("rfScenSpeed");
-    if (speedEl) speedEl.value = String(s.avgSpeed || 15);
-    var costEl = document.getElementById("rfScenCostPerHr");
-    if (costEl) costEl.value = String(s.costPerRevenueHour || 150);
-    var daysEl = document.getElementById("rfScenServiceDays");
-    if (daysEl) daysEl.value = String(s.serviceDaysPerYear || 260);
   }
 
   function buildAndCompareScenarios() {
-    saveScenarioForm(); // save current form first
-
     var activeCDI = getActiveCDI();
     if (!Number.isFinite(activeCDI)) {
       alert("Run Demand or Calibrate analysis first.");
@@ -1037,30 +1026,35 @@
     var calibFactor = (_calibration && _calibration.factor) ? _calibration.factor : 1;
     var lengthScale = (_normalizeByLength && _calibration) ? getTargetCorridorLength() : 1;
     var baseCDI = activeCDI;
+    var freqElast = parseFloat((document.getElementById("rfFreqElastValue") || {}).value) || 0.5;
 
     var builtScenarios = [];
 
-    for (var i = 0; i < _scenarios.length; i++) {
-      var s = _scenarios[i];
-      if (!s.name && i > 0) continue; // skip empty scenarios beyond A
+    for (var i = 0; i < 4; i++) {
+      var name = (document.getElementById("rfScenName_" + i) || {}).value || SCENARIO_NAMES[i];
+      var serviceTypeId = (document.getElementById("rfScenServiceType_" + i) || {}).value || "local_bus";
+      var headway = parseFloat((document.getElementById("rfScenHeadway_" + i) || {}).value) || 30;
+      var span = parseFloat((document.getElementById("rfScenSpan_" + i) || {}).value) || 14;
+      var avgSpeed = parseFloat((document.getElementById("rfScenSpeed_" + i) || {}).value) || 15;
+      var costPerRevenueHour = parseFloat((document.getElementById("rfScenCostPerHr_" + i) || {}).value) || 150;
+      var serviceDaysPerYear = parseInt((document.getElementById("rfScenServiceDays_" + i) || {}).value, 10) || 260;
 
-      // Compute elasticity for this scenario's service type
       var elast = RM.applyElasticity(baseCDI * calibFactor * lengthScale, {
-        serviceTypeId: s.serviceTypeId,
+        serviceTypeId: serviceTypeId,
         baseHeadway: 30, // baseline local bus
-        newHeadway: s.headway,
-        freqElasticity: parseFloat((document.getElementById("rfFreqElastValue") || {}).value) || 0.5
+        newHeadway: headway,
+        freqElasticity: freqElast
       });
 
       var built = RM.buildScenario({
-        name: s.name,
-        serviceTypeId: s.serviceTypeId,
+        name: name,
+        serviceTypeId: serviceTypeId,
         routeLengthMiles: routeLength,
-        headway: s.headway,
-        span: s.span,
-        avgSpeed: s.avgSpeed,
-        costPerRevenueHour: s.costPerRevenueHour,
-        serviceDaysPerYear: s.serviceDaysPerYear,
+        headway: headway,
+        span: span,
+        avgSpeed: avgSpeed,
+        costPerRevenueHour: costPerRevenueHour,
+        serviceDaysPerYear: serviceDaysPerYear,
         baseDemandCDI: baseCDI * calibFactor * lengthScale,
         elasticityResult: elast,
         calibrationFactor: 1 // already applied via baseCDI * calibFactor * lengthScale
@@ -1455,15 +1449,7 @@
       });
     }
 
-    // Scenario tab
-    var scenTabs = document.querySelectorAll(".rf-scenario-tab");
-    for (var si = 0; si < scenTabs.length; si++) {
-      scenTabs[si].addEventListener("click", function (e) {
-        saveScenarioForm();
-        loadScenarioForm(parseInt(e.target.getAttribute("data-scenario"), 10));
-      });
-    }
-
+    // Scenarios tab
     var buildBtn = document.getElementById("rfBuildScenarios");
     if (buildBtn) buildBtn.addEventListener("click", buildAndCompareScenarios);
 
@@ -1517,11 +1503,14 @@
 
     // Restore active tab
     switchTab(_activeTab);
+
+    // Restore all scenario form values
+    loadAllScenarioForms();
   }
 
   function onClose(core) {
-    // Save scenario form state
-    saveScenarioForm();
+    // Save all scenario form state
+    saveAllScenarioForms();
   }
 
   async function update(core) {

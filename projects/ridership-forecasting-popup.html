@@ -393,52 +393,129 @@
     <div class="rf-tab-body">
 
       <div class="rf-section-title">Service Scenarios</div>
-      <div class="tiny" style="margin-bottom:8px;">
-        Define operating characteristics for each service type to compare ridership, cost, and productivity.
+      <div class="tiny" style="margin-bottom:10px;">
+        Define operating characteristics for each scenario to compare ridership, cost, and productivity side-by-side.
       </div>
 
-      <!-- Scenario sub-tabs -->
-      <div class="rf-scenario-tabs">
-        <button class="rf-scenario-tab rf-scenario-tab-active" data-scenario="0">Scenario A</button>
-        <button class="rf-scenario-tab" data-scenario="1">Scenario B</button>
-        <button class="rf-scenario-tab" data-scenario="2">Scenario C</button>
-        <button class="rf-scenario-tab" data-scenario="3">Scenario D</button>
-      </div>
+      <!-- 4-column scenario inputs -->
+      <div class="rf-scenario-columns">
 
-      <!-- Scenario input form (shared, values swap per active scenario) -->
-      <div class="rf-scenario-form">
-        <div class="rf-scenario-grid">
-          <label class="tiny">Scenario Name</label>
-          <input id="rfScenName" type="text" value="Scenario A" class="rf-text-input" />
-
+        <!-- Scenario A -->
+        <div class="rf-scenario-col">
+          <div class="rf-scenario-col-header">Scenario A</div>
+          <label class="tiny">Name</label>
+          <input id="rfScenName_0" type="text" value="Scenario A" class="rf-text-input" />
           <label class="tiny">Service Type</label>
-          <select id="rfScenServiceType" class="rf-select">
+          <select id="rfScenServiceType_0" class="rf-select">
             <option value="local_bus">Local Bus</option>
             <option value="enhanced_bus">Enhanced Bus</option>
-            <option value="limited_stop">Limited-Stop Express</option>
+            <option value="limited_stop">Limited-Stop</option>
             <option value="brt">BRT-Style</option>
           </select>
-
-          <label class="tiny">Peak Headway (min)</label>
-          <input id="rfScenHeadway" type="number" min="1" max="120" value="30" class="rf-number-input" />
-
-          <label class="tiny">Service Span (hrs/day)</label>
-          <input id="rfScenSpan" type="number" min="1" max="24" value="14" class="rf-number-input" />
-
-          <label class="tiny">Average Speed (mph)</label>
-          <input id="rfScenSpeed" type="number" min="1" max="80" value="15" class="rf-number-input" />
-
-          <label class="tiny">Cost per Revenue Hour ($)</label>
-          <input id="rfScenCostPerHr" type="number" min="1" max="500" value="150" class="rf-number-input" />
-
-          <label class="tiny">Service Days per Year</label>
-          <select id="rfScenServiceDays" class="rf-select">
-            <option value="260">260 (Weekday only)</option>
-            <option value="302">302 (Weekday + Saturday)</option>
-            <option value="312">312 (Daily except holidays)</option>
+          <label class="tiny">Headway (min)</label>
+          <input id="rfScenHeadway_0" type="number" min="1" max="120" value="30" class="rf-number-input" />
+          <label class="tiny">Span (hrs/day)</label>
+          <input id="rfScenSpan_0" type="number" min="1" max="24" value="14" class="rf-number-input" />
+          <label class="tiny">Speed (mph)</label>
+          <input id="rfScenSpeed_0" type="number" min="1" max="80" value="15" class="rf-number-input" />
+          <label class="tiny">Cost/Rev-Hr ($)</label>
+          <input id="rfScenCostPerHr_0" type="number" min="1" max="500" value="150" class="rf-number-input" />
+          <label class="tiny">Service Days/Yr</label>
+          <select id="rfScenServiceDays_0" class="rf-select">
+            <option value="260">260 (Weekday)</option>
+            <option value="302">302 (+ Sat.)</option>
+            <option value="312">312 (Exc. holidays)</option>
             <option value="365">365 (Daily)</option>
           </select>
         </div>
+
+        <!-- Scenario B -->
+        <div class="rf-scenario-col">
+          <div class="rf-scenario-col-header">Scenario B</div>
+          <label class="tiny">Name</label>
+          <input id="rfScenName_1" type="text" value="Scenario B" class="rf-text-input" />
+          <label class="tiny">Service Type</label>
+          <select id="rfScenServiceType_1" class="rf-select">
+            <option value="local_bus">Local Bus</option>
+            <option value="enhanced_bus">Enhanced Bus</option>
+            <option value="limited_stop">Limited-Stop</option>
+            <option value="brt">BRT-Style</option>
+          </select>
+          <label class="tiny">Headway (min)</label>
+          <input id="rfScenHeadway_1" type="number" min="1" max="120" value="30" class="rf-number-input" />
+          <label class="tiny">Span (hrs/day)</label>
+          <input id="rfScenSpan_1" type="number" min="1" max="24" value="14" class="rf-number-input" />
+          <label class="tiny">Speed (mph)</label>
+          <input id="rfScenSpeed_1" type="number" min="1" max="80" value="15" class="rf-number-input" />
+          <label class="tiny">Cost/Rev-Hr ($)</label>
+          <input id="rfScenCostPerHr_1" type="number" min="1" max="500" value="150" class="rf-number-input" />
+          <label class="tiny">Service Days/Yr</label>
+          <select id="rfScenServiceDays_1" class="rf-select">
+            <option value="260">260 (Weekday)</option>
+            <option value="302">302 (+ Sat.)</option>
+            <option value="312">312 (Exc. holidays)</option>
+            <option value="365">365 (Daily)</option>
+          </select>
+        </div>
+
+        <!-- Scenario C -->
+        <div class="rf-scenario-col">
+          <div class="rf-scenario-col-header">Scenario C</div>
+          <label class="tiny">Name</label>
+          <input id="rfScenName_2" type="text" value="Scenario C" class="rf-text-input" />
+          <label class="tiny">Service Type</label>
+          <select id="rfScenServiceType_2" class="rf-select">
+            <option value="local_bus">Local Bus</option>
+            <option value="enhanced_bus">Enhanced Bus</option>
+            <option value="limited_stop">Limited-Stop</option>
+            <option value="brt">BRT-Style</option>
+          </select>
+          <label class="tiny">Headway (min)</label>
+          <input id="rfScenHeadway_2" type="number" min="1" max="120" value="30" class="rf-number-input" />
+          <label class="tiny">Span (hrs/day)</label>
+          <input id="rfScenSpan_2" type="number" min="1" max="24" value="14" class="rf-number-input" />
+          <label class="tiny">Speed (mph)</label>
+          <input id="rfScenSpeed_2" type="number" min="1" max="80" value="15" class="rf-number-input" />
+          <label class="tiny">Cost/Rev-Hr ($)</label>
+          <input id="rfScenCostPerHr_2" type="number" min="1" max="500" value="150" class="rf-number-input" />
+          <label class="tiny">Service Days/Yr</label>
+          <select id="rfScenServiceDays_2" class="rf-select">
+            <option value="260">260 (Weekday)</option>
+            <option value="302">302 (+ Sat.)</option>
+            <option value="312">312 (Exc. holidays)</option>
+            <option value="365">365 (Daily)</option>
+          </select>
+        </div>
+
+        <!-- Scenario D -->
+        <div class="rf-scenario-col">
+          <div class="rf-scenario-col-header">Scenario D</div>
+          <label class="tiny">Name</label>
+          <input id="rfScenName_3" type="text" value="Scenario D" class="rf-text-input" />
+          <label class="tiny">Service Type</label>
+          <select id="rfScenServiceType_3" class="rf-select">
+            <option value="local_bus">Local Bus</option>
+            <option value="enhanced_bus">Enhanced Bus</option>
+            <option value="limited_stop">Limited-Stop</option>
+            <option value="brt">BRT-Style</option>
+          </select>
+          <label class="tiny">Headway (min)</label>
+          <input id="rfScenHeadway_3" type="number" min="1" max="120" value="30" class="rf-number-input" />
+          <label class="tiny">Span (hrs/day)</label>
+          <input id="rfScenSpan_3" type="number" min="1" max="24" value="14" class="rf-number-input" />
+          <label class="tiny">Speed (mph)</label>
+          <input id="rfScenSpeed_3" type="number" min="1" max="80" value="15" class="rf-number-input" />
+          <label class="tiny">Cost/Rev-Hr ($)</label>
+          <input id="rfScenCostPerHr_3" type="number" min="1" max="500" value="150" class="rf-number-input" />
+          <label class="tiny">Service Days/Yr</label>
+          <select id="rfScenServiceDays_3" class="rf-select">
+            <option value="260">260 (Weekday)</option>
+            <option value="302">302 (+ Sat.)</option>
+            <option value="312">312 (Exc. holidays)</option>
+            <option value="365">365 (Daily)</option>
+          </select>
+        </div>
+
       </div>
 
       <!-- Comparison table -->
