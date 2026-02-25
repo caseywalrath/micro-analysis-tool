@@ -70,7 +70,7 @@ projects/
   transit-propensity.html   TPI sidebar panel (legacy, replaced by popup version)
   tpi-weights.html          TPI weight sliders (legacy, merged into popup)
   tpi-legend.html           TPI legend: 5-class Blues color swatches (reused by floating widget)
-  ridership-forecasting-popup.html  RF popup body: 4-tab layout (Calibrate first), 3-step calibration workflow UI (system analysis → CSV upload → match/calibrate), corridor dropdown in Demand tab, CDI info button (ⓘ toggle), segment breakdown, elasticity sliders, scenario sub-tabs, comparison table
+  ridership-forecasting-popup.html  RF popup body: 4-tab layout (Calibrate first), 3-step calibration workflow UI (system analysis → CSV upload → match/calibrate); "Adjust Weights" button above "Analyze System" opens an in-popup modal overlay with 9 factor weight sliders (Confirm / Cancel / Reset to Defaults / Copy From TPI); corridor dropdown in Demand tab, CDI info button (ⓘ toggle), segment breakdown, elasticity sliders, scenario sub-tabs, comparison table
   ridership-legend.html     RF demand legend: 5-class Blues swatches for CDI score (High → Low)
 docs/
   ridership-forecasting-plan.md  Strategic evaluation and implementation plan for the ridership forecasting tool
@@ -177,8 +177,14 @@ Floating widget options: `{ position: "bottom-left"|"bottom-right"|"top-left"|"t
 ### tpi-scoring.js (window.TPI namespace, not on App)
 `TPI.FACTORS` (9-factor array with id, label, weight, acsCodes, compute functions), `TPI.batchFetchACS(geoLevel, year, geoids)`, `TPI.aggregateLodesToGeo(lodesData, geoLevel, geoids)`, `TPI.computeQuintiles(values)`, `TPI.computeComposite(factorScores, weights)`, `TPI.computeTPI(options)` (full pipeline: fetch → normalize → score), `TPI.rescoreFromRaw(rawValues, weights, geoids)` (instant re-score from cached data)
 
-### transit-propensity.js (analysis module, no public API)
+**Default factor weights** (sum = 100): Population Density 35, Employment Density 35, Zero-Vehicle HH 0, Low-Income % 6, Senior 65+ % 6, Disability % 6, People of Color % 6, Youth <18% 0, LEP % 6. These are shared defaults for both TPI and RF modules (each module stores its own independent copy in `_weights`).
+
+**Tract-level fallbacks** (within `TPI.computeTPI()`): When `geoLevel === "bg"` and `apportionByArea` is false, TPI runs two fallback passes: (1) *static* — factors flagged `tractOnly: true` (currently only LEP / C16001) are always fetched at tract level and mapped down to block groups via parent-tract GEOID slicing; (2) *dynamic* — after computing raw values, any ACS factor that produced zero finite values at BG level is automatically re-fetched at tract level and remapped. Both fallbacks are skipped when `apportionByArea: true`. All downstream modules (RF included) benefit automatically since they delegate to `TPI.computeTPI()`.
+
+### transit-propensity.js (analysis module)
 Registers module `"transit-propensity"` as a popup-based analysis. Opens in a 3-column popup (Weights | Results | Actions) with its own geography/year selectors. Internal functions: `runTPI()`, `runInstantRescore()`, `renderChoropleth(result)`, `clearChoropleth()`, `displayResults(result)`, `exportGeoJSON()`, `exportCSV()`, `markStale()`. All state is private to the IIFE closure. DOM writes are guarded with `isPopupVisible()` so `update()` can safely fire when the popup is closed.
+
+**Public API (on `App`):** `App.getTpiWeights()` — returns a shallow copy of TPI's current `_weights` object. Used by the RF module's "Copy From TPI" button to read TPI's live weight settings without tight coupling.
 
 ### ridership-scoring.js (window.RidershipModel namespace, not on App)
 Scoring engine for the Ridership Forecasting module. Depends on `window.TPI` for demand computation.
@@ -187,9 +193,9 @@ Scoring engine for the Ridership Forecasting module. Depends on `window.TPI` for
 
 `RidershipModel.getServiceType(id)` — returns a service type preset by id.
 
-`RidershipModel.computeCorridorDemand(options)` — wraps `TPI.computeTPI()`, then computes the Corridor Demand Index (CDI) as a population-weighted average of TPI composite scores. Options: `{ geoLevel, year, weights, lodesData, apportionByArea, segmentLengthMiles, onProgress }`. Returns `{ tpiResult, corridorCDI: { value, scored, total }, segments: [...], classification }`.
+`RidershipModel.computeCorridorDemand(options)` — wraps `TPI.computeTPI()`, then computes the Corridor Demand Index (CDI) as a population-weighted average of TPI composite scores. Options: `{ geoLevel, year, weights, lodesData, apportionByArea, segmentLengthMiles, onProgress }`. Returns `{ tpiResult, corridorCDI: { value, scored, total }, segments: [...], classification }`. Used in uncalibrated mode only; calibrated mode bypasses this and calls `computeSegments()` directly on cached TPI data.
 
-Segment objects: `{ cdi, classification, geoCount, bufferGeometry }`. Segments are produced by chunking all route geometries with `turf.lineChunk()`, buffering each chunk, and re-aggregating TPI geographies by overlap fraction — no additional Census API calls.
+`RidershipModel.computeSegments(tpiResult, segmentMiles, selectedCorridor)` — segments drawn routes and lines into equal-length chunks, computes a population-weighted CDI for each segment by intersecting chunk buffers with already-fetched TPI geographies. Pure turf.js — no Census API calls. `selectedCorridor` is `"route:N"` / `"line:N"` (only that feature) or `"all"` / falsy (all drawn routes and lines). Segment objects: `{ featureType, routeIndex, segmentIndex, cdi, classification, geoCount, geometry, bufferGeometry, lengthMiles }`.
 
 `RidershipModel.classifyCDI(score)` — returns `{ label, level, cssClass }` for a numeric CDI (High ≥4, Medium 3–3.9, Low-Medium 2–2.9, Low <2).
 
@@ -214,9 +220,9 @@ Segment objects: `{ cdi, classification, geoCount, bufferGeometry }`. Segments a
 ### ridership-forecasting.js (analysis module, no public API)
 Registers module `"ridership-forecasting"` as a popup-based analysis. Opens in a 4-tab popup (960px wide). All state is private to the IIFE closure. DOM writes are guarded with `isPopupVisible()`.
 
-**Tab 1 – Calibrate** (now first): 3-step gated workflow. Step 1: "Analyze System" — geography/year settings + button; calls `RidershipModel.computeSystemDemand()` and shows a per-route CDI score table. Step 2: "Upload CSV" — file picker, auto-column detection via `App.guessHeader()`, "Match Routes" button; calls `RidershipModel.matchRoutesToCSV()` and shows green/red match results. Step 3: "Run Calibration" — uses matched (CDI, ridership) pairs (one per route) for ratio-based or OLS regression calibration. Each step is unlocked by completing the previous one. Calibration factor persists across tabs.
+**Tab 1 – Calibrate** (now first): 3-step gated workflow. Step 1: "Analyze System" — geography/year settings, an **"Adjust Weights" button** (opens a modal overlay with 9 factor weight sliders; buttons: Confirm / Cancel / Reset to Defaults / Copy From TPI), and the "Analyze System" button; calls `RidershipModel.computeSystemDemand()` and shows a per-route CDI score table. Step 2: "Upload CSV" — file picker, auto-column detection via `App.guessHeader()`, "Match Routes" button; calls `RidershipModel.matchRoutesToCSV()` and shows green/red match results. Step 3: "Run Calibration" — uses matched (CDI, ridership) pairs (one per route) for ratio-based or OLS regression calibration. Each step is unlocked by completing the previous one. Calibration factor persists across tabs. RF weights are independent from TPI weights; `_weights` is stored in the module closure and defaults to `TPI.getDefaultWeights()`.
 
-**Tab 2 – Demand**: Corridor dropdown ("Analyze corridor") populated from per-route CDI data lets the user select a specific route/line or the system-wide CDI. If calibration has been run, the displayed CDI reflects that corridor's score relative to the shared quintile normalization. If calibration has not been run, an uncalibrated warning banner is shown but analysis still works. Renders CDI choropleth on map (Blues color ramp), segment overlay, and floating legend widget (`projects/ridership-legend.html`). CDI info button (ⓘ) toggles inline explanation. GeoJSON and CSV export enabled after analysis.
+**Tab 2 – Demand**: Corridor dropdown ("Analyze corridor") populated from per-route CDI data lets the user select a specific route/line or the system-wide CDI. If calibration has been run, the displayed CDI reads directly from the cached `_perRouteCDI` array (no Census API calls). Segment analysis in calibrated mode calls `RidershipModel.computeSegments()` directly on the cached `_systemResult.tpiResult` — no redundant TPI re-fetch. Segments are scoped to the selected corridor only (single corridor selected = only that feature's segments; "All corridors" = all routes and lines). If calibration has not been run, `computeCorridorDemand()` is called (full TPI fetch). Renders CDI choropleth on map (Blues color ramp), segment overlay, and floating legend widget (`projects/ridership-legend.html`). CDI info button (ⓘ) toggles inline explanation. GeoJSON and CSV export enabled after analysis.
 
 **Tab 3 – Elasticity**: Service type dropdown, baseline/proposed headway inputs, frequency elasticity slider (0.1–1.0, default 0.5). Uses `getActiveCDI()` (see below) so the CDI automatically reflects the selected corridor. Calls `RidershipModel.applyElasticity()` and displays Conservative / Moderate / Optimistic ridership ranges. Recalculates instantly on any input change (no API calls).
 
@@ -224,7 +230,7 @@ Registers module `"ridership-forecasting"` as a popup-based analysis. Opens in a
 
 **`getActiveCDI()`** (internal helper): Returns the CDI value for the currently selected corridor. Checks `_selectedCorridor` against `_perRouteCDI`; falls back to `_systemResult.systemCDI.value`, then `_lastResult.corridorCDI.value`. Replaces all hardcoded `_lastResult.corridorCDI.value` references in Elasticity and Scenarios tabs, so they automatically update when the corridor selection changes.
 
-**Module-local state**: `_lastResult` (legacy demand result from Demand tab), `_systemResult` (result from `computeSystemDemand()`), `_perRouteCDI` (per-route CDI array), `_matchResult` (CSV match result), `_selectedCorridor` ("all" or "route:N"/"line:N"), `_calibration` (calibration coefficients), `_calibData` (uploaded CSV rows), `_scenarios` (array of 4 scenario param sets), `_activeScenario`, `_stale`, `_running`, `_initialized`, `_apportionByArea`, `_activeTab`.
+**Module-local state**: `_lastResult` (legacy demand result from Demand tab), `_systemResult` (result from `computeSystemDemand()`), `_perRouteCDI` (per-route CDI array), `_matchResult` (CSV match result), `_selectedCorridor` ("all" or "route:N"/"line:N"), `_calibration` (calibration coefficients), `_calibData` (uploaded CSV rows), `_scenarios` (array of 4 scenario param sets), `_activeScenario`, `_stale`, `_running`, `_initialized`, `_apportionByArea`, `_activeTab`, `_weights` (independent factor weights, defaults to `TPI.getDefaultWeights()`), `_pendingWeights` (temporary copy while the Adjust Weights modal is open).
 
 ## Analysis Module System
 
