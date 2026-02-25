@@ -19,6 +19,7 @@
   var _running = false;
   var _initialized = false;
   var _apportionByArea = false;
+  var _normalizeByLength = false;
   var _calibration = null;      // { factor, n, rSquared, ... }
   var _calibData = null;        // parsed CSV rows
   var _scenarios = [{}, {}, {}, {}]; // 4 scenario parameter sets
@@ -506,6 +507,24 @@
     return NaN;
   }
 
+  function getTargetCorridorLength() {
+    // Return length in miles for the currently selected corridor.
+    if (_selectedCorridor !== "all" && _perRouteCDI) {
+      var parts = _selectedCorridor.split(":");
+      var type = parts[0];
+      var idx = parseInt(parts[1], 10);
+      for (var i = 0; i < _perRouteCDI.length; i++) {
+        var r = _perRouteCDI[i];
+        if (r.featureType === type && r.featureIndex === idx) {
+          return (Number.isFinite(r.lengthMiles) && r.lengthMiles > 0) ? r.lengthMiles : 1;
+        }
+      }
+    }
+    // "all" or no match: total length of all drawn routes
+    var total = RM.getRouteLength();
+    return (Number.isFinite(total) && total > 0) ? total : 1;
+  }
+
   function populateCorridorDropdown() {
     var sel = document.getElementById("rfCorridorSelect");
     if (!sel) return;
@@ -757,6 +776,11 @@
       if (!Number.isFinite(ridership)) continue;
       var routeCDI = match.routeCDI.cdi;
       if (!Number.isFinite(routeCDI) || routeCDI <= 0) continue;
+      if (_normalizeByLength) {
+        var len = match.routeCDI.lengthMiles;
+        if (!Number.isFinite(len) || len <= 0) continue;
+        ridership = ridership / len;
+      }
       obs.push({ ridership: ridership, demandIndex: routeCDI });
     }
 
@@ -845,7 +869,8 @@
     var freqElast = parseFloat(document.getElementById("rfFreqElastValue").value) || 0.5;
 
     var calibFactor = (_calibration && _calibration.factor) ? _calibration.factor : 1;
-    var baseCDI = getActiveCDI() * calibFactor;
+    var lengthScale = (_normalizeByLength && _calibration) ? getTargetCorridorLength() : 1;
+    var baseCDI = getActiveCDI() * calibFactor * lengthScale;
 
     var elast = RM.applyElasticity(baseCDI, {
       serviceTypeId: stId,
@@ -926,6 +951,7 @@
 
     var routeLength = RM.getRouteLength();
     var calibFactor = (_calibration && _calibration.factor) ? _calibration.factor : 1;
+    var lengthScale = (_normalizeByLength && _calibration) ? getTargetCorridorLength() : 1;
     var baseCDI = activeCDI;
 
     var builtScenarios = [];
@@ -935,7 +961,7 @@
       if (!s.name && i > 0) continue; // skip empty scenarios beyond A
 
       // Compute elasticity for this scenario's service type
-      var elast = RM.applyElasticity(baseCDI * calibFactor, {
+      var elast = RM.applyElasticity(baseCDI * calibFactor * lengthScale, {
         serviceTypeId: s.serviceTypeId,
         baseHeadway: 30, // baseline local bus
         newHeadway: s.headway,
@@ -951,9 +977,9 @@
         avgSpeed: s.avgSpeed,
         costPerRevenueHour: s.costPerRevenueHour,
         serviceDaysPerYear: s.serviceDaysPerYear,
-        baseDemandCDI: baseCDI * calibFactor,
+        baseDemandCDI: baseCDI * calibFactor * lengthScale,
         elasticityResult: elast,
-        calibrationFactor: 1 // already applied via baseCDI * calibFactor
+        calibrationFactor: 1 // already applied via baseCDI * calibFactor * lengthScale
       });
 
       builtScenarios.push(built);
@@ -1186,6 +1212,17 @@
       });
     }
 
+    var calibNormCb = document.getElementById("rfCalibNormalizeByLength");
+    if (calibNormCb) {
+      calibNormCb.checked = _normalizeByLength;
+      calibNormCb.addEventListener("change", function () {
+        _normalizeByLength = calibNormCb.checked;
+        var demandNormCb = document.getElementById("rfNormalizeByLength");
+        if (demandNormCb) demandNormCb.checked = _normalizeByLength;
+        markStale();
+      });
+    }
+
     var uploadBtn = document.getElementById("rfUploadCalibCSV");
     var fileInput = document.getElementById("rfCalibFile");
     if (uploadBtn && fileInput) {
@@ -1229,6 +1266,17 @@
         // Sync to calibrate tab checkbox
         var calibCb = document.getElementById("rfCalibApportionByArea");
         if (calibCb) calibCb.checked = _apportionByArea;
+        markStale();
+      });
+    }
+
+    var normCb = document.getElementById("rfNormalizeByLength");
+    if (normCb) {
+      normCb.checked = _normalizeByLength;
+      normCb.addEventListener("change", function () {
+        _normalizeByLength = normCb.checked;
+        var calibNormCb2 = document.getElementById("rfCalibNormalizeByLength");
+        if (calibNormCb2) calibNormCb2.checked = _normalizeByLength;
         markStale();
       });
     }
@@ -1308,6 +1356,12 @@
     if (apportionCb) apportionCb.checked = _apportionByArea;
     var calibApportionCb = document.getElementById("rfCalibApportionByArea");
     if (calibApportionCb) calibApportionCb.checked = _apportionByArea;
+
+    // Sync normalize-by-length checkboxes
+    var normCb = document.getElementById("rfNormalizeByLength");
+    if (normCb) normCb.checked = _normalizeByLength;
+    var calibNormCb = document.getElementById("rfCalibNormalizeByLength");
+    if (calibNormCb) calibNormCb.checked = _normalizeByLength;
 
     // Restore system analysis state
     if (_systemResult) {

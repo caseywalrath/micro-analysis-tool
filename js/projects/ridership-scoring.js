@@ -229,13 +229,20 @@
       }
 
       var cdi = totalPop > 0 ? weightedSum / totalPop : NaN;
+      var srcGeom = feat.type === "route"
+        ? (App.routes[feat.index] || null)
+        : (App.lines[feat.index] || null);
+      var lengthMiles = (srcGeom && srcGeom.geometry)
+        ? turf.length(srcGeom, { units: "miles" })
+        : 0;
       results.push({
         name: feat.name,
         featureType: feat.type,
         featureIndex: feat.index,
         cdi: cdi,
         classification: classifyCDI({ value: cdi }).label,
-        geoCount: geoCount
+        geoCount: geoCount,
+        lengthMiles: lengthMiles
       });
     }
 
