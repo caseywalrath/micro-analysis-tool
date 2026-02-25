@@ -26,7 +26,7 @@
       bufferRadius: parseFloat(document.getElementById("bufferRadius").value) || 0.5,
       lineBufferRadius: parseFloat(document.getElementById("lineBufferRadius").value) || 0.5,
       routeBufferRadius: parseFloat(document.getElementById("routeBufferRadius").value) || 0.5,
-      lodesFileName: App.lodesFileName || ""
+      lodesFileNames: App.lodesFileNames || []
     };
 
     // Checkbox selections
@@ -113,12 +113,14 @@
     if (yearEl && state.year) yearEl.value = state.year;
 
     // 7. LODES filename hint (data is NOT cached — too large)
-    if (state.lodesFileName) {
-      App.lodesFileName = state.lodesFileName;
+    // Support both new array format (lodesFileNames) and old string format (lodesFileName)
+    var lodesHints = state.lodesFileNames ||
+      (state.lodesFileName ? [state.lodesFileName] : []);
+    if (lodesHints.length > 0) {
       var lodesInfoEl = document.getElementById("lodesInfo");
       if (lodesInfoEl) {
         lodesInfoEl.textContent =
-          "Previously loaded: " + state.lodesFileName + " \u2014 re-upload to use";
+          "Previously loaded: " + lodesHints.join(", ") + " \u2014 re-upload to use";
       }
     }
   }
@@ -186,13 +188,9 @@
     if (routeBufRadEl) routeBufRadEl.value = "0.5";
 
     // 4. Clear LODES state
-    App.lodesData = null;
-    App.lodesFileName = "";
-    if (typeof App.setLodesLoadedUI === "function") {
-      App.setLodesLoadedUI(false, "", 0);
+    if (typeof App.clearLodesData === "function") {
+      App.clearLodesData();
     }
-    var lodesInfoEl = document.getElementById("lodesInfo");
-    if (lodesInfoEl) lodesInfoEl.textContent = "";
 
     // 5. Uncheck all variable checkboxes
     var boxes = document.querySelectorAll('#varSelect input[type="checkbox"]');

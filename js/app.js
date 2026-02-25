@@ -49,7 +49,8 @@
       '<label class="var-check"><input type="checkbox" value="LODES_WAC_C000"> Total existing employment \u2014 file required</label>' +
       '<div class="lodes-actions">' +
         '<button type="button" id="downloadLodes">Download</button>' +
-        '<button type="button" id="lodesOpenFile">Add</button>' +
+        '<button type="button" id="lodesOpenFile">Add State</button>' +
+        '<button type="button" id="lodesClearAll" style="display:none;">Clear All</button>' +
       '</div>' +
       '<input id="lodesFile" type="file" accept=".gz,.csv.gz" style="display:none" />' +
       '<div id="lodesInfo" class="sb2-tiny" style="margin-top:4px;"></div>' +
@@ -646,39 +647,34 @@
       document.getElementById("lodesFile").click();
     });
 
-    // LODES file upload
+    // LODES file upload — merges into any already-loaded state data
     document.getElementById("lodesFile").addEventListener("change", async function (e) {
       var file = e.target.files && e.target.files[0];
       if (!file) return;
-
-      if (App.lodesData) {
-        var confirmed = confirm(
-          "A LODES file is already loaded (" + App.lodesFileName + ").\n\nLoad \"" + file.name + "\" and replace the existing data?"
-        );
-        if (!confirmed) {
-          this.value = "";
-          return;
-        }
-      }
-
+      this.value = ""; // allow re-selecting the same file
       try {
         var jobsMap = await App.parseLodesFromUploadedFile(file);
-        App.lodesData = jobsMap;
-        App.lodesFileName = file.name;
-        App.setLodesLoadedUI(true, file.name, jobsMap.size);
+        App.mergeLodesFile(jobsMap, file.name);
         App.setStatus("Ready");
         notifyProject();
         if (typeof App.cache !== "undefined") App.cache.save();
       } catch (err) {
-        App.lodesData = null;
-        App.lodesFileName = "";
-        App.setLodesLoadedUI(false, "", 0);
         App.setStatus("Error");
-        document.getElementById("lodesInfo").textContent = String(err && err.message ? err.message : err);
-        notifyProject();
-        if (typeof App.cache !== "undefined") App.cache.save();
+        var infoEl = document.getElementById("lodesInfo");
+        if (infoEl) infoEl.textContent = "Error loading " + file.name + ": " + String(err && err.message ? err.message : err);
       }
     });
+
+    // LODES clear-all button
+    var lodesClearBtn = document.getElementById("lodesClearAll");
+    if (lodesClearBtn) {
+      lodesClearBtn.addEventListener("click", function () {
+        if (!confirm("Remove all loaded LODES data?")) return;
+        App.clearLodesData();
+        notifyProject();
+        if (typeof App.cache !== "undefined") App.cache.save();
+      });
+    }
 
     // Reset session button: clear everything AND localStorage
     var resetBtn = document.getElementById("reset");

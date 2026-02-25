@@ -58,16 +58,48 @@
     a.remove();
   }
 
-  var LODES_UPLOADED = null; // Map(w_geocode -> C000)
+  var LODES_UPLOADED = null; // Map(w_geocode -> C000), merged across all loaded state files
   var LODES_UPLOADED_NAME = "";
+  var LODES_LOADED_FILES = []; // [{ name, stateAbbr, nRows }] — one entry per uploaded file
 
-  function setLodesLoadedUI(loaded, name, nRows) {
+  function guessStateFromMap(jobsMap) {
+    var firstKey = jobsMap.keys().next().value || "";
+    var fips = firstKey.slice(0, 2);
+    var abbr = STATE_FIPS_TO_ABBR[fips];
+    return abbr ? abbr.toUpperCase() : (fips || "??");
+  }
+
+  function setLodesLoadedUI() {
     var loadedEl = document.getElementById("lodesLoaded");
     var infoEl = document.getElementById("lodesInfo");
-    if (loadedEl) loadedEl.textContent = loaded ? "Yes" : "No";
-    if (infoEl) infoEl.textContent = loaded
-      ? "Loaded " + name + " (" + nRows.toLocaleString() + " block rows)."
-      : "";
+    var clearBtn = document.getElementById("lodesClearAll");
+    if (loadedEl) loadedEl.textContent = LODES_LOADED_FILES.length > 0 ? "Yes" : "No";
+    if (!infoEl) return;
+    if (LODES_LOADED_FILES.length === 0) {
+      infoEl.textContent = "";
+      if (clearBtn) clearBtn.style.display = "none";
+    } else {
+      infoEl.innerHTML = LODES_LOADED_FILES.map(function (f) {
+        return "<div>" + f.stateAbbr + " \u2014 " + f.name + " (" + f.nRows.toLocaleString() + " blocks)</div>";
+      }).join("");
+      if (clearBtn) clearBtn.style.display = "";
+    }
+  }
+
+  function mergeLodesFile(jobsMap, name) {
+    if (!LODES_UPLOADED) LODES_UPLOADED = new Map();
+    jobsMap.forEach(function (v, k) { LODES_UPLOADED.set(k, v); });
+    var stateAbbr = guessStateFromMap(jobsMap);
+    LODES_LOADED_FILES.push({ name: name, stateAbbr: stateAbbr, nRows: jobsMap.size });
+    LODES_UPLOADED_NAME = LODES_LOADED_FILES.map(function (f) { return f.name; }).join(", ");
+    setLodesLoadedUI();
+  }
+
+  function clearLodesData() {
+    LODES_UPLOADED = null;
+    LODES_UPLOADED_NAME = "";
+    LODES_LOADED_FILES = [];
+    setLodesLoadedUI();
   }
 
   async function parseLodesFromUploadedFile(file) {
@@ -163,9 +195,9 @@
   App.STATE_FIPS_TO_ABBR = STATE_FIPS_TO_ABBR;
   App.getStateFromMapCenter = getStateFromMapCenter;
   App.startDownload = startDownload;
-  App.lodesData = null; // alias for external access
-  App.lodesFileName = "";
   App.setLodesLoadedUI = setLodesLoadedUI;
+  App.mergeLodesFile = mergeLodesFile;
+  App.clearLodesData = clearLodesData;
   App.parseLodesFromUploadedFile = parseLodesFromUploadedFile;
   App.fetchBlocksInternalPointsInUnion = fetchBlocksInternalPointsInUnion;
   App.computeEmploymentServedOnly = computeEmploymentServedOnly;
@@ -179,6 +211,10 @@
   Object.defineProperty(App, "lodesFileName", {
     get: function () { return LODES_UPLOADED_NAME; },
     set: function (v) { LODES_UPLOADED_NAME = v; },
+    configurable: true
+  });
+  Object.defineProperty(App, "lodesFileNames", {
+    get: function () { return LODES_LOADED_FILES.map(function (f) { return f.name; }); },
     configurable: true
   });
 })();
