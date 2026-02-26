@@ -71,9 +71,17 @@ A CDI of 3.5 does not mean "3.5 riders." It is an index that feeds into the ride
 
 ## Tab 1: Demand
 
-This tab runs the core demand analysis and produces the CDI score.
+This tab runs the core demand analysis and produces the CDI score for the **target system** you are analyzing.
 
-### Settings (left side)
+### Target System (top of left side)
+
+- **Same system as calibration** -- Check this box if the routes you are analyzing for demand are the same routes you calibrated against. When checked, the tool reuses the calibration step's TPI data (no additional Census API calls needed). When unchecked, you can select different routes/lines for demand analysis.
+
+- **Demand system features** -- When "Same system" is unchecked, a checklist appears showing all drawn routes and lines. Select which features define the demand/target system. These get their own independent quintile normalization, separate from the calibration system. This is important for **cross-system analysis** (e.g., calibrating with UTA data but analyzing Colorado Springs corridors).
+
+- **Analysis corridor** -- Select which specific route or line you want to analyze in detail. "All corridors" uses the system-wide CDI. Selecting a specific corridor shows that corridor's CDI and scopes segment analysis to just that feature.
+
+### Settings (continued)
 
 - **Geography Level** -- Choose between Census Tracts (faster, less detailed) or Block Groups (slower, more granular). Block Groups are the default and recommended for corridor-level work.
 
@@ -86,9 +94,9 @@ This tab runs the core demand analysis and produces the CDI score.
 ### Analyze Demand (button)
 
 Click this to run the analysis. The tool will:
-1. Query census geographies that overlap your corridor buffer
+1. Query census geographies that overlap the selected demand features' buffers
 2. Fetch demographic data from the Census Bureau API
-3. Score each geography on the nine TPI factors
+3. Score each geography on the nine TPI factors (quintile-normalized within this system)
 4. Compute the corridor-wide CDI and segment-level CDI (if segmentation is on)
 5. Render a color-coded map (choropleth) on the map view
 
@@ -126,13 +134,29 @@ This tab is optional but recommended. It lets you adjust the model's output usin
 - If you have comparable data from a peer system (e.g., UTA route-level data for a Mountain West comparison)
 - If you have system-level NTD data and want to establish a baseline productivity ratio
 
+### Cross-system calibration
+
+You can calibrate using data from one transit system (e.g., UTA in Salt Lake City) and then apply that calibration to a different system (e.g., a proposed corridor in Colorado Springs). To do this:
+
+1. Draw routes for the calibration system AND the target system on the map
+2. In the Calibrate tab, use the **feature checklist** to select only the calibration system's routes (uncheck the target system corridors)
+3. Complete calibration as normal
+4. Switch to the Demand tab, uncheck "Same system as calibration," and select the target system's routes
+5. The calibration factor will be applied to CDI values computed independently within the target system's geography
+
+**Best practice**: When calibrating with a different system than your study corridor, do NOT include the study corridor in the calibration feature selection. This ensures the calibration quintile normalization reflects the system with observed ridership data, not the study corridor's demographics.
+
 ### How to calibrate
 
-1. **Upload CSV** -- Click the upload button and select a CSV file containing observed ridership data. Expected columns include route name, daily ridership (or boardings per hour), peak headway, and service type. The tool will attempt to auto-detect which columns map to which fields.
+1. **Select Calibration Features** -- Use the feature checklist in Step 1 to choose which drawn routes/lines define the calibration system. Only selected features will be included in the TPI analysis and quintile normalization.
 
-2. **Column Mapping** -- After upload, verify or correct the column assignments using the dropdown menus. The tool guesses based on common column names but you should confirm.
+2. **Analyze System** -- Click the button to run the demand analysis for the selected features. Each route gets a CDI score normalized within the calibration system.
 
-3. **Choose a Method**:
+3. **Upload CSV** -- Click the upload button and select a CSV file containing observed ridership data. Expected columns include route name, daily ridership (or boardings per hour), peak headway, and service type. The tool will attempt to auto-detect which columns map to which fields.
+
+4. **Column Mapping** -- After upload, verify or correct the column assignments using the dropdown menus. The tool guesses based on common column names but you should confirm.
+
+5. **Choose a Method**:
    - **Ratio-based (recommended)** -- Divides each route's observed ridership by its computed demand index and averages the results. Simple, robust, and works well with small datasets (5--15 routes). Produces a single calibration factor.
    - **Simple regression** -- Fits a line through the data (observed ridership vs. demand index). Better if you have more data (10+ routes) and want to account for scatter. Produces an intercept and slope.
 
@@ -143,11 +167,11 @@ This tab is optional but recommended. It lets you adjust the model's output usin
 
 5. **Warnings** -- If the sample size is very small (fewer than 5 routes), a warning appears. The calibration still works but should be interpreted with caution.
 
-### Import / Export Coefficients
+### Import / Export Calibration
 
-- **Export Coefficients** -- Saves the calibration factor, method, and fit statistics as a JSON file. Useful for sharing calibration settings between sessions or with colleagues.
+- **Export Calibration** -- Saves the calibration factor, method, fit statistics, factor weights, and per-route CDI data as a JSON file. This is a standalone artifact that can be reused across sessions without re-running the Census data fetch. Useful for sharing calibration settings between sessions or with colleagues.
 
-- **Import Coefficients** -- Loads a previously exported calibration file, restoring the factor without needing to re-upload and re-process the observed data.
+- **Import Calibration** -- Loads a previously exported calibration file, restoring the factor and (in v2 format) per-route CDI data and weights without needing to re-upload and re-process the observed data. Supports both v1 (coefficients only) and v2 (with metadata) formats.
 
 ---
 

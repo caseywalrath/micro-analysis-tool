@@ -48,6 +48,22 @@
             <span>Normalize by Length</span>
           </label>
 
+          <div style="margin-top:10px;">
+            <label class="tiny">Calibration features</label>
+            <div class="tiny" style="color:var(--muted); margin-bottom:4px;">
+              Select which routes/lines to include. Only selected features contribute
+              to quintile normalization and CDI scoring.
+            </div>
+            <div id="rfCalibFeatureList" class="rf-feature-checklist">
+              <div class="tiny" style="color:var(--muted);">Draw routes/lines on the map first.</div>
+            </div>
+            <div class="rf-feature-select-actions">
+              <a href="#" id="rfCalibSelectAll" class="tiny">Select all</a>
+              <span class="tiny" style="color:var(--muted);"> | </span>
+              <a href="#" id="rfCalibSelectNone" class="tiny">Clear</a>
+            </div>
+          </div>
+
           <button id="rfAdjustWeights" type="button" class="rf-btn-sm" style="margin-top:12px; width:100%;">
             Adjust Weights
           </button>
@@ -194,9 +210,30 @@
       <div class="rf-section-row">
         <!-- Left: Settings -->
         <div class="rf-settings-col">
-          <div class="rf-section-title">Settings</div>
+          <div class="rf-section-title">Target System</div>
 
-          <label class="tiny">Corridor to analyze</label>
+          <label class="rf-toggle-row">
+            <input type="checkbox" id="rfDemandUseSameSystem">
+            <span>Same system as calibration</span>
+          </label>
+
+          <div id="rfDemandFeatureSection" style="margin-top:6px;">
+            <label class="tiny">Demand system features</label>
+            <div class="tiny" style="color:var(--muted); margin-bottom:4px;">
+              Select routes/lines for the target system. These get their own
+              quintile normalization, independent of the calibration system.
+            </div>
+            <div id="rfDemandFeatureList" class="rf-feature-checklist">
+              <div class="tiny" style="color:var(--muted);">Draw routes/lines on the map first.</div>
+            </div>
+            <div class="rf-feature-select-actions">
+              <a href="#" id="rfDemandSelectAll" class="tiny">Select all</a>
+              <span class="tiny" style="color:var(--muted);"> | </span>
+              <a href="#" id="rfDemandSelectNone" class="tiny">Clear</a>
+            </div>
+          </div>
+
+          <label class="tiny" style="margin-top:8px;">Analysis corridor</label>
           <select id="rfCorridorSelect" class="rf-select">
             <option value="all">All corridors (system-wide)</option>
           </select>

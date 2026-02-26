@@ -80,6 +80,35 @@
   // Wraps TPI.computeTPI(), adds segment analysis and CDI aggregate
   // =========================================================================
 
+  // Build a union polygon from a subset of drawn features' buffers.
+  // featureFilter: { routeIndices: [0,2,...], lineIndices: [1,3,...] }
+  // Returns a single union Polygon/MultiPolygon, or null if no buffers found.
+  function buildUnionFromFeatures(featureFilter) {
+    if (!featureFilter) return null;
+    var union = null;
+    var routeBuffers = App.routeBuffers || [];
+    var lineBuffers = App.lineBuffers || [];
+
+    if (featureFilter.routeIndices) {
+      for (var i = 0; i < featureFilter.routeIndices.length; i++) {
+        var idx = featureFilter.routeIndices[i];
+        if (idx < routeBuffers.length && routeBuffers[idx]) {
+          union = union ? turf.union(union, routeBuffers[idx]) : routeBuffers[idx];
+        }
+      }
+    }
+    if (featureFilter.lineIndices) {
+      for (var i = 0; i < featureFilter.lineIndices.length; i++) {
+        var idx = featureFilter.lineIndices[i];
+        if (idx < lineBuffers.length && lineBuffers[idx]) {
+          union = union ? turf.union(union, lineBuffers[idx]) : lineBuffers[idx];
+        }
+      }
+    }
+    return union;
+  }
+  RM.buildUnionFromFeatures = buildUnionFromFeatures;
+
   // computeCorridorDemand(options)
   // options: {
   //   geoLevel, year, weights, lodesData, apportionByArea, onProgress,
@@ -164,7 +193,9 @@
   // This enables the "snapshot" approach: TPI is run once across ALL features
   // with shared quintile normalization, then per-route CDI is extracted by
   // aggregating only the geographies overlapping each individual buffer.
-  function computePerRouteCDI(tpiResult) {
+  // featureFilter (optional): { routeIndices: [0,2,...], lineIndices: [1,3,...] }
+  // If null/undefined, all routes and lines are included (backward compatible).
+  function computePerRouteCDI(tpiResult, featureFilter) {
     var results = [];
     var popRaw = tpiResult.rawValues.get("pop_density");
 
@@ -173,6 +204,7 @@
     var routes = App.routes || [];
     var routeBuffers = App.routeBuffers || [];
     for (var ri = 0; ri < routes.length; ri++) {
+      if (featureFilter && featureFilter.routeIndices && featureFilter.routeIndices.indexOf(ri) === -1) continue;
       if (ri < routeBuffers.length && routeBuffers[ri]) {
         features.push({
           name: (routes[ri].properties && routes[ri].properties.name) || ("Route " + (ri + 1)),
@@ -185,6 +217,7 @@
     var lines = App.lines || [];
     var lineBuffers = App.lineBuffers || [];
     for (var li = 0; li < lines.length; li++) {
+      if (featureFilter && featureFilter.lineIndices && featureFilter.lineIndices.indexOf(li) === -1) continue;
       if (li < lineBuffers.length && lineBuffers[li]) {
         features.push({
           name: (lines[li].properties && lines[li].properties.name) || ("Line " + (li + 1)),
@@ -294,7 +327,10 @@
   }
   RM.computePerRouteCDI = computePerRouteCDI;
 
-  // System-wide demand: runs TPI across all drawn features, then extracts per-route CDI.
+  // System-wide demand: runs TPI across drawn features, then extracts per-route CDI.
+  // options.unionPolygon (optional): custom study area polygon (passed to TPI.computeTPI)
+  // options.featureFilter (optional): { routeIndices: [...], lineIndices: [...] } to restrict
+  //   which routes/lines are included in per-route CDI computation.
   // Returns: { tpiResult, systemCDI, routeCDIs[], geoLevel, year }
   async function computeSystemDemand(options) {
     var onProgress = options.onProgress || function () {};
@@ -306,6 +342,7 @@
       weights: options.weights || {},
       lodesData: options.lodesData || null,
       apportionByArea: !!options.apportionByArea,
+      unionPolygon: options.unionPolygon || null,
       onProgress: onProgress
     });
 
@@ -313,7 +350,7 @@
     var systemCDI = computeCorridorCDI(tpiResult);
 
     onProgress("Computing per-route demand indices...");
-    var routeCDIs = computePerRouteCDI(tpiResult);
+    var routeCDIs = computePerRouteCDI(tpiResult, options.featureFilter || null);
 
     return {
       tpiResult: tpiResult,
@@ -807,23 +844,42 @@
   }
 
   // Import/export calibration coefficients
-  function exportCoefficients(calibResult) {
-    return JSON.stringify({
+  // Export calibration coefficients + optional metadata (weights, perRouteCDI, settings).
+  // options: { weights, featureFilter, perRouteCDI, geoLevel, year }
+  function exportCoefficients(calibResult, options) {
+    var data = {
       type: "ridership-calibration",
-      version: 1,
+      version: 2,
       calibration: calibResult,
       exportedAt: new Date().toISOString()
-    }, null, 2);
+    };
+    if (options) {
+      if (options.weights) data.weights = options.weights;
+      if (options.featureFilter) data.featureFilter = options.featureFilter;
+      if (options.perRouteCDI) data.perRouteCDI = options.perRouteCDI;
+      if (options.geoLevel) data.geoLevel = options.geoLevel;
+      if (options.year) data.year = options.year;
+    }
+    return JSON.stringify(data, null, 2);
   }
   RM.exportCoefficients = exportCoefficients;
 
+  // Import calibration coefficients. Handles both v1 (coefficients only) and v2 (with metadata).
+  // Returns: { calibration, weights?, perRouteCDI?, geoLevel?, year?, error? }
   function importCoefficients(jsonStr) {
     try {
       var data = JSON.parse(jsonStr);
       if (data.type !== "ridership-calibration" || !data.calibration) {
         return { error: "Invalid calibration file format" };
       }
-      return data.calibration;
+      var result = { calibration: data.calibration };
+      // v2 metadata
+      if (data.weights) result.weights = data.weights;
+      if (data.perRouteCDI) result.perRouteCDI = data.perRouteCDI;
+      if (data.featureFilter) result.featureFilter = data.featureFilter;
+      if (data.geoLevel) result.geoLevel = data.geoLevel;
+      if (data.year) result.year = data.year;
+      return result;
     } catch (e) {
       return { error: "Could not parse calibration file: " + e.message };
     }

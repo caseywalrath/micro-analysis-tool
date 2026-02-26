@@ -27,10 +27,17 @@
   var _activeTab = "calibrate";
 
   // System-wide calibration state
-  var _systemResult = null;      // result from RM.computeSystemDemand()
-  var _perRouteCDI = null;       // array from RM.computePerRouteCDI()
+  var _systemResult = null;      // result from RM.computeSystemDemand() (calibration context)
+  var _perRouteCDI = null;       // per-route CDI array (calibration context)
   var _matchResult = null;       // result from RM.matchRoutesToCSV()
   var _selectedCorridor = "all"; // "all" or "route:N" / "line:N"
+  var _calibFeatureFilter = null; // { routeIndices: [...], lineIndices: [...] } or null (all)
+
+  // Demand-phase state (independent TPI context when analyzing a different system)
+  var _demandSystemResult = null;  // result from demand-phase RM.computeSystemDemand()
+  var _demandPerRouteCDI = null;   // per-route CDI array (demand context)
+  var _demandFeatureFilter = null; // { routeIndices: [...], lineIndices: [...] } or null
+  var _demandUseSameSystem = false; // true = reuse calibration TPI data for demand
 
   // Default scenario names
   var SCENARIO_NAMES = ["Scenario A", "Scenario B", "Scenario C", "Scenario D"];
@@ -211,34 +218,92 @@
       var segLen = parseFloat(document.getElementById("rfSegmentLength").value) || 0;
 
       var result;
+      var tpiResult;
+      var activeRouteCDIs;
 
-      if (_systemResult && _systemResult.tpiResult) {
-        // Calibrated mode: reuse system TPI, compute corridor CDI and segments
-        if (textEl) textEl.textContent = "Using system analysis data...";
-        App.setStatus("Computing corridor demand from system data...");
+      // Determine which path to take for TPI data:
+      // Path A: "Same system as calibration" — reuse calibration TPI data
+      // Path B: Different system — run a fresh TPI for the demand features
+      // Path C: Uncalibrated fallback — run fresh TPI for all features (legacy)
 
-        var tpiResult = _systemResult.tpiResult;
+      var sameSystemCb = document.getElementById("rfDemandUseSameSystem");
+      var useSameSystem = sameSystemCb && sameSystemCb.checked;
 
-        // Determine CDI to display
+      if (useSameSystem && _systemResult && _systemResult.tpiResult) {
+        // Path A: Same system — reuse calibration TPI data (no Census API calls)
+        if (textEl) textEl.textContent = "Using calibration system data...";
+        App.setStatus("Computing corridor demand from calibration data...");
+        tpiResult = _systemResult.tpiResult;
+        activeRouteCDIs = _perRouteCDI;
+        _demandPerRouteCDI = _perRouteCDI;
+        _demandSystemResult = _systemResult;
+
+      } else if (_systemResult && _systemResult.tpiResult) {
+        // Path B: Different system — run fresh TPI for demand features
+        var demandFilter = readFeatureFilter("rfDemandFeatureList");
+        _demandFeatureFilter = demandFilter;
+        var customUnion = demandFilter ? RM.buildUnionFromFeatures(demandFilter) : null;
+
+        if (textEl) textEl.textContent = "Running demand system analysis...";
+        App.setStatus("Analyzing demand system...");
+
+        var demandSystemResult = await RM.computeSystemDemand({
+          geoLevel: geoLevel,
+          year: year,
+          weights: _weights,
+          lodesData: App.lodesData,
+          apportionByArea: _apportionByArea,
+          unionPolygon: customUnion,
+          featureFilter: demandFilter,
+          onProgress: function (msg) {
+            if (textEl) textEl.textContent = msg;
+            App.setStatus(msg);
+          }
+        });
+
+        _demandSystemResult = demandSystemResult;
+        _demandPerRouteCDI = demandSystemResult.routeCDIs;
+        tpiResult = demandSystemResult.tpiResult;
+        activeRouteCDIs = demandSystemResult.routeCDIs;
+
+        // Populate corridor dropdown with demand system routes
+        populateCorridorDropdown(_demandPerRouteCDI);
+
+      } else {
+        // Path C: Uncalibrated — run fresh TPI for all features (legacy behavior)
+        result = await RM.computeCorridorDemand({
+          geoLevel: geoLevel,
+          year: year,
+          weights: _weights,
+          lodesData: App.lodesData,
+          apportionByArea: _apportionByArea,
+          segmentMiles: segLen,
+          onProgress: function (msg) {
+            if (textEl) textEl.textContent = msg;
+            App.setStatus(msg);
+          }
+        });
+      }
+
+      // For Path A and B, build the result object from TPI data
+      if (!result && tpiResult) {
         var displayCDI;
-        if (_selectedCorridor !== "all" && _perRouteCDI) {
-          // Use the per-route CDI for the selected corridor
+        if (_selectedCorridor !== "all" && activeRouteCDIs) {
           var parts = _selectedCorridor.split(":");
           var selType = parts[0];
           var selIdx = parseInt(parts[1], 10);
-          for (var pi = 0; pi < _perRouteCDI.length; pi++) {
-            if (_perRouteCDI[pi].featureType === selType && _perRouteCDI[pi].featureIndex === selIdx) {
-              displayCDI = { value: _perRouteCDI[pi].cdi, scored: _perRouteCDI[pi].geoCount, total: _perRouteCDI[pi].geoCount };
+          for (var pi = 0; pi < activeRouteCDIs.length; pi++) {
+            if (activeRouteCDIs[pi].featureType === selType && activeRouteCDIs[pi].featureIndex === selIdx) {
+              displayCDI = { value: activeRouteCDIs[pi].cdi, scored: activeRouteCDIs[pi].geoCount, total: activeRouteCDIs[pi].geoCount };
               break;
             }
           }
         }
         if (!displayCDI) {
-          displayCDI = _systemResult.systemCDI;
+          var sysResult = _demandSystemResult || _systemResult;
+          displayCDI = sysResult ? sysResult.systemCDI : { value: NaN, scored: 0, total: 0 };
         }
 
-        // Compute segments using cached TPI data — no Census API calls.
-        // Scoped to the selected corridor if one is chosen; all features otherwise.
         var segments = [];
         if (segLen > 0 && RM.computeSegments) {
           if (textEl) textEl.textContent = "Computing segments...";
@@ -254,24 +319,11 @@
           geoLevel: geoLevel,
           year: year
         };
-      } else {
-        // Uncalibrated mode: run fresh TPI (current behavior)
-        result = await RM.computeCorridorDemand({
-          geoLevel: geoLevel,
-          year: year,
-          weights: _weights,
-          lodesData: App.lodesData,
-          apportionByArea: _apportionByArea,
-          segmentMiles: segLen,
-          onProgress: function (msg) {
-            if (textEl) textEl.textContent = msg;
-            App.setStatus(msg);
-          }
-        });
       }
 
       _lastResult = result;
       _stale = false;
+      _demandStale = false;
 
       // Render choropleth
       var tpi = result.tpiResult;
@@ -544,12 +596,18 @@
     removeChoropleth();
     _lastResult = null;
     _stale = false;
+    _calibStale = false;
+    _demandStale = false;
     _calibration = null;
     _calibData = null;
     _systemResult = null;
     _perRouteCDI = null;
     _matchResult = null;
     _selectedCorridor = "all";
+    _calibFeatureFilter = null;
+    _demandSystemResult = null;
+    _demandPerRouteCDI = null;
+    _demandFeatureFilter = null;
     App.popup.hideFloatingWidget("rf-legend");
     if (isPopupVisible()) {
       var el = document.getElementById("rfDemandResults");
@@ -571,20 +629,26 @@
 
   // ---- Calibration helpers ----
 
-  // Get the CDI value for the currently selected corridor
+  // Get the CDI value for the currently selected corridor.
+  // Prefers demand-context CDI (independent normalization for the target system),
+  // then falls back to calibration-context CDI.
   function getActiveCDI() {
+    // Determine which per-route CDI array to use (demand context first, then calibration)
+    var activeRouteCDIs = _demandPerRouteCDI || _perRouteCDI;
+
     // If a specific corridor is selected and we have per-route data, use its CDI
-    if (_selectedCorridor !== "all" && _perRouteCDI) {
+    if (_selectedCorridor !== "all" && activeRouteCDIs) {
       var parts = _selectedCorridor.split(":");
       var type = parts[0];
       var idx = parseInt(parts[1], 10);
-      for (var i = 0; i < _perRouteCDI.length; i++) {
-        if (_perRouteCDI[i].featureType === type && _perRouteCDI[i].featureIndex === idx) {
-          return _perRouteCDI[i].cdi;
+      for (var i = 0; i < activeRouteCDIs.length; i++) {
+        if (activeRouteCDIs[i].featureType === type && activeRouteCDIs[i].featureIndex === idx) {
+          return activeRouteCDIs[i].cdi;
         }
       }
     }
-    // Fall back to system CDI from calibration, then to corridor CDI from demand
+    // Fall back to system CDI: demand context, then calibration, then legacy demand
+    if (_demandSystemResult && _demandSystemResult.systemCDI) return _demandSystemResult.systemCDI.value;
     if (_systemResult && _systemResult.systemCDI) return _systemResult.systemCDI.value;
     if (_lastResult && _lastResult.corridorCDI) return _lastResult.corridorCDI.value;
     return NaN;
@@ -592,12 +656,14 @@
 
   function getTargetCorridorLength() {
     // Return length in miles for the currently selected corridor.
-    if (_selectedCorridor !== "all" && _perRouteCDI) {
+    // Prefer demand context, then calibration context.
+    var activeRouteCDIs = _demandPerRouteCDI || _perRouteCDI;
+    if (_selectedCorridor !== "all" && activeRouteCDIs) {
       var parts = _selectedCorridor.split(":");
       var type = parts[0];
       var idx = parseInt(parts[1], 10);
-      for (var i = 0; i < _perRouteCDI.length; i++) {
-        var r = _perRouteCDI[i];
+      for (var i = 0; i < activeRouteCDIs.length; i++) {
+        var r = activeRouteCDIs[i];
         if (r.featureType === type && r.featureIndex === idx) {
           return (Number.isFinite(r.lengthMiles) && r.lengthMiles > 0) ? r.lengthMiles : 1;
         }
@@ -608,13 +674,106 @@
     return (Number.isFinite(total) && total > 0) ? total : 1;
   }
 
-  function populateCorridorDropdown() {
+  // ---- Feature selection checklists ----
+
+  // Build a single checkbox row for a feature
+  function makeFeatureCheckRow(type, index, name, checked) {
+    var row = document.createElement("div");
+    row.className = "rf-feature-check-row";
+    var cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = checked;
+    cb.setAttribute("data-feature-type", type);
+    cb.setAttribute("data-feature-index", String(index));
+    var badge = document.createElement("span");
+    badge.className = "rf-feature-type-badge";
+    badge.textContent = type === "route" ? "R" : "L";
+    var lbl = document.createElement("label");
+    lbl.textContent = name;
+    row.appendChild(cb);
+    row.appendChild(badge);
+    row.appendChild(lbl);
+    return row;
+  }
+
+  // Populate a feature checklist container with current routes/lines.
+  // previousFilter: optional feature filter to restore checkbox state from
+  function populateFeatureList(containerId, previousFilter) {
+    var container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = "";
+    var routes = App.routes || [];
+    var lines = App.lines || [];
+    if (routes.length === 0 && lines.length === 0) {
+      container.innerHTML = '<div class="tiny" style="color:var(--muted);">Draw routes/lines on the map first.</div>';
+      return;
+    }
+    for (var ri = 0; ri < routes.length; ri++) {
+      var name = (routes[ri].properties && routes[ri].properties.name) || ("Route " + (ri + 1));
+      var checked = !previousFilter || !previousFilter.routeIndices || previousFilter.routeIndices.indexOf(ri) !== -1;
+      container.appendChild(makeFeatureCheckRow("route", ri, name, checked));
+    }
+    for (var li = 0; li < lines.length; li++) {
+      var name = (lines[li].properties && lines[li].properties.name) || ("Line " + (li + 1));
+      var checked = !previousFilter || !previousFilter.lineIndices || previousFilter.lineIndices.indexOf(li) !== -1;
+      container.appendChild(makeFeatureCheckRow("line", li, name, checked));
+    }
+  }
+
+  // Read checkbox state from a feature checklist and return a featureFilter object.
+  // Returns null if ALL are checked (equivalent to "no filter" for backward compat).
+  function readFeatureFilter(containerId) {
+    var container = document.getElementById(containerId);
+    if (!container) return null;
+    var cbs = container.querySelectorAll('input[type="checkbox"]');
+    if (cbs.length === 0) return null;
+    var routeIndices = [];
+    var lineIndices = [];
+    var allChecked = true;
+    for (var i = 0; i < cbs.length; i++) {
+      var type = cbs[i].getAttribute("data-feature-type");
+      var idx = parseInt(cbs[i].getAttribute("data-feature-index"), 10);
+      if (cbs[i].checked) {
+        if (type === "route") routeIndices.push(idx);
+        else if (type === "line") lineIndices.push(idx);
+      } else {
+        allChecked = false;
+      }
+    }
+    if (allChecked) return null; // no filter needed
+    return { routeIndices: routeIndices, lineIndices: lineIndices };
+  }
+
+  // Wire select-all / clear links for a feature checklist
+  function wireFeatureSelectLinks(selectAllId, selectNoneId, containerId) {
+    var allLink = document.getElementById(selectAllId);
+    var noneLink = document.getElementById(selectNoneId);
+    if (allLink) {
+      allLink.addEventListener("click", function (e) {
+        e.preventDefault();
+        var cbs = document.querySelectorAll("#" + containerId + ' input[type="checkbox"]');
+        for (var i = 0; i < cbs.length; i++) cbs[i].checked = true;
+      });
+    }
+    if (noneLink) {
+      noneLink.addEventListener("click", function (e) {
+        e.preventDefault();
+        var cbs = document.querySelectorAll("#" + containerId + ' input[type="checkbox"]');
+        for (var i = 0; i < cbs.length; i++) cbs[i].checked = false;
+      });
+    }
+  }
+
+  // Populate the corridor dropdown from a CDI array.
+  // If no routeCDIs param, uses demand context first, then calibration context.
+  function populateCorridorDropdown(routeCDIs) {
     var sel = document.getElementById("rfCorridorSelect");
     if (!sel) return;
     sel.innerHTML = '<option value="all">All corridors (system-wide)</option>';
-    if (!_perRouteCDI) return;
-    for (var i = 0; i < _perRouteCDI.length; i++) {
-      var pr = _perRouteCDI[i];
+    var data = routeCDIs || _demandPerRouteCDI || _perRouteCDI;
+    if (!data) return;
+    for (var i = 0; i < data.length; i++) {
+      var pr = data[i];
       var opt = document.createElement("option");
       opt.value = pr.featureType + ":" + pr.featureIndex;
       opt.textContent = pr.name + " (CDI: " + (Number.isFinite(pr.cdi) ? pr.cdi.toFixed(2) : "N/A") + ")";
@@ -641,12 +800,19 @@
       var apportion = apportionCb ? apportionCb.checked : false;
       _apportionByArea = apportion;
 
+      // Read calibration feature filter from checkboxes
+      var featureFilter = readFeatureFilter("rfCalibFeatureList");
+      _calibFeatureFilter = featureFilter;
+      var customUnion = featureFilter ? RM.buildUnionFromFeatures(featureFilter) : null;
+
       var result = await RM.computeSystemDemand({
         geoLevel: geoLevel,
         year: year,
         weights: _weights,
         lodesData: App.lodesData,
         apportionByArea: apportion,
+        unionPolygon: customUnion,
+        featureFilter: featureFilter,
         onProgress: function (msg) {
           if (textEl) textEl.textContent = msg;
           App.setStatus(msg);
@@ -656,6 +822,11 @@
       _systemResult = result;
       _perRouteCDI = result.routeCDIs;
       _stale = false;
+      _calibStale = false;
+
+      // Clear demand state since calibration changed
+      _demandSystemResult = null;
+      _demandPerRouteCDI = null;
 
       // Render choropleth
       var tpi = result.tpiResult;
@@ -1367,7 +1538,13 @@
   function exportCalibJSON() {
     if (!_calibration) return;
     _triggerDownload(
-      RM.exportCoefficients(_calibration),
+      RM.exportCoefficients(_calibration, {
+        weights: _weights ? Object.assign({}, _weights) : null,
+        featureFilter: _calibFeatureFilter,
+        perRouteCDI: _perRouteCDI,
+        geoLevel: _systemResult ? _systemResult.geoLevel : null,
+        year: _systemResult ? _systemResult.year : null
+      }),
       "application/json",
       "ridership-calibration-" + _dateStamp() + ".json"
     );
@@ -1382,7 +1559,14 @@
         alert(result.error);
         return;
       }
-      _calibration = result;
+      _calibration = result.calibration;
+      // Restore v2 metadata if present
+      if (result.weights) _weights = Object.assign({}, result.weights);
+      if (result.perRouteCDI) {
+        _perRouteCDI = result.perRouteCDI;
+        populateCorridorDropdown(_perRouteCDI);
+      }
+      if (result.featureFilter) _calibFeatureFilter = result.featureFilter;
       // Update UI
       var resultsEl = document.getElementById("rfCalibResults");
       if (resultsEl) resultsEl.style.display = "";
@@ -1392,24 +1576,45 @@
       if (r2El) r2El.textContent = _calibration.rSquared != null ? _calibration.rSquared.toFixed(4) : "\u2014";
       var sizeEl = document.getElementById("rfCalibSampleSize");
       if (sizeEl) sizeEl.textContent = String(_calibration.n || "\u2014");
-      App.setStatus("Calibration coefficients imported");
+      App.setStatus("Calibration imported" + (result.perRouteCDI ? " (with per-route CDI)" : ""));
     };
     reader.readAsText(file);
   }
 
   // ---- Stale indicator ----
 
+  var _calibStale = false;
+  var _demandStale = false;
+
   function markStale() {
-    if (!_lastResult) return;
-    _stale = true;
+    // Mark both contexts stale when features change
+    if (_systemResult) _calibStale = true;
+    if (_lastResult || _demandSystemResult) _demandStale = true;
+    _stale = _calibStale || _demandStale;
     if (!isPopupVisible()) return;
-    var statusEl = document.getElementById("rfDemandStatus");
-    var textEl = document.getElementById("rfDemandStatusText");
-    if (statusEl && textEl) {
-      statusEl.style.display = "";
-      textEl.textContent = "Data has changed \u2014 re-run to update.";
-      statusEl.className = "rf-status rf-status-stale";
+    // Show stale indicator on Demand tab
+    if (_demandStale) {
+      var statusEl = document.getElementById("rfDemandStatus");
+      var textEl = document.getElementById("rfDemandStatusText");
+      if (statusEl && textEl) {
+        statusEl.style.display = "";
+        textEl.textContent = "Features changed \u2014 re-run to update.";
+        statusEl.className = "rf-status rf-status-stale";
+      }
     }
+    // Show stale indicator on Calibrate tab
+    if (_calibStale) {
+      var sysStatusEl = document.getElementById("rfSystemStatus");
+      var sysTextEl = document.getElementById("rfSystemStatusText");
+      if (sysStatusEl && sysTextEl) {
+        sysStatusEl.style.display = "";
+        sysTextEl.textContent = "Features changed \u2014 re-run to update.";
+        sysStatusEl.className = "rf-status rf-status-stale";
+      }
+    }
+    // On feature deletion, invalidate feature filters since indices may have shifted
+    _calibFeatureFilter = null;
+    _demandFeatureFilter = null;
   }
 
   // ---- Module init (called once on first popup open) ----
@@ -1494,6 +1699,10 @@
       });
     }
 
+    // Feature selection checklists (Calibrate tab)
+    populateFeatureList("rfCalibFeatureList", _calibFeatureFilter);
+    wireFeatureSelectLinks("rfCalibSelectAll", "rfCalibSelectNone", "rfCalibFeatureList");
+
     var uploadBtn = document.getElementById("rfUploadCalibCSV");
     var fileInput = document.getElementById("rfCalibFile");
     if (uploadBtn && fileInput) {
@@ -1526,6 +1735,29 @@
     if (goDemand) goDemand.addEventListener("click", function (e) { e.preventDefault(); switchTab("demand"); });
 
     // ---- Demand tab ----
+
+    // Feature selection checklists (Demand tab)
+    populateFeatureList("rfDemandFeatureList", _demandFeatureFilter);
+    wireFeatureSelectLinks("rfDemandSelectAll", "rfDemandSelectNone", "rfDemandFeatureList");
+
+    // "Same system as calibration" toggle
+    var sameSystemCb = document.getElementById("rfDemandUseSameSystem");
+    if (sameSystemCb) {
+      sameSystemCb.checked = _demandUseSameSystem;
+      sameSystemCb.addEventListener("change", function () {
+        _demandUseSameSystem = sameSystemCb.checked;
+        var featureSection = document.getElementById("rfDemandFeatureSection");
+        if (featureSection) featureSection.style.display = sameSystemCb.checked ? "none" : "";
+        // When switching to same system, populate corridor dropdown from calibration data
+        if (sameSystemCb.checked && _perRouteCDI) {
+          populateCorridorDropdown(_perRouteCDI);
+        }
+      });
+      // Apply initial state
+      var featureSection = document.getElementById("rfDemandFeatureSection");
+      if (featureSection && _demandUseSameSystem) featureSection.style.display = "none";
+    }
+
     var runBtn = document.getElementById("rfRunDemand");
     if (runBtn) runBtn.addEventListener("click", runDemand);
 
@@ -1626,6 +1858,18 @@
     var calibNormCb = document.getElementById("rfCalibNormalizeByLength");
     if (calibNormCb) calibNormCb.checked = _normalizeByLength;
 
+    // Refresh feature checklists (picks up any features added/removed while popup was closed)
+    populateFeatureList("rfCalibFeatureList", _calibFeatureFilter);
+    populateFeatureList("rfDemandFeatureList", _demandFeatureFilter);
+
+    // Sync "same system" checkbox and feature section visibility
+    var sameSystemCb = document.getElementById("rfDemandUseSameSystem");
+    if (sameSystemCb) {
+      sameSystemCb.checked = _demandUseSameSystem;
+      var featureSection = document.getElementById("rfDemandFeatureSection");
+      if (featureSection) featureSection.style.display = _demandUseSameSystem ? "none" : "";
+    }
+
     // Restore system analysis state
     if (_systemResult) {
       displaySystemResults(_systemResult);
@@ -1671,6 +1915,11 @@
     } else {
       markStale();
     }
+    // Refresh feature checklists if popup is open (picks up added/removed features)
+    if (isPopupVisible()) {
+      populateFeatureList("rfCalibFeatureList", _calibFeatureFilter);
+      populateFeatureList("rfDemandFeatureList", _demandFeatureFilter);
+    }
   }
 
   // ---- Session persistence (cache module hooks) ----
@@ -1714,6 +1963,7 @@
 
   function saveRfState(mode) {
     var data = {
+      _schemaVersion: 2,
       weights: Object.assign({}, _weights),
       apportionByArea: _apportionByArea,
       normalizeByLength: _normalizeByLength,
@@ -1721,7 +1971,13 @@
       scenarios: _scenarios.map(function (s) { return Object.assign({}, s); }),
       selectedCorridor: _selectedCorridor,
       activeTab: _activeTab,
-      perRouteCDI: _perRouteCDI ? _perRouteCDI.slice() : null
+      // Calibration context
+      perRouteCDI: _perRouteCDI ? _perRouteCDI.slice() : null,
+      calibFeatureFilter: _calibFeatureFilter,
+      // Demand context
+      demandPerRouteCDI: _demandPerRouteCDI ? _demandPerRouteCDI.slice() : null,
+      demandFeatureFilter: _demandFeatureFilter,
+      demandUseSameSystem: _demandUseSameSystem
     };
 
     if (_systemResult) {
@@ -1730,6 +1986,15 @@
         geoLevel: _systemResult.geoLevel,
         year: _systemResult.year,
         tpiResult: serializeTpiResult(_systemResult.tpiResult, mode)
+      };
+    }
+
+    if (_demandSystemResult) {
+      data.demandSystemResult = {
+        systemCDI: _demandSystemResult.systemCDI ? Object.assign({}, _demandSystemResult.systemCDI) : null,
+        geoLevel: _demandSystemResult.geoLevel,
+        year: _demandSystemResult.year,
+        tpiResult: serializeTpiResult(_demandSystemResult.tpiResult, mode)
       };
     }
 
@@ -1749,6 +2014,14 @@
     if (data.selectedCorridor) _selectedCorridor = data.selectedCorridor;
     if (data.activeTab) _activeTab = data.activeTab;
     if (Array.isArray(data.perRouteCDI)) _perRouteCDI = data.perRouteCDI.slice();
+
+    // v2 fields: feature filters and demand context
+    if (data._schemaVersion >= 2) {
+      if (data.calibFeatureFilter) _calibFeatureFilter = data.calibFeatureFilter;
+      if (Array.isArray(data.demandPerRouteCDI)) _demandPerRouteCDI = data.demandPerRouteCDI.slice();
+      if (data.demandFeatureFilter) _demandFeatureFilter = data.demandFeatureFilter;
+      if (data.demandUseSameSystem != null) _demandUseSameSystem = !!data.demandUseSameSystem;
+    }
 
     if (data.systemResult) {
       var tpiRestored = deserializeTpiResult(data.systemResult.tpiResult);
@@ -1771,6 +2044,18 @@
           position: "bottom-left", width: 170, title: "Demand Legend"
         });
       }
+    }
+
+    // Restore demand system result (v2)
+    if (data.demandSystemResult) {
+      var demandTpiRestored = deserializeTpiResult(data.demandSystemResult.tpiResult);
+      _demandSystemResult = {
+        tpiResult: demandTpiRestored,
+        systemCDI: data.demandSystemResult.systemCDI || null,
+        routeCDIs: _demandPerRouteCDI || [],
+        geoLevel: data.demandSystemResult.geoLevel,
+        year: data.demandSystemResult.year
+      };
     }
   }
 
