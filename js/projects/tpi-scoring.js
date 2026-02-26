@@ -68,7 +68,7 @@
         return (zeroCar / totalHH) * 100;
       },
       higherIsBetter: true,
-      defaultWeight: 0,
+      defaultWeight: 5,
       description: "Percent of households with zero vehicles (ACS B08201_002E / B11001_001E)"
     },
     {
@@ -84,7 +84,7 @@
         return (povPop / totalPop) * 100;
       },
       higherIsBetter: true,
-      defaultWeight: 6,
+      defaultWeight: 5,
       description: "Percent of persons below poverty level (ACS B17001_002E / B01003_001E)"
     },
     {
@@ -112,7 +112,7 @@
         return (seniorSum / totalPop) * 100;
       },
       higherIsBetter: true,
-      defaultWeight: 6,
+      defaultWeight: 5,
       description: "Percent of population age 65 and over (ACS B01001 males + females 65+ / B01003_001E)"
     },
     {
@@ -140,7 +140,7 @@
         return (disabSum / denom) * 100;
       },
       higherIsBetter: true,
-      defaultWeight: 6,
+      defaultWeight: 5,
       description: "Percent of civilian noninstitutionalized population with a disability (ACS B18101)"
     },
     {
@@ -156,7 +156,7 @@
         return ((total - nhWhite) / total) * 100;
       },
       higherIsBetter: true,
-      defaultWeight: 6,
+      defaultWeight: 5,
       description: "Percent of population who are people of color (ACS B03002: total minus NH White alone)"
     },
     {
@@ -213,7 +213,7 @@
         return (lepSum / denom) * 100;
       },
       higherIsBetter: true,
-      defaultWeight: 6,
+      defaultWeight: 5,
       description: "Percent of population age 5+ who speak English less than very well (ACS C16001)"
     }
   ];
