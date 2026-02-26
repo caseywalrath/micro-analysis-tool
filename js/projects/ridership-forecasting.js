@@ -957,11 +957,19 @@
     var colRidership = document.getElementById("rfCalibColRidership").value;
     if (!colRidership) { alert("Please select the ridership column."); return; }
 
+    var colHeadway = (document.getElementById("rfCalibColHeadway") || {}).value || "";
+
     var method = document.querySelector('input[name="rfCalibMethod"]:checked');
     var methodVal = method ? method.value : "ratio";
 
-    // Build observation array using per-route CDI (the core fix)
+    // Reference headway for normalization (same default as Elasticity tab baseline)
+    var REF_HEADWAY = 30;
+    // Use the Elasticity tab's current elasticity value if available, else 0.5
+    var normElast = parseFloat((document.getElementById("rfFreqElastValue") || {}).value) || 0.5;
+
+    // Build observation array using per-route CDI
     var obs = [];
+    var headwayNormCount = 0;
     for (var i = 0; i < _matchResult.matched.length; i++) {
       var match = _matchResult.matched[i];
       var ridership = parseFloat(match.csvRow[colRidership]);
@@ -972,6 +980,17 @@
         var len = match.routeCDI.lengthMiles;
         if (!Number.isFinite(len) || len <= 0) continue;
         ridership = ridership / len;
+      }
+      // Headway normalization: strip out frequency effect relative to reference headway
+      if (colHeadway) {
+        var routeHeadway = parseFloat(match.csvRow[colHeadway]);
+        if (Number.isFinite(routeHeadway) && routeHeadway > 0) {
+          var freqEffect = RM.computeFrequencyEffect(REF_HEADWAY, routeHeadway, normElast);
+          if (freqEffect > 0) {
+            ridership = ridership / freqEffect;
+            headwayNormCount++;
+          }
+        }
       }
       obs.push({ ridership: ridership, demandIndex: routeCDI });
     }
@@ -990,6 +1009,14 @@
       _calibration = { factor: calibResult.factor, n: calibResult.n, rSquared: calibResult.rSquared, method: "ratio" };
     }
 
+    // Record headway normalization metadata so downstream tabs know it was applied
+    if (headwayNormCount > 0) {
+      _calibration.headwayNormalized = true;
+      _calibration.refHeadway = REF_HEADWAY;
+      _calibration.normElasticity = normElast;
+      _calibration.headwayNormCount = headwayNormCount;
+    }
+
     // Display results
     var resultsEl = document.getElementById("rfCalibResults");
     if (resultsEl) resultsEl.style.display = "";
@@ -1002,6 +1029,19 @@
 
     var sizeEl = document.getElementById("rfCalibSampleSize");
     if (sizeEl) sizeEl.textContent = String(_calibration.n);
+
+    // Headway normalization note
+    var normEl = document.getElementById("rfCalibHeadwayNote");
+    if (normEl) {
+      if (_calibration.headwayNormalized) {
+        normEl.style.display = "";
+        normEl.textContent = "Headway-normalized (" + _calibration.headwayNormCount +
+          " of " + _calibration.n + " routes, ref " + _calibration.refHeadway +
+          " min, elasticity " + _calibration.normElasticity.toFixed(2) + ")";
+      } else {
+        normEl.style.display = "none";
+      }
+    }
 
     var warnEl = document.getElementById("rfCalibWarning");
     if (warnEl) {

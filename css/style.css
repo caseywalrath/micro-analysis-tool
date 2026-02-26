@@ -1191,6 +1191,15 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Libe
   color: #92400e;
   margin-top: 6px;
 }
+.rf-note {
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  font-size: 12px;
+  color: #1e40af;
+  margin-top: 6px;
+}
 
 /* Per-route CDI score list (Calibrate tab) */
 .rf-route-score-list {
