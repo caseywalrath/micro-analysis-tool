@@ -1061,10 +1061,12 @@
     var freqElast = parseFloat(document.getElementById("rfFreqElastValue").value) || 0.5;
 
     var calibFactor = (_calibration && _calibration.factor) ? _calibration.factor : 1;
+    var calibIntercept = (_calibration && Number.isFinite(_calibration.intercept)) ? _calibration.intercept : 0;
     var lengthScale = (_normalizeByLength && _calibration) ? getTargetCorridorLength() : 1;
-    var baseCDI = getActiveCDI() * calibFactor * lengthScale;
+    var corridorCDI = getActiveCDI();
+    var baseDemand = Math.max(0, (calibIntercept + corridorCDI * calibFactor) * lengthScale);
 
-    var elast = RM.applyElasticity(baseCDI, {
+    var elast = RM.applyElasticity(baseDemand, {
       serviceTypeId: stId,
       baseHeadway: baseHeadway,
       newHeadway: newHeadway,
@@ -1082,7 +1084,7 @@
     if (freqEffEl) freqEffEl.textContent = elast.freqEffect.toFixed(3) + "x";
 
     var baseCDIEl = document.getElementById("rfBaseCDI");
-    if (baseCDIEl) baseCDIEl.textContent = baseCDI.toFixed(2);
+    if (baseCDIEl) baseCDIEl.textContent = Number.isFinite(corridorCDI) ? corridorCDI.toFixed(2) : "\u2014";
   }
 
   function fmtPct(v) { return "+" + Math.round(v * 100) + "%"; }
@@ -1133,8 +1135,9 @@
 
     var routeLength = getTargetCorridorLength();
     var calibFactor = (_calibration && _calibration.factor) ? _calibration.factor : 1;
+    var calibIntercept = (_calibration && Number.isFinite(_calibration.intercept)) ? _calibration.intercept : 0;
     var lengthScale = (_normalizeByLength && _calibration) ? getTargetCorridorLength() : 1;
-    var baseCDI = activeCDI;
+    var baseDemand = Math.max(0, (calibIntercept + activeCDI * calibFactor) * lengthScale);
     var freqElast = parseFloat((document.getElementById("rfFreqElastValue") || {}).value) || 0.5;
 
     var builtScenarios = [];
@@ -1148,7 +1151,7 @@
       var costPerRevenueHour = parseFloat((document.getElementById("rfScenCostPerHr_" + i) || {}).value) || 150;
       var serviceDaysPerYear = parseInt((document.getElementById("rfScenServiceDays_" + i) || {}).value, 10) || 260;
 
-      var elast = RM.applyElasticity(baseCDI * calibFactor * lengthScale, {
+      var elast = RM.applyElasticity(baseDemand, {
         serviceTypeId: serviceTypeId,
         baseHeadway: 30, // baseline local bus
         newHeadway: headway,
@@ -1164,9 +1167,9 @@
         avgSpeed: avgSpeed,
         costPerRevenueHour: costPerRevenueHour,
         serviceDaysPerYear: serviceDaysPerYear,
-        baseDemandCDI: baseCDI * calibFactor * lengthScale,
+        baseDemandCDI: baseDemand,
         elasticityResult: elast,
-        calibrationFactor: 1 // already applied via baseCDI * calibFactor * lengthScale
+        calibrationFactor: 1 // already applied above
       });
 
       builtScenarios.push(built);
