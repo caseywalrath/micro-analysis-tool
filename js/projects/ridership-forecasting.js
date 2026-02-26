@@ -228,7 +228,7 @@
           var selIdx = parseInt(parts[1], 10);
           for (var pi = 0; pi < _perRouteCDI.length; pi++) {
             if (_perRouteCDI[pi].featureType === selType && _perRouteCDI[pi].featureIndex === selIdx) {
-              displayCDI = { value: _perRouteCDI[pi].cdi, scored: _perRouteCDI[pi].geoCount, total: tpiResult.geoids.length };
+              displayCDI = { value: _perRouteCDI[pi].cdi, scored: _perRouteCDI[pi].geoCount, total: _perRouteCDI[pi].geoCount };
               break;
             }
           }
@@ -336,14 +336,14 @@
 
     // Stats
     var geoCount = document.getElementById("rfGeoCount");
-    if (geoCount) geoCount.textContent = String(result.tpiResult.geoids.length);
+    if (geoCount) geoCount.textContent = String(result.corridorCDI.scored);
 
     var scoredCount = document.getElementById("rfScoredCount");
     if (scoredCount) scoredCount.textContent = result.corridorCDI.scored + " / " + result.corridorCDI.total;
 
     var routeLen = document.getElementById("rfRouteLength");
     if (routeLen) {
-      var len = RM.getRouteLength();
+      var len = getTargetCorridorLength();
       routeLen.textContent = len > 0 ? len.toFixed(2) + " mi" : "\u2014";
     }
 
@@ -1131,7 +1131,7 @@
       return;
     }
 
-    var routeLength = RM.getRouteLength();
+    var routeLength = getTargetCorridorLength();
     var calibFactor = (_calibration && _calibration.factor) ? _calibration.factor : 1;
     var lengthScale = (_normalizeByLength && _calibration) ? getTargetCorridorLength() : 1;
     var baseCDI = activeCDI;
