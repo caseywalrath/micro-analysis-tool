@@ -694,6 +694,87 @@
     }
   }
 
+  // ---- CDI transparency helpers ----
+
+  // Compute system-wide average quintile score per factor (baseline for comparison bars)
+  function computeSystemFactorAverages(tpiResult) {
+    var avgs = {};
+    if (!tpiResult || !tpiResult.factorScores) return avgs;
+    var fsIter = tpiResult.factorScores.entries();
+    var fsEntry = fsIter.next();
+    while (!fsEntry.done) {
+      var factorId = fsEntry.value[0];
+      var scoreMap = fsEntry.value[1];
+      var sum = 0, count = 0;
+      var valIter = scoreMap.values();
+      var v = valIter.next();
+      while (!v.done) {
+        if (Number.isFinite(v.value)) { sum += v.value; count++; }
+        v = valIter.next();
+      }
+      avgs[factorId] = count > 0 ? sum / count : NaN;
+      fsEntry = fsIter.next();
+    }
+    return avgs;
+  }
+
+  // Build HTML for per-factor breakdown bars for one route
+  function buildRouteFactorBreakdownHTML(routeCDI, systemAvgs, effectiveWeights) {
+    var factors = TPI.FACTORS;
+    var breakdown = routeCDI.factorBreakdown || {};
+    var html = '<div class="rf-route-factor-list">';
+
+    for (var i = 0; i < factors.length; i++) {
+      var f = factors[i];
+      var w = (effectiveWeights && effectiveWeights[f.id] != null) ? effectiveWeights[f.id] : 0;
+      if (w === 0) continue; // Skip inactive factors
+
+      var routeAvg = breakdown[f.id];
+      var sysAvg = systemAvgs[f.id];
+      var routeValid = Number.isFinite(routeAvg);
+      var sysValid = Number.isFinite(sysAvg);
+
+      // Bar widths: scale 1-5 to 0-100%
+      var routeBarPct = routeValid ? ((routeAvg - 1) / 4) * 100 : 0;
+      var sysMarkerPct = sysValid ? ((sysAvg - 1) / 4) * 100 : 0;
+
+      // Color: green if route > system, red if route < system, neutral if close
+      var diff = (routeValid && sysValid) ? routeAvg - sysAvg : 0;
+      var barColor = diff > 0.3 ? "#48bb78" : (diff < -0.3 ? "#f56565" : "#a0aec0");
+
+      html += '<div class="rf-route-factor-row">' +
+        '<span class="rf-route-factor-name" title="' + (f.description || f.label) + '">' + f.label + '</span>' +
+        '<span class="rf-route-factor-weight tiny">' + Math.round(w) + '%</span>' +
+        '<span class="rf-route-factor-bar-wrap">' +
+          '<span class="rf-route-factor-bar" style="width:' + routeBarPct.toFixed(0) + '%;background:' + barColor + ';" ' +
+            'title="Route: ' + (routeValid ? routeAvg.toFixed(1) : 'N/A') + ' / System: ' + (sysValid ? sysAvg.toFixed(1) : 'N/A') + '"></span>' +
+          (sysValid ? '<span class="rf-route-factor-sys-marker" style="left:' + sysMarkerPct.toFixed(0) + '%;" title="System avg: ' + sysAvg.toFixed(1) + '"></span>' : '') +
+        '</span>' +
+        '<span class="rf-route-factor-score">' + (routeValid ? routeAvg.toFixed(1) : 'N/A') + '</span>' +
+        '</div>';
+    }
+
+    html += '</div>';
+    return html;
+  }
+
+  // Toggle expand/collapse of a route detail panel
+  function toggleRouteDetail(e) {
+    var row = e.currentTarget;
+    var detailId = row.getAttribute("data-route-detail");
+    var detail = document.getElementById(detailId);
+    if (!detail) return;
+
+    var expand = row.querySelector(".rf-route-score-expand");
+    if (detail.style.display === "none") {
+      detail.style.display = "";
+      if (expand) expand.innerHTML = "&#9662;"; // down triangle
+    } else {
+      detail.style.display = "none";
+      if (expand) expand.innerHTML = "&#9656;"; // right triangle
+    }
+  }
+
   function displaySystemResults(result) {
     if (!isPopupVisible()) return;
     var el = document.getElementById("rfSystemResults");
@@ -708,7 +789,10 @@
     var countEl = document.getElementById("rfSystemFeatureCount");
     if (countEl) countEl.textContent = String(result.routeCDIs.length);
 
-    // Per-route score list
+    // Compute system-wide factor averages (baseline for comparison bars)
+    var systemFactorAvgs = computeSystemFactorAverages(result.tpiResult);
+
+    // Per-route score list with expandable factor details
     var listEl = document.getElementById("rfRouteScoreList");
     if (listEl && result.routeCDIs.length > 0) {
       var html = "";
@@ -716,14 +800,39 @@
         var r = result.routeCDIs[i];
         var cdi = Number.isFinite(r.cdi) ? r.cdi.toFixed(2) : "N/A";
         var typeLabel = r.featureType === "route" ? "Route" : "Line";
-        html += '<div class="rf-route-score-row">' +
+
+        // Score range text (min - max composite among overlapping geos)
+        var rangeText = "";
+        if (r.compositeRange && Number.isFinite(r.compositeRange.min) && Number.isFinite(r.compositeRange.max)) {
+          if (r.compositeRange.max - r.compositeRange.min < 0.1) {
+            rangeText = "(~" + r.compositeRange.min.toFixed(1) + " uniform)";
+          } else {
+            rangeText = "(" + r.compositeRange.min.toFixed(1) + " \u2013 " + r.compositeRange.max.toFixed(1) + ")";
+          }
+        }
+
+        html += '<div class="rf-route-score-item">' +
+          '<div class="rf-route-score-row" data-route-detail="rfRouteDetail_' + i + '">' +
+          '<span class="rf-route-score-expand">&#9656;</span>' +
           '<span class="rf-route-score-name">' + typeLabel + ': ' + r.name + '</span>' +
           '<span class="rf-route-score-cdi">' + cdi + '</span>' +
+          (rangeText ? '<span class="rf-route-score-range tiny">' + rangeText + '</span>' : '') +
           '<span class="rf-cdi-badge rf-cdi-' + r.classification.toLowerCase().replace(/[^a-z]/g, "") + '">' + r.classification + '</span>' +
           '<span class="rf-route-score-geos tiny">' + r.geoCount + ' geos</span>' +
           '</div>';
+
+        // Expandable factor breakdown detail panel
+        html += '<div class="rf-route-score-detail" id="rfRouteDetail_' + i + '" style="display:none;">';
+        html += buildRouteFactorBreakdownHTML(r, systemFactorAvgs, result.tpiResult.effectiveWeights);
+        html += '</div></div>';
       }
       listEl.innerHTML = html;
+
+      // Wire click-to-expand on each row
+      var rows = listEl.querySelectorAll(".rf-route-score-row[data-route-detail]");
+      for (var ri = 0; ri < rows.length; ri++) {
+        rows[ri].addEventListener("click", toggleRouteDetail);
+      }
     }
   }
 

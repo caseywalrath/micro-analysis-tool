@@ -196,9 +196,16 @@
     }
 
     // For each feature, compute population-weighted CDI from overlapping TPI geos
+    // Also collect per-factor breakdowns and composite range for transparency
     for (var fi = 0; fi < features.length; fi++) {
       var feat = features[fi];
       var weightedSum = 0, totalPop = 0, geoCount = 0;
+
+      // Per-factor accumulators (weighted sum of quintile scores per factor)
+      var factorWeightedSums = {};
+      var factorPopSums = {};
+      var compositeMin = Infinity;
+      var compositeMax = -Infinity;
 
       for (var gi = 0; gi < tpiResult.geos.length; gi++) {
         var geo = tpiResult.geos[gi];
@@ -226,6 +233,38 @@
         weightedSum += scoreData.composite * pop;
         totalPop += pop;
         geoCount++;
+
+        // Track min/max composite scores
+        if (scoreData.composite < compositeMin) compositeMin = scoreData.composite;
+        if (scoreData.composite > compositeMax) compositeMax = scoreData.composite;
+
+        // Extract per-factor quintile scores for this geo
+        if (tpiResult.factorScores) {
+          var fsIter = tpiResult.factorScores.entries();
+          var fsEntry = fsIter.next();
+          while (!fsEntry.done) {
+            var factorId = fsEntry.value[0];
+            var scoreMap = fsEntry.value[1];
+            var fScore = scoreMap.get(geoid);
+            if (fScore != null && Number.isFinite(fScore)) {
+              if (!factorWeightedSums[factorId]) {
+                factorWeightedSums[factorId] = 0;
+                factorPopSums[factorId] = 0;
+              }
+              factorWeightedSums[factorId] += fScore * pop;
+              factorPopSums[factorId] += pop;
+            }
+            fsEntry = fsIter.next();
+          }
+        }
+      }
+
+      // Build factor breakdown: population-weighted average quintile per factor
+      var factorBreakdown = {};
+      for (var fId in factorWeightedSums) {
+        factorBreakdown[fId] = factorPopSums[fId] > 0
+          ? factorWeightedSums[fId] / factorPopSums[fId]
+          : NaN;
       }
 
       var cdi = totalPop > 0 ? weightedSum / totalPop : NaN;
@@ -242,7 +281,12 @@
         cdi: cdi,
         classification: classifyCDI({ value: cdi }).label,
         geoCount: geoCount,
-        lengthMiles: lengthMiles
+        lengthMiles: lengthMiles,
+        factorBreakdown: factorBreakdown,
+        compositeRange: {
+          min: compositeMin === Infinity ? NaN : compositeMin,
+          max: compositeMax === -Infinity ? NaN : compositeMax
+        }
       });
     }
 

@@ -1200,18 +1200,109 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Libe
   border-radius: 6px;
   background: #fafbfc;
 }
+.rf-route-score-item {
+  border-bottom: 1px solid var(--border);
+}
+.rf-route-score-item:last-child { border-bottom: none; }
+
 .rf-route-score-row {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 5px 10px;
   font-size: 12px;
-  border-bottom: 1px solid var(--border);
+  cursor: pointer;
 }
-.rf-route-score-row:last-child { border-bottom: none; }
+.rf-route-score-row:hover { background: #f0f4f8; }
 .rf-route-score-name { flex: 1; font-weight: 500; }
 .rf-route-score-cdi { font-weight: 600; min-width: 36px; text-align: right; }
 .rf-route-score-geos { color: var(--muted); min-width: 50px; text-align: right; }
+
+.rf-route-score-expand {
+  display: inline-block;
+  width: 12px;
+  font-size: 10px;
+  color: var(--muted);
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.rf-route-score-range {
+  color: var(--muted);
+  font-size: 11px;
+  min-width: 60px;
+  text-align: center;
+}
+
+/* Expandable per-route factor breakdown panel */
+.rf-route-score-detail {
+  padding: 6px 10px 10px 24px;
+  background: #f7fafc;
+  border-top: 1px solid #eee;
+}
+
+.rf-route-factor-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.rf-route-factor-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  padding: 2px 0;
+}
+
+.rf-route-factor-name {
+  width: 110px;
+  flex-shrink: 0;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rf-route-factor-weight {
+  width: 28px;
+  text-align: right;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.rf-route-factor-bar-wrap {
+  flex: 1;
+  height: 8px;
+  background: #edf2f7;
+  border-radius: 4px;
+  position: relative;
+  min-width: 60px;
+}
+
+.rf-route-factor-bar {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+}
+
+.rf-route-factor-sys-marker {
+  position: absolute;
+  top: -2px;
+  width: 2px;
+  height: 12px;
+  background: #1a1a1a;
+  border-radius: 1px;
+  transform: translateX(-1px);
+}
+
+.rf-route-factor-score {
+  width: 28px;
+  text-align: right;
+  font-weight: 600;
+  color: #1a1a1a;
+  flex-shrink: 0;
+}
 
 /* Match results list (Calibrate tab) */
 .rf-match-list {

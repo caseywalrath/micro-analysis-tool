@@ -65,7 +65,9 @@
           <div id="rfSystemResults" style="display:none;">
             <div class="rf-section-title">Per-Route CDI Scores</div>
             <div class="tiny" style="margin-bottom:4px;">
-              Scores are relative to the entire system &mdash; routes in high-demand areas score higher.
+              CDI scores are relative to this system&rsquo;s corridors, not national benchmarks. Averaging bounded quintile
+              scores (1&ndash;5) naturally compresses the range &mdash; most routes cluster in the 2.5&ndash;4.0 band.
+              Click any route below to see which factors drive its score.
             </div>
             <div id="rfRouteScoreList" class="rf-route-score-list"></div>
             <div class="rf-stats-grid" style="margin-top:8px;">
@@ -261,6 +263,10 @@
               <p>A composite score (1&ndash;5) summarizing transit demand potential across all census geographies within the corridor buffer.</p>
               <p><strong>How it&rsquo;s calculated:</strong> The CDI is a population-weighted average of the Transit Propensity Index (TPI) scores for each block group or tract in the study area. TPI scores combine nine factors&mdash;population density, employment density, zero-vehicle households, poverty, seniors, disability, people of color, youth, and limited English proficiency&mdash;each ranked by quintile within the corridor (1&nbsp;=&nbsp;lowest, 5&nbsp;=&nbsp;highest).</p>
               <p><strong>What it means:</strong> A CDI of 4&ndash;5 indicates strong latent demand for transit. Scores are relative to your study corridor only, not a national benchmark.</p>
+              <p><strong>Why scores cluster:</strong> Because quintile scores are bounded (1&ndash;5) and each route covers many
+              block groups of varying character, the population-weighted average naturally regresses toward 3.
+              The default 70% weight on density (population + employment) means density variation is the primary
+              differentiator. Adjust weights in the Calibrate tab to emphasize other factors.</p>
             </div>
 
             <div class="rf-stats-grid">
