@@ -136,6 +136,40 @@
     return codes;
   }
 
+  // --- Map serialization helpers (for saving/restoring TPI/RF results) ---
+
+  // Convert Map<k, v> → plain Object { k: v } (for JSON serialization)
+  function mapToObj(map) {
+    if (!map) return null;
+    var obj = {};
+    map.forEach(function (v, k) { obj[k] = v; });
+    return obj;
+  }
+
+  // Convert plain Object { k: v } → Map<k, v>
+  function objToMap(obj) {
+    var m = new Map();
+    if (!obj) return m;
+    Object.keys(obj).forEach(function (k) { m.set(k, obj[k]); });
+    return m;
+  }
+
+  // Convert Map<k, Map<k2, v>> → nested Object { k: { k2: v } }
+  function nestedMapToObj(outerMap) {
+    if (!outerMap) return null;
+    var obj = {};
+    outerMap.forEach(function (innerMap, key) { obj[key] = mapToObj(innerMap); });
+    return obj;
+  }
+
+  // Convert nested Object { k: { k2: v } } → Map<k, Map<k2, v>>
+  function nestedObjToMap(obj) {
+    var m = new Map();
+    if (!obj) return m;
+    Object.keys(obj).forEach(function (k) { m.set(k, objToMap(obj[k])); });
+    return m;
+  }
+
   // --- Expose on App namespace ---
 
   App.setStatus = setStatus;
@@ -151,4 +185,8 @@
   App.setAggUI = setAggUI;
   App.formatValue = formatValue;
   App.getSelectedVars = getSelectedVars;
+  App.mapToObj = mapToObj;
+  App.objToMap = objToMap;
+  App.nestedMapToObj = nestedMapToObj;
+  App.nestedObjToMap = nestedObjToMap;
 })();

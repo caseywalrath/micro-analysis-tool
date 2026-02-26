@@ -1630,6 +1630,107 @@
     }
   }
 
+  // ---- Session persistence (cache module hooks) ----
+
+  // Helper: serialize the tpiResult Maps inside a system/demand result.
+  function serializeTpiResult(tpi, mode) {
+    if (!tpi) return null;
+    var obj = {
+      geoLevel: tpi.geoLevel,
+      year: tpi.year,
+      geoids: tpi.geoids ? tpi.geoids.slice() : [],
+      effectiveWeights: tpi.effectiveWeights ? Object.assign({}, tpi.effectiveWeights) : {},
+      tractFallbackFactors: tpi.tractFallbackFactors ? tpi.tractFallbackFactors.slice() : [],
+      apportionByArea: tpi.apportionByArea || false,
+      scores: App.mapToObj(tpi.scores),
+      factorScores: App.nestedMapToObj(tpi.factorScores),
+      rawValues: App.nestedMapToObj(tpi.rawValues)
+    };
+    if (mode === "full" && tpi.geos) {
+      obj.geos = tpi.geos.slice();
+    }
+    return obj;
+  }
+
+  // Helper: reconstruct a tpiResult from serialized data.
+  function deserializeTpiResult(r) {
+    if (!r) return null;
+    return {
+      geoLevel: r.geoLevel,
+      year: r.year,
+      geoids: r.geoids || [],
+      geos: r.geos || [],
+      effectiveWeights: r.effectiveWeights || {},
+      tractFallbackFactors: r.tractFallbackFactors || [],
+      apportionByArea: r.apportionByArea || false,
+      scores: App.objToMap(r.scores),
+      factorScores: App.nestedObjToMap(r.factorScores),
+      rawValues: App.nestedObjToMap(r.rawValues)
+    };
+  }
+
+  function saveRfState(mode) {
+    var data = {
+      weights: Object.assign({}, _weights),
+      apportionByArea: _apportionByArea,
+      normalizeByLength: _normalizeByLength,
+      calibration: _calibration ? Object.assign({}, _calibration) : null,
+      scenarios: _scenarios.map(function (s) { return Object.assign({}, s); }),
+      selectedCorridor: _selectedCorridor,
+      activeTab: _activeTab,
+      perRouteCDI: _perRouteCDI ? _perRouteCDI.slice() : null
+    };
+
+    if (_systemResult) {
+      data.systemResult = {
+        systemCDI: _systemResult.systemCDI ? Object.assign({}, _systemResult.systemCDI) : null,
+        geoLevel: _systemResult.geoLevel,
+        year: _systemResult.year,
+        tpiResult: serializeTpiResult(_systemResult.tpiResult, mode)
+      };
+    }
+
+    return data;
+  }
+
+  function restoreRfState(data) {
+    if (!data) return;
+
+    if (data.weights) _weights = Object.assign({}, data.weights);
+    if (data.apportionByArea != null) _apportionByArea = !!data.apportionByArea;
+    if (data.normalizeByLength != null) _normalizeByLength = !!data.normalizeByLength;
+    if (data.calibration) _calibration = Object.assign({}, data.calibration);
+    if (Array.isArray(data.scenarios) && data.scenarios.length === 4) {
+      for (var i = 0; i < 4; i++) _scenarios[i] = Object.assign({}, data.scenarios[i]);
+    }
+    if (data.selectedCorridor) _selectedCorridor = data.selectedCorridor;
+    if (data.activeTab) _activeTab = data.activeTab;
+    if (Array.isArray(data.perRouteCDI)) _perRouteCDI = data.perRouteCDI.slice();
+
+    if (data.systemResult) {
+      var tpiRestored = deserializeTpiResult(data.systemResult.tpiResult);
+      _systemResult = {
+        tpiResult: tpiRestored,
+        systemCDI: data.systemResult.systemCDI || null,
+        routeCDIs: _perRouteCDI || [],
+        geoLevel: data.systemResult.geoLevel,
+        year: data.systemResult.year
+      };
+      _stale = false;
+
+      // If geometry was saved, render RF choropleth immediately
+      if (tpiRestored && tpiRestored.geos && tpiRestored.geos.length > 0) {
+        var displayCDI = _systemResult.systemCDI ||
+          { value: NaN, scored: tpiRestored.geoids.length, total: tpiRestored.geoids.length };
+        renderChoropleth({ tpiResult: tpiRestored, corridorCDI: displayCDI });
+        App.renderCensusOverlay(tpiRestored.geos);
+        App.popup.showFloatingWidget("rf-legend", "projects/ridership-legend.html", {
+          position: "bottom-left", width: 170, title: "Demand Legend"
+        });
+      }
+    }
+  }
+
   // ---- Register module ----
 
   App.registerModule({
@@ -1649,5 +1750,13 @@
     clear: function () { clearAll(); },
     update: async function (core) { await update(core); }
   });
+
+  // Register with session cache so RF state is saved/restored with features
+  if (App.cache && App.cache.registerModule) {
+    App.cache.registerModule("rf", {
+      collect: saveRfState,
+      apply: restoreRfState
+    });
+  }
 
 })();

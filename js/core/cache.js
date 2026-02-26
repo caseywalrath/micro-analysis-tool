@@ -14,9 +14,19 @@
   var _saveTimer = null;
   var DEBOUNCE_MS = 500;
 
-  // ---- Collect current state into a serialisable object ----
+  // ---- Module state registry ----
+  // Analysis modules register collect/apply hooks to persist their own state.
+  // collect(mode) returns a serializable object; mode is "light" (localStorage)
+  // or "full" (file export, may include geometry).
+  // apply(data) restores state from a previously collected object.
 
-  function collectState() {
+  var _moduleHandlers = [];
+
+  // ---- Collect current state into a serialisable object ----
+  // mode: "light" (default, for localStorage — skips heavy geometry)
+  //       "full"  (for file export — includes geos for choropleth restore)
+
+  function collectState(mode) {
     var state = {
       version: SCHEMA_VERSION,
       stations: App.stations.slice(),
@@ -43,6 +53,19 @@
 
     var yearEl = document.getElementById("yearSelect");
     if (yearEl) state.year = yearEl.value;
+
+    // Module state (TPI, RF, etc.)
+    state.moduleState = {};
+    for (var mi = 0; mi < _moduleHandlers.length; mi++) {
+      var mh = _moduleHandlers[mi];
+      if (typeof mh.handlers.collect === "function") {
+        try {
+          state.moduleState[mh.id] = mh.handlers.collect(mode || "light");
+        } catch (e) {
+          console.warn("Cache: module collect failed for", mh.id, e);
+        }
+      }
+    }
 
     return state;
   }
@@ -121,6 +144,21 @@
       if (lodesInfoEl) {
         lodesInfoEl.textContent =
           "Previously loaded: " + lodesHints.join(", ") + " \u2014 re-upload to use";
+      }
+    }
+
+    // 8. Module state (TPI, RF, etc.) — optional field, skip if absent
+    if (state.moduleState) {
+      for (var mi = 0; mi < _moduleHandlers.length; mi++) {
+        var mh = _moduleHandlers[mi];
+        var moduleData = state.moduleState[mh.id];
+        if (moduleData && typeof mh.handlers.apply === "function") {
+          try {
+            mh.handlers.apply(moduleData);
+          } catch (e) {
+            console.warn("Cache: module apply failed for", mh.id, e);
+          }
+        }
       }
     }
   }
@@ -241,7 +279,7 @@
 
   function exportToFile() {
     try {
-      var state = collectState();
+      var state = collectState("full");
       var json = JSON.stringify(state, null, 2);
       var blob = new Blob([json], { type: "application/json" });
       var url = URL.createObjectURL(blob);
@@ -322,6 +360,11 @@
     reset: reset,
     exportToFile: exportToFile,
     importFromFile: importFromFile,
-    STORAGE_KEY: STORAGE_KEY
+    STORAGE_KEY: STORAGE_KEY,
+    // registerModule(id, { collect(mode), apply(data) })
+    // Analysis modules call this at load time to opt into session persistence.
+    registerModule: function (id, handlers) {
+      _moduleHandlers.push({ id: id, handlers: handlers });
+    }
   };
 })();

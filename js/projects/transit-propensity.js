@@ -673,6 +673,72 @@
     }
   }
 
+  // ---- Session persistence (cache module hooks) ----
+
+  // Serialize TPI result Maps to plain objects for JSON storage.
+  // mode "full" includes geos (geometry) so choropleth can be restored.
+  function saveTpiState(mode) {
+    var data = {
+      weights: Object.assign({}, _weights),
+      apportionByArea: _apportionByArea
+    };
+    if (!_lastResult) return data;
+    var tpi = _lastResult;
+    data.result = {
+      geoLevel: tpi.geoLevel,
+      year: tpi.year,
+      geoids: tpi.geoids ? tpi.geoids.slice() : [],
+      effectiveWeights: tpi.effectiveWeights ? Object.assign({}, tpi.effectiveWeights) : {},
+      tractFallbackFactors: tpi.tractFallbackFactors ? tpi.tractFallbackFactors.slice() : [],
+      apportionByArea: tpi.apportionByArea || false,
+      scores: App.mapToObj(tpi.scores),
+      factorScores: App.nestedMapToObj(tpi.factorScores),
+      rawValues: App.nestedMapToObj(tpi.rawValues)
+    };
+    if (mode === "full" && tpi.geos) {
+      data.result.geos = tpi.geos.slice();
+    }
+    return data;
+  }
+
+  // Restore TPI state from saved data. Called by cache during restore/import.
+  function restoreTpiState(data) {
+    if (!data) return;
+
+    // Restore weights and settings
+    if (data.weights) _weights = Object.assign({}, data.weights);
+    if (data.apportionByArea != null) _apportionByArea = !!data.apportionByArea;
+
+    if (!data.result) return;
+    var r = data.result;
+
+    // Reconstruct the TPI result object with Maps
+    var restored = {
+      geoLevel: r.geoLevel,
+      year: r.year,
+      geoids: r.geoids || [],
+      geos: r.geos || [],
+      effectiveWeights: r.effectiveWeights || {},
+      tractFallbackFactors: r.tractFallbackFactors || [],
+      apportionByArea: r.apportionByArea || false,
+      scores: App.objToMap(r.scores),
+      factorScores: App.nestedObjToMap(r.factorScores),
+      rawValues: App.nestedObjToMap(r.rawValues)
+    };
+
+    _lastResult = restored;
+    _stale = false;
+
+    // If geometry was saved, render choropleth immediately (map is loaded at restore time)
+    if (restored.geos && restored.geos.length > 0) {
+      renderChoropleth(restored);
+      App.renderCensusOverlay(restored.geos);
+      App.popup.showFloatingWidget("tpi-legend", "projects/tpi-legend.html", {
+        position: "bottom-left", width: 160, title: "TPI Legend"
+      });
+    }
+  }
+
   // ---- Expose current TPI weights for other modules (e.g. "Copy From TPI" in RF) ----
 
   App.getTpiWeights = function () { return Object.assign({}, _weights); };
@@ -710,5 +776,13 @@
       await update(core);
     }
   });
+
+  // Register with session cache so TPI state is saved/restored with features
+  if (App.cache && App.cache.registerModule) {
+    App.cache.registerModule("tpi", {
+      collect: saveTpiState,
+      apply: restoreTpiState
+    });
+  }
 
 })();
