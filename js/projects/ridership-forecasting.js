@@ -39,6 +39,11 @@
   var _demandFeatureFilter = null; // { routeIndices: [...], lineIndices: [...] } or null
   var _demandUseSameSystem = false; // true = reuse calibration TPI data for demand
 
+  // Shared-pool normalization state
+  var _sharedPoolMode = false;          // true = combined calibration+demand normalization pool
+  var _sharedCalibPerRouteCDI = null;   // calibration-context CDI from most recent shared run
+  var _sharedSystemResult = null;       // full TPI result from most recent shared run
+
   // Default scenario names
   var SCENARIO_NAMES = ["Scenario A", "Scenario B", "Scenario C", "Scenario D"];
   for (var si = 0; si < 4; si++) {
@@ -198,6 +203,68 @@
 
   // ---- Layer 1: Demand ----
 
+  // Run a single combined TPI analysis for both calibration and demand feature sets.
+  // Ensures both systems' CDI values are scored from the same normalization pool.
+  // Updates _demandPerRouteCDI, _demandSystemResult, _sharedCalibPerRouteCDI, _sharedSystemResult.
+  // If match data is available, refits calibration from the new shared-pool CDI values.
+  async function runSharedPoolAnalysis(geoLevel, year, textEl) {
+    // Read the current demand filter from the UI
+    var demandFilter = readFeatureFilter("rfDemandFeatureList");
+    _demandFeatureFilter = demandFilter;
+
+    // Combine calibration and demand feature filters for the shared union polygon
+    var combinedFilter = combineFeatureFilters(_calibFeatureFilter, demandFilter);
+    var sharedUnion = combinedFilter ? RM.buildUnionFromFeatures(combinedFilter) : null;
+
+    if (textEl) textEl.textContent = "Running shared pool analysis...";
+    App.setStatus("Running shared pool normalization analysis...");
+
+    // One TPI run covering all combined features; featureFilter:null = compute CDI for all routes
+    var result = await RM.computeSystemDemand({
+      geoLevel: geoLevel,
+      year: year,
+      weights: _weights,
+      lodesData: App.lodesData,
+      apportionByArea: _apportionByArea,
+      unionPolygon: sharedUnion,
+      featureFilter: null,
+      onProgress: function (msg) {
+        if (textEl) textEl.textContent = msg;
+        App.setStatus(msg);
+      }
+    });
+
+    // Partition result.routeCDIs by filter
+    _sharedCalibPerRouteCDI = filterRouteCDIs(result.routeCDIs, _calibFeatureFilter);
+    _demandPerRouteCDI      = filterRouteCDIs(result.routeCDIs, demandFilter);
+    _sharedSystemResult     = result;
+    _demandSystemResult     = result;
+
+    // Refit calibration from shared-pool CDI values if match data exists
+    if (_matchResult && _matchResult.matched.length >= 2) {
+      var newCalib = refitCalibrationFromCDI(_sharedCalibPerRouteCDI);
+      if (newCalib) {
+        _calibration = newCalib;
+        if (isPopupVisible()) {
+          var factorEl = document.getElementById("rfCalibFactor");
+          if (factorEl) factorEl.textContent = _calibration.factor.toFixed(4);
+          var r2El = document.getElementById("rfCalibRSquared");
+          if (r2El) r2El.textContent = _calibration.rSquared != null ? _calibration.rSquared.toFixed(4) : "\u2014";
+          var sizeEl = document.getElementById("rfCalibSampleSize");
+          if (sizeEl) sizeEl.textContent = String(_calibration.n);
+          var spNoteEl = document.getElementById("rfCalibSharedPoolNote");
+          if (spNoteEl) {
+            spNoteEl.style.display = "";
+            spNoteEl.textContent = "Calibration refitted using shared-pool CDI values " +
+              "(factor: " + _calibration.factor.toFixed(4) + ", n=" + _calibration.n + ").";
+          }
+        }
+      }
+    }
+
+    return result;
+  }
+
   async function runDemand() {
     if (_running) return;
     _running = true;
@@ -228,6 +295,7 @@
 
       var sameSystemCb = document.getElementById("rfDemandUseSameSystem");
       var useSameSystem = sameSystemCb && sameSystemCb.checked;
+      var useSharedPool = _sharedPoolMode && !useSameSystem && !!_systemResult;
 
       if (useSameSystem && _systemResult && _systemResult.tpiResult) {
         // Path A: Same system — reuse calibration TPI data (no Census API calls)
@@ -237,6 +305,13 @@
         activeRouteCDIs = _perRouteCDI;
         _demandPerRouteCDI = _perRouteCDI;
         _demandSystemResult = _systemResult;
+
+      } else if (useSharedPool) {
+        // Path B-shared: combined normalization pool (one TPI run covers both systems)
+        var sharedResult = await runSharedPoolAnalysis(geoLevel, year, textEl);
+        tpiResult = sharedResult.tpiResult;
+        activeRouteCDIs = _demandPerRouteCDI;
+        populateCorridorDropdown(_demandPerRouteCDI);
 
       } else if (_systemResult && _systemResult.tpiResult) {
         // Path B: Different system — run fresh TPI for demand features
@@ -608,6 +683,9 @@
     _demandSystemResult = null;
     _demandPerRouteCDI = null;
     _demandFeatureFilter = null;
+    _sharedPoolMode = false;
+    _sharedCalibPerRouteCDI = null;
+    _sharedSystemResult = null;
     App.popup.hideFloatingWidget("rf-legend");
     if (isPopupVisible()) {
       var el = document.getElementById("rfDemandResults");
@@ -623,6 +701,11 @@
       if (step2) { step2.style.opacity = "0.5"; step2.style.pointerEvents = "none"; }
       var step3 = document.getElementById("rfCalibStep3");
       if (step3) { step3.style.opacity = "0.5"; step3.style.pointerEvents = "none"; }
+      // Reset shared pool UI
+      var spNoteEl = document.getElementById("rfCalibSharedPoolNote");
+      if (spNoteEl) spNoteEl.style.display = "none";
+      var spCbEl = document.getElementById("rfSharedPoolMode");
+      if (spCbEl) { spCbEl.checked = false; spCbEl.disabled = false; }
     }
     App.setStatus("Ridership analysis cleared");
   }
@@ -742,6 +825,121 @@
     }
     if (allChecked) return null; // no filter needed
     return { routeIndices: routeIndices, lineIndices: lineIndices };
+  }
+
+  // Combine two feature filters by unioning their route/line index sets.
+  // Returns null (= all features) if either argument is null (either side covers all).
+  function combineFeatureFilters(a, b) {
+    if (!a || !b) return null;
+    var routeSet = {};
+    var lineSet = {};
+    (a.routeIndices || []).concat(b.routeIndices || []).forEach(function (i) { routeSet[i] = true; });
+    (a.lineIndices  || []).concat(b.lineIndices  || []).forEach(function (i) { lineSet[i]  = true; });
+    return {
+      routeIndices: Object.keys(routeSet).map(Number).sort(function (x, y) { return x - y; }),
+      lineIndices:  Object.keys(lineSet).map(Number).sort(function (x, y) { return x - y; })
+    };
+  }
+
+  // Filter a routeCDIs array to only entries matching the given feature filter.
+  // Returns all entries if filter is null.
+  function filterRouteCDIs(all, filter) {
+    if (!filter || !all) return all;
+    return all.filter(function (r) {
+      if (r.featureType === "route") return filter.routeIndices.indexOf(r.featureIndex) !== -1;
+      if (r.featureType === "line")  return filter.lineIndices.indexOf(r.featureIndex)  !== -1;
+      return false;
+    });
+  }
+
+  // Refit calibration coefficients from existing _matchResult match data,
+  // substituting updated CDI values from a shared-pool run.
+  // calibPerRouteCDI: shared-pool per-route CDI array for calibration features.
+  // Returns an updated calibration object (with sharedPoolMode: true), or null if
+  // insufficient data or column mapping is unavailable (import-only flow).
+  function refitCalibrationFromCDI(calibPerRouteCDI) {
+    if (!_matchResult || _matchResult.matched.length < 2) return null;
+    if (!calibPerRouteCDI || calibPerRouteCDI.length === 0) return null;
+
+    var colRidership = (document.getElementById("rfCalibColRidership") || {}).value || "";
+    if (!colRidership) return null; // column mapping not available
+
+    var colHeadway = (document.getElementById("rfCalibColHeadway") || {}).value || "";
+    var method = document.querySelector('input[name="rfCalibMethod"]:checked');
+    var methodVal = method ? method.value : (_calibration ? _calibration.method : "ratio");
+    var REF_HEADWAY = 30;
+    var normElast = parseFloat((document.getElementById("rfFreqElastValue") || {}).value) || 0.5;
+
+    // Build lookup: (featureType:featureIndex) → shared-pool CDI entry
+    var cdiLookup = {};
+    for (var k = 0; k < calibPerRouteCDI.length; k++) {
+      var r = calibPerRouteCDI[k];
+      cdiLookup[r.featureType + ":" + r.featureIndex] = r;
+    }
+
+    var obs = [];
+    var headwayNormCount = 0;
+    for (var i = 0; i < _matchResult.matched.length; i++) {
+      var match = _matchResult.matched[i];
+      var ridership = parseFloat(match.csvRow[colRidership]);
+      if (!Number.isFinite(ridership)) continue;
+
+      // Look up shared-pool CDI by featureType+featureIndex (robust to name edits)
+      var key = match.routeCDI.featureType + ":" + match.routeCDI.featureIndex;
+      var sharedEntry = cdiLookup[key];
+      var routeCDI = sharedEntry ? sharedEntry.cdi : match.routeCDI.cdi;
+      if (!Number.isFinite(routeCDI) || routeCDI <= 0) continue;
+
+      if (_normalizeByLength) {
+        var len = match.routeCDI.lengthMiles;
+        if (!Number.isFinite(len) || len <= 0) continue;
+        ridership = ridership / len;
+      }
+
+      if (colHeadway) {
+        var routeHeadway = parseFloat(match.csvRow[colHeadway]);
+        if (Number.isFinite(routeHeadway) && routeHeadway > 0) {
+          var freqEffect = RM.computeFrequencyEffect(REF_HEADWAY, routeHeadway, normElast);
+          if (freqEffect > 0) { ridership = ridership / freqEffect; headwayNormCount++; }
+        }
+      }
+
+      obs.push({ ridership: ridership, demandIndex: routeCDI });
+    }
+
+    if (obs.length < 2) return null;
+
+    var calibResult;
+    var newCalib;
+    if (methodVal === "regression") {
+      calibResult = RM.calibrateRegression(obs);
+      newCalib = {
+        factor: calibResult.slope,
+        intercept: calibResult.intercept,
+        n: calibResult.n,
+        rSquared: calibResult.rSquared,
+        method: "regression",
+        sharedPoolMode: true
+      };
+    } else {
+      calibResult = RM.calibrateRatio(obs);
+      newCalib = {
+        factor: calibResult.factor,
+        n: calibResult.n,
+        rSquared: calibResult.rSquared,
+        method: "ratio",
+        sharedPoolMode: true
+      };
+    }
+
+    if (headwayNormCount > 0) {
+      newCalib.headwayNormalized = true;
+      newCalib.refHeadway = REF_HEADWAY;
+      newCalib.normElasticity = normElast;
+      newCalib.headwayNormCount = headwayNormCount;
+    }
+
+    return newCalib;
   }
 
   // Wire select-all / clear links for a feature checklist
@@ -1537,14 +1735,20 @@
 
   function exportCalibJSON() {
     if (!_calibration) return;
+    // Build standard v2 export, then add v3 shared-pool fields
+    var baseJson = RM.exportCoefficients(_calibration, {
+      weights: _weights ? Object.assign({}, _weights) : null,
+      featureFilter: _calibFeatureFilter,
+      perRouteCDI: _perRouteCDI,
+      geoLevel: _systemResult ? _systemResult.geoLevel : null,
+      year: _systemResult ? _systemResult.year : null
+    });
+    var data = JSON.parse(baseJson);
+    data.normalizationMode = _sharedPoolMode ? "shared" : "separate";
+    if (_demandFeatureFilter) data.demandFeatureFilter = _demandFeatureFilter;
+    if (_sharedCalibPerRouteCDI) data.sharedCalibPerRouteCDI = _sharedCalibPerRouteCDI;
     _triggerDownload(
-      RM.exportCoefficients(_calibration, {
-        weights: _weights ? Object.assign({}, _weights) : null,
-        featureFilter: _calibFeatureFilter,
-        perRouteCDI: _perRouteCDI,
-        geoLevel: _systemResult ? _systemResult.geoLevel : null,
-        year: _systemResult ? _systemResult.year : null
-      }),
+      JSON.stringify(data, null, 2),
       "application/json",
       "ridership-calibration-" + _dateStamp() + ".json"
     );
@@ -1567,7 +1771,22 @@
         populateCorridorDropdown(_perRouteCDI);
       }
       if (result.featureFilter) _calibFeatureFilter = result.featureFilter;
+
+      // Restore v3 shared-pool fields from raw JSON (not passed through by importCoefficients)
+      try {
+        var rawData = JSON.parse(e.target.result);
+        if (rawData.normalizationMode === "shared") {
+          _sharedPoolMode = true;
+          if (rawData.demandFeatureFilter) _demandFeatureFilter = rawData.demandFeatureFilter;
+          if (rawData.sharedCalibPerRouteCDI) _sharedCalibPerRouteCDI = rawData.sharedCalibPerRouteCDI;
+        } else {
+          _sharedPoolMode = false;
+        }
+      } catch (_) { _sharedPoolMode = false; }
+
       // Update UI
+      var spCb = document.getElementById("rfSharedPoolMode");
+      if (spCb) { spCb.checked = _sharedPoolMode; spCb.disabled = _demandUseSameSystem; }
       var resultsEl = document.getElementById("rfCalibResults");
       if (resultsEl) resultsEl.style.display = "";
       var factorEl = document.getElementById("rfCalibFactor");
@@ -1576,6 +1795,17 @@
       if (r2El) r2El.textContent = _calibration.rSquared != null ? _calibration.rSquared.toFixed(4) : "\u2014";
       var sizeEl = document.getElementById("rfCalibSampleSize");
       if (sizeEl) sizeEl.textContent = String(_calibration.n || "\u2014");
+      // Show shared-pool note if imported calibration was refitted
+      var spNoteEl = document.getElementById("rfCalibSharedPoolNote");
+      if (spNoteEl) {
+        if (_calibration.sharedPoolMode) {
+          spNoteEl.style.display = "";
+          spNoteEl.textContent = "Calibration refitted using shared-pool CDI values " +
+            "(factor: " + _calibration.factor.toFixed(4) + ", n=" + _calibration.n + ").";
+        } else {
+          spNoteEl.style.display = "none";
+        }
+      }
       App.setStatus("Calibration imported" + (result.perRouteCDI ? " (with per-route CDI)" : ""));
     };
     reader.readAsText(file);
@@ -1615,6 +1845,13 @@
     // On feature deletion, invalidate feature filters since indices may have shifted
     _calibFeatureFilter = null;
     _demandFeatureFilter = null;
+    // Invalidate shared pool derived state (will be recomputed on next demand run)
+    _sharedCalibPerRouteCDI = null;
+    _sharedSystemResult = null;
+    if (isPopupVisible()) {
+      var spNoteEl = document.getElementById("rfCalibSharedPoolNote");
+      if (spNoteEl) spNoteEl.style.display = "none";
+    }
   }
 
   // ---- Module init (called once on first popup open) ----
@@ -1742,6 +1979,7 @@
 
     // "Same system as calibration" toggle
     var sameSystemCb = document.getElementById("rfDemandUseSameSystem");
+    var sharedPoolCb = document.getElementById("rfSharedPoolMode");
     if (sameSystemCb) {
       sameSystemCb.checked = _demandUseSameSystem;
       sameSystemCb.addEventListener("change", function () {
@@ -1752,10 +1990,51 @@
         if (sameSystemCb.checked && _perRouteCDI) {
           populateCorridorDropdown(_perRouteCDI);
         }
+        // Shared pool is redundant when using same system; default it on when going cross-system
+        if (sharedPoolCb) {
+          sharedPoolCb.disabled = sameSystemCb.checked;
+          if (sameSystemCb.checked) {
+            sharedPoolCb.checked = false;
+            _sharedPoolMode = false;
+          } else {
+            sharedPoolCb.checked = true;
+            _sharedPoolMode = true;
+          }
+        }
       });
       // Apply initial state
       var featureSection = document.getElementById("rfDemandFeatureSection");
       if (featureSection && _demandUseSameSystem) featureSection.style.display = "none";
+    }
+
+    // Shared pool normalization checkbox
+    if (sharedPoolCb) {
+      sharedPoolCb.checked = _sharedPoolMode;
+      sharedPoolCb.disabled = _demandUseSameSystem;
+      sharedPoolCb.addEventListener("change", function () {
+        _sharedPoolMode = sharedPoolCb.checked;
+        _demandStale = true;
+        _stale = true;
+        if (isPopupVisible()) {
+          var statusEl = document.getElementById("rfDemandStatus");
+          var textEl = document.getElementById("rfDemandStatusText");
+          if (statusEl && textEl) {
+            statusEl.style.display = "";
+            textEl.textContent = "Normalization mode changed \u2014 re-run to update.";
+            statusEl.className = "rf-status rf-status-stale";
+          }
+        }
+      });
+    }
+
+    // Shared pool info button toggles tooltip
+    var sharedPoolInfoBtn = document.getElementById("rfSharedPoolInfoBtn");
+    var sharedPoolTooltip = document.getElementById("rfSharedPoolTooltip");
+    if (sharedPoolInfoBtn && sharedPoolTooltip) {
+      sharedPoolInfoBtn.addEventListener("click", function (e) {
+        e.preventDefault();
+        sharedPoolTooltip.style.display = sharedPoolTooltip.style.display === "none" ? "" : "none";
+      });
     }
 
     var runBtn = document.getElementById("rfRunDemand");
@@ -1870,6 +2149,25 @@
       if (featureSection) featureSection.style.display = _demandUseSameSystem ? "none" : "";
     }
 
+    // Sync shared pool checkbox
+    var spCb = document.getElementById("rfSharedPoolMode");
+    if (spCb) {
+      spCb.checked = _sharedPoolMode;
+      spCb.disabled = _demandUseSameSystem;
+    }
+
+    // Restore shared-pool refit note if calibration was refitted in shared mode
+    var spNoteEl = document.getElementById("rfCalibSharedPoolNote");
+    if (spNoteEl) {
+      if (_calibration && _calibration.sharedPoolMode) {
+        spNoteEl.style.display = "";
+        spNoteEl.textContent = "Calibration refitted using shared-pool CDI values " +
+          "(factor: " + _calibration.factor.toFixed(4) + ", n=" + _calibration.n + ").";
+      } else {
+        spNoteEl.style.display = "none";
+      }
+    }
+
     // Restore system analysis state
     if (_systemResult) {
       displaySystemResults(_systemResult);
@@ -1963,7 +2261,7 @@
 
   function saveRfState(mode) {
     var data = {
-      _schemaVersion: 2,
+      _schemaVersion: 3,
       weights: Object.assign({}, _weights),
       apportionByArea: _apportionByArea,
       normalizeByLength: _normalizeByLength,
@@ -1977,7 +2275,9 @@
       // Demand context
       demandPerRouteCDI: _demandPerRouteCDI ? _demandPerRouteCDI.slice() : null,
       demandFeatureFilter: _demandFeatureFilter,
-      demandUseSameSystem: _demandUseSameSystem
+      demandUseSameSystem: _demandUseSameSystem,
+      // Shared pool normalization (v3)
+      sharedPoolMode: _sharedPoolMode
     };
 
     if (_systemResult) {
@@ -2023,6 +2323,13 @@
       if (data.demandUseSameSystem != null) _demandUseSameSystem = !!data.demandUseSameSystem;
     }
 
+    // v3 fields: shared pool mode
+    if (data._schemaVersion >= 3) {
+      if (data.sharedPoolMode != null) _sharedPoolMode = !!data.sharedPoolMode;
+    } else {
+      _sharedPoolMode = false; // v1/v2 → v3 migration default
+    }
+
     if (data.systemResult) {
       var tpiRestored = deserializeTpiResult(data.systemResult.tpiResult);
       _systemResult = {
@@ -2056,6 +2363,13 @@
         geoLevel: data.demandSystemResult.geoLevel,
         year: data.demandSystemResult.year
       };
+    }
+
+    // Rebuild shared pool derived state from restored data (v3)
+    // In shared pool mode, _demandSystemResult IS the shared result; reconstruct calibration CDI.
+    if (_sharedPoolMode && _demandSystemResult && Array.isArray(_demandSystemResult.routeCDIs) && _demandSystemResult.routeCDIs.length > 0) {
+      _sharedSystemResult = _demandSystemResult;
+      _sharedCalibPerRouteCDI = filterRouteCDIs(_demandSystemResult.routeCDIs, _calibFeatureFilter);
     }
   }
 

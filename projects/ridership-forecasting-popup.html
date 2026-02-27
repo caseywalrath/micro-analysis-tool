@@ -180,6 +180,7 @@
               </div>
             </div>
             <div id="rfCalibHeadwayNote" class="rf-note" style="display:none;"></div>
+            <div id="rfCalibSharedPoolNote" class="rf-note" style="display:none;"></div>
             <div id="rfCalibWarning" class="rf-warning" style="display:none;"></div>
           </div>
 
@@ -230,6 +231,20 @@
               <a href="#" id="rfDemandSelectAll" class="tiny">Select all</a>
               <span class="tiny" style="color:var(--muted);"> | </span>
               <a href="#" id="rfDemandSelectNone" class="tiny">Clear</a>
+            </div>
+
+            <label class="rf-toggle-row" style="margin-top:8px;">
+              <input type="checkbox" id="rfSharedPoolMode">
+              <span>Shared pool normalization (calibration + demand)
+                <button id="rfSharedPoolInfoBtn" class="rf-info-btn" type="button" aria-label="What is shared pool normalization?">&#9432;</button>
+              </span>
+            </label>
+            <div id="rfSharedPoolTooltip" class="rf-cdi-tooltip" style="display:none; margin-top:4px;">
+              <strong>Shared Pool Normalization</strong>
+              <p style="margin:4px 0 0;">By default, CDI for each system is computed within its own normalization pool. A &#8220;High CDI&#8221; in the target system is relative to that system only, which may not correspond to the same absolute conditions as in the calibration system.</p>
+              <p style="margin:4px 0 0;">When checked, a single TPI analysis covers both calibration and demand systems together. All routes are scored relative to the same pool of geographies, making CDI directly comparable across systems. The calibration is automatically refitted using the new shared-pool CDI values for calibration routes.</p>
+              <p style="margin:4px 0 0;"><strong>Use when:</strong> calibrating against one peer system and applying to a target with substantially different absolute density levels.</p>
+              <p style="margin:4px 0 0;"><strong>Warning:</strong> Changing feature selections changes the normalization pool and may shift all CDI values. Re-run after any changes.</p>
             </div>
           </div>
 

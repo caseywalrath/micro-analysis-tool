@@ -322,6 +322,50 @@ This ensures enough buses are available to maintain the headway given the round-
 
 ---
 
+## Normalization Modes
+
+The CDI (Corridor Demand Index) is always computed relative to a pool of corridors — the set of geographies used for quintile scoring. By default, each system uses its own independent pool. This section explains when and why to change that.
+
+### Separate Pools (default)
+
+Each system's CDI is computed within its own normalization pool:
+
+- **Calibration system CDI**: normalized against the calibration system's corridors only
+- **Demand system CDI**: normalized against the demand system's corridors only
+
+A route that scores 4.2 CDI in Colorado Springs is in the top quintile *relative to Colorado Springs corridors*. A route that scores 4.2 CDI in a calibration system like Salt Lake City is in the top quintile *relative to Salt Lake City corridors*. These values are on different absolute scales — but the calibration relationship is still meaningful if applied consistently within each system.
+
+**Use separate pools when:**
+- Analyzing corridors within the same system you calibrated against
+- Calibration and demand systems have similar absolute density levels
+- You want to preserve within-system relative rankings (which corridor is best relative to its peers)
+
+### Shared Pool
+
+When the **Shared pool normalization (calibration + demand)** checkbox is checked in the Demand tab — available only when "Same system as calibration" is unchecked — a single TPI run covers both the calibration and demand systems together. All corridors from both systems are scored relative to the same combined pool of geographies, making CDI values directly comparable across systems.
+
+After the combined analysis runs, the calibration is automatically refitted using the new shared-pool CDI values for calibration routes. The updated factor appears in the Calibrate tab results with a note confirming the refit.
+
+**Use shared pool when:**
+- Calibrating against one system (e.g., Salt Lake City) and applying the calibration to another (e.g., Colorado Springs) where absolute density levels differ substantially
+- You want cross-system CDI comparisons to be meaningful in absolute terms
+- You are combining high-density urban corridors with low-density suburban corridors in the same analysis
+
+**Important:** When "Same system as calibration" is unchecked, shared pool is checked by default — this is the recommended setting for cross-system analysis. You can manually uncheck it if you prefer separate-pool behavior.
+
+**Warning:** The normalization pool depends on which features are selected. Changing feature selections (or re-running calibration) after enabling shared pool mode will mark the demand analysis as stale, and you should re-run to get consistent results.
+
+### Mode comparison
+
+| Situation | Recommended Mode |
+|---|---|
+| Calibration and demand are from the same geographic area | Separate pools (default, or use "Same system") |
+| Calibration and demand systems span very different density environments | Shared pool |
+| Quick single-city corridor assessment | Separate pools |
+| Peer-system comparison where absolute density levels matter | Shared pool |
+
+---
+
 ## Typical Workflows
 
 ### Quick Corridor Assessment
