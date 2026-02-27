@@ -13,6 +13,9 @@
 
   // ---- Buffer-Area Data panel ----
 
+  // Reusable ⚠ tooltip markup for median (non-additive) variables.
+  var WARN_ICON = '<span class="var-warn-icon" title="Median estimate \u2014 displayed as an area-weighted average of overlapping geographies\u2019 values. This is not a true median for the buffer area. Use with caution.">\u26A0</span>';
+
   var STATION_DATA_PANEL_HTML =
     '<label>Geography level' +
       '<select id="geoLevel">' +
@@ -29,23 +32,81 @@
     '<fieldset id="varSelect" class="var-checklist">' +
       '<legend>Variables (select one or more)</legend>' +
 
-      '<div class="var-group-label">Land Use (ACS: additive sums)</div>' +
+      // ---- Demographics ----
+      '<div class="var-group-label">Demographics</div>' +
       '<label class="var-check"><input type="checkbox" value="B01003_001E"> Total population</label>' +
       '<label class="var-check"><input type="checkbox" value="B11001_001E"> Total households</label>' +
-      '<label class="var-check"><input type="checkbox" value="B25001_001E"> Total housing units</label>' +
-      '<label class="var-check"><input type="checkbox" value="B25002_001E"> Occupied housing units</label>' +
-      '<label class="var-check"><input type="checkbox" value="B25002_003E"> Vacant housing units</label>' +
+      '<label class="var-check"><input type="checkbox" value="B19013_001E"> Median household income ' + WARN_ICON + '</label>' +
+      '<label class="var-check"><input type="checkbox" value="B01002_001E"> Median age ' + WARN_ICON + '</label>' +
+      '<label class="var-check"><input type="checkbox" value="B01001_002E"> Male population</label>' +
+      '<label class="var-check"><input type="checkbox" value="B01001_026E"> Female population</label>' +
+      '<label class="var-check"><input type="checkbox" value="B02001_002E"> White alone</label>' +
+      '<label class="var-check"><input type="checkbox" value="B02001_003E"> Black or African American alone</label>' +
+      '<label class="var-check"><input type="checkbox" value="B02001_004E"> American Indian and Alaska Native alone</label>' +
+      '<label class="var-check"><input type="checkbox" value="B02001_005E"> Asian alone</label>' +
+      '<label class="var-check"><input type="checkbox" value="B02001_006E"> Native Hawaiian and Other Pacific Islander alone</label>' +
+      '<label class="var-check"><input type="checkbox" value="B02001_007E"> Some other race alone</label>' +
+      '<label class="var-check"><input type="checkbox" value="B02001_008E"> Two or more races</label>' +
+      '<label class="var-check"><input type="checkbox" value="B03003_003E"> Hispanic or Latino</label>' +
+      '<label class="var-check"><input type="checkbox" value="B03003_002E"> Not Hispanic or Latino</label>' +
 
-      '<div class="var-group-label">Mobility / Transit-dependent (ACS: additive sums)</div>' +
-      '<label class="var-check"><input type="checkbox" value="B08201_002E"> Zero-car households</label>' +
+      // ---- Equity ----
+      '<div class="var-group-label">Equity</div>' +
+      '<label class="var-check"><input type="checkbox" value="C18108_002E"> With a disability</label>' +
       '<label class="var-check"><input type="checkbox" value="B17001_002E"> Persons below poverty level</label>' +
+      '<label class="var-check"><input type="checkbox" value="DERIVED_EDU_LT_HS"> Less than high school diploma</label>' +
+      '<label class="var-check"><input type="checkbox" value="DERIVED_EDU_HS"> High school diploma or GED</label>' +
+      '<label class="var-check"><input type="checkbox" value="DERIVED_EDU_SOME_COLLEGE"> Some college or associate\u2019s degree</label>' +
+      '<label class="var-check"><input type="checkbox" value="DERIVED_EDU_BA_PLUS"> Bachelor\u2019s degree or higher</label>' +
+      '<label class="var-check"><input type="checkbox" value="B16001_002E"> Speaks only English at home</label>' +
+      '<label class="var-check"><input type="checkbox" value="DERIVED_LEP"> Limited English proficient</label>' +
+      '<label class="var-check"><input type="checkbox" value="B05001_002E"> Born in US, citizen</label>' +
+      '<label class="var-check"><input type="checkbox" value="B05001_005E"> Naturalized US citizen</label>' +
+      '<label class="var-check"><input type="checkbox" value="B05001_006E"> Not a US citizen</label>' +
+      '<label class="var-check"><input type="checkbox" value="B11016_002E"> 1-person household</label>' +
+      '<label class="var-check"><input type="checkbox" value="B11016_003E"> 2-person household</label>' +
+      '<label class="var-check"><input type="checkbox" value="B11016_004E"> 3-person household</label>' +
+      '<label class="var-check"><input type="checkbox" value="B11016_005E"> 4-person household</label>' +
+      '<label class="var-check"><input type="checkbox" value="B11016_006E"> 5-person household</label>' +
+      '<label class="var-check"><input type="checkbox" value="B11016_007E"> 6-person household</label>' +
+      '<label class="var-check"><input type="checkbox" value="B11016_008E"> 7+-person household</label>' +
+      '<label class="var-check"><input type="checkbox" value="B08201_002E"> Zero-car households</label>' +
+      '<label class="var-check"><input type="checkbox" value="B23025_004E"> Employed (civilian labor force)</label>' +
+      '<label class="var-check"><input type="checkbox" value="B23025_005E"> Unemployed (civilian labor force)</label>' +
+      '<label class="var-check"><input type="checkbox" value="B23025_007E"> Not in labor force</label>' +
 
-      '<div class="var-group-label">Non-additive (ACS medians: area-weighted avg estimate)</div>' +
-      '<label class="var-check"><input type="checkbox" value="B19013_001E"> Median household income \u26A0</label>' +
-      '<label class="var-check"><input type="checkbox" value="B25064_001E"> Median gross rent \u26A0</label>' +
-      '<label class="var-check"><input type="checkbox" value="B25077_001E"> Median home value \u26A0</label>' +
+      // ---- Travel ----
+      '<div class="var-group-label">Travel</div>' +
+      '<label class="var-check"><input type="checkbox" value="DERIVED_VEH_0"> 0 vehicles available</label>' +
+      '<label class="var-check"><input type="checkbox" value="B08201_003E"> 1 vehicle available</label>' +
+      '<label class="var-check"><input type="checkbox" value="B08201_004E"> 2 vehicles available</label>' +
+      '<label class="var-check"><input type="checkbox" value="B08201_005E"> 3 vehicles available</label>' +
+      '<label class="var-check"><input type="checkbox" value="B08201_006E"> 4+ vehicles available</label>' +
+      '<label class="var-check"><input type="checkbox" value="B08301_002E"> Commute: drove alone</label>' +
+      '<label class="var-check"><input type="checkbox" value="B08301_003E"> Commute: carpooled</label>' +
+      '<label class="var-check"><input type="checkbox" value="B08301_010E"> Commute: public transit</label>' +
+      '<label class="var-check"><input type="checkbox" value="B08301_019E"> Commute: walked</label>' +
+      '<label class="var-check"><input type="checkbox" value="B08301_018E"> Commute: biked</label>' +
+      '<label class="var-check"><input type="checkbox" value="B08301_021E"> Commute: worked from home</label>' +
+      '<label class="var-check"><input type="checkbox" value="DERIVED_COMMTIME_LT15"> Commute time: under 15 min</label>' +
+      '<label class="var-check"><input type="checkbox" value="DERIVED_COMMTIME_15_29"> Commute time: 15\u201329 min</label>' +
+      '<label class="var-check"><input type="checkbox" value="DERIVED_COMMTIME_30_44"> Commute time: 30\u201344 min</label>' +
+      '<label class="var-check"><input type="checkbox" value="B08303_011E"> Commute time: 45\u201359 min</label>' +
+      '<label class="var-check"><input type="checkbox" value="DERIVED_COMMTIME_60PLUS"> Commute time: 60+ min</label>' +
 
-      '<div class="var-group-label">Employment (LODES: additive sum)</div>' +
+      // ---- Housing ----
+      '<div class="var-group-label">Housing</div>' +
+      '<label class="var-check"><input type="checkbox" value="B25001_001E"> Total housing units</label>' +
+      '<label class="var-check"><input type="checkbox" value="B25003_002E"> Owner-occupied units</label>' +
+      '<label class="var-check"><input type="checkbox" value="B25003_003E"> Renter-occupied units</label>' +
+      '<label class="var-check"><input type="checkbox" value="DERIVED_RENT_NOT_BURDENED"> Gross rent &lt; 30% of income</label>' +
+      '<label class="var-check"><input type="checkbox" value="DERIVED_RENT_BURDENED"> Gross rent 30\u201349.9% of income (cost burdened)</label>' +
+      '<label class="var-check"><input type="checkbox" value="B25070_010E"> Gross rent 50%+ of income (severely cost burdened)</label>' +
+      '<label class="var-check"><input type="checkbox" value="B25064_001E"> Median gross rent ' + WARN_ICON + '</label>' +
+      '<label class="var-check"><input type="checkbox" value="B25077_001E"> Median home value ' + WARN_ICON + '</label>' +
+
+      // ---- Employment ----
+      '<div class="var-group-label">Employment</div>' +
       '<label class="var-check"><input type="checkbox" value="LODES_WAC_C000"> Total existing employment \u2014 file required</label>' +
       '<div class="lodes-actions">' +
         '<button type="button" id="downloadLodes">Download</button>' +
@@ -65,6 +126,10 @@
         '<option value="2022">2022 ACS</option>' +
         '<option value="2021">2021 ACS</option>' +
       '</select>' +
+    '</label>' +
+
+    '<label class="var-check" style="margin:6px 0 4px;">' +
+      '<input type="checkbox" id="apportionByArea" checked> Apportion by area' +
     '</label>' +
 
     '<button id="run">Calculate summary</button>' +
@@ -166,10 +231,10 @@
     document.getElementById("results-modal").style.display = "none";
   }
 
-  function aggDescription(meta) {
+  function aggDescription(meta, apportionByArea) {
     if (meta.source === "LODES") return "Sum (block internal points)";
-    if (meta.agg === "sum") return "Sum (area-apportioned)";
-    return "Area-weighted average";
+    if (meta.agg === "sum") return apportionByArea ? "Sum (area-apportioned)" : "Sum (all overlapping geos)";
+    return apportionByArea ? "Area-weighted average" : "Simple average (all overlapping geos)";
   }
 
   // ---- Summary runners ----
@@ -183,6 +248,8 @@
 
     var year = document.getElementById("yearSelect").value;
     var geoLevel = document.getElementById("geoLevel").value;
+    var apportionByAreaEl = document.getElementById("apportionByArea");
+    var apportionByArea = apportionByAreaEl ? apportionByAreaEl.checked : true;
 
     // Separate ACS vs LODES selections
     var acsVars = [];
@@ -196,14 +263,15 @@
       }
     }
 
-    // Initialize modal table with "pending" rows
+    // Initialize modal table with "pending" rows.
+    // codeToRows maps each code → array of <tr> elements (handles duplicate codes across categories).
     var tbody = document.getElementById("results-tbody");
     tbody.innerHTML = "";
     var progressEl = document.getElementById("results-progress");
     var notesEl = document.getElementById("results-notes");
     notesEl.textContent = "";
 
-    var rowEls = {};
+    var codeToRows = {};
     for (var j = 0; j < selectedVars.length; j++) {
       var code = selectedVars[j];
       var m = App.getMeta(code);
@@ -213,9 +281,10 @@
         "<td>" + (m.category || "\u2014") + "</td>" +
         "<td>" + (m.label || code) + "</td>" +
         "<td>Computing\u2026</td>" +
-        "<td>" + aggDescription(m) + "</td>";
+        "<td>" + aggDescription(m, apportionByArea) + "</td>";
       tbody.appendChild(tr);
-      rowEls[code] = tr;
+      if (!codeToRows[code]) codeToRows[code] = [];
+      codeToRows[code].push(tr);
     }
 
     openResultsModal();
@@ -225,17 +294,32 @@
     if (!unionFeat) {
       var errMsg = App.stations.length === 0 ? "No stations placed" : "No buffers set";
       for (var k = 0; k < selectedVars.length; k++) {
-        var errRow = rowEls[selectedVars[k]];
-        errRow.className = "result-error";
-        errRow.children[2].textContent = errMsg;
+        var errRows = codeToRows[selectedVars[k]] || [];
+        for (var ei = 0; ei < errRows.length; ei++) {
+          errRows[ei].className = "result-error";
+          errRows[ei].children[2].textContent = errMsg;
+        }
       }
       progressEl.textContent = "";
       App.setStatus("No buffers");
       return;
     }
 
+    // Deduplicate ACS vars so each unique code is only fetched once,
+    // but all matching rows will be updated when the result arrives.
+    var acsVarsUniq = [];
+    var seenAcs = {};
+    for (var si = 0; si < acsVars.length; si++) {
+      if (!seenAcs[acsVars[si]]) { seenAcs[acsVars[si]] = true; acsVarsUniq.push(acsVars[si]); }
+    }
+    var lodesVarsUniq = [];
+    var seenLodes = {};
+    for (var sl = 0; sl < lodesVars.length; sl++) {
+      if (!seenLodes[lodesVars[sl]]) { seenLodes[lodesVars[sl]] = true; lodesVarsUniq.push(lodesVars[sl]); }
+    }
+
     var completed = 0;
-    var total = selectedVars.length;
+    var total = acsVarsUniq.length + lodesVarsUniq.length;
     var nGeosEl = document.getElementById("nGeos");
     var statusCard = document.getElementById("summaryStatus");
 
@@ -248,30 +332,46 @@
       }
     }
 
+    function updateRows(code, result, varMeta, useTractFallback) {
+      var rows = codeToRows[code] || [];
+      for (var ri = 0; ri < rows.length; ri++) {
+        rows[ri].className = "";
+        rows[ri].children[2].textContent = App.formatValue(result.value, varMeta);
+        if (useTractFallback) {
+          rows[ri].children[3].textContent += " \u2014 Tract-level data (not available at block group)";
+        }
+      }
+    }
+
+    function markRowsError(code, msg) {
+      var rows = codeToRows[code] || [];
+      for (var ri = 0; ri < rows.length; ri++) {
+        rows[ri].className = "result-error";
+        rows[ri].children[2].textContent = msg;
+      }
+    }
+
     // Shared TIGERweb geometry fetch for all ACS variables
     var geos = null;
     var tractGeosForFallback = null; // fetched lazily when any tract-only var is encountered at BG level
-    if (acsVars.length > 0) {
+    if (acsVarsUniq.length > 0) {
       App.setStatus("Querying TIGERweb\u2026");
       progressEl.textContent = "Fetching census geometries\u2026";
       geos = await App.fetchTigerwebGeos(geoLevel, unionFeat);
       App.renderCensusOverlay(geos);
 
       if (geos.length === 0) {
-        for (var gi = 0; gi < acsVars.length; gi++) {
-          var gRow = rowEls[acsVars[gi]];
-          gRow.className = "result-error";
-          gRow.children[2].textContent = "No intersecting geographies";
+        for (var gi = 0; gi < acsVarsUniq.length; gi++) {
+          markRowsError(acsVarsUniq[gi], "No intersecting geographies");
           updateProgress();
         }
       } else {
         var geoids = geos.map(function (f) { return f.properties.GEOID; }).filter(Boolean);
 
-        // Fetch + aggregate each ACS variable
-        for (var ai = 0; ai < acsVars.length; ai++) {
-          var varCode = acsVars[ai];
+        // Fetch + aggregate each unique ACS variable
+        for (var ai = 0; ai < acsVarsUniq.length; ai++) {
+          var varCode = acsVarsUniq[ai];
           var varMeta = App.getMeta(varCode);
-          var row = rowEls[varCode];
           var useTractFallback = (geoLevel === "bg" && varMeta.tractOnly);
 
           try {
@@ -295,17 +395,16 @@
               fetchGeoids = geoids;
             }
 
-            var valueMap = await App.fetchACSValues(fetchGeoLevel, year, varCode, fetchGeoids);
-            var result = App.aggregateWithinUnion(unionFeat, fetchGeos, valueMap, varMeta.agg);
-
-            row.className = "";
-            row.children[2].textContent = App.formatValue(result.value, varMeta);
-            if (useTractFallback) {
-              row.children[3].textContent += " \u2014 Tract-level data (not available at block group)";
+            var valueMap;
+            if (varMeta.codes && varMeta.codes.length > 0) {
+              valueMap = await App.fetchACSMultiValues(fetchGeoLevel, year, varMeta.codes, fetchGeoids);
+            } else {
+              valueMap = await App.fetchACSValues(fetchGeoLevel, year, varCode, fetchGeoids);
             }
+            var result = App.aggregateWithinUnion(unionFeat, fetchGeos, valueMap, varMeta.agg, { apportionByArea: apportionByArea });
+            updateRows(varCode, result, varMeta, useTractFallback);
           } catch (e) {
-            row.className = "result-error";
-            row.children[2].textContent = "Error: " + (e.message || e);
+            markRowsError(varCode, "Error: " + (e.message || e));
           }
           updateProgress();
         }
@@ -313,13 +412,11 @@
     }
 
     // LODES variables
-    for (var li = 0; li < lodesVars.length; li++) {
-      var lCode = lodesVars[li];
-      var lRow = rowEls[lCode];
+    for (var li = 0; li < lodesVarsUniq.length; li++) {
+      var lCode = lodesVarsUniq[li];
 
       if (!App.lodesData) {
-        lRow.className = "result-error";
-        lRow.children[2].textContent = "LODES file not loaded";
+        markRowsError(lCode, "LODES file not loaded");
         updateProgress();
         continue;
       }
@@ -329,18 +426,19 @@
         progressEl.textContent = "Computing LODES employment (" + (completed + 1) + "/" + total + ")\u2026";
 
         var blocksInside = await App.fetchBlocksInternalPointsInUnion(unionFeat);
-        var sum = 0;
-        var matched = 0;
+        var lodesSum = 0;
         for (var geoid of blocksInside) {
           var v = App.lodesData.get(geoid);
-          if (v != null) { sum += v; matched++; }
+          if (v != null) { lodesSum += v; }
         }
 
-        lRow.className = "";
-        lRow.children[2].textContent = sum.toLocaleString(undefined, { maximumFractionDigits: 0 });
+        var lRows = codeToRows[lCode] || [];
+        for (var lri = 0; lri < lRows.length; lri++) {
+          lRows[lri].className = "";
+          lRows[lri].children[2].textContent = lodesSum.toLocaleString(undefined, { maximumFractionDigits: 0 });
+        }
       } catch (e) {
-        lRow.className = "result-error";
-        lRow.children[2].textContent = "Error: " + (e.message || e);
+        markRowsError(lCode, "Error: " + (e.message || e));
       }
       updateProgress();
     }
@@ -354,10 +452,13 @@
     if (tractGeosForFallback && tractGeosForFallback.length > 0) {
       notesParts.push(tractGeosForFallback.length + " tract(s) used for variables not available at block group level.");
     }
-    if (lodesVars.length > 0 && App.lodesData) {
+    if (lodesVarsUniq.length > 0 && App.lodesData) {
       notesParts.push("LODES file: " + App.lodesFileName + ".");
     }
-    var methodNote = 'Summaries are computed within the <b>dissolved union</b> of all buffers. Set the buffer radius in the Features panel. For ACS, counts are area-apportioned and medians are shown as an area-weighted average estimate.';
+    var apportionNote = apportionByArea
+      ? "counts are area-apportioned (fractional overlap)"
+      : "counts include all intersecting geographies in full (no area apportionment)";
+    var methodNote = 'Summaries are computed within the <b>dissolved union</b> of all buffers. Set the buffer radius in the Features panel. For ACS, ' + apportionNote + '. Medians are shown as an area-weighted average estimate.';
     notesEl.innerHTML = (notesParts.length ? notesParts.join(" ") + "<br>" : "") + methodNote;
 
     // Update sidebar status card
