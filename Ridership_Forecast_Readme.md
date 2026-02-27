@@ -85,11 +85,22 @@ This tab runs the core demand analysis and produces the CDI score for the **targ
 
 - **Geography Level** -- Choose between Census Tracts (faster, less detailed) or Block Groups (slower, more granular). Block Groups are the default and recommended for corridor-level work.
 
-- **ACS Year** -- Which year of American Community Survey data to use. Default is 2024 (the most recent available).
+- **ACS Year** -- Which year of American Community Survey data to use. Default is 2024 (the most recent available). A small warning icon (⚠) appears next to this label if LODES employment data has not been uploaded. See the note below.
 
 - **Segment Length** -- If set above zero, the route is divided into equal-length segments (e.g., every half mile) and each segment gets its own CDI score. This shows where demand is strongest along the corridor. Set to 0 to skip segmentation.
 
 - **Apportion by Area** -- When checked, geographies that only partially overlap the corridor buffer are scaled proportionally. This is more accurate for edge cases but slightly slower.
+
+### LODES Data Warning
+
+If you see a warning icon (⚠) next to the **ACS Year** label, it means the Employment Density factor (LODES data) has not been loaded. When LODES is absent:
+
+- The Employment Density factor **is excluded** from the TPI scoring
+- Its weight (typically 35% of the total) is automatically **redistributed to the other eight factors**
+- The analysis **still runs successfully** — results remain valid, just with a heavier emphasis on population density and socioeconomic factors
+- To include employment in the analysis, upload a LODES file via the **LODES** panel in the left sidebar (requires downloading from the Census Bureau for your state)
+
+Employment data is most important for analyzing commute corridors with significant job centers. Population-only analysis is still useful for residential ridership assessment.
 
 ### Analyze Demand (button)
 
@@ -145,6 +156,10 @@ You can calibrate using data from one transit system (e.g., UTA in Salt Lake Cit
 5. The calibration factor will be applied to CDI values computed independently within the target system's geography
 
 **Best practice**: When calibrating with a different system than your study corridor, do NOT include the study corridor in the calibration feature selection. This ensures the calibration quintile normalization reflects the system with observed ridership data, not the study corridor's demographics.
+
+### Data Requirements
+
+If you see a warning icon (⚠) next to the **ACS Year** label in the Calibrate tab, LODES employment data is not loaded. See the note under the Demand tab for details. The analysis will proceed without employment density, but employment is especially important for calibration if your observed ridership data comes from routes with significant job centers.
 
 ### How to calibrate
 
@@ -460,7 +475,7 @@ The forecasts should be used alongside professional judgment, local knowledge, a
 | **Cost per Boarding** | Annual operating cost divided by annual ridership. Measures cost-effectiveness. |
 | **Elasticity** | How sensitive ridership is to changes in a variable (like frequency). An elasticity of 0.5 means a 10% increase in frequency yields about a 5% increase in ridership. |
 | **Headway** | Time between consecutive buses at a stop, in minutes. Lower headway = more frequent service. |
-| **LODES** | LEHD Origin-Destination Employment Statistics. Block-level employment data from the Census Bureau. |
+| **LODES** | LEHD Origin-Destination Employment Statistics. Block-level employment data from the Census Bureau. Used to compute the Employment Density factor in TPI scoring. If LODES is not loaded, a warning icon (⚠) appears next to the ACS Year selector in the analysis popups, and the Employment factor is excluded (its weight redistributed to other factors). |
 | **NTD** | National Transit Database. Federal reporting system with system-level ridership and financial data for every US transit agency. |
 | **OLS Regression** | Ordinary Least Squares. A statistical method that fits a best-fit line through data points. |
 | **Quintile** | One-fifth of a ranked dataset. The top quintile (5) is the highest 20%; the bottom quintile (1) is the lowest 20%. |
