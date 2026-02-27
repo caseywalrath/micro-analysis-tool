@@ -311,7 +311,7 @@
         var sharedResult = await runSharedPoolAnalysis(geoLevel, year, textEl);
         tpiResult = sharedResult.tpiResult;
         activeRouteCDIs = _demandPerRouteCDI;
-        populateCorridorDropdown(_demandPerRouteCDI);
+        populateCorridorDropdownFromCheckedFeatures();
 
       } else if (_systemResult && _systemResult.tpiResult) {
         // Path B: Different system — run fresh TPI for demand features
@@ -342,7 +342,7 @@
         activeRouteCDIs = demandSystemResult.routeCDIs;
 
         // Populate corridor dropdown with demand system routes
-        populateCorridorDropdown(_demandPerRouteCDI);
+        populateCorridorDropdownFromCheckedFeatures();
 
       } else {
         // Path C: Uncalibrated — run fresh TPI for all features (legacy behavior)
@@ -498,36 +498,6 @@
       segSection.style.display = "none";
     }
 
-    // Factor summary
-    displayFactorSummary(result.tpiResult);
-  }
-
-  function displayFactorSummary(tpiResult) {
-    var summaryEl = document.getElementById("rfFactorSummary");
-    if (!summaryEl) return;
-
-    var factors = TPI.FACTORS;
-    var html = "";
-    for (var i = 0; i < factors.length; i++) {
-      var f = factors[i];
-      var w = tpiResult.effectiveWeights[f.id] || 0;
-      var scoreMap = tpiResult.factorScores.get(f.id);
-      var avgScore = NaN;
-      if (scoreMap && scoreMap.size > 0) {
-        var sum = 0; var cnt = 0;
-        for (var entry of scoreMap.values()) { sum += entry; cnt++; }
-        avgScore = cnt > 0 ? sum / cnt : NaN;
-      }
-      var statusClass = scoreMap && scoreMap.size > 0 ? "tpi-factor-ok" : "tpi-factor-na";
-      var statusLabel = scoreMap && scoreMap.size > 0 ? "avg " + avgScore.toFixed(1) + " / 5" : "No Data";
-
-      html += '<div class="tpi-factor-row">' +
-        '<span class="tpi-factor-name">' + f.label + '</span>' +
-        '<span class="tpi-factor-weight">' + Math.round(w) + '%</span>' +
-        '<span class="tpi-factor-score ' + statusClass + '">' + statusLabel + '</span>' +
-        '</div>';
-    }
-    summaryEl.innerHTML = html;
   }
 
   // ---- Choropleth rendering ----
@@ -943,7 +913,7 @@
   }
 
   // Wire select-all / clear links for a feature checklist
-  function wireFeatureSelectLinks(selectAllId, selectNoneId, containerId) {
+  function wireFeatureSelectLinks(selectAllId, selectNoneId, containerId, afterChange) {
     var allLink = document.getElementById(selectAllId);
     var noneLink = document.getElementById(selectNoneId);
     if (allLink) {
@@ -951,6 +921,7 @@
         e.preventDefault();
         var cbs = document.querySelectorAll("#" + containerId + ' input[type="checkbox"]');
         for (var i = 0; i < cbs.length; i++) cbs[i].checked = true;
+        if (afterChange) afterChange();
       });
     }
     if (noneLink) {
@@ -958,6 +929,7 @@
         e.preventDefault();
         var cbs = document.querySelectorAll("#" + containerId + ' input[type="checkbox"]');
         for (var i = 0; i < cbs.length; i++) cbs[i].checked = false;
+        if (afterChange) afterChange();
       });
     }
   }
@@ -976,6 +948,55 @@
       opt.value = pr.featureType + ":" + pr.featureIndex;
       opt.textContent = pr.name + " (CDI: " + (Number.isFinite(pr.cdi) ? pr.cdi.toFixed(2) : "N/A") + ")";
       sel.appendChild(opt);
+    }
+  }
+
+  // Populate corridor dropdown from checked demand feature checkboxes.
+  // Shows feature names immediately (before analysis). Enriches with CDI values from
+  // _demandPerRouteCDI when available (i.e. after demand analysis has run).
+  // Restores _selectedCorridor if still present; falls back to "all" if feature was unchecked.
+  function populateCorridorDropdownFromCheckedFeatures() {
+    var sel = document.getElementById("rfCorridorSelect");
+    if (!sel) return;
+    var prevValue = _selectedCorridor || "all";
+    sel.innerHTML = '<option value="all">All corridors (system-wide)</option>';
+
+    var container = document.getElementById("rfDemandFeatureList");
+    if (!container) return;
+    var cbs = container.querySelectorAll('input[type="checkbox"]');
+
+    for (var i = 0; i < cbs.length; i++) {
+      if (!cbs[i].checked) continue;
+      var type = cbs[i].getAttribute("data-feature-type");
+      var idx = parseInt(cbs[i].getAttribute("data-feature-index"), 10);
+
+      // Look up feature name from App.routes / App.lines
+      var feat = type === "route" ? (App.routes || [])[idx] : (App.lines || [])[idx];
+      var featName = (feat && feat.properties && feat.properties.name) ||
+        (type === "route" ? "Route " : "Line ") + (idx + 1);
+
+      // Enrich with CDI if available from demand context
+      var cdiStr = "";
+      var activeCDIs = _demandPerRouteCDI;
+      if (activeCDIs) {
+        for (var j = 0; j < activeCDIs.length; j++) {
+          if (activeCDIs[j].featureType === type && activeCDIs[j].featureIndex === idx) {
+            cdiStr = " (CDI: " + activeCDIs[j].cdi.toFixed(2) + ")";
+            break;
+          }
+        }
+      }
+
+      var opt = document.createElement("option");
+      opt.value = type + ":" + idx;
+      opt.textContent = featName + cdiStr;
+      sel.appendChild(opt);
+    }
+
+    // Restore previous corridor selection if still present in dropdown
+    if (prevValue && prevValue !== "all") {
+      sel.value = prevValue;
+      if (sel.value !== prevValue) sel.value = "all"; // feature was unchecked
     }
   }
 
@@ -1041,8 +1062,12 @@
       // Display per-route CDI results
       displaySystemResults(result);
 
-      // Populate the Demand tab corridor dropdown
-      populateCorridorDropdown();
+      // Populate the Demand tab corridor dropdown (context-aware)
+      if (_demandUseSameSystem) {
+        populateCorridorDropdown(_perRouteCDI);
+      } else {
+        populateCorridorDropdownFromCheckedFeatures();
+      }
 
       // Enable Step 2
       var step2 = document.getElementById("rfCalibStep2");
@@ -1975,7 +2000,21 @@
 
     // Feature selection checklists (Demand tab)
     populateFeatureList("rfDemandFeatureList", _demandFeatureFilter);
-    wireFeatureSelectLinks("rfDemandSelectAll", "rfDemandSelectNone", "rfDemandFeatureList");
+    wireFeatureSelectLinks("rfDemandSelectAll", "rfDemandSelectNone", "rfDemandFeatureList",
+      populateCorridorDropdownFromCheckedFeatures);
+
+    // Wire individual checkbox changes via event delegation
+    var demandFeatureListEl = document.getElementById("rfDemandFeatureList");
+    if (demandFeatureListEl) {
+      demandFeatureListEl.addEventListener("change", function (e) {
+        if (e.target && e.target.type === "checkbox") {
+          populateCorridorDropdownFromCheckedFeatures();
+        }
+      });
+    }
+
+    // Initial corridor dropdown population from checked demand features
+    populateCorridorDropdownFromCheckedFeatures();
 
     // "Same system as calibration" toggle
     var sameSystemCb = document.getElementById("rfDemandUseSameSystem");
@@ -1986,9 +2025,11 @@
         _demandUseSameSystem = sameSystemCb.checked;
         var featureSection = document.getElementById("rfDemandFeatureSection");
         if (featureSection) featureSection.style.display = sameSystemCb.checked ? "none" : "";
-        // When switching to same system, populate corridor dropdown from calibration data
-        if (sameSystemCb.checked && _perRouteCDI) {
+        // Update corridor dropdown for the new mode
+        if (sameSystemCb.checked) {
           populateCorridorDropdown(_perRouteCDI);
+        } else {
+          populateCorridorDropdownFromCheckedFeatures();
         }
         // Shared pool is redundant when using same system; default it on when going cross-system
         if (sharedPoolCb) {
@@ -2171,7 +2212,11 @@
     // Restore system analysis state
     if (_systemResult) {
       displaySystemResults(_systemResult);
-      populateCorridorDropdown();
+      if (_demandUseSameSystem) {
+        populateCorridorDropdown(_perRouteCDI);
+      } else {
+        populateCorridorDropdownFromCheckedFeatures();
+      }
       var step2 = document.getElementById("rfCalibStep2");
       if (step2) { step2.style.opacity = "1"; step2.style.pointerEvents = "auto"; }
     }
