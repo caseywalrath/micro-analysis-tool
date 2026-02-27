@@ -1508,7 +1508,8 @@
     var calibIntercept = (_calibration && Number.isFinite(_calibration.intercept)) ? _calibration.intercept : 0;
     var lengthScale = (_normalizeByLength && _calibration) ? getTargetCorridorLength() : 1;
     var corridorCDI = getActiveCDI();
-    var baseDemand = Math.max(0, (calibIntercept + corridorCDI * calibFactor) * lengthScale);
+    var baseDemand = Math.max(0, corridorCDI * calibFactor * lengthScale,
+                              (calibIntercept + corridorCDI * calibFactor) * lengthScale);
 
     var elast = RM.applyElasticity(baseDemand, {
       serviceTypeId: stId,
@@ -1581,7 +1582,8 @@
     var calibFactor = (_calibration && _calibration.factor) ? _calibration.factor : 1;
     var calibIntercept = (_calibration && Number.isFinite(_calibration.intercept)) ? _calibration.intercept : 0;
     var lengthScale = (_normalizeByLength && _calibration) ? getTargetCorridorLength() : 1;
-    var baseDemand = Math.max(0, (calibIntercept + activeCDI * calibFactor) * lengthScale);
+    var baseDemand = Math.max(0, activeCDI * calibFactor * lengthScale,
+                              (calibIntercept + activeCDI * calibFactor) * lengthScale);
     var freqElast = parseFloat((document.getElementById("rfFreqElastValue") || {}).value) || 0.5;
 
     var builtScenarios = [];
