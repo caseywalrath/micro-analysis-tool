@@ -657,6 +657,10 @@
       markStale();
     }
     updateWeightSum();
+
+    // LODES warning
+    var lodesWarnBtn = document.getElementById("tpiLodesWarnBtn");
+    if (lodesWarnBtn) lodesWarnBtn.style.display = App.lodesData ? "none" : "";
   }
 
   function onClose(core) {
@@ -670,6 +674,10 @@
       clearChoropleth();
     } else {
       markStale();
+    }
+    if (isPopupVisible()) {
+      var lodesWarnBtn = document.getElementById("tpiLodesWarnBtn");
+      if (lodesWarnBtn) lodesWarnBtn.style.display = App.lodesData ? "none" : "";
     }
   }
 

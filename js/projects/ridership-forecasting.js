@@ -952,6 +952,16 @@
   }
 
   // Populate corridor dropdown from checked demand feature checkboxes.
+  // Show/hide the ⚠ LODES warning buttons based on whether LODES data is loaded.
+  // Call from onOpen() and inside isPopupVisible() guard in update().
+  function updateLodesWarnings() {
+    var hasLodes = !!App.lodesData;
+    var calibBtn = document.getElementById("rfCalibLodesWarnBtn");
+    var demandBtn = document.getElementById("rfDemandLodesWarnBtn");
+    if (calibBtn) calibBtn.style.display = hasLodes ? "none" : "";
+    if (demandBtn) demandBtn.style.display = hasLodes ? "none" : "";
+  }
+
   // Shows feature names immediately (before analysis). Enriches with CDI values from
   // _demandPerRouteCDI when available (i.e. after demand analysis has run).
   // Restores _selectedCorridor if still present; falls back to "all" if feature was unchecked.
@@ -2245,6 +2255,9 @@
 
     // Restore all scenario form values
     loadAllScenarioForms();
+
+    // LODES warning
+    updateLodesWarnings();
   }
 
   function onClose(core) {
@@ -2262,6 +2275,7 @@
     if (isPopupVisible()) {
       populateFeatureList("rfCalibFeatureList", _calibFeatureFilter);
       populateFeatureList("rfDemandFeatureList", _demandFeatureFilter);
+      updateLodesWarnings();
     }
   }
 
