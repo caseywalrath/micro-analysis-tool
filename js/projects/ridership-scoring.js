@@ -601,6 +601,21 @@
   }
   RM.applyElasticity = applyElasticity;
 
+  // Apply model uncertainty band around a calibrated baseline ridership estimate.
+  // baseMid: number (the calibrated baseline projection)
+  // pct: number 0–1 (e.g., 0.25 for ±25%)
+  // Returns: { low, mid, high }
+  function applyBaselineUncertainty(baseMid, pct) {
+    if (!Number.isFinite(baseMid) || baseMid <= 0) return { low: 0, mid: 0, high: 0 };
+    pct = (pct != null && Number.isFinite(pct)) ? Math.max(0, Math.min(1, pct)) : 0.25;
+    return {
+      low:  Math.max(0, baseMid * (1 - pct)),
+      mid:  baseMid,
+      high: baseMid * (1 + pct)
+    };
+  }
+  RM.applyBaselineUncertainty = applyBaselineUncertainty;
+
   // =========================================================================
   // Layer 4: Scenario Builder
   // Computes operating metrics for a service scenario

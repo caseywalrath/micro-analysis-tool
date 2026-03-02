@@ -20,6 +20,7 @@
   var _initialized = false;
   var _apportionByArea = false;
   var _normalizeByLength = false;
+  var _baselineUncertaintyPct = 0.25; // ±25% model uncertainty around calibrated baseline
   var _calibration = null;      // { factor, n, rSquared, ... }
   var _calibData = null;        // parsed CSV rows
   var _scenarios = [{}, {}, {}, {}]; // 4 scenario parameter sets
@@ -1508,25 +1509,45 @@
     var calibIntercept = (_calibration && Number.isFinite(_calibration.intercept)) ? _calibration.intercept : 0;
     var lengthScale = (_normalizeByLength && _calibration) ? getTargetCorridorLength() : 1;
     var corridorCDI = getActiveCDI();
-    var baseDemand = Math.max(0, corridorCDI * calibFactor * lengthScale,
+    var baseMid = Math.max(0, corridorCDI * calibFactor * lengthScale,
                               (calibIntercept + corridorCDI * calibFactor) * lengthScale);
 
-    var elast = RM.applyElasticity(baseDemand, {
+    // Apply baseline uncertainty band
+    var baseBand = RM.applyBaselineUncertainty(baseMid, _baselineUncertaintyPct);
+
+    // Extract pure service multipliers (pass 1.0 to get multipliers only)
+    var mult = RM.applyElasticity(1.0, {
       serviceTypeId: stId,
       baseHeadway: baseHeadway,
       newHeadway: newHeadway,
       freqElasticity: freqElast
     });
 
+    // Combine aligned: uncertainty band × service multiplier band
+    var finalLow  = baseBand.low  * mult.low;
+    var finalMid  = baseBand.mid  * mult.mid;
+    var finalHigh = baseBand.high * mult.high;
+
+    // Display baseline band (before service effects)
+    var baseBandEl = document.getElementById("rfBaselineBand");
+    if (baseBandEl) baseBandEl.style.display = "";
+    var bbLow = document.getElementById("rfBaseBandLow");
+    var bbMid = document.getElementById("rfBaseBandMid");
+    var bbHigh = document.getElementById("rfBaseBandHigh");
+    if (bbLow) bbLow.textContent = fmtNum(baseBand.low);
+    if (bbMid) bbMid.textContent = fmtNum(baseBand.mid);
+    if (bbHigh) bbHigh.textContent = fmtNum(baseBand.high);
+
+    // Display final ridership band (uncertainty + service)
     var lowEl = document.getElementById("rfElastLow");
     var midEl = document.getElementById("rfElastMid");
     var highEl = document.getElementById("rfElastHigh");
-    if (lowEl) lowEl.textContent = fmtNum(elast.low);
-    if (midEl) midEl.textContent = fmtNum(elast.mid);
-    if (highEl) highEl.textContent = fmtNum(elast.high);
+    if (lowEl) lowEl.textContent = fmtNum(finalLow);
+    if (midEl) midEl.textContent = fmtNum(finalMid);
+    if (highEl) highEl.textContent = fmtNum(finalHigh);
 
     var freqEffEl = document.getElementById("rfFreqEffect");
-    if (freqEffEl) freqEffEl.textContent = elast.freqEffect.toFixed(3) + "x";
+    if (freqEffEl) freqEffEl.textContent = mult.freqEffect.toFixed(3) + "x";
 
     var baseCDIEl = document.getElementById("rfBaseCDI");
     if (baseCDIEl) baseCDIEl.textContent = Number.isFinite(corridorCDI) ? corridorCDI.toFixed(2) : "\u2014";
@@ -1582,9 +1603,12 @@
     var calibFactor = (_calibration && _calibration.factor) ? _calibration.factor : 1;
     var calibIntercept = (_calibration && Number.isFinite(_calibration.intercept)) ? _calibration.intercept : 0;
     var lengthScale = (_normalizeByLength && _calibration) ? getTargetCorridorLength() : 1;
-    var baseDemand = Math.max(0, activeCDI * calibFactor * lengthScale,
+    var baseMid = Math.max(0, activeCDI * calibFactor * lengthScale,
                               (calibIntercept + activeCDI * calibFactor) * lengthScale);
     var freqElast = parseFloat((document.getElementById("rfFreqElastValue") || {}).value) || 0.5;
+
+    // Apply baseline uncertainty band once for the active corridor
+    var baseBand = RM.applyBaselineUncertainty(baseMid, _baselineUncertaintyPct);
 
     var builtScenarios = [];
 
@@ -1597,12 +1621,22 @@
       var costPerRevenueHour = parseFloat((document.getElementById("rfScenCostPerHr_" + i) || {}).value) || 150;
       var serviceDaysPerYear = parseInt((document.getElementById("rfScenServiceDays_" + i) || {}).value, 10) || 260;
 
-      var elast = RM.applyElasticity(baseDemand, {
+      // Extract pure service multipliers (pass 1.0 to get multipliers only)
+      var mult = RM.applyElasticity(1.0, {
         serviceTypeId: serviceTypeId,
         baseHeadway: 30, // baseline local bus
         newHeadway: headway,
         freqElasticity: freqElast
       });
+
+      // Combine aligned: uncertainty band × service multiplier band
+      var adjustedElast = {
+        low:  baseBand.low  * mult.low,
+        mid:  baseBand.mid  * mult.mid,
+        high: baseBand.high * mult.high,
+        freqEffect: mult.freqEffect,
+        serviceType: mult.serviceType
+      };
 
       var built = RM.buildScenario({
         name: name,
@@ -1613,8 +1647,8 @@
         avgSpeed: avgSpeed,
         costPerRevenueHour: costPerRevenueHour,
         serviceDaysPerYear: serviceDaysPerYear,
-        baseDemandCDI: baseDemand,
-        elasticityResult: elast,
+        baseDemandCDI: baseMid,
+        elasticityResult: adjustedElast,
         calibrationFactor: 1 // already applied above
       });
 
@@ -1764,7 +1798,7 @@
   function exportScenariosJSON() {
     if (!_lastBuiltScenarios) return;
     _triggerDownload(
-      JSON.stringify({ type: "ridership-scenarios", version: 1, scenarios: _lastBuiltScenarios, exportedAt: new Date().toISOString() }, null, 2),
+      JSON.stringify({ type: "ridership-scenarios", version: 1, scenarios: _lastBuiltScenarios, baselineUncertaintyPct: _baselineUncertaintyPct, exportedAt: new Date().toISOString() }, null, 2),
       "application/json",
       "ridership-scenarios-" + _dateStamp() + ".json"
     );
@@ -1782,6 +1816,7 @@
     });
     var data = JSON.parse(baseJson);
     data.normalizationMode = _sharedPoolMode ? "shared" : "separate";
+    data.baselineUncertaintyPct = _baselineUncertaintyPct;
     if (_demandFeatureFilter) data.demandFeatureFilter = _demandFeatureFilter;
     if (_sharedCalibPerRouteCDI) data.sharedCalibPerRouteCDI = _sharedCalibPerRouteCDI;
     _triggerDownload(
@@ -1819,9 +1854,18 @@
         } else {
           _sharedPoolMode = false;
         }
+        // Restore baseline uncertainty (default 0.25 if absent)
+        if (rawData.baselineUncertaintyPct != null && Number.isFinite(rawData.baselineUncertaintyPct)) {
+          _baselineUncertaintyPct = rawData.baselineUncertaintyPct;
+        }
       } catch (_) { _sharedPoolMode = false; }
 
       // Update UI
+      var uncertSlider = document.getElementById("rfBaseUncertSlider");
+      var uncertValue = document.getElementById("rfBaseUncertValue");
+      var uncertPctInt = Math.round(_baselineUncertaintyPct * 100);
+      if (uncertSlider) uncertSlider.value = String(uncertPctInt);
+      if (uncertValue) uncertValue.value = String(uncertPctInt);
       var spCb = document.getElementById("rfSharedPoolMode");
       if (spCb) { spCb.checked = _sharedPoolMode; spCb.disabled = _demandUseSameSystem; }
       var resultsEl = document.getElementById("rfCalibResults");
@@ -2165,6 +2209,24 @@
       });
     }
 
+    // Baseline uncertainty slider (Elasticity tab)
+    var uncertSlider = document.getElementById("rfBaseUncertSlider");
+    var uncertValue = document.getElementById("rfBaseUncertValue");
+    if (uncertSlider && uncertValue) {
+      uncertSlider.addEventListener("input", function () {
+        uncertValue.value = uncertSlider.value;
+        _baselineUncertaintyPct = parseInt(uncertSlider.value, 10) / 100;
+        refreshElasticity();
+      });
+      uncertValue.addEventListener("change", function () {
+        var v = Math.max(0, Math.min(60, parseInt(uncertValue.value, 10) || 0));
+        uncertValue.value = String(v);
+        uncertSlider.value = String(v);
+        _baselineUncertaintyPct = v / 100;
+        refreshElasticity();
+      });
+    }
+
     // Scenarios tab
     var buildBtn = document.getElementById("rfBuildScenarios");
     if (buildBtn) buildBtn.addEventListener("click", buildAndCompareScenarios);
@@ -2189,6 +2251,13 @@
     if (normCb) normCb.checked = _normalizeByLength;
     var calibNormCb = document.getElementById("rfCalibNormalizeByLength");
     if (calibNormCb) calibNormCb.checked = _normalizeByLength;
+
+    // Sync baseline uncertainty slider
+    var uncertSlider = document.getElementById("rfBaseUncertSlider");
+    var uncertValue = document.getElementById("rfBaseUncertValue");
+    var uncertPctInt = Math.round(_baselineUncertaintyPct * 100);
+    if (uncertSlider) uncertSlider.value = String(uncertPctInt);
+    if (uncertValue) uncertValue.value = String(uncertPctInt);
 
     // Refresh feature checklists (picks up any features added/removed while popup was closed)
     populateFeatureList("rfCalibFeatureList", _calibFeatureFilter);
@@ -2326,6 +2395,7 @@
       weights: Object.assign({}, _weights),
       apportionByArea: _apportionByArea,
       normalizeByLength: _normalizeByLength,
+      baselineUncertaintyPct: _baselineUncertaintyPct,
       calibration: _calibration ? Object.assign({}, _calibration) : null,
       scenarios: _scenarios.map(function (s) { return Object.assign({}, s); }),
       selectedCorridor: _selectedCorridor,
@@ -2368,6 +2438,8 @@
     if (data.weights) _weights = Object.assign({}, data.weights);
     if (data.apportionByArea != null) _apportionByArea = !!data.apportionByArea;
     if (data.normalizeByLength != null) _normalizeByLength = !!data.normalizeByLength;
+    _baselineUncertaintyPct = (data.baselineUncertaintyPct != null && Number.isFinite(data.baselineUncertaintyPct))
+      ? data.baselineUncertaintyPct : 0.25;
     if (data.calibration) _calibration = Object.assign({}, data.calibration);
     if (Array.isArray(data.scenarios) && data.scenarios.length === 4) {
       for (var i = 0; i < 4; i++) _scenarios[i] = Object.assign({}, data.scenarios[i]);
