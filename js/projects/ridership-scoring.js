@@ -22,9 +22,7 @@
     {
       id: "local_bus",
       label: "Local Bus (Baseline)",
-      frequencyPremium:  { low: 0, mid: 0, high: 0 },
-      speedPremium:      { low: 0, mid: 0, high: 0 },
-      modePremium:       { low: 0, mid: 0, high: 0 },
+      servicePremium:    { low: 0.00, high: 0.00 },
       defaultSpeed: 12,    // mph
       defaultHeadway: 30,  // minutes
       defaultSpan: 14,     // hours
@@ -33,9 +31,7 @@
     {
       id: "enhanced_bus",
       label: "Enhanced Bus",
-      frequencyPremium:  { low: 0.10, mid: 0.15, high: 0.20 },
-      speedPremium:      { low: 0.05, mid: 0.10, high: 0.15 },
-      modePremium:       { low: 0.15, mid: 0.22, high: 0.30 },
+      servicePremium:    { low: 0.15, high: 0.35 },
       defaultSpeed: 14,
       defaultHeadway: 20,
       defaultSpan: 16,
@@ -44,9 +40,7 @@
     {
       id: "limited_stop",
       label: "Limited-Stop Express",
-      frequencyPremium:  { low: 0.05, mid: 0.10, high: 0.15 },
-      speedPremium:      { low: 0.10, mid: 0.15, high: 0.20 },
-      modePremium:       { low: 0.10, mid: 0.15, high: 0.20 },
+      servicePremium:    { low: 0.15, high: 0.30 },
       defaultSpeed: 18,
       defaultHeadway: 15,
       defaultSpan: 16,
@@ -55,9 +49,7 @@
     {
       id: "brt",
       label: "BRT-Style",
-      frequencyPremium:  { low: 0.15, mid: 0.25, high: 0.35 },
-      speedPremium:      { low: 0.15, mid: 0.25, high: 0.35 },
-      modePremium:       { low: 0.25, mid: 0.37, high: 0.50 },
+      servicePremium:    { low: 0.30, high: 0.65 },
       defaultSpeed: 22,
       defaultHeadway: 10,
       defaultSpan: 18,
@@ -562,11 +554,12 @@
   }
   RM.computeFrequencyEffect = computeFrequencyEffect;
 
-  // Apply elasticity multipliers to produce low/mid/high ridership estimates
+  // Apply elasticity multipliers to produce low/mid/high ridership estimates.
+  // When baseDemandCDI is 1.0, returns pure multipliers for use with applyBaselineUncertainty.
   // params: {
   //   serviceTypeId,
   //   baseHeadway, newHeadway, freqElasticity,
-  //   customFreqPremium, customSpeedPremium, customModePremium (optional overrides)
+  //   customServicePremium  (optional override: { low, high } fractions, mid derived as avg)
   // }
   function applyElasticity(baseDemandCDI, params) {
     var st = getServiceType(params.serviceTypeId || "local_bus");
@@ -578,17 +571,19 @@
       params.freqElasticity || 0.5
     );
 
-    // Service type premiums (use custom if provided, otherwise preset)
-    var freqPrem = params.customFreqPremium != null ? params.customFreqPremium : st.frequencyPremium;
-    var speedPrem = params.customSpeedPremium != null ? params.customSpeedPremium : st.speedPremium;
-    var modePrem = params.customModePremium != null ? params.customModePremium : st.modePremium;
+    // Combined service premium (custom override or preset); mid = avg of low and high
+    var prem = params.customServicePremium != null ? params.customServicePremium : st.servicePremium;
 
-    // Combined multiplier for each scenario (low/mid/high)
     function calcMultiplier(level) {
-      var fp = (typeof freqPrem === "object") ? freqPrem[level] : freqPrem;
-      var sp = (typeof speedPrem === "object") ? speedPrem[level] : speedPrem;
-      var mp = (typeof modePrem === "object") ? modePrem[level] : modePrem;
-      return freqEffect * (1 + fp) * (1 + sp) * (1 + mp);
+      var p;
+      if (typeof prem === "object") {
+        p = level === "mid"
+          ? (prem.low + prem.high) / 2
+          : (prem[level] != null ? prem[level] : (prem.low + prem.high) / 2);
+      } else {
+        p = prem;
+      }
+      return freqEffect * (1 + p);
     }
 
     return {

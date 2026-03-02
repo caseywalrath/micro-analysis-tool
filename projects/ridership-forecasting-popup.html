@@ -407,10 +407,19 @@
 
         <!-- Right: Results -->
         <div class="rf-results-col">
-          <div class="rf-section-title">Service Type Premiums</div>
+          <div class="rf-section-title">Service Type Premium</div>
+          <div class="tiny" style="color:var(--muted); margin-bottom:6px;">Ridership uplift vs. Local Bus baseline. Moderate = average of the two. Applies to the selected service type only.</div>
 
-          <div id="rfPremiumDisplay" class="rf-premium-grid">
-            <!-- Filled dynamically -->
+          <label class="tiny">Conservative (%)</label>
+          <div class="rf-slider-row">
+            <input id="rfServicePremLow" type="range" min="0" max="150" step="5" value="0" class="rf-slider" />
+            <input id="rfServicePremLowVal" type="number" min="0" max="150" step="5" value="0" class="rf-number-input-sm" />
+          </div>
+
+          <label class="tiny" style="margin-top:6px;">Optimistic (%)</label>
+          <div class="rf-slider-row">
+            <input id="rfServicePremHigh" type="range" min="0" max="150" step="5" value="0" class="rf-slider" />
+            <input id="rfServicePremHighVal" type="number" min="0" max="150" step="5" value="0" class="rf-number-input-sm" />
           </div>
 
           <div class="rf-section-title" style="margin-top:16px;">Ridership Multiplier</div>

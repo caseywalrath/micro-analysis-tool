@@ -21,6 +21,13 @@
   var _apportionByArea = false;
   var _normalizeByLength = false;
   var _baselineUncertaintyPct = 0.25; // ±25% model uncertainty around calibrated baseline
+  // User-adjustable service type premiums (low, high per service type; mid = avg)
+  var _servicePremiums = {
+    local_bus:    { low: 0.00, high: 0.00 },
+    enhanced_bus: { low: 0.15, high: 0.35 },
+    limited_stop: { low: 0.15, high: 0.30 },
+    brt:          { low: 0.30, high: 0.65 }
+  };
   var _calibration = null;      // { factor, n, rSquared, ... }
   var _calibData = null;        // parsed CSV rows
   var _scenarios = [{}, {}, {}, {}]; // 4 scenario parameter sets
@@ -63,6 +70,21 @@
 
   function isPopupVisible() {
     return App.popup.isOpen() && App.popup.currentModuleId() === "ridership-forecasting";
+  }
+
+  // Sync premium slider values to the stored premiums for a given service type ID.
+  function syncPremiumSliders(stId) {
+    var prem = _servicePremiums[stId] || { low: 0, high: 0 };
+    var lowPct  = Math.round(prem.low  * 100);
+    var highPct = Math.round(prem.high * 100);
+    var slLow  = document.getElementById("rfServicePremLow");
+    var inLow  = document.getElementById("rfServicePremLowVal");
+    var slHigh = document.getElementById("rfServicePremHigh");
+    var inHigh = document.getElementById("rfServicePremHighVal");
+    if (slLow)  slLow.value  = String(lowPct);
+    if (inLow)  inLow.value  = String(lowPct);
+    if (slHigh) slHigh.value = String(highPct);
+    if (inHigh) inHigh.value = String(highPct);
   }
 
   // ---- Weight modal (Adjust Weights) ----
@@ -1474,19 +1496,9 @@
     if (!isPopupVisible()) return;
 
     var stId = document.getElementById("rfServiceType").value;
-    var st = RM.getServiceType(stId);
 
-    // Display premiums
-    var premEl = document.getElementById("rfPremiumDisplay");
-    if (premEl) {
-      premEl.innerHTML =
-        '<div class="rf-premium-row"><span class="rf-premium-label">Frequency</span>' +
-        '<span class="rf-premium-range">' + fmtPct(st.frequencyPremium.low) + ' - ' + fmtPct(st.frequencyPremium.high) + '</span></div>' +
-        '<div class="rf-premium-row"><span class="rf-premium-label">Speed</span>' +
-        '<span class="rf-premium-range">' + fmtPct(st.speedPremium.low) + ' - ' + fmtPct(st.speedPremium.high) + '</span></div>' +
-        '<div class="rf-premium-row"><span class="rf-premium-label">Mode</span>' +
-        '<span class="rf-premium-range">' + fmtPct(st.modePremium.low) + ' - ' + fmtPct(st.modePremium.high) + '</span></div>';
-    }
+    // Sync premium sliders to this service type's stored values
+    syncPremiumSliders(stId);
 
     // Compute elasticity if demand exists
     var noCDI = document.getElementById("rfElasticityNoCDI");
@@ -1520,7 +1532,8 @@
       serviceTypeId: stId,
       baseHeadway: baseHeadway,
       newHeadway: newHeadway,
-      freqElasticity: freqElast
+      freqElasticity: freqElast,
+      customServicePremium: _servicePremiums[stId]
     });
 
     // Combine aligned: uncertainty band × service multiplier band
@@ -1626,6 +1639,7 @@
         serviceTypeId: serviceTypeId,
         baseHeadway: 30, // baseline local bus
         newHeadway: headway,
+        customServicePremium: _servicePremiums[serviceTypeId],
         freqElasticity: freqElast
       });
 
@@ -1817,6 +1831,7 @@
     var data = JSON.parse(baseJson);
     data.normalizationMode = _sharedPoolMode ? "shared" : "separate";
     data.baselineUncertaintyPct = _baselineUncertaintyPct;
+    data.servicePremiums = Object.assign({}, _servicePremiums);
     if (_demandFeatureFilter) data.demandFeatureFilter = _demandFeatureFilter;
     if (_sharedCalibPerRouteCDI) data.sharedCalibPerRouteCDI = _sharedCalibPerRouteCDI;
     _triggerDownload(
@@ -1858,6 +1873,14 @@
         if (rawData.baselineUncertaintyPct != null && Number.isFinite(rawData.baselineUncertaintyPct)) {
           _baselineUncertaintyPct = rawData.baselineUncertaintyPct;
         }
+        // Restore service premiums if present
+        if (rawData.servicePremiums && typeof rawData.servicePremiums === "object") {
+          for (var spk in rawData.servicePremiums) {
+            if (rawData.servicePremiums[spk] && typeof rawData.servicePremiums[spk] === "object") {
+              _servicePremiums[spk] = rawData.servicePremiums[spk];
+            }
+          }
+        }
       } catch (_) { _sharedPoolMode = false; }
 
       // Update UI
@@ -1866,6 +1889,8 @@
       var uncertPctInt = Math.round(_baselineUncertaintyPct * 100);
       if (uncertSlider) uncertSlider.value = String(uncertPctInt);
       if (uncertValue) uncertValue.value = String(uncertPctInt);
+      var stSelImport = document.getElementById("rfServiceType");
+      if (stSelImport) syncPremiumSliders(stSelImport.value);
       var spCb = document.getElementById("rfSharedPoolMode");
       if (spCb) { spCb.checked = _sharedPoolMode; spCb.disabled = _demandUseSameSystem; }
       var resultsEl = document.getElementById("rfCalibResults");
@@ -2186,9 +2211,43 @@
     var expCSV = document.getElementById("rfExportDemandCSV");
     if (expCSV) expCSV.addEventListener("click", exportDemandCSV);
 
-    // Elasticity tab
+    // Elasticity tab — service type: sync premium sliders then refresh
     var stSelect = document.getElementById("rfServiceType");
-    if (stSelect) stSelect.addEventListener("change", refreshElasticity);
+    if (stSelect) stSelect.addEventListener("change", function () {
+      syncPremiumSliders(stSelect.value);
+      refreshElasticity();
+    });
+
+    // Service type premium sliders (low/high per service type)
+    var premLowSlider = document.getElementById("rfServicePremLow");
+    var premLowVal    = document.getElementById("rfServicePremLowVal");
+    var premHighSlider = document.getElementById("rfServicePremHigh");
+    var premHighVal    = document.getElementById("rfServicePremHighVal");
+
+    function onPremChange() {
+      var sid = (document.getElementById("rfServiceType") || {}).value || "local_bus";
+      var lo = Math.max(0, Math.min(150, parseInt(premLowVal ? premLowVal.value : 0, 10) || 0));
+      var hi = Math.max(0, Math.min(150, parseInt(premHighVal ? premHighVal.value : 0, 10) || 0));
+      if (premLowSlider)  premLowSlider.value  = String(lo);
+      if (premLowVal)     premLowVal.value     = String(lo);
+      if (premHighSlider) premHighSlider.value = String(hi);
+      if (premHighVal)    premHighVal.value    = String(hi);
+      if (!_servicePremiums[sid]) _servicePremiums[sid] = { low: 0, high: 0 };
+      _servicePremiums[sid].low  = lo  / 100;
+      _servicePremiums[sid].high = hi / 100;
+      refreshElasticity();
+    }
+
+    if (premLowSlider) premLowSlider.addEventListener("input", function () {
+      if (premLowVal) premLowVal.value = premLowSlider.value;
+      onPremChange();
+    });
+    if (premLowVal) premLowVal.addEventListener("change", onPremChange);
+    if (premHighSlider) premHighSlider.addEventListener("input", function () {
+      if (premHighVal) premHighVal.value = premHighSlider.value;
+      onPremChange();
+    });
+    if (premHighVal) premHighVal.addEventListener("change", onPremChange);
 
     var baseHw = document.getElementById("rfBaseHeadway");
     if (baseHw) baseHw.addEventListener("change", refreshElasticity);
@@ -2258,6 +2317,10 @@
     var uncertPctInt = Math.round(_baselineUncertaintyPct * 100);
     if (uncertSlider) uncertSlider.value = String(uncertPctInt);
     if (uncertValue) uncertValue.value = String(uncertPctInt);
+
+    // Sync service premium sliders for currently selected service type
+    var stSelEl = document.getElementById("rfServiceType");
+    if (stSelEl) syncPremiumSliders(stSelEl.value);
 
     // Refresh feature checklists (picks up any features added/removed while popup was closed)
     populateFeatureList("rfCalibFeatureList", _calibFeatureFilter);
@@ -2396,6 +2459,7 @@
       apportionByArea: _apportionByArea,
       normalizeByLength: _normalizeByLength,
       baselineUncertaintyPct: _baselineUncertaintyPct,
+      servicePremiums: Object.assign({}, _servicePremiums),
       calibration: _calibration ? Object.assign({}, _calibration) : null,
       scenarios: _scenarios.map(function (s) { return Object.assign({}, s); }),
       selectedCorridor: _selectedCorridor,
@@ -2440,6 +2504,14 @@
     if (data.normalizeByLength != null) _normalizeByLength = !!data.normalizeByLength;
     _baselineUncertaintyPct = (data.baselineUncertaintyPct != null && Number.isFinite(data.baselineUncertaintyPct))
       ? data.baselineUncertaintyPct : 0.25;
+    if (data.servicePremiums && typeof data.servicePremiums === "object") {
+      // Merge stored premiums over defaults (preserves any service types not in saved data)
+      for (var spk in data.servicePremiums) {
+        if (data.servicePremiums[spk] && typeof data.servicePremiums[spk] === "object") {
+          _servicePremiums[spk] = data.servicePremiums[spk];
+        }
+      }
+    }
     if (data.calibration) _calibration = Object.assign({}, data.calibration);
     if (Array.isArray(data.scenarios) && data.scenarios.length === 4) {
       for (var i = 0; i < 4; i++) _scenarios[i] = Object.assign({}, data.scenarios[i]);
