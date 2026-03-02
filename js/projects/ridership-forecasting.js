@@ -24,9 +24,9 @@
   // User-adjustable service type premiums (low, high per service type; mid = avg)
   var _servicePremiums = {
     local_bus:    { low: 0.00, high: 0.00 },
-    enhanced_bus: { low: 0.15, high: 0.35 },
-    limited_stop: { low: 0.15, high: 0.30 },
-    brt:          { low: 0.30, high: 0.65 }
+    enhanced_bus: { low: 0.05, high: 0.15 },
+    limited_stop: { low: 0.00, high: 0.10 },
+    brt:          { low: 0.05, high: 0.25 }
   };
   var _calibration = null;      // { factor, n, rSquared, ... }
   var _calibData = null;        // parsed CSV rows

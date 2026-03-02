@@ -31,7 +31,7 @@
     {
       id: "enhanced_bus",
       label: "Enhanced Bus",
-      servicePremium:    { low: 0.15, high: 0.35 },
+      servicePremium:    { low: 0.05, high: 0.15 },
       defaultSpeed: 14,
       defaultHeadway: 20,
       defaultSpan: 16,
@@ -40,7 +40,7 @@
     {
       id: "limited_stop",
       label: "Limited-Stop Express",
-      servicePremium:    { low: 0.15, high: 0.30 },
+      servicePremium:    { low: 0.00, high: 0.10 },
       defaultSpeed: 18,
       defaultHeadway: 15,
       defaultSpan: 16,
@@ -49,7 +49,7 @@
     {
       id: "brt",
       label: "BRT-Style",
-      servicePremium:    { low: 0.30, high: 0.65 },
+      servicePremium:    { low: 0.05, high: 0.25 },
       defaultSpeed: 22,
       defaultHeadway: 10,
       defaultSpan: 18,
