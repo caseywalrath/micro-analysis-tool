@@ -554,6 +554,20 @@
   }
   RM.computeFrequencyEffect = computeFrequencyEffect;
 
+  // Span elasticity: ridership_2 = ridership_1 × (span_2 / span_1) ^ elasticity
+  // Constant-elasticity power curve produces diminishing marginal returns automatically.
+  // Adding 4 hours is a bigger % change at 10 hrs than at 18 hrs.
+  // elasticity is typically 0.5-0.9, default 0.7
+  // References: Currie & Loader (2009), TRB TCQSM hours-of-service LOS guidance,
+  //   Hampton Roads Transit (0.83), TCRP synthesis literature.
+  // baseSpan: reference span in hours (typically 14 — the local bus default)
+  // newSpan: proposed span in hours for this scenario
+  function computeSpanEffect(baseSpan, newSpan, elasticity) {
+    if (!baseSpan || !newSpan || baseSpan <= 0 || newSpan <= 0) return 1;
+    return Math.pow(newSpan / baseSpan, elasticity != null ? elasticity : 0.7);
+  }
+  RM.computeSpanEffect = computeSpanEffect;
+
   // Apply elasticity multipliers to produce low/mid/high ridership estimates.
   // When baseDemandCDI is 1.0, returns pure multipliers for use with applyBaselineUncertainty.
   // params: {

@@ -211,6 +211,8 @@ This tab estimates how ridership changes when you improve service frequency or u
 
 - **Frequency Elasticity** -- A slider and input box (range 0.1 to 1.0, default 0.5). This value controls how strongly ridership responds to frequency changes. The typical range from TCRP (Transit Cooperative Research Program) is 0.3 to 0.6. A value of 0.5 means that doubling frequency increases ridership by about 41%.
 
+- **Service Span Elasticity** -- A slider and input box (range 0.1 to 1.0, default 0.7). This value controls how strongly ridership responds to changes in service hours per day (span). It is applied in the Scenarios tab when you change the "Span" input for each scenario — ridership estimates adjust relative to the 14-hour local bus baseline. The typical range is 0.5 to 0.9. See [Service Span Elasticity](#service-span-elasticity) below for details.
+
 ### Service Type Premiums (right side)
 
 When you select a service type, the tool shows three premium categories:
@@ -273,7 +275,8 @@ Click this to compute all metrics for all four scenarios at once. The tool calcu
 | **Revenue Hours / Day** | Total hours of in-service vehicle operation per day |
 | **Annual Revenue Hours** | Revenue hours per day multiplied by service days per year |
 | **Annual Operating Cost** | Annual revenue hours multiplied by cost per revenue hour |
-| **Daily Ridership (Low / Mid / High)** | Estimated daily boardings based on CDI, elasticity premiums, and calibration factor (if available). Three estimates reflecting conservative, moderate, and optimistic assumptions. |
+| **Span Effect** | The ridership multiplier from the service span change relative to the 14-hour baseline (e.g., 1.19x for 18 hrs at elasticity 0.7). A value of 1.0 means no change from the baseline span. |
+| **Daily Ridership (Low / Mid / High)** | Estimated daily boardings based on CDI, elasticity premiums, span effect, and calibration factor (if available). Three estimates reflecting conservative, moderate, and optimistic assumptions. |
 | **Annual Ridership (Mid)** | Moderate daily estimate multiplied by service days per year |
 | **Boardings per Revenue Hour** | Annual ridership divided by annual revenue hours. A key productivity metric -- typical for bus is 10-30 depending on context. |
 | **Cost per Boarding** | Annual operating cost divided by annual ridership. Lower is better. Typical range is $3-$15 for productive bus routes. |
@@ -307,13 +310,39 @@ Frequency is calculated as 60 divided by the headway in minutes (e.g., 15-minute
 
 This means a 41% ridership increase from the frequency improvement alone.
 
+### Service Span Elasticity
+
+Service span is the number of hours per day the route operates (e.g., 6 AM to 8 PM = 14 hours). When a scenario's span differs from the 14-hour local bus baseline, the tool applies a span multiplier using the same power-curve approach as frequency elasticity:
+
+> **Span effect = (scenario span / 14 hours) raised to the power of the span elasticity**
+
+**Example**: A scenario with an 18-hour span and the default elasticity of 0.7:
+> Effect = (18 / 14) ^ 0.7 = 1.286 ^ 0.7 ≈ 1.19
+
+This means approximately 19% more ridership from the extended service hours, relative to 14-hour service. Conversely, a 10-hour span would produce:
+> Effect = (10 / 14) ^ 0.7 = 0.714 ^ 0.7 ≈ 0.77 (about 23% fewer riders)
+
+**Why a power curve?** The formula naturally produces diminishing marginal returns. Adding 4 hours to a 10-hour service day (a 40% increase) has a much larger proportional impact than adding 4 hours to an 18-hour service day (a 22% increase). This reflects how early morning and late evening extensions often capture significant pent-up demand when span is short, but add less marginal ridership once the service day is already long.
+
+**Defining "effective span"**: To keep span conceptually separate from frequency, count only hours when service is frequent enough to be practically usable — ideally when headways are 60 minutes or less. Avoid counting hours at 90–120 minute headways as equivalent to true all-day service, as this would overstate span's contribution relative to frequency.
+
+**Recommended parameter range:**
+
+| Value | Interpretation | Source |
+|---|---|---|
+| 0.5 | Conservative — consistent with lower-end service elasticity literature; appropriate when added off-peak hours are less productive | TCRP synthesis |
+| 0.6–0.8 (typical) | Supported by studies showing service-hours/miles elasticities around 0.7–0.8 and strong ridership response to evening/weekend extensions | Currie & Loader (2009); TCRP literature |
+| 0.83–0.9 | Aggressive — direct precedent: Hampton Roads Transit uses 0.83; Currie & Loader report >0.8 on weekend evening extensions | Currie & Loader (2009); HRT planning practice |
+
+The default value of 0.7 represents a mid-range, widely defensible estimate appropriate for most sketch-level planning contexts. Adjust upward (toward 0.85) if your corridor has strong latent demand for early morning or evening trips; adjust downward (toward 0.5) if added span hours are unlikely to generate proportional ridership.
+
 ### Combined Ridership Multiplier
 
-The total ridership multiplier combines the frequency effect with the service type premiums:
+The total ridership multiplier combines the frequency effect, the span effect, and the service type premiums:
 
-> **Multiplier = frequency effect x (1 + frequency premium) x (1 + speed premium) x (1 + mode premium)**
+> **Multiplier = frequency effect × span effect × (1 + service type premium)**
 
-Each premium comes from the selected service type and has a low, mid, and high value, producing three multiplier estimates.
+The service type premium has a low and high value (with mid = average), producing three multiplier estimates (Conservative / Moderate / Optimistic). The span effect is applied uniformly across all three.
 
 ### Ridership Estimate
 
@@ -481,6 +510,7 @@ The forecasts should be used alongside professional judgment, local knowledge, a
 | **Quintile** | One-fifth of a ranked dataset. The top quintile (5) is the highest 20%; the bottom quintile (1) is the lowest 20%. |
 | **Revenue Hour** | One hour of in-service vehicle operation (bus on the road, doors open to passengers). |
 | **Service Span** | Hours per day that a route operates (e.g., 6 AM to 8 PM = 14-hour span). |
+| **Service Span Elasticity** | A parameter controlling how strongly ridership responds to changes in service hours. Applied as a power curve: `(new span / baseline span) ^ elasticity`. Default is 0.7; typical range 0.5–0.9. |
 | **TCRP** | Transit Cooperative Research Program. A federally funded research program that publishes guidance on transit planning topics, including elasticity values. |
 | **TIGERweb** | The Census Bureau's geographic boundary service used to retrieve tract and block group shapes. |
 | **TPI** | Transit Propensity Index. The 9-factor scoring model that feeds into the CDI. |

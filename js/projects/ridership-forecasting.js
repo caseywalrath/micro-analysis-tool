@@ -21,6 +21,7 @@
   var _apportionByArea = false;
   var _normalizeByLength = false;
   var _baselineUncertaintyPct = 0.25; // ±25% model uncertainty around calibrated baseline
+  var _spanElasticity = 0.70; // span-to-ridership elasticity (power curve); applied per-scenario in Scenarios tab
   // User-adjustable service type premiums (low, high per service type; mid = avg)
   var _servicePremiums = {
     local_bus:    { low: 0.00, high: 0.00 },
@@ -1623,6 +1624,9 @@
     // Apply baseline uncertainty band once for the active corridor
     var baseBand = RM.applyBaselineUncertainty(baseMid, _baselineUncertaintyPct);
 
+    // Baseline span reference (local bus default) for span elasticity comparisons
+    var BASELINE_SPAN = 14;
+
     var builtScenarios = [];
 
     for (var i = 0; i < 4; i++) {
@@ -1643,12 +1647,16 @@
         freqElasticity: freqElast
       });
 
-      // Combine aligned: uncertainty band × service multiplier band
+      // Span effect: (scenarioSpan / baselineSpan) ^ spanElasticity
+      var spanEffect = RM.computeSpanEffect(BASELINE_SPAN, span, _spanElasticity);
+
+      // Combine aligned: uncertainty band × service multiplier band × span multiplier
       var adjustedElast = {
-        low:  baseBand.low  * mult.low,
-        mid:  baseBand.mid  * mult.mid,
-        high: baseBand.high * mult.high,
+        low:  baseBand.low  * mult.low  * spanEffect,
+        mid:  baseBand.mid  * mult.mid  * spanEffect,
+        high: baseBand.high * mult.high * spanEffect,
         freqEffect: mult.freqEffect,
+        spanEffect: spanEffect,
         serviceType: mult.serviceType
       };
 
@@ -1665,6 +1673,7 @@
         elasticityResult: adjustedElast,
         calibrationFactor: 1 // already applied above
       });
+      built.spanEffect = spanEffect;
 
       builtScenarios.push(built);
     }
@@ -1700,6 +1709,7 @@
       { label: "Service Type", key: function (s) { return RM.getServiceType(s.serviceTypeId).label; } },
       { label: "Headway (min)", key: function (s) { return s.headway; } },
       { label: "Span (hrs/day)", key: function (s) { return s.span; } },
+      { label: "Span Effect", key: function (s) { return s.spanEffect != null ? s.spanEffect.toFixed(3) + "x" : "\u2014"; } },
       { label: "Avg Speed (mph)", key: function (s) { return s.avgSpeed; } },
       { label: "Vehicles Needed", key: function (s) { return s.vehiclesNeeded; } },
       { label: "Rev-Hrs / Day", key: function (s) { return s.revenueHoursPerDay.toFixed(1); } },
@@ -2268,6 +2278,22 @@
       });
     }
 
+    // Service span elasticity slider
+    var spanElastSlider = document.getElementById("rfSpanElastSlider");
+    var spanElastValue = document.getElementById("rfSpanElastValue");
+    if (spanElastSlider && spanElastValue) {
+      spanElastSlider.addEventListener("input", function () {
+        spanElastValue.value = spanElastSlider.value;
+        _spanElasticity = parseFloat(spanElastSlider.value) || 0.7;
+      });
+      spanElastValue.addEventListener("change", function () {
+        var v = Math.max(0.1, Math.min(1.0, parseFloat(spanElastValue.value) || 0.7));
+        spanElastValue.value = v.toFixed(2);
+        spanElastSlider.value = String(v);
+        _spanElasticity = v;
+      });
+    }
+
     // Baseline uncertainty slider (Elasticity tab)
     var uncertSlider = document.getElementById("rfBaseUncertSlider");
     var uncertValue = document.getElementById("rfBaseUncertValue");
@@ -2317,6 +2343,12 @@
     var uncertPctInt = Math.round(_baselineUncertaintyPct * 100);
     if (uncertSlider) uncertSlider.value = String(uncertPctInt);
     if (uncertValue) uncertValue.value = String(uncertPctInt);
+
+    // Sync span elasticity slider
+    var spanElastSlider = document.getElementById("rfSpanElastSlider");
+    var spanElastValue = document.getElementById("rfSpanElastValue");
+    if (spanElastSlider) spanElastSlider.value = String(_spanElasticity);
+    if (spanElastValue) spanElastValue.value = String(_spanElasticity);
 
     // Sync service premium sliders for currently selected service type
     var stSelEl = document.getElementById("rfServiceType");
@@ -2459,6 +2491,7 @@
       apportionByArea: _apportionByArea,
       normalizeByLength: _normalizeByLength,
       baselineUncertaintyPct: _baselineUncertaintyPct,
+      spanElasticity: _spanElasticity,
       servicePremiums: Object.assign({}, _servicePremiums),
       calibration: _calibration ? Object.assign({}, _calibration) : null,
       scenarios: _scenarios.map(function (s) { return Object.assign({}, s); }),
@@ -2504,6 +2537,8 @@
     if (data.normalizeByLength != null) _normalizeByLength = !!data.normalizeByLength;
     _baselineUncertaintyPct = (data.baselineUncertaintyPct != null && Number.isFinite(data.baselineUncertaintyPct))
       ? data.baselineUncertaintyPct : 0.25;
+    _spanElasticity = (data.spanElasticity != null && Number.isFinite(data.spanElasticity))
+      ? data.spanElasticity : 0.70;
     if (data.servicePremiums && typeof data.servicePremiums === "object") {
       // Merge stored premiums over defaults (preserves any service types not in saved data)
       for (var spk in data.servicePremiums) {
