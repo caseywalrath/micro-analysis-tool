@@ -137,7 +137,6 @@
       '<label class="var-check"><input type="checkbox" value="C18108_002E"> With a disability</label>' +
       '<label class="var-check"><input type="checkbox" value="B17001_002E"> Persons below poverty level</label>' +
       '<label class="var-check"><input type="checkbox" value="GROUP_EDUCATION"> Education</label>' +
-      '<label class="var-check"><input type="checkbox" value="B16001_002E"> Speaks only English at home</label>' +
       '<label class="var-check"><input type="checkbox" value="DERIVED_LEP"> Limited English proficient</label>' +
       '<label class="var-check"><input type="checkbox" value="GROUP_CITIZENSHIP"> Citizenship</label>' +
       '<label class="var-check"><input type="checkbox" value="B08201_002E"> Zero-car households</label>' +

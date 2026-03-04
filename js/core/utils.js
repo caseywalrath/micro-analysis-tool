@@ -108,7 +108,6 @@
       codes: ["B15003_019E","B15003_020E","B15003_021E"] },
     "DERIVED_EDU_BA_PLUS":    { source: "ACS", agg: "sum", fmt: "int", label: "Bachelor's degree or higher",                             category: "Equity",
       codes: ["B15003_022E","B15003_023E","B15003_024E","B15003_025E"] },
-    "B16001_002E":            { source: "ACS", agg: "sum", fmt: "int", label: "Speaks only English at home",                             category: "Equity" },
     "DERIVED_LEP":            { source: "ACS", agg: "sum", fmt: "int", label: "Limited English proficient",                              category: "Equity", tractOnly: true,
       codes: ["C16001_005E","C16001_008E","C16001_011E","C16001_014E","C16001_017E","C16001_020E",
               "C16001_023E","C16001_026E","C16001_029E","C16001_032E","C16001_035E","C16001_038E"] },
