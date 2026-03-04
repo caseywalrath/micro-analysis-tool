@@ -56,7 +56,7 @@
     "B03003_003E": { type: "var", code: "B01003_001E" },
     "B03003_002E": { type: "var", code: "B01003_001E" },
     // Disability → % of total population
-    "C18108_002E": { type: "var", code: "B01003_001E" },
+    "DERIVED_DISABILITY": { type: "var", code: "B01003_001E" },
     // Poverty → % of total population
     "B17001_002E": { type: "var", code: "B01003_001E" },
     // Education → % of sum of all 4 education categories
@@ -134,7 +134,7 @@
 
       // ---- Equity ----
       '<div class="var-group-label">Equity</div>' +
-      '<label class="var-check"><input type="checkbox" value="C18108_002E"> With a disability</label>' +
+      '<label class="var-check"><input type="checkbox" value="DERIVED_DISABILITY"> With a disability</label>' +
       '<label class="var-check"><input type="checkbox" value="B17001_002E"> Persons below poverty level</label>' +
       '<label class="var-check"><input type="checkbox" value="GROUP_EDUCATION"> Education</label>' +
       '<label class="var-check"><input type="checkbox" value="DERIVED_LEP"> Limited English proficient</label>' +
