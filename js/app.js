@@ -71,11 +71,6 @@
 
       // ---- Travel ----
       '<div class="var-group-label">Travel</div>' +
-      '<label class="var-check"><input type="checkbox" value="DERIVED_VEH_0"> 0 vehicles available</label>' +
-      '<label class="var-check"><input type="checkbox" value="B08201_003E"> 1 vehicle available</label>' +
-      '<label class="var-check"><input type="checkbox" value="B08201_004E"> 2 vehicles available</label>' +
-      '<label class="var-check"><input type="checkbox" value="B08201_005E"> 3 vehicles available</label>' +
-      '<label class="var-check"><input type="checkbox" value="B08201_006E"> 4+ vehicles available</label>' +
       '<label class="var-check"><input type="checkbox" value="B08301_002E"> Commute: drove alone</label>' +
       '<label class="var-check"><input type="checkbox" value="B08301_003E"> Commute: carpooled</label>' +
       '<label class="var-check"><input type="checkbox" value="B08301_010E"> Commute: public transit</label>' +
