@@ -79,6 +79,9 @@
     // ---- Demographics ----
     "B01003_001E": { source: "ACS", agg: "sum", fmt: "int",     label: "Total population",            category: "Demographics" },
     "B11001_001E": { source: "ACS", agg: "sum", fmt: "int",     label: "Total households",             category: "Demographics" },
+    "DERIVED_PPH":  { source: "ACS", agg: "ratio", fmt: "decimal", label: "Average persons per household", category: "Demographics",
+                      numerator: "B01003_001E", denominator: "B11001_001E",
+                      ratioLabel: "Calculated: Total Population / Total Households" },
     "B19013_001E": { source: "ACS", agg: "avg", fmt: "usd",     label: "Median household income",      category: "Demographics", tractOnly: true },
     "B01002_001E": { source: "ACS", agg: "avg", fmt: "decimal", label: "Median age",                   category: "Demographics" },
     "B01001_002E": { source: "ACS", agg: "sum", fmt: "int",     label: "Male population",              category: "Demographics" },

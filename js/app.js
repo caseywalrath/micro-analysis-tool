@@ -36,6 +36,7 @@
       '<div class="var-group-label">Demographics</div>' +
       '<label class="var-check"><input type="checkbox" value="B01003_001E"> Total population</label>' +
       '<label class="var-check"><input type="checkbox" value="B11001_001E"> Total households</label>' +
+      '<label class="var-check"><input type="checkbox" value="DERIVED_PPH"> Average persons per household</label>' +
       '<label class="var-check"><input type="checkbox" value="B19013_001E"> Median household income ' + WARN_ICON + '</label>' +
       '<label class="var-check"><input type="checkbox" value="B01002_001E"> Median age ' + WARN_ICON + '</label>' +
       '<label class="var-check"><input type="checkbox" value="B01001_002E"> Male population</label>' +
@@ -63,13 +64,6 @@
       '<label class="var-check"><input type="checkbox" value="B05001_002E"> Born in US, citizen</label>' +
       '<label class="var-check"><input type="checkbox" value="B05001_005E"> Naturalized US citizen</label>' +
       '<label class="var-check"><input type="checkbox" value="B05001_006E"> Not a US citizen</label>' +
-      '<label class="var-check"><input type="checkbox" value="B11016_002E"> 1-person household</label>' +
-      '<label class="var-check"><input type="checkbox" value="B11016_003E"> 2-person household</label>' +
-      '<label class="var-check"><input type="checkbox" value="B11016_004E"> 3-person household</label>' +
-      '<label class="var-check"><input type="checkbox" value="B11016_005E"> 4-person household</label>' +
-      '<label class="var-check"><input type="checkbox" value="B11016_006E"> 5-person household</label>' +
-      '<label class="var-check"><input type="checkbox" value="B11016_007E"> 6-person household</label>' +
-      '<label class="var-check"><input type="checkbox" value="B11016_008E"> 7+-person household</label>' +
       '<label class="var-check"><input type="checkbox" value="B08201_002E"> Zero-car households</label>' +
       '<label class="var-check"><input type="checkbox" value="B23025_004E"> Employed (civilian labor force)</label>' +
       '<label class="var-check"><input type="checkbox" value="B23025_005E"> Unemployed (civilian labor force)</label>' +
@@ -235,6 +229,7 @@
 
   function aggDescription(meta, apportionByArea) {
     if (meta.source === "LODES") return "Sum (block internal points)";
+    if (meta.agg === "ratio") return meta.ratioLabel || "Calculated ratio";
     if (meta.agg === "sum") return apportionByArea ? "Sum (area-apportioned)" : "Sum (all overlapping geos)";
     return apportionByArea ? "Area-weighted average" : "Simple average (all overlapping geos)";
   }
@@ -399,13 +394,23 @@
               fetchGeoids = geoids;
             }
 
-            var valueMap;
-            if (varMeta.codes && varMeta.codes.length > 0) {
-              valueMap = await App.fetchACSMultiValues(fetchGeoLevel, year, varMeta.codes, fetchGeoids);
+            var result;
+            if (varMeta.agg === "ratio") {
+              var numMap = await App.fetchACSValues(fetchGeoLevel, year, varMeta.numerator, fetchGeoids);
+              var denMap = await App.fetchACSValues(fetchGeoLevel, year, varMeta.denominator, fetchGeoids);
+              var numAgg = App.aggregateWithinUnion(unionFeat, fetchGeos, numMap, "sum", { apportionByArea: apportionByArea });
+              var denAgg = App.aggregateWithinUnion(unionFeat, fetchGeos, denMap, "sum", { apportionByArea: apportionByArea });
+              var ratioVal = (denAgg.value > 0) ? (numAgg.value / denAgg.value) : NaN;
+              result = { value: ratioVal, used: numAgg.used };
             } else {
-              valueMap = await App.fetchACSValues(fetchGeoLevel, year, varCode, fetchGeoids);
+              var valueMap;
+              if (varMeta.codes && varMeta.codes.length > 0) {
+                valueMap = await App.fetchACSMultiValues(fetchGeoLevel, year, varMeta.codes, fetchGeoids);
+              } else {
+                valueMap = await App.fetchACSValues(fetchGeoLevel, year, varCode, fetchGeoids);
+              }
+              result = App.aggregateWithinUnion(unionFeat, fetchGeos, valueMap, varMeta.agg, { apportionByArea: apportionByArea });
             }
-            var result = App.aggregateWithinUnion(unionFeat, fetchGeos, valueMap, varMeta.agg, { apportionByArea: apportionByArea });
             updateRows(varCode, result, varMeta, useTractFallback);
           } catch (e) {
             markRowsError(varCode, "Error: " + (e.message || e));
