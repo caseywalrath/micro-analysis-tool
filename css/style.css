@@ -411,6 +411,24 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Libe
   color: #2b6cb0;
   background: #f0f5ff;
 }
+.basemap-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+.basemap-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #333;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.basemap-toggle-row:hover {
+  background: #eef1f5;
+}
 
 /* ---- Analysis module popup ---- */
 .module-popup {
