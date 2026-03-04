@@ -128,31 +128,31 @@
       '<label class="var-check"><input type="checkbox" value="DERIVED_PPH"> Average persons per household</label>' +
       '<label class="var-check"><input type="checkbox" value="B19013_001E"> Median household income ' + WARN_ICON + '</label>' +
       '<label class="var-check"><input type="checkbox" value="B01002_001E"> Median age ' + WARN_ICON + '</label>' +
-      '<label class="var-check"><input type="checkbox" value="GROUP_SEX"> Sex (male/female)</label>' +
-      '<label class="var-check"><input type="checkbox" value="GROUP_RACE"> Race (all categories)</label>' +
-      '<label class="var-check"><input type="checkbox" value="GROUP_ETHNICITY"> Ethnicity (Hispanic/non-Hispanic)</label>' +
+      '<label class="var-check"><input type="checkbox" value="GROUP_SEX"> Sex</label>' +
+      '<label class="var-check"><input type="checkbox" value="GROUP_RACE"> Race</label>' +
+      '<label class="var-check"><input type="checkbox" value="GROUP_ETHNICITY"> Ethnicity</label>' +
 
       // ---- Equity ----
       '<div class="var-group-label">Equity</div>' +
       '<label class="var-check"><input type="checkbox" value="C18108_002E"> With a disability</label>' +
       '<label class="var-check"><input type="checkbox" value="B17001_002E"> Persons below poverty level</label>' +
-      '<label class="var-check"><input type="checkbox" value="GROUP_EDUCATION"> Education (all levels)</label>' +
+      '<label class="var-check"><input type="checkbox" value="GROUP_EDUCATION"> Education</label>' +
       '<label class="var-check"><input type="checkbox" value="B16001_002E"> Speaks only English at home</label>' +
       '<label class="var-check"><input type="checkbox" value="DERIVED_LEP"> Limited English proficient</label>' +
-      '<label class="var-check"><input type="checkbox" value="GROUP_CITIZENSHIP"> Citizenship (all categories)</label>' +
+      '<label class="var-check"><input type="checkbox" value="GROUP_CITIZENSHIP"> Citizenship</label>' +
       '<label class="var-check"><input type="checkbox" value="B08201_002E"> Zero-car households</label>' +
-      '<label class="var-check"><input type="checkbox" value="GROUP_EMPLOYMENT"> Employment status (all categories)</label>' +
+      '<label class="var-check"><input type="checkbox" value="GROUP_EMPLOYMENT"> Employment status</label>' +
 
       // ---- Travel ----
       '<div class="var-group-label">Travel</div>' +
-      '<label class="var-check"><input type="checkbox" value="GROUP_COMMUTE"> Commute mode (all modes)</label>' +
-      '<label class="var-check"><input type="checkbox" value="GROUP_COMMTIME"> Commute time (all categories)</label>' +
+      '<label class="var-check"><input type="checkbox" value="GROUP_COMMUTE"> Commute mode</label>' +
+      '<label class="var-check"><input type="checkbox" value="GROUP_COMMTIME"> Commute time</label>' +
 
       // ---- Housing ----
       '<div class="var-group-label">Housing</div>' +
       '<label class="var-check"><input type="checkbox" value="B25001_001E"> Total housing units</label>' +
-      '<label class="var-check"><input type="checkbox" value="GROUP_OCCUPANCY"> Occupancy (owner/renter)</label>' +
-      '<label class="var-check"><input type="checkbox" value="GROUP_RENT_BURDEN"> Rent burden (all categories)</label>' +
+      '<label class="var-check"><input type="checkbox" value="GROUP_OCCUPANCY"> Occupancy</label>' +
+      '<label class="var-check"><input type="checkbox" value="GROUP_RENT_BURDEN"> Rent burden</label>' +
       '<label class="var-check"><input type="checkbox" value="B25064_001E"> Median gross rent ' + WARN_ICON + '</label>' +
       '<label class="var-check"><input type="checkbox" value="B25077_001E"> Median home value ' + WARN_ICON + '</label>' +
 
