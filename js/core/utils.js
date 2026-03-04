@@ -97,7 +97,7 @@
     "B03003_002E": { source: "ACS", agg: "sum", fmt: "int",     label: "Not Hispanic or Latino",       category: "Demographics" },
 
     // ---- Equity ----
-    "DERIVED_DISABILITY":     { source: "ACS", agg: "sum", fmt: "int", label: "With a disability",                                        category: "Equity",
+    "DERIVED_DISABILITY":     { source: "ACS", agg: "sum", fmt: "int", label: "With a disability",                                        category: "Equity", tractOnly: true,
       codes: ["B18101_004E","B18101_007E","B18101_010E","B18101_013E","B18101_016E","B18101_019E",
               "B18101_023E","B18101_026E","B18101_029E","B18101_032E","B18101_035E","B18101_038E"] },
     "B17001_002E":            { source: "ACS", agg: "sum", fmt: "int", label: "Persons below poverty level",                              category: "Equity", tractOnly: true },
