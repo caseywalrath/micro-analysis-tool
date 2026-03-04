@@ -121,10 +121,10 @@
 
     '<label>Year' +
       '<select id="yearSelect">' +
-        '<option value="2024">2024 ACS</option>' +
-        '<option value="2023">2023 ACS</option>' +
-        '<option value="2022">2022 ACS</option>' +
-        '<option value="2021">2021 ACS</option>' +
+        '<option value="2024">2024 ACS 5-year</option>' +
+        '<option value="2023">2023 ACS 5-year</option>' +
+        '<option value="2022">2022 ACS 5-year</option>' +
+        '<option value="2021">2021 ACS 5-year</option>' +
       '</select>' +
     '</label>' +
 
