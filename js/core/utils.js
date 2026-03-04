@@ -97,8 +97,8 @@
     "B03003_002E": { source: "ACS", agg: "sum", fmt: "int",     label: "Not Hispanic or Latino",       category: "Demographics" },
 
     // ---- Equity ----
-    "C18108_002E":            { source: "ACS", agg: "sum", fmt: "int", label: "With a disability",                                        category: "Equity" },
-    "B17001_002E":            { source: "ACS", agg: "sum", fmt: "int", label: "Persons below poverty level",                              category: "Equity" },
+    "C18108_002E":            { source: "ACS", agg: "sum", fmt: "int", label: "With a disability",                                        category: "Equity", tractOnly: true },
+    "B17001_002E":            { source: "ACS", agg: "sum", fmt: "int", label: "Persons below poverty level",                              category: "Equity", tractOnly: true },
     "DERIVED_EDU_LT_HS":      { source: "ACS", agg: "sum", fmt: "int", label: "Less than high school diploma",                            category: "Equity",
       codes: ["B15003_002E","B15003_003E","B15003_004E","B15003_005E","B15003_006E","B15003_007E","B15003_008E",
               "B15003_009E","B15003_010E","B15003_011E","B15003_012E","B15003_013E","B15003_014E","B15003_015E","B15003_016E"] },
@@ -111,9 +111,9 @@
     "DERIVED_LEP":            { source: "ACS", agg: "sum", fmt: "int", label: "Limited English proficient",                              category: "Equity", tractOnly: true,
       codes: ["C16001_005E","C16001_008E","C16001_011E","C16001_014E","C16001_017E","C16001_020E",
               "C16001_023E","C16001_026E","C16001_029E","C16001_032E","C16001_035E","C16001_038E"] },
-    "B05001_002E":            { source: "ACS", agg: "sum", fmt: "int", label: "Born in US, citizen",                                     category: "Equity" },
-    "B05001_005E":            { source: "ACS", agg: "sum", fmt: "int", label: "Naturalized US citizen",                                  category: "Equity" },
-    "B05001_006E":            { source: "ACS", agg: "sum", fmt: "int", label: "Not a US citizen",                                        category: "Equity" },
+    "B05001_002E":            { source: "ACS", agg: "sum", fmt: "int", label: "Born in US, citizen",                                     category: "Equity", tractOnly: true },
+    "B05001_005E":            { source: "ACS", agg: "sum", fmt: "int", label: "Naturalized US citizen",                                  category: "Equity", tractOnly: true },
+    "B05001_006E":            { source: "ACS", agg: "sum", fmt: "int", label: "Not a US citizen",                                        category: "Equity", tractOnly: true },
     "B11016_002E":            { source: "ACS", agg: "sum", fmt: "int", label: "1-person household",                                      category: "Equity" },
     "B11016_003E":            { source: "ACS", agg: "sum", fmt: "int", label: "2-person household",                                      category: "Equity" },
     "B11016_004E":            { source: "ACS", agg: "sum", fmt: "int", label: "3-person household",                                      category: "Equity" },
