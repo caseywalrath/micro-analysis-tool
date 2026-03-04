@@ -31,6 +31,7 @@ Project onboarding for Claude Code sessions. Read this first.
 - Changes made to wrong files
 - User confusion about what version is "live"
 - User not knowing a new branch was created or how to work from it
+- **ACS variable code changes require updates in TWO files.** `utils.js` holds `VAR_META` (labels/categories), but `app.js` has three additional structures that must stay in sync: (1) the `GROUP_*` object used to build sidebar checkbox groups, (2) the matching local group array (e.g. `COMM_GROUP`), and (3) the `DENOM_MAP` entry for percentage calculation. Updating `utils.js` alone will cause the old code to appear as a raw label with no category in results.
 ## Overview
 
 Browser-based geospatial analysis tool. Pure front-end (no build step, no backend, no npm). Open `index.html` in a browser and it works. All data stays client-side; Census APIs are called directly.
@@ -43,7 +44,7 @@ css/
   style.css                 Core layout, toolbar, feature panel, results modal, module popup, floating widgets, basemap switcher, TPI styles, RF styles (.rf- prefix)
   sidebar-v2.css            Sidebar panel system styles (scoped under #sidebar), variable checkbox list
 js/
-  app.js                    Startup, module registry, sidebar panel HTML, multi-variable summary runner, results modal, event wiring
+  app.js                    Startup, module registry, sidebar panel HTML, multi-variable summary runner, results modal, event wiring. Contains: GROUP_* object (checkbox group membership), local group arrays (e.g. COMM_GROUP) used as percentage denominators, and DENOM_MAP — all must stay in sync with VAR_META in utils.js when variable codes change.
   core/
     utils.js                CSV parsing, number formatting, GEOID normalization, VAR_META (with label/category), getSelectedVars
     sidebar.js              Sidebar panel manager: addPanel, removePanel, toggle, render
