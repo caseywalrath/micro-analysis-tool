@@ -159,9 +159,11 @@
     var su = _stationUnion();
     var lu = App.lineBufferUnionPolygon ? App.lineBufferUnionPolygon() : null;
     var ru = App.routeBufferUnionPolygon ? App.routeBufferUnionPolygon() : null;
+    var pu = App.polygonUnionPolygon ? App.polygonUnionPolygon() : null;
     var combined = su || null;
     if (lu) combined = combined ? turf.union(combined, lu) : lu;
     if (ru) combined = combined ? turf.union(combined, ru) : ru;
+    if (pu) combined = combined ? turf.union(combined, pu) : pu;
     return combined;
   };
 
@@ -292,7 +294,9 @@
     // Check for buffer union
     var unionFeat = App.bufferUnionPolygon();
     if (!unionFeat) {
-      var errMsg = App.stations.length === 0 ? "No stations placed" : "No buffers set";
+      var errMsg = (App.stations.length === 0 && App.lines.length === 0 &&
+                    App.routes.length === 0 && App.polygons.length === 0)
+        ? "No features placed" : "No buffers set";
       for (var k = 0; k < selectedVars.length; k++) {
         var errRows = codeToRows[selectedVars[k]] || [];
         for (var ei = 0; ei < errRows.length; ei++) {
