@@ -16,6 +16,95 @@
   // Reusable ⚠ tooltip markup for median (non-additive) variables.
   var WARN_ICON = '<span class="var-warn-icon" title="Median estimate \u2014 displayed as an area-weighted average of overlapping geographies\u2019 values. This is not a true median for the buffer area. Use with caution.">\u26A0</span>';
 
+  // ---- Group checkbox → member variable mapping ----
+
+  var CHECKBOX_GROUPS = {
+    GROUP_SEX:         ["B01001_002E", "B01001_026E"],
+    GROUP_RACE:        ["B02001_002E","B02001_003E","B02001_004E","B02001_005E","B02001_006E","B02001_007E","B02001_008E"],
+    GROUP_ETHNICITY:   ["B03003_003E", "B03003_002E"],
+    GROUP_EDUCATION:   ["DERIVED_EDU_LT_HS","DERIVED_EDU_HS","DERIVED_EDU_SOME_COLLEGE","DERIVED_EDU_BA_PLUS"],
+    GROUP_CITIZENSHIP: ["B05001_002E","B05001_005E","B05001_006E"],
+    GROUP_EMPLOYMENT:  ["B23025_004E","B23025_005E","B23025_007E"],
+    GROUP_COMMUTE:     ["B08301_002E","B08301_003E","B08301_010E","B08301_019E","B08301_018E","B08301_021E"],
+    GROUP_COMMTIME:    ["DERIVED_COMMTIME_LT15","DERIVED_COMMTIME_15_29","DERIVED_COMMTIME_30_44","B08303_011E","DERIVED_COMMTIME_60PLUS"],
+    GROUP_OCCUPANCY:   ["B25003_002E","B25003_003E"],
+    GROUP_RENT_BURDEN: ["DERIVED_RENT_NOT_BURDENED","DERIVED_RENT_BURDENED","B25070_010E"]
+  };
+
+  // Always fetched and always shown in results, regardless of checkbox state.
+  var MANDATORY_VARS = ["B01003_001E", "B11001_001E", "B25001_001E", "B25003_003E"];
+
+  // Maps each variable code to how its percent denominator is computed.
+  var EDU_GROUP   = ["DERIVED_EDU_LT_HS","DERIVED_EDU_HS","DERIVED_EDU_SOME_COLLEGE","DERIVED_EDU_BA_PLUS"];
+  var EMP_GROUP   = ["B23025_004E","B23025_005E","B23025_007E"];
+  var COMM_GROUP  = ["B08301_002E","B08301_003E","B08301_010E","B08301_019E","B08301_018E","B08301_021E"];
+  var CTIME_GROUP = ["DERIVED_COMMTIME_LT15","DERIVED_COMMTIME_15_29","DERIVED_COMMTIME_30_44","B08303_011E","DERIVED_COMMTIME_60PLUS"];
+
+  var DENOM_MAP = {
+    // Sex → % of total population
+    "B01001_002E": { type: "var", code: "B01003_001E" },
+    "B01001_026E": { type: "var", code: "B01003_001E" },
+    // Race → % of total population
+    "B02001_002E": { type: "var", code: "B01003_001E" },
+    "B02001_003E": { type: "var", code: "B01003_001E" },
+    "B02001_004E": { type: "var", code: "B01003_001E" },
+    "B02001_005E": { type: "var", code: "B01003_001E" },
+    "B02001_006E": { type: "var", code: "B01003_001E" },
+    "B02001_007E": { type: "var", code: "B01003_001E" },
+    "B02001_008E": { type: "var", code: "B01003_001E" },
+    // Ethnicity → % of total population
+    "B03003_003E": { type: "var", code: "B01003_001E" },
+    "B03003_002E": { type: "var", code: "B01003_001E" },
+    // Disability → % of total population
+    "C18108_002E": { type: "var", code: "B01003_001E" },
+    // Poverty → % of total population
+    "B17001_002E": { type: "var", code: "B01003_001E" },
+    // Education → % of sum of all 4 education categories
+    "DERIVED_EDU_LT_HS":        { type: "group", codes: EDU_GROUP },
+    "DERIVED_EDU_HS":           { type: "group", codes: EDU_GROUP },
+    "DERIVED_EDU_SOME_COLLEGE": { type: "group", codes: EDU_GROUP },
+    "DERIVED_EDU_BA_PLUS":      { type: "group", codes: EDU_GROUP },
+    // Zero-car → % of total households
+    "B08201_002E": { type: "var", code: "B11001_001E" },
+    // Employment → % of sum of all 3 employment categories
+    "B23025_004E": { type: "group", codes: EMP_GROUP },
+    "B23025_005E": { type: "group", codes: EMP_GROUP },
+    "B23025_007E": { type: "group", codes: EMP_GROUP },
+    // Commute mode → % of sum of all 6 commute modes
+    "B08301_002E": { type: "group", codes: COMM_GROUP },
+    "B08301_003E": { type: "group", codes: COMM_GROUP },
+    "B08301_010E": { type: "group", codes: COMM_GROUP },
+    "B08301_019E": { type: "group", codes: COMM_GROUP },
+    "B08301_018E": { type: "group", codes: COMM_GROUP },
+    "B08301_021E": { type: "group", codes: COMM_GROUP },
+    // Commute time → % of sum of all 5 commute time categories
+    "DERIVED_COMMTIME_LT15":   { type: "group", codes: CTIME_GROUP },
+    "DERIVED_COMMTIME_15_29":  { type: "group", codes: CTIME_GROUP },
+    "DERIVED_COMMTIME_30_44":  { type: "group", codes: CTIME_GROUP },
+    "B08303_011E":             { type: "group", codes: CTIME_GROUP },
+    "DERIVED_COMMTIME_60PLUS": { type: "group", codes: CTIME_GROUP },
+    // Occupancy → % of total housing units
+    "B25003_002E": { type: "var", code: "B25001_001E" },
+    "B25003_003E": { type: "var", code: "B25001_001E" },
+    // Rent burden → % of renter-occupied units
+    "DERIVED_RENT_NOT_BURDENED": { type: "var", code: "B25003_003E" },
+    "DERIVED_RENT_BURDENED":     { type: "var", code: "B25003_003E" },
+    "B25070_010E":               { type: "var", code: "B25003_003E" }
+  };
+
+  // Expands group checkbox codes into their member variable codes.
+  function expandGroups(codes) {
+    var result = [], seen = {};
+    for (var i = 0; i < codes.length; i++) {
+      var members = CHECKBOX_GROUPS[codes[i]];
+      var list = members || [codes[i]];
+      for (var j = 0; j < list.length; j++) {
+        if (!seen[list[j]]) { seen[list[j]] = true; result.push(list[j]); }
+      }
+    }
+    return result;
+  }
+
   var STATION_DATA_PANEL_HTML =
     '<label>Geography level' +
       '<select id="geoLevel">' +
@@ -39,58 +128,31 @@
       '<label class="var-check"><input type="checkbox" value="DERIVED_PPH"> Average persons per household</label>' +
       '<label class="var-check"><input type="checkbox" value="B19013_001E"> Median household income ' + WARN_ICON + '</label>' +
       '<label class="var-check"><input type="checkbox" value="B01002_001E"> Median age ' + WARN_ICON + '</label>' +
-      '<label class="var-check"><input type="checkbox" value="B01001_002E"> Male population</label>' +
-      '<label class="var-check"><input type="checkbox" value="B01001_026E"> Female population</label>' +
-      '<label class="var-check"><input type="checkbox" value="B02001_002E"> White alone</label>' +
-      '<label class="var-check"><input type="checkbox" value="B02001_003E"> Black or African American alone</label>' +
-      '<label class="var-check"><input type="checkbox" value="B02001_004E"> American Indian and Alaska Native alone</label>' +
-      '<label class="var-check"><input type="checkbox" value="B02001_005E"> Asian alone</label>' +
-      '<label class="var-check"><input type="checkbox" value="B02001_006E"> Native Hawaiian and Other Pacific Islander alone</label>' +
-      '<label class="var-check"><input type="checkbox" value="B02001_007E"> Some other race alone</label>' +
-      '<label class="var-check"><input type="checkbox" value="B02001_008E"> Two or more races</label>' +
-      '<label class="var-check"><input type="checkbox" value="B03003_003E"> Hispanic or Latino</label>' +
-      '<label class="var-check"><input type="checkbox" value="B03003_002E"> Not Hispanic or Latino</label>' +
+      '<label class="var-check"><input type="checkbox" value="GROUP_SEX"> Sex (male/female)</label>' +
+      '<label class="var-check"><input type="checkbox" value="GROUP_RACE"> Race (all categories)</label>' +
+      '<label class="var-check"><input type="checkbox" value="GROUP_ETHNICITY"> Ethnicity (Hispanic/non-Hispanic)</label>' +
 
       // ---- Equity ----
       '<div class="var-group-label">Equity</div>' +
       '<label class="var-check"><input type="checkbox" value="C18108_002E"> With a disability</label>' +
       '<label class="var-check"><input type="checkbox" value="B17001_002E"> Persons below poverty level</label>' +
-      '<label class="var-check"><input type="checkbox" value="DERIVED_EDU_LT_HS"> Less than high school diploma</label>' +
-      '<label class="var-check"><input type="checkbox" value="DERIVED_EDU_HS"> High school diploma or GED</label>' +
-      '<label class="var-check"><input type="checkbox" value="DERIVED_EDU_SOME_COLLEGE"> Some college or associate\u2019s degree</label>' +
-      '<label class="var-check"><input type="checkbox" value="DERIVED_EDU_BA_PLUS"> Bachelor\u2019s degree or higher</label>' +
+      '<label class="var-check"><input type="checkbox" value="GROUP_EDUCATION"> Education (all levels)</label>' +
       '<label class="var-check"><input type="checkbox" value="B16001_002E"> Speaks only English at home</label>' +
       '<label class="var-check"><input type="checkbox" value="DERIVED_LEP"> Limited English proficient</label>' +
-      '<label class="var-check"><input type="checkbox" value="B05001_002E"> Born in US, citizen</label>' +
-      '<label class="var-check"><input type="checkbox" value="B05001_005E"> Naturalized US citizen</label>' +
-      '<label class="var-check"><input type="checkbox" value="B05001_006E"> Not a US citizen</label>' +
+      '<label class="var-check"><input type="checkbox" value="GROUP_CITIZENSHIP"> Citizenship (all categories)</label>' +
       '<label class="var-check"><input type="checkbox" value="B08201_002E"> Zero-car households</label>' +
-      '<label class="var-check"><input type="checkbox" value="B23025_004E"> Employed (civilian labor force)</label>' +
-      '<label class="var-check"><input type="checkbox" value="B23025_005E"> Unemployed (civilian labor force)</label>' +
-      '<label class="var-check"><input type="checkbox" value="B23025_007E"> Not in labor force</label>' +
+      '<label class="var-check"><input type="checkbox" value="GROUP_EMPLOYMENT"> Employment status (all categories)</label>' +
 
       // ---- Travel ----
       '<div class="var-group-label">Travel</div>' +
-      '<label class="var-check"><input type="checkbox" value="B08301_002E"> Commute: drove alone</label>' +
-      '<label class="var-check"><input type="checkbox" value="B08301_003E"> Commute: carpooled</label>' +
-      '<label class="var-check"><input type="checkbox" value="B08301_010E"> Commute: public transit</label>' +
-      '<label class="var-check"><input type="checkbox" value="B08301_019E"> Commute: walked</label>' +
-      '<label class="var-check"><input type="checkbox" value="B08301_018E"> Commute: biked</label>' +
-      '<label class="var-check"><input type="checkbox" value="B08301_021E"> Commute: worked from home</label>' +
-      '<label class="var-check"><input type="checkbox" value="DERIVED_COMMTIME_LT15"> Commute time: under 15 min</label>' +
-      '<label class="var-check"><input type="checkbox" value="DERIVED_COMMTIME_15_29"> Commute time: 15\u201329 min</label>' +
-      '<label class="var-check"><input type="checkbox" value="DERIVED_COMMTIME_30_44"> Commute time: 30\u201344 min</label>' +
-      '<label class="var-check"><input type="checkbox" value="B08303_011E"> Commute time: 45\u201359 min</label>' +
-      '<label class="var-check"><input type="checkbox" value="DERIVED_COMMTIME_60PLUS"> Commute time: 60+ min</label>' +
+      '<label class="var-check"><input type="checkbox" value="GROUP_COMMUTE"> Commute mode (all modes)</label>' +
+      '<label class="var-check"><input type="checkbox" value="GROUP_COMMTIME"> Commute time (all categories)</label>' +
 
       // ---- Housing ----
       '<div class="var-group-label">Housing</div>' +
       '<label class="var-check"><input type="checkbox" value="B25001_001E"> Total housing units</label>' +
-      '<label class="var-check"><input type="checkbox" value="B25003_002E"> Owner-occupied units</label>' +
-      '<label class="var-check"><input type="checkbox" value="B25003_003E"> Renter-occupied units</label>' +
-      '<label class="var-check"><input type="checkbox" value="DERIVED_RENT_NOT_BURDENED"> Gross rent &lt; 30% of income</label>' +
-      '<label class="var-check"><input type="checkbox" value="DERIVED_RENT_BURDENED"> Gross rent 30\u201349.9% of income (cost burdened)</label>' +
-      '<label class="var-check"><input type="checkbox" value="B25070_010E"> Gross rent 50%+ of income (severely cost burdened)</label>' +
+      '<label class="var-check"><input type="checkbox" value="GROUP_OCCUPANCY"> Occupancy (owner/renter)</label>' +
+      '<label class="var-check"><input type="checkbox" value="GROUP_RENT_BURDEN"> Rent burden (all categories)</label>' +
       '<label class="var-check"><input type="checkbox" value="B25064_001E"> Median gross rent ' + WARN_ICON + '</label>' +
       '<label class="var-check"><input type="checkbox" value="B25077_001E"> Median home value ' + WARN_ICON + '</label>' +
 
@@ -232,10 +294,16 @@
   // ---- Summary runners ----
 
   async function runSummary() {
-    var selectedVars = App.getSelectedVars();
+    var selectedVars = expandGroups(App.getSelectedVars());
     if (selectedVars.length === 0) {
       App.setStatus("No variables selected");
       return;
+    }
+    // Always include mandatory denominator variables
+    var _seen = {};
+    for (var mi = 0; mi < selectedVars.length; mi++) _seen[selectedVars[mi]] = true;
+    for (var mdi = 0; mdi < MANDATORY_VARS.length; mdi++) {
+      if (!_seen[MANDATORY_VARS[mdi]]) { _seen[MANDATORY_VARS[mdi]] = true; selectedVars.push(MANDATORY_VARS[mdi]); }
     }
 
     var year = document.getElementById("yearSelect").value;
@@ -264,6 +332,7 @@
     notesEl.textContent = "";
 
     var codeToRows = {};
+    var resultsMap = {};
     for (var j = 0; j < selectedVars.length; j++) {
       var code = selectedVars[j];
       var m = App.getMeta(code);
@@ -273,6 +342,7 @@
         "<td>" + (m.category || "\u2014") + "</td>" +
         "<td>" + (m.label || code) + "</td>" +
         "<td>Computing\u2026</td>" +
+        "<td>\u2014</td>" +
         "<td>" + aggDescription(m, apportionByArea) + "</td>";
       tbody.appendChild(tr);
       if (!codeToRows[code]) codeToRows[code] = [];
@@ -327,12 +397,14 @@
     }
 
     function updateRows(code, result, varMeta, useTractFallback) {
+      resultsMap[code] = result.value;
       var rows = codeToRows[code] || [];
       for (var ri = 0; ri < rows.length; ri++) {
         rows[ri].className = "";
         rows[ri].children[2].textContent = App.formatValue(result.value, varMeta);
+        // children[3] = Percent (filled in final pass)
         if (useTractFallback) {
-          rows[ri].children[3].textContent += " \u2014 Tract-level data (not available at block group)";
+          rows[ri].children[4].textContent += " \u2014 Tract-level data (not available at block group)";
         }
       }
     }
@@ -445,6 +517,32 @@
         markRowsError(lCode, "Error: " + (e.message || e));
       }
       updateProgress();
+    }
+
+    // ---- Percent column pass ----
+    var allPctCodes = Object.keys(codeToRows);
+    for (var pi = 0; pi < allPctCodes.length; pi++) {
+      var pCode = allPctCodes[pi];
+      var pDenom = DENOM_MAP[pCode];
+      var pRows = codeToRows[pCode] || [];
+      var pct = null;
+      if (pDenom && Number.isFinite(resultsMap[pCode])) {
+        var den;
+        if (pDenom.type === "var") {
+          den = resultsMap[pDenom.code];
+        } else {
+          den = 0;
+          for (var gi = 0; gi < pDenom.codes.length; gi++) {
+            var gv = resultsMap[pDenom.codes[gi]];
+            if (!Number.isFinite(gv)) { den = null; break; }
+            den += gv;
+          }
+        }
+        if (Number.isFinite(den) && den > 0) pct = (resultsMap[pCode] / den) * 100;
+      }
+      for (var pri = 0; pri < pRows.length; pri++) {
+        pRows[pri].children[3].textContent = pct !== null ? pct.toFixed(1) + "%" : "\u2014";
+      }
     }
 
     // Build notes footer
