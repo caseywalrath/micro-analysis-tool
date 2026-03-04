@@ -171,15 +171,18 @@
                  bounds.getEast() + "," + bounds.getNorth();
 
       var layerUrl = "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Places_CouSub_ConCity_SubMCD/MapServer/4";
-      var features = await App.fetchAllTigerwebFeatures(layerUrl, {
+      var params = new URLSearchParams({
+        where: "1=1",
         geometry: bbox,
         geometryType: "esriGeometryEnvelope",
         inSR: "4326",
         outSR: "4326",
         spatialRel: "esriSpatialRelIntersects",
         outFields: "NAME,GEOID",
-        returnGeometry: "true"
+        returnGeometry: "true",
+        f: "geojson"
       });
+      var features = await App.fetchAllTigerwebFeatures(layerUrl, params);
 
       var fc = { type: "FeatureCollection", features: features };
 
