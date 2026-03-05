@@ -556,6 +556,7 @@
     var lodesData = options.lodesData || null;
     var onProgress = options.onProgress || function () {};
     var apportionByArea = !!options.apportionByArea;
+    var growthFactors = options.growthFactors || null;
 
     // Build effective weights: use defaults where not overridden
     var effectiveWeights = {};
@@ -642,6 +643,16 @@
       // Tract level: no fallback needed, all vars available natively
       onProgress("Fetching ACS data (" + allAcsVars.length + " variables)...");
       acsData = await batchFetchACS("tract", year, geoids, allAcsVars);
+    }
+
+    // 3b. Apply population growth factors (if provided)
+    if (growthFactors) {
+      acsData.forEach(function (geoVals, geoid) {
+        var tractId = geoid.slice(0, 11);
+        var gf = growthFactors.get(geoid) || growthFactors.get(tractId) || 1.0;
+        var pop = geoVals.get("B01003_001E");
+        if (Number.isFinite(pop) && gf !== 1.0) geoVals.set("B01003_001E", pop * gf);
+      });
     }
 
     // 4. Aggregate LODES to geo level (if available and weighted)

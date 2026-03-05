@@ -174,6 +174,7 @@
         weights: _weights,
         lodesData: App.lodesData,
         apportionByArea: _apportionByArea,
+        growthFactors: App.projGrowthFactors(),
         onProgress: function (msg) {
           if (textEl) textEl.textContent = msg;
           App.setStatus(msg);

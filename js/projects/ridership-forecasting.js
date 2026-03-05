@@ -250,6 +250,7 @@
       weights: _weights,
       lodesData: App.lodesData,
       apportionByArea: _apportionByArea,
+      growthFactors: App.projGrowthFactors(),
       unionPolygon: sharedUnion,
       featureFilter: null,
       onProgress: function (msg) {
@@ -352,6 +353,7 @@
           weights: _weights,
           lodesData: App.lodesData,
           apportionByArea: _apportionByArea,
+          growthFactors: App.projGrowthFactors(),
           unionPolygon: customUnion,
           featureFilter: demandFilter,
           onProgress: function (msg) {
@@ -376,6 +378,7 @@
           weights: _weights,
           lodesData: App.lodesData,
           apportionByArea: _apportionByArea,
+          growthFactors: App.projGrowthFactors(),
           segmentMiles: segLen,
           onProgress: function (msg) {
             if (textEl) textEl.textContent = msg;
@@ -1064,6 +1067,7 @@
         weights: _weights,
         lodesData: App.lodesData,
         apportionByArea: apportion,
+        growthFactors: App.projGrowthFactors(),
         unionPolygon: customUnion,
         featureFilter: featureFilter,
         onProgress: function (msg) {

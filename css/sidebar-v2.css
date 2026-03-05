@@ -140,6 +140,15 @@
   flex: 1;
   margin-top: 0;
 }
+#sidebar .proj-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+#sidebar .proj-actions button {
+  flex: 1;
+  margin-top: 0;
+}
 
 /* ---- Cards ---- */
 #sidebar .sb2-card {

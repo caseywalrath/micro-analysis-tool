@@ -191,6 +191,26 @@
       '</div>' +
     '</div>';
 
+  // ---- Population Projections sidebar panel ----
+
+  var PROJECTIONS_PANEL_HTML =
+    '<label>Projection year' +
+      '<select id="projYear" disabled>' +
+        '<option value="">Current (ACS)</option>' +
+        '<option value="2030">2030</option>' +
+        '<option value="2040">2040</option>' +
+        '<option value="2050">2050</option>' +
+      '</select>' +
+    '</label>' +
+    '<div class="proj-actions">' +
+      '<button type="button" id="projUploadBtn">Upload CSV</button>' +
+      '<button type="button" id="projClear" style="display:none;">Clear</button>' +
+    '</div>' +
+    '<input id="projFile" type="file" accept=".csv" style="display:none" />' +
+    '<div id="projInfo" class="sb2-tiny" style="margin-top:4px;">' +
+      'No projection loaded \u2014 upload a growth factor CSV' +
+    '</div>';
+
   // ---- Module registry (replaces single-project system) ----
 
   var _modules = new Map(); // Map<id, moduleConfig>
@@ -617,6 +637,13 @@
       collapsed: false,
       order: 10
     });
+    App.sidebar.addPanel({
+      id: "projections",
+      title: "Population Projections",
+      html: PROJECTIONS_PANEL_HTML,
+      collapsed: true,
+      order: 25
+    });
     if (_modules.size > 0) {
       App.sidebar.addPanel({
         id: "analysis",
@@ -873,6 +900,53 @@
       lodesClearBtn.addEventListener("click", function () {
         if (!confirm("Remove all loaded LODES data?")) return;
         App.clearLodesData();
+        notifyProject();
+        if (typeof App.cache !== "undefined") App.cache.save();
+      });
+    }
+
+    // Projection year dropdown
+    document.getElementById("projYear").addEventListener("change", function () {
+      App.projYear = this.value || null;
+      notifyProject();
+      if (typeof App.cache !== "undefined") App.cache.save();
+    });
+
+    // Projection "Upload CSV" button — triggers the hidden file input
+    document.getElementById("projUploadBtn").addEventListener("click", function () {
+      document.getElementById("projFile").click();
+    });
+
+    // Projection file upload
+    document.getElementById("projFile").addEventListener("change", async function (e) {
+      var file = e.target.files && e.target.files[0];
+      if (!file) return;
+      this.value = ""; // allow re-selecting the same file
+      try {
+        var data = await App.parseProjectionsCSV(file);
+        App.setProjectionsData(data, file.name);
+        // Default to 2030 on first upload if no year selected
+        var yearSel = document.getElementById("projYear");
+        if (yearSel && !yearSel.value) {
+          yearSel.value = "2030";
+          App.projYear = "2030";
+        }
+        App.setStatus("Ready");
+        notifyProject();
+        if (typeof App.cache !== "undefined") App.cache.save();
+      } catch (err) {
+        App.setStatus("Error");
+        var infoEl = document.getElementById("projInfo");
+        if (infoEl) infoEl.textContent = "Error loading " + file.name + ": " + String(err && err.message ? err.message : err);
+      }
+    });
+
+    // Projection clear button
+    var projClearBtn = document.getElementById("projClear");
+    if (projClearBtn) {
+      projClearBtn.addEventListener("click", function () {
+        if (!confirm("Remove loaded projection data?")) return;
+        App.clearProjectionsData();
         notifyProject();
         if (typeof App.cache !== "undefined") App.cache.save();
       });

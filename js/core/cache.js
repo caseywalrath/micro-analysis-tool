@@ -36,7 +36,9 @@
       bufferRadius: parseFloat(document.getElementById("bufferRadius").value) || 0.5,
       lineBufferRadius: parseFloat(document.getElementById("lineBufferRadius").value) || 0.5,
       routeBufferRadius: parseFloat(document.getElementById("routeBufferRadius").value) || 0.5,
-      lodesFileNames: App.lodesFileNames || []
+      lodesFileNames: App.lodesFileNames || [],
+      projFileName: App.projFileName || "",
+      projYear: App.projYear || null
     };
 
     // Checkbox selections
@@ -147,7 +149,20 @@
       }
     }
 
-    // 8. Module state (TPI, RF, etc.) — optional field, skip if absent
+    // 8. Projection filename hint (data is NOT cached — small CSV, re-upload is fast)
+    if (state.projFileName) {
+      var projInfoEl = document.getElementById("projInfo");
+      if (projInfoEl) {
+        projInfoEl.textContent = "Previously loaded: " + state.projFileName + " \u2014 re-upload to use";
+      }
+    }
+    if (state.projYear) {
+      var projYearEl = document.getElementById("projYear");
+      if (projYearEl) projYearEl.value = state.projYear;
+      App.projYear = state.projYear;
+    }
+
+    // 9. Module state (TPI, RF, etc.) — optional field, skip if absent
     if (state.moduleState) {
       for (var mi = 0; mi < _moduleHandlers.length; mi++) {
         var mh = _moduleHandlers[mi];
@@ -228,6 +243,11 @@
     // 4. Clear LODES state
     if (typeof App.clearLodesData === "function") {
       App.clearLodesData();
+    }
+
+    // 4b. Clear projection state
+    if (typeof App.clearProjectionsData === "function") {
+      App.clearProjectionsData();
     }
 
     // 5. Uncheck all variable checkboxes

@@ -119,6 +119,7 @@
       weights: options.weights || {},
       lodesData: options.lodesData || null,
       apportionByArea: !!options.apportionByArea,
+      growthFactors: options.growthFactors || null,
       onProgress: onProgress
     });
 
@@ -334,6 +335,7 @@
       weights: options.weights || {},
       lodesData: options.lodesData || null,
       apportionByArea: !!options.apportionByArea,
+      growthFactors: options.growthFactors || null,
       unionPolygon: options.unionPolygon || null,
       onProgress: onProgress
     });
