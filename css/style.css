@@ -70,6 +70,7 @@ button { cursor: pointer; }
 /* ---- Right-side feature panel ---- */
 #feature-panel {
   width: 240px;
+  min-width: 24px;
   border-left: 1px solid var(--border);
   padding: 0;
   box-sizing: border-box;
@@ -78,13 +79,51 @@ button { cursor: pointer; }
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  transition: width 0.2s ease;
 }
 .fp-content {
   flex: 1;
   overflow-y: auto;
   padding: 12px 10px;
 }
-#feature-panel h3 { margin: 0 0 10px; }
+/* --- Feature panel header + collapse --- */
+.fp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 10px 0;
+  flex-shrink: 0;
+  margin-bottom: 6px;
+}
+.fp-header h3 { margin: 0; }
+#fp-collapse-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--muted);
+  padding: 2px 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: color 0.15s;
+}
+#fp-collapse-btn:hover { color: #2b6cb0; }
+#feature-panel.fp-collapsed {
+  width: 24px;
+}
+#feature-panel.fp-collapsed .fp-content,
+#feature-panel.fp-collapsed .fp-actions {
+  display: none;
+}
+#feature-panel.fp-collapsed .fp-header {
+  padding: 10px 5px 0;
+  justify-content: center;
+}
+#feature-panel.fp-collapsed #fp-collapse-btn svg {
+  transform: rotate(180deg);
+}
 
 .fp-section { margin-bottom: 6px; }
 .fp-section-header {

@@ -63,4 +63,16 @@
   }
 
   App.refreshFeaturePanel = refreshFeaturePanel;
+
+  // Wire feature panel collapse toggle
+  (function () {
+    var btn = document.getElementById('fp-collapse-btn');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      var panel = document.getElementById('feature-panel');
+      var collapsed = panel.classList.toggle('fp-collapsed');
+      btn.title = collapsed ? 'Show panel' : 'Hide panel';
+      btn.setAttribute('aria-label', collapsed ? 'Show feature panel' : 'Hide feature panel');
+    });
+  })();
 })();
