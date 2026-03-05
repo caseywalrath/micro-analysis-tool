@@ -37,34 +37,35 @@
   async function parseProjectionsCSV(file) {
     App.setStatus("Reading projection CSV\u2026");
     var text = await file.text();
-    var rows = App.parseCSV(text);
-    if (rows.length < 2) throw new Error("Projection CSV appears empty.");
+    var parsed = App.parseCSV(text);          // { headers: [...], rows: [{...}, ...] }
+    var headers = parsed.headers;
+    var rows = parsed.rows;
+    if (!rows || rows.length === 0) throw new Error("Projection CSV appears empty.");
 
-    var headers = rows[0];
-    var idxGEOID = App.guessHeader(headers, ["GEOID", "geoid", "Geoid", "GeoID", "tract", "TRACT"]);
-    var idx2030 = App.guessHeader(headers, ["gf_2030", "GF_2030", "growth_2030"]);
-    var idx2040 = App.guessHeader(headers, ["gf_2040", "GF_2040", "growth_2040"]);
-    var idx2050 = App.guessHeader(headers, ["gf_2050", "GF_2050", "growth_2050"]);
+    // guessHeader returns the matching header string, or "" on miss
+    var colGEOID = App.guessHeader(headers, ["GEOID", "geoid", "Geoid", "GeoID", "tract", "TRACT"]);
+    var col2030 = App.guessHeader(headers, ["gf_2030", "GF_2030", "growth_2030"]);
+    var col2040 = App.guessHeader(headers, ["gf_2040", "GF_2040", "growth_2040"]);
+    var col2050 = App.guessHeader(headers, ["gf_2050", "GF_2050", "growth_2050"]);
 
-    if (idxGEOID === -1) throw new Error("Could not find GEOID column in projection CSV.");
-    if (idx2030 === -1 && idx2040 === -1 && idx2050 === -1) {
+    if (!colGEOID) throw new Error("Could not find GEOID column in projection CSV.");
+    if (!col2030 && !col2040 && !col2050) {
       throw new Error("Could not find any growth factor columns (gf_2030, gf_2040, gf_2050).");
     }
 
     var data = new Map();
-    for (var i = 1; i < rows.length; i++) {
+    for (var i = 0; i < rows.length; i++) {
       var row = rows[i];
-      var geoid = String(row[idxGEOID] || "").replace(/['"]/g, "").trim();
+      var geoid = String(row[colGEOID] || "").replace(/['"]/g, "").trim();
       if (!geoid) continue;
       // Normalize to 11-char tract GEOID
       if (geoid.length > 11) geoid = geoid.slice(0, 11);
-      // Pad short GEOIDs (e.g. missing leading zero)
       while (geoid.length < 11) geoid = "0" + geoid;
 
       var entry = {
-        gf_2030: idx2030 !== -1 ? parseFloat(row[idx2030]) || 1.0 : 1.0,
-        gf_2040: idx2040 !== -1 ? parseFloat(row[idx2040]) || 1.0 : 1.0,
-        gf_2050: idx2050 !== -1 ? parseFloat(row[idx2050]) || 1.0 : 1.0
+        gf_2030: col2030 ? parseFloat(row[col2030]) || 1.0 : 1.0,
+        gf_2040: col2040 ? parseFloat(row[col2040]) || 1.0 : 1.0,
+        gf_2050: col2050 ? parseFloat(row[col2050]) || 1.0 : 1.0
       };
       data.set(geoid, entry);
     }
