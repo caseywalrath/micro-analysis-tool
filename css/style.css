@@ -78,7 +78,7 @@ button { cursor: pointer; }
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  position: relative;
   transition: width 0.2s ease;
 }
 .fp-content {
@@ -86,45 +86,44 @@ button { cursor: pointer; }
   overflow-y: auto;
   padding: 12px 10px;
 }
-/* --- Feature panel header + collapse --- */
+/* --- Feature panel header --- */
 .fp-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   padding: 10px 10px 0;
   flex-shrink: 0;
   margin-bottom: 6px;
+  overflow: hidden;
 }
 .fp-header h3 { margin: 0; }
+/* --- Floating tab toggle button --- */
 #fp-collapse-btn {
-  background: transparent;
-  border: none;
+  position: absolute;
+  left: -30px;
+  top: 12px;
+  z-index: 10;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-right: none;
+  border-radius: 6px 0 0 6px;
   cursor: pointer;
   color: var(--muted);
-  padding: 2px 4px;
-  border-radius: 4px;
+  padding: 8px 6px;
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-  transition: color 0.15s;
+  transition: color 0.15s, background 0.15s;
+  box-shadow: -2px 0 4px rgba(0,0,0,0.08);
 }
-#fp-collapse-btn:hover { color: #2b6cb0; }
-/* Expanded: chevron points left (←) — clicking will hide the panel */
+#fp-collapse-btn:hover { color: #2b6cb0; background: #f0f5ff; }
+/* Expanded: chevron points left (←) = click to hide */
 #fp-collapse-btn svg { transform: rotate(180deg); }
-/* Collapsed: chevron points right (→) — clicking will show the panel */
+/* Collapsed: chevron points right (→) = click to show */
 #feature-panel.fp-collapsed #fp-collapse-btn svg { transform: rotate(0deg); }
-#feature-panel.fp-collapsed {
-  width: 24px;
-}
+#feature-panel.fp-collapsed { width: 24px; }
 #feature-panel.fp-collapsed .fp-content,
-#feature-panel.fp-collapsed .fp-actions {
-  display: none;
-}
-#feature-panel.fp-collapsed .fp-header {
-  padding: 10px 5px 0;
-  justify-content: center;
-}
+#feature-panel.fp-collapsed .fp-actions,
+#feature-panel.fp-collapsed .fp-header { display: none; }
 
 .fp-section { margin-bottom: 6px; }
 .fp-section-header {
