@@ -110,6 +110,10 @@ button { cursor: pointer; }
   transition: color 0.15s;
 }
 #fp-collapse-btn:hover { color: #2b6cb0; }
+/* Expanded: chevron points left (←) — clicking will hide the panel */
+#fp-collapse-btn svg { transform: rotate(180deg); }
+/* Collapsed: chevron points right (→) — clicking will show the panel */
+#feature-panel.fp-collapsed #fp-collapse-btn svg { transform: rotate(0deg); }
 #feature-panel.fp-collapsed {
   width: 24px;
 }
@@ -120,9 +124,6 @@ button { cursor: pointer; }
 #feature-panel.fp-collapsed .fp-header {
   padding: 10px 5px 0;
   justify-content: center;
-}
-#feature-panel.fp-collapsed #fp-collapse-btn svg {
-  transform: rotate(180deg);
 }
 
 .fp-section { margin-bottom: 6px; }
