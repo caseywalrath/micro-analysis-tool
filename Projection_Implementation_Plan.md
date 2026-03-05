@@ -10,16 +10,17 @@ The MPO ArcGIS service (`PPACG_TAZ_Forecasted_Changes_2020_to_2050`) requires au
 
 ## Methodology: Growth Factors, Not Absolute Values
 
-TAZ model populations and ACS census populations use different methodologies and will not match exactly. To avoid apples-to-oranges substitution, growth factors (ratios) are used:
+TAZ model populations and ACS census populations use different methodologies and will not match exactly. To avoid apples-to-oranges substitution, growth factors (ratios) are used. The crosswalk uses **population weighting** (not area weighting) to prevent greenfield TAZs with near-zero baselines from producing extreme growth factors:
 
 ```
 TAZ growth factor (year) = TAZ_pop(year) / TAZ_pop(2020)
-Tract growth factor (year) = Σᵢ[TAZ_gf_i × overlap_area(tract, TAZᵢ)] / Σᵢ[overlap_area(tract, TAZᵢ)]
+weight(tract, TAZᵢ) = overlap_area(tract, TAZᵢ) × TAZ_pop_density_2020ᵢ
+Tract growth factor (year) = Σᵢ[TAZ_gf_i × weight(tract, TAZᵢ)] / Σᵢ[weight(tract, TAZᵢ)]
 ```
 
 At analysis time: `projected_pop = ACS_baseline_pop × tract_growth_factor`
 
-This preserves the relative growth signal from the MPO model while keeping absolute magnitudes anchored to census data. Areas with no TAZ coverage default to a growth factor of 1.0 (no projected change).
+Population weighting ensures dense, established TAZs dominate the tract-level average, while near-empty greenfield TAZs (e.g., 3 people → 5,992) contribute almost no weight despite their extreme ratios. Areas with no TAZ coverage default to a growth factor of 1.0 (no projected change).
 
 ---
 

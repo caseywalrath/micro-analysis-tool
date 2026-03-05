@@ -10,7 +10,9 @@
 
 ## What You're Building
 
-The tool works with census tract geographies. The MPO data uses TAZ geographies. These don't line up. The crosswalk calculates, for each census tract: "what is the population-weighted average growth rate across all the TAZs that overlap this tract?"
+The tool works with census tract geographies. The MPO data uses TAZ geographies. These don't line up. The crosswalk calculates, for each census tract: "what is the **population-weighted** average growth rate across all the TAZs that overlap this tract?"
+
+The weighting is important. TAZs vary enormously in size and density — some are dense urban areas, others are near-empty greenfield zones that may project huge growth from a tiny baseline (e.g., 3 people → 5,992). A simple area-weighted average would let those extreme ratios dominate the tract-level result. Population weighting ensures that dense, established TAZs have proportionally more influence, which produces realistic tract-level growth factors.
 
 The output looks like this:
 
@@ -95,6 +97,22 @@ Before proceeding, verify the actual field names in the TAZ attribute table (fie
 
 > **If the fields have commas in their values** (like "1,010"), the data was exported with number formatting. You may need to clean this — see the note at the end of Part 3.
 
+### Step 2D — Calculate TAZ Total Area
+
+You need each TAZ's total area so you can compute population density later (population weight = intersection area × TAZ population density). This must be calculated **before** running the Intersect, because after Intersect the geometries are split into pieces.
+
+1. Open the TAZ layer's attribute table
+2. Click **Add** (the plus icon) to add a new field
+   - **Name:** `taz_area_sqm`
+   - **Data Type:** `Double`
+   - Click **OK**
+3. Right-click the `taz_area_sqm` column header → **Calculate Geometry**
+   - **Property:** `Area`
+   - **Area Unit:** `Square Meters`
+   - Click **OK**
+
+Each TAZ now has its total area recorded. This value will carry through to the Intersect output so you can compute density per intersection piece.
+
 ---
 
 ## Part 3: Run the Spatial Overlay (Intersect)
@@ -130,9 +148,11 @@ Click **Run**. This may take 1–3 minutes depending on the number of TAZs and t
 
 ---
 
-## Part 4: Calculate Areas and Growth Factors
+## Part 4: Calculate Areas, Weights, and Growth Factors
 
 Now you'll add calculated fields to the intersection layer. All of this is done in the attribute table using **Add Field** and **Field Calculator**.
+
+The key idea: instead of weighting each intersection piece by its area alone, we weight by its **estimated 2020 population** (area × TAZ population density). This ensures that near-empty greenfield TAZs (which may have extreme growth ratios like 1000×) contribute almost no weight to the tract-level average, while dense established TAZs dominate.
 
 ### Step 4A — Calculate Intersection Area
 
@@ -147,14 +167,30 @@ Now you'll add calculated fields to the intersection layer. All of this is done 
 
 Each row now has the area of that intersection piece in square meters.
 
-### Step 4B — Calculate TAZ Growth Factors
+### Step 4B — Calculate Population Weight
+
+This is the critical step. For each intersection piece, estimate how many 2020 residents it contains by multiplying intersection area by the TAZ's population density:
+
+1. Add a new field: **Name:** `pop_weight`, **Data Type:** `Double`
+2. Right-click `pop_weight` → **Calculate Field**
+3. In the expression box (substituting your actual field names):
+   ```python
+   !area_sqm! * (!POP_2020! / !taz_area_sqm!) if !taz_area_sqm! and !taz_area_sqm! > 0 else 0
+   ```
+4. Click **OK**
+
+**What this produces:** The estimated number of 2020 residents within each intersection piece. A dense TAZ (5,000 people in 2 sq km) produces high weights; a near-empty greenfield TAZ (3 people in 10 sq km) produces tiny weights. When we later average growth factors using these weights, the dense TAZ's modest 1.1× factor dominates over the greenfield's extreme 1997× factor.
+
+> **Zero-population TAZs** get a weight of 0 and drop out of the calculation entirely — no special handling needed.
+
+### Step 4C — Calculate TAZ Growth Factors
 
 You need one growth factor column per projection year. These are ratios: projected population ÷ 2020 population.
 
 **For 2030:**
 1. Add a new field: **Name:** `gf_2030`, **Data Type:** `Double`
 2. Right-click `gf_2030` → **Calculate Field**
-3. In the expression box, type (substituting your actual field names from Step 2C):
+3. In the expression box (substituting your actual field names from Step 2C):
    ```python
    !POP_2030! / !POP_2020! if !POP_2020! and !POP_2020! > 0 else 1.0
    ```
@@ -168,19 +204,19 @@ You need one growth factor column per projection year. These are ratios: project
 1. Add field `gf_2050` (Double)
 2. Calculate Field: `!POP_2050! / !POP_2020! if !POP_2020! and !POP_2020! > 0 else 1.0`
 
-> **What the `if` condition does:** TAZs with zero 2020 population would cause a division-by-zero error. The condition sets growth factor to 1.0 (no change) for those cases. This is correct behavior — an empty TAZ in 2020 that has projected population in 2050 is likely a model artifact.
+> **Note:** Yes, greenfield TAZs will still show extreme ratios here (e.g., 1997×). That's fine — the population weight from Step 4B ensures these extreme values have almost no influence on the tract-level result.
 
-### Step 4C — Calculate Weighted Contributions
+### Step 4D — Calculate Weighted Contributions
 
-For each intersection polygon, you want: `area × growth_factor`. These are the numerator values you'll sum up per tract.
+For each intersection polygon, multiply `pop_weight × growth_factor`. These are the numerator values you'll sum up per tract.
 
 **For 2030:**
 1. Add field `w_gf_2030` (Double)
-2. Calculate Field: `!area_sqm! * !gf_2030!`
+2. Calculate Field: `!pop_weight! * !gf_2030!`
 
 **Repeat for 2040 and 2050:**
-- `w_gf_2040` = `!area_sqm! * !gf_2040!`
-- `w_gf_2050` = `!area_sqm! * !gf_2050!`
+- `w_gf_2040` = `!pop_weight! * !gf_2040!`
+- `w_gf_2050` = `!pop_weight! * !gf_2050!`
 
 ---
 
@@ -198,31 +234,31 @@ Now you aggregate all the intersection pieces up to the tract level by summing t
    - **Statistics Fields:** Add each of the following:
      | Field | Statistic Type |
      |-------|---------------|
-     | `area_sqm` | SUM |
+     | `pop_weight` | SUM |
      | `w_gf_2030` | SUM |
      | `w_gf_2040` | SUM |
      | `w_gf_2050` | SUM |
    - **Case Field:** Set this to your census tract **GEOID** field (it might be called `GEOID`, `GEOID_1`, or similar — look for the 11-character tract identifier)
 4. Click **Run**
 
-The result is a table with one row per census tract and summed values for area and weighted growth factor contributions.
+The result is a table with one row per census tract. `SUM_pop_weight` is the estimated 2020 population within that tract (from TAZ data). The `SUM_w_gf_*` columns are the population-weighted growth factor contributions.
 
 ### Step 5B — Calculate Final Growth Factors
 
-Open the `Tract_GrowthFactors` table. It will have columns like `SUM_area_sqm`, `SUM_w_gf_2030`, etc.
+Open the `Tract_GrowthFactors` table. It will have columns like `SUM_pop_weight`, `SUM_w_gf_2030`, etc.
 
-Now divide to get the final area-weighted growth factors:
+Now divide to get the final population-weighted growth factors:
 
 **For 2030:**
 1. Add field `gf_2030` (Double) to this table
 2. Calculate Field:
    ```python
-   !SUM_w_gf_2030! / !SUM_area_sqm! if !SUM_area_sqm! and !SUM_area_sqm! > 0 else 1.0
+   !SUM_w_gf_2030! / !SUM_pop_weight! if !SUM_pop_weight! and !SUM_pop_weight! > 0 else 1.0
    ```
 
 **Repeat for 2040 and 2050:**
-- `gf_2040` = `!SUM_w_gf_2040! / !SUM_area_sqm! if !SUM_area_sqm! and !SUM_area_sqm! > 0 else 1.0`
-- `gf_2050` = `!SUM_w_gf_2050! / !SUM_area_sqm! if !SUM_area_sqm! and !SUM_area_sqm! > 0 else 1.0`
+- `gf_2040` = `!SUM_w_gf_2040! / !SUM_pop_weight! if !SUM_pop_weight! and !SUM_pop_weight! > 0 else 1.0`
+- `gf_2050` = `!SUM_w_gf_2050! / !SUM_pop_weight! if !SUM_pop_weight! and !SUM_pop_weight! > 0 else 1.0`
 
 ### Step 5C — Rename the GEOID Column
 
@@ -238,7 +274,7 @@ The GEOID column in the Summary Statistics output may have been renamed (e.g., t
 
 ### Step 6A — Remove Unnecessary Columns (Optional but Recommended)
 
-The summary table has many intermediate columns (`SUM_area_sqm`, `SUM_w_gf_2030`, etc.) that you don't need in the final CSV. You can hide them:
+The summary table has many intermediate columns (`SUM_pop_weight`, `SUM_w_gf_2030`, etc.) that you don't need in the final CSV. You can hide them:
 
 1. In the table, right-click any column header → **Fields**
 2. Uncheck the visibility boxes for all columns except: `GEOID`, `gf_2030`, `gf_2040`, `gf_2050`
@@ -267,7 +303,7 @@ GEOID,gf_2030,gf_2040,gf_2050
 
 **Things to check:**
 - The GEOID column contains 11-character strings (not numbers — Excel sometimes strips leading zeros)
-- Growth factor values are reasonable. Most tracts should be between 0.8 and 3.0. Very large values (>5) may indicate a data issue in the TAZ layer.
+- Growth factor values are reasonable. Most tracts should be between 0.8 and 5.0. Because the crosswalk is population-weighted, extreme greenfield TAZ ratios (1000×+) are naturally muted. If you still see very large values (>10), check whether the tract overlaps only near-empty TAZs with no established population to anchor the weighting.
 - The file has no header other than the column names (no title row)
 
 > **If Excel stripped leading zeros from GEOIDs:** Open the CSV in a text editor (Notepad, VS Code) and check whether GEOIDs like `08001000100` appear correctly. If they show as `8001000100` (10 digits instead of 11), you'll need to reformat. In Excel: select the GEOID column → Format Cells → Text → re-enter a value to trigger re-read, or simply use the text editor to confirm the raw file is correct (ArcGIS usually preserves them as strings).
@@ -295,11 +331,14 @@ Both layers must use the same coordinate system (projection). Check: right-click
 **"My growth factors are all 1.0"**
 This usually means the GEOID column from the census tracts didn't match the CASE field in Summary Statistics. Open the intersection layer attribute table and confirm you can see the tract GEOID values. Also confirm the Summary Statistics case field points to the right column.
 
-**"Some growth factor values are very high (10x, 50x)"**
-Check the TAZ population fields for that record. If `POP_2020 = 0` and `POP_2050 = 100`, the growth factor is technically infinite — the formula returns 1.0 for zero-baseline TAZs, but if there are data entry issues in the TAZ layer, you may see outliers. You can cap values: change the Calculate Field expression to `min(10.0, !SUM_w_gf_2050! / !SUM_area_sqm!)` as a safeguard.
+**"All `pop_weight` values are 0"**
+Check that you calculated `taz_area_sqm` on the TAZ layer **before** running Intersect (Step 2D). If you added it after, the Intersect output won't have the field. Also check that `POP_2020` has numeric values (not text with commas — see the comma note below).
+
+**"Some tracts still show very high growth factors (>10×)"**
+With population weighting, this should be rare. It can happen when a census tract overlaps **only** low-population TAZs (e.g., a rural tract at the metro edge where all overlapping TAZs have <10 people in 2020). In these cases, the small populations still produce small weights, but there are no dense TAZs to anchor the average. You can cap these as a safeguard: change the final Calculate Field to `min(10.0, !SUM_w_gf_2050! / !SUM_pop_weight!) if !SUM_pop_weight! and !SUM_pop_weight! > 0 else 1.0`.
 
 **"I have tracts with no TAZ coverage"**
-This can happen near the metro boundary. Those tracts will have `SUM_area_sqm = 0` in the Summary Statistics output and the `if > 0 else 1.0` condition handles them by assigning a growth factor of 1.0. The tool also defaults to 1.0 for any GEOID not found in the CSV. Both behaviors are consistent.
+This can happen near the metro boundary. Those tracts will have `SUM_pop_weight = 0` in the Summary Statistics output and the `if > 0 else 1.0` condition handles them by assigning a growth factor of 1.0. The tool also defaults to 1.0 for any GEOID not found in the CSV. Both behaviors are consistent.
 
 **"The TAZ field names have commas in numeric values (e.g., '1,010')"**
 If the exported TAZ layer stored population values as text strings with comma formatting, you need to clean them before calculating growth factors. In the Calculate Field step, use:
