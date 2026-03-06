@@ -31,7 +31,7 @@ Project onboarding for Claude Code sessions. Read this first.
 - Changes made to wrong files
 - User confusion about what version is "live"
 - User not knowing a new branch was created or how to work from it
-- **ACS variable code changes require updates in TWO files.** `utils.js` holds `VAR_META` (labels/categories), but `app.js` has three additional structures that must stay in sync: (1) the `GROUP_*` object used to build sidebar checkbox groups, (2) the matching local group array (e.g. `COMM_GROUP`), and (3) the `DENOM_MAP` entry for percentage calculation. Updating `utils.js` alone will cause the old code to appear as a raw label with no category in results.
+- **ACS variable code changes require updates in TWO files.** `utils.js` holds `VAR_META` (labels/categories), but `buffer-summary.js` has three additional structures that must stay in sync: (1) the `CHECKBOX_GROUPS` object used to build sidebar checkbox groups, (2) the matching local group array (e.g. `COMM_GROUP`), and (3) the `DENOM_MAP` entry for percentage calculation. Updating `utils.js` alone will cause the old code to appear as a raw label with no category in results.
 ## Overview
 
 Browser-based geospatial analysis tool. Pure front-end (no build step, no backend, no npm). Open `index.html` in a browser and it works. All data stays client-side; Census APIs are called directly.
@@ -39,12 +39,12 @@ Browser-based geospatial analysis tool. Pure front-end (no build step, no backen
 ## File Structure
 
 ```
-index.html                  App shell: toolbar, sidebar, map, feature panel, results modal, module popup container, script tags
+index.html                  App shell: toolbar, sidebar, map, feature panel, module popup container, script tags
 css/
-  style.css                 Core layout, toolbar, feature panel, results modal, module popup, floating widgets, basemap switcher, TPI styles, RF styles (.rf- prefix)
-  sidebar-v2.css            Sidebar panel system styles (scoped under #sidebar), variable checkbox list
+  style.css                 Core layout, toolbar, feature panel, module popup, floating widgets, basemap switcher, BAS styles (.bas- prefix), TPI styles, RF styles (.rf- prefix)
+  sidebar-v2.css            Sidebar panel system styles (scoped under #sidebar), variable checkbox list, section labels
 js/
-  app.js                    Startup, module registry, sidebar panel HTML, multi-variable summary runner, results modal, event wiring. Contains: GROUP_* object (checkbox group membership), local group arrays (e.g. COMM_GROUP) used as percentage denominators, and DENOM_MAP — all must stay in sync with VAR_META in utils.js when variable codes change.
+  app.js                    Startup, module registry, sidebar panel HTML (Data Inputs), event wiring. Note: CHECKBOX_GROUPS, DENOM_MAP, and runSummary() have moved to buffer-summary.js.
   core/
     utils.js                CSV parsing, number formatting, GEOID normalization, VAR_META (with label/category), getSelectedVars
     sidebar.js              Sidebar panel manager: addPanel, removePanel, toggle, render
@@ -60,12 +60,14 @@ js/
     cache.js                Session cache: save/restore/reset via localStorage; JSON import/export
     popup.js                Analysis popup manager: open/close module popups, floating map widgets (legend)
   projects/
+    buffer-summary.js       Buffer-Area Summary module: CHECKBOX_GROUPS, MANDATORY_VARS, DENOM_MAP, expandGroups, runSummary (moved from app.js). Registered as popup-based module.
     fta-small-starts.js     FTA Small Starts: breakpoint classification, CRE/ESS/LBAR (registered as disabled module)
     tpi-scoring.js          TPI scoring engine: 9-factor definitions, batch ACS fetch, LODES aggregation, quintile normalization, composite scoring
     transit-propensity.js   TPI module: popup-based UI with weight sliders, choropleth rendering, hover tooltips, floating legend, GeoJSON/CSV export, stale detection
     ridership-scoring.js    Ridership scoring engine: corridor CDI computation, per-route CDI extraction, system-wide demand orchestration, CSV route matching, segment analysis, service type presets, elasticity formulas, scenario builder, ratio/OLS calibration (window.RidershipModel namespace)
     ridership-forecasting.js  Ridership Forecasting module: 4-tab popup (Calibrate | Demand | Elasticity | Scenarios), 3-step calibration workflow, corridor dropdown, choropleth + segment map, scenario comparison table, GeoJSON/CSV/JSON export; shared-pool normalization mode for cross-system calibration
 projects/
+  buffer-summary-popup.html   Buffer-Area Summary popup body: settings (geography, year, apportion) + results table
   fta-small-starts.html     FTA sidebar HTML fragment (legacy, kept for future popup migration)
   transit-propensity-popup.html  TPI popup body: 3-column layout (Weights | Results | Actions); LODES warning icon (⚠) next to ACS Year selector in Actions column (shows tooltip when LODES not loaded)
   transit-propensity.html   TPI sidebar panel (legacy, replaced by popup version)
@@ -110,6 +112,7 @@ cache.js    (needs App.stations, App.lines, App.routes, App.polygons, render/reb
 popup.js    (needs App namespace; defines App.popup)
 app.js              (wires everything; registers sidebar panels; defines App.registerModule; calls cache.restore)
 <modules>           (call App.registerModule)
+  buffer-summary.js     (needs App namespace, App.cache; registers Buffer-Area Summary module; contains CHECKBOX_GROUPS, DENOM_MAP, runSummary)
   fta-small-starts.js   (needs App namespace; registers as disabled module)
   tpi-scoring.js        (needs App namespace, turf; defines window.TPI)
   transit-propensity.js (needs TPI, App.registerModule, App.popup, App.map, App.renderCensusOverlay)
@@ -117,7 +120,7 @@ app.js              (wires everything; registers sidebar panels; defines App.reg
   ridership-forecasting.js (needs RidershipModel, TPI, App.registerModule, App.popup, App.map, App.renderCensusOverlay)
 ```
 
-**Active modules:** TPI is enabled (popup-based). Ridership Forecasting is enabled (popup-based, 4-tab). FTA Small Starts is registered but disabled (button shown grayed out).
+**Active modules:** Buffer-Area Summary is enabled (popup-based, settings + results table). TPI is enabled (popup-based). Ridership Forecasting is enabled (popup-based, 4-tab). FTA Small Starts is registered but disabled (button shown grayed out).
 
 ## App Namespace (Public API)
 
@@ -336,29 +339,27 @@ Remove all module `<script>` tags from `index.html`. The Analysis sidebar panel 
 
 ### Sidebar (left, panel-based)
 
-The sidebar is an empty `<div id="sidebar">` populated at runtime by `App.sidebar`. Panels are registered in `app.js` on map load, then `render()` builds the DOM. Each panel has a collapsible header (click to toggle). Panel HTML strings live in `app.js` (station-data, lodes) or are built from registered modules (analysis).
+The sidebar is an empty `<div id="sidebar">` populated at runtime by `App.sidebar`. Panels are registered in `app.js` on map load, then `render()` builds the DOM. Each panel has a collapsible header (click to toggle). Panel HTML strings live in `app.js` (Data Inputs) or are built from registered modules (Analysis).
 
 ```
 +-----------------------------+
-|  ▾ Buffer-Area Data         |  Collapsible panel (order 10)
-|  Geography level dropdown,  |  Select all / Clear all links,
-|  checkbox list of variables |  checkbox groups: Land Use, Employment,
-|  (11 ACS/LODES vars),      |  Mobility, Non-additive Medians.
-|  Year dropdown,             |  [Update summary] button opens results
-|  [Update summary]           |  popup modal with 4-col table.
-|  Status card + View Results |  "View Results" re-opens last results.
-+-----------------------------+
-|  ▸ LODES (File-based)       |  Collapsible panel (order 20, starts collapsed)
-|  Download / Upload          |  Download button, file picker, status.
+|  ▾ Data Inputs              |  Collapsible panel (order 10)
+|  Census                     |  Section header: variable checkboxes
+|    Select all / Clear all   |  grouped by: Demographics, Equity,
+|    checkbox variables       |  Travel, Housing, Employment (LODES)
+|  Employment (LODES)         |  LODES checkbox, Download/Add State/
+|    Download / Add State     |  Clear All buttons, file picker
+|  PPACG Pop Projection       |  Projection year, Upload CSV, Clear
 +-----------------------------+
 |  ▾ Analysis                 |  Collapsible panel (order 30)
+|  [Buffer-Area Summary]      |  Button: opens BAS popup (settings + results table)
 |  [Transit Propensity Index] |  Button: opens TPI popup (3-column layout)
 |  [Ridership Forecasting]    |  Button: opens RF popup (4-tab layout)
 |  [FTA Small Starts] (gray)  |  Button: disabled (coming soon)
 +-----------------------------+
 ```
 
-Clicking an analysis module button opens a popup window over the map. The TPI popup has a 3-column layout (Weights | Results | Actions). The Ridership Forecasting popup has a 4-tab layout (Calibrate | Demand | Elasticity | Scenarios). Each active choropleth shows a floating legend widget at bottom-left of the map.
+Clicking an analysis module button opens a popup window over the map. The Buffer-Area Summary popup contains geography/year settings and a results table. The TPI popup has a 3-column layout (Weights | Results | Actions). The Ridership Forecasting popup has a 4-tab layout (Calibrate | Demand | Elasticity | Scenarios). Each active choropleth shows a floating legend widget at bottom-left of the map.
 
 ### Feature Panel (right)
 

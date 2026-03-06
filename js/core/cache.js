@@ -49,14 +49,10 @@
     }
     state.checkedVars = checked;
 
-    // Dropdowns
-    var geoEl = document.getElementById("geoLevel");
-    if (geoEl) state.geoLevel = geoEl.value;
+    // Note: geoLevel and year are now managed by the buffer-summary module
+    // via cache.registerModule(). They are stored in state.moduleState["buffer-summary"].
 
-    var yearEl = document.getElementById("yearSelect");
-    if (yearEl) state.year = yearEl.value;
-
-    // Module state (TPI, RF, etc.)
+    // Module state (TPI, RF, buffer-summary, etc.)
     state.moduleState = {};
     for (var mi = 0; mi < _moduleHandlers.length; mi++) {
       var mh = _moduleHandlers[mi];
@@ -130,12 +126,16 @@
       }
     }
 
-    // 6. Restore dropdown values
-    var geoEl = document.getElementById("geoLevel");
-    if (geoEl && state.geoLevel) geoEl.value = state.geoLevel;
-
-    var yearEl = document.getElementById("yearSelect");
-    if (yearEl && state.year) yearEl.value = state.year;
+    // 6. Migrate old geoLevel/year into moduleState for buffer-summary
+    if (!state.moduleState) state.moduleState = {};
+    if (!state.moduleState["buffer-summary"]) {
+      // Backward compat: old sessions stored these at top level
+      state.moduleState["buffer-summary"] = {
+        geoLevel: state.geoLevel || "bg",
+        year: state.year || "2024",
+        apportionByArea: true
+      };
+    }
 
     // 7. LODES filename hint (data is NOT cached — too large)
     // Support both new array format (lodesFileNames) and old string format (lodesFileName)
@@ -254,19 +254,15 @@
     var boxes = document.querySelectorAll('#varSelect input[type="checkbox"]');
     for (var i = 0; i < boxes.length; i++) boxes[i].checked = false;
 
-    // 6. Reset dropdowns to defaults
-    var geoEl = document.getElementById("geoLevel");
-    if (geoEl) geoEl.value = "tract";
-    var yearEl = document.getElementById("yearSelect");
-    if (yearEl) yearEl.value = "2023";
+    // 6. Reset buffer-summary popup state (if popup DOM exists)
+    var basGeoEl = document.getElementById("basGeoLevel");
+    if (basGeoEl) basGeoEl.value = "bg";
+    var basYearEl = document.getElementById("basYearSelect");
+    if (basYearEl) basYearEl.value = "2024";
+    var basApportionEl = document.getElementById("basApportionByArea");
+    if (basApportionEl) basApportionEl.checked = true;
 
-    // 7. Hide summary status card
-    var nGeosEl = document.getElementById("nGeos");
-    if (nGeosEl) nGeosEl.textContent = "0";
-    var statusCard = document.getElementById("summaryStatus");
-    if (statusCard) statusCard.style.display = "none";
-
-    // 8. Update status
+    // 7. Update status
     App.setStatus("Session reset");
   }
 

@@ -201,6 +201,20 @@
   color: #333;
   padding: 0 4px;
 }
+#sidebar .sb2-section-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #333;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 12px 0 6px;
+  padding: 6px 0 4px;
+  border-top: 2px solid var(--border);
+}
+#sidebar .sb2-section-label:first-child {
+  border-top: none;
+  margin-top: 0;
+}
 #sidebar .var-group-label {
   font-size: 11px;
   font-weight: 600;
