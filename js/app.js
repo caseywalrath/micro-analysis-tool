@@ -555,10 +555,11 @@
       });
     });
     var lodesCbSave = document.getElementById("lodesCheckbox");
-    if (lodesCbSave) lodesCbSave.addEventListener("change", function () {
-      if (typeof App.cache !== "undefined") App.cache.save();
+    if (lodesCbSave) {
+      lodesCbSave.addEventListener("change", function () {
+        if (typeof App.cache !== "undefined") App.cache.save();
       });
-    });
+    }
 
     // Restore cached session (runs after sidebar, events, and project init are all ready)
     if (typeof App.cache !== "undefined" && App.cache.restore()) {
