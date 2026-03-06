@@ -131,12 +131,18 @@
       App.setStatus("No variables selected");
       return;
     }
-    // Always include mandatory denominator variables
+
+    // displayVars = only what the user checked (these get table rows)
+    var displayVars = selectedVars.slice();
+
+    // Always fetch mandatory denominator variables for percent calculations,
+    // but do NOT create table rows for them unless the user explicitly selected them.
     var _seen = {};
     for (var mi = 0; mi < selectedVars.length; mi++) _seen[selectedVars[mi]] = true;
     for (var mdi = 0; mdi < MANDATORY_VARS.length; mdi++) {
       if (!_seen[MANDATORY_VARS[mdi]]) { _seen[MANDATORY_VARS[mdi]] = true; selectedVars.push(MANDATORY_VARS[mdi]); }
     }
+    // selectedVars now = displayVars + any mandatory denoms not already selected
 
     var year = document.getElementById("basYearSelect").value;
     var geoLevel = document.getElementById("basGeoLevel").value;
@@ -172,8 +178,8 @@
 
     var codeToRows = {};
     var resultsMap = {};
-    for (var j = 0; j < selectedVars.length; j++) {
-      var code = selectedVars[j];
+    for (var j = 0; j < displayVars.length; j++) {
+      var code = displayVars[j];
       var m = App.getMeta(code);
       var tr = document.createElement("tr");
       tr.className = "result-pending";
@@ -194,8 +200,8 @@
       var errMsg = (App.stations.length === 0 && App.lines.length === 0 &&
                     App.routes.length === 0 && App.polygons.length === 0)
         ? "No features placed" : "No buffers set";
-      for (var k = 0; k < selectedVars.length; k++) {
-        var errRows = codeToRows[selectedVars[k]] || [];
+      for (var k = 0; k < displayVars.length; k++) {
+        var errRows = codeToRows[displayVars[k]] || [];
         for (var ei = 0; ei < errRows.length; ei++) {
           errRows[ei].className = "result-error";
           errRows[ei].children[2].textContent = errMsg;
