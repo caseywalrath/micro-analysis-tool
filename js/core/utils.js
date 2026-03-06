@@ -213,6 +213,9 @@
     for (var i = 0; i < boxes.length; i++) {
       codes.push(boxes[i].value);
     }
+    // Also check standalone LODES checkbox (outside fieldset)
+    var lodesCb = document.getElementById("lodesCheckbox");
+    if (lodesCb && lodesCb.checked) codes.push(lodesCb.value);
     return codes;
   }
 

@@ -47,6 +47,9 @@
     for (var i = 0; i < boxes.length; i++) {
       if (boxes[i].checked) checked.push(boxes[i].value);
     }
+    // Also collect standalone LODES checkbox (outside fieldset)
+    var lodesCb = document.getElementById("lodesCheckbox");
+    if (lodesCb && lodesCb.checked) checked.push(lodesCb.value);
     state.checkedVars = checked;
 
     // Note: geoLevel and year are now managed by the buffer-summary module
@@ -124,6 +127,9 @@
       for (var bi = 0; bi < boxes.length; bi++) {
         boxes[bi].checked = !!checkedSet[boxes[bi].value];
       }
+      // Also restore standalone LODES checkbox (outside fieldset)
+      var lodesCb = document.getElementById("lodesCheckbox");
+      if (lodesCb) lodesCb.checked = !!checkedSet["LODES_WAC_C000"];
     }
 
     // 6. Migrate old geoLevel/year into moduleState for buffer-summary
@@ -253,6 +259,8 @@
     // 5. Uncheck all variable checkboxes
     var boxes = document.querySelectorAll('#varSelect input[type="checkbox"]');
     for (var i = 0; i < boxes.length; i++) boxes[i].checked = false;
+    var lodesCb = document.getElementById("lodesCheckbox");
+    if (lodesCb) lodesCb.checked = false;
 
     // 6. Reset buffer-summary popup state (if popup DOM exists)
     var basGeoEl = document.getElementById("basGeoLevel");

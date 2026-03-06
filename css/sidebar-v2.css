@@ -140,6 +140,17 @@
   flex: 1;
   margin-top: 0;
 }
+#sidebar .proj-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+#sidebar .proj-row .proj-year-label {
+  flex: 1;
+}
+#sidebar .proj-row .proj-actions {
+  margin-top: 0;
+}
 #sidebar .proj-actions {
   display: flex;
   gap: 6px;
@@ -192,7 +203,7 @@
   border-radius: 6px;
   padding: 8px 10px;
   margin: 8px 0;
-  max-height: 400px;
+  max-height: 300px;
   overflow-y: auto;
   background: #fff;
 }

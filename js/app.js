@@ -62,33 +62,36 @@
       '<label class="var-check"><input type="checkbox" value="B25064_001E"> Median gross rent ' + WARN_ICON + '</label>' +
       '<label class="var-check"><input type="checkbox" value="B25077_001E"> Median home value ' + WARN_ICON + '</label>' +
 
-      // ---- Employment (LODES) ----
-      '<div class="var-group-label">Employment (LODES)</div>' +
-      '<label class="var-check"><input type="checkbox" value="LODES_WAC_C000"> Total existing employment \u2014 file required</label>' +
-      '<div class="lodes-actions">' +
-        '<button type="button" id="downloadLodes">Download</button>' +
-        '<button type="button" id="lodesOpenFile">Add State</button>' +
-        '<button type="button" id="lodesClearAll" style="display:none;">Clear All</button>' +
-      '</div>' +
-      '<input id="lodesFile" type="file" accept=".gz,.csv.gz" style="display:none" />' +
-      '<div id="lodesInfo" class="sb2-tiny" style="margin-top:4px;"></div>' +
-      '<span id="lodesState" style="display:none"></span>' +
-      '<span id="lodesLoaded" style="display:none"></span>' +
     '</fieldset>' +
+
+    // ---- Employment (LODES) section ----
+    '<div class="sb2-section-label">Employment (LODES)</div>' +
+    '<label class="var-check"><input type="checkbox" id="lodesCheckbox" value="LODES_WAC_C000"> Total existing employment \u2014 file required</label>' +
+    '<div class="lodes-actions">' +
+      '<button type="button" id="downloadLodes">Download</button>' +
+      '<button type="button" id="lodesOpenFile">Add State</button>' +
+      '<button type="button" id="lodesClearAll" style="display:none;">Clear All</button>' +
+    '</div>' +
+    '<input id="lodesFile" type="file" accept=".gz,.csv.gz" style="display:none" />' +
+    '<div id="lodesInfo" class="sb2-tiny" style="margin-top:4px;"></div>' +
+    '<span id="lodesState" style="display:none"></span>' +
+    '<span id="lodesLoaded" style="display:none"></span>' +
 
     // ---- PPACG Pop Projection section ----
     '<div class="sb2-section-label">PPACG Pop Projection</div>' +
-    '<label>Projection year' +
-      '<select id="projYear" disabled>' +
-        '<option value="">Current (ACS)</option>' +
-        '<option value="2030">2030</option>' +
-        '<option value="2040">2040</option>' +
-        '<option value="2050">2050</option>' +
-      '</select>' +
-    '</label>' +
-    '<div class="proj-actions">' +
-      '<button type="button" id="projUploadBtn">Upload CSV</button>' +
-      '<button type="button" id="projClear" style="display:none;">Clear</button>' +
+    '<div class="proj-row">' +
+      '<label class="proj-year-label">Projection year' +
+        '<select id="projYear" disabled>' +
+          '<option value="">Current (ACS)</option>' +
+          '<option value="2030">2030</option>' +
+          '<option value="2040">2040</option>' +
+          '<option value="2050">2050</option>' +
+        '</select>' +
+      '</label>' +
+      '<div class="proj-actions">' +
+        '<button type="button" id="projUploadBtn">Upload CSV</button>' +
+        '<button type="button" id="projClear" style="display:none;">Clear</button>' +
+      '</div>' +
     '</div>' +
     '<input id="projFile" type="file" accept=".csv" style="display:none" />' +
     '<div id="projInfo" class="sb2-tiny" style="margin-top:4px;">' +
@@ -297,11 +300,15 @@
     document.getElementById("varSelectAll").addEventListener("click", function () {
       var boxes = document.querySelectorAll('#varSelect input[type="checkbox"]');
       for (var i = 0; i < boxes.length; i++) boxes[i].checked = true;
+      var lodesCb = document.getElementById("lodesCheckbox");
+      if (lodesCb) lodesCb.checked = true;
       if (typeof App.cache !== "undefined") App.cache.save();
     });
     document.getElementById("varClearAll").addEventListener("click", function () {
       var boxes = document.querySelectorAll('#varSelect input[type="checkbox"]');
       for (var i = 0; i < boxes.length; i++) boxes[i].checked = false;
+      var lodesCb = document.getElementById("lodesCheckbox");
+      if (lodesCb) lodesCb.checked = false;
       if (typeof App.cache !== "undefined") App.cache.save();
     });
 
@@ -545,6 +552,11 @@
     document.querySelectorAll('#varSelect input[type="checkbox"]').forEach(function (cb) {
       cb.addEventListener("change", function () {
         if (typeof App.cache !== "undefined") App.cache.save();
+      });
+    });
+    var lodesCbSave = document.getElementById("lodesCheckbox");
+    if (lodesCbSave) lodesCbSave.addEventListener("change", function () {
+      if (typeof App.cache !== "undefined") App.cache.save();
       });
     });
 
