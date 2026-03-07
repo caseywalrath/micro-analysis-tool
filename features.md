@@ -121,6 +121,32 @@ Investigate possibility of including more recent ACS data
 ### Mixed-geography analysis - Medium Priority
 Allow the tool to simultanesly analyze variables that are only available at different geographies (eg, Census Tract vs Block Group) with proper documentation
 
+### Title VI Analysis Module — Not started
+A new analysis module for Title VI civil rights compliance reporting. Title VI of the Civil Rights Act of 1964 requires that federally funded transit projects do not disproportionately burden minority and low-income populations. This module would leverage existing TPI/ACS infrastructure to automate the demographic analysis portion of a Title VI equity assessment.
+
+**Core concept:** Compare demographic composition inside the project corridor (buffer union) against a reference area (county, metro area, or user-defined region) to identify whether protected populations are disproportionately affected.
+
+**Key populations to analyze:**
+- Minority (non-white) population share
+- Low-income households (below poverty threshold)
+- Limited English Proficiency (LEP) households
+- Senior (65+) population
+- Zero-vehicle households
+- People with disabilities
+
+**Potential features:**
+- Side-by-side comparison table: corridor demographics vs. reference area demographics
+- Disparate impact flagging when corridor shares exceed reference area thresholds (e.g., corridor minority % > reference minority %)
+- Multiple reference area options: county-level (auto-detected from corridor location), MSA-level, or custom polygon
+- Map overlay showing Title VI population concentrations within the corridor
+- Exportable summary suitable for inclusion in Title VI reports (CSV/PDF)
+- Integration with existing ACS fetch infrastructure — most required variables are already in VAR_META or TPI factors
+- FTA reporting format alignment where applicable
+
+**Dependencies:** Builds on `census.js` (ACS fetch + aggregation), `tpi-scoring.js` (factor definitions, batch ACS), and the popup module system (`App.registerModule`). Would register as a new popup-based module in the Analysis panel.
+
+**Files (anticipated):** `js/projects/title-vi.js`, `projects/title-vi-popup.html`
+
 ---
 
 ## Persistence & Export
