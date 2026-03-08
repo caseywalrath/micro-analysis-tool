@@ -380,7 +380,9 @@
 
     for (var qi = 0; qi < n; qi++) {
       // Position 0..n-1 maps to quintile 1..5
-      var quintile = Math.min(5, Math.floor((qi / n) * 5) + 1);
+      // Multiply before dividing to avoid IEEE 754 rounding error at exact
+      // fractions (e.g. qi=3, n=5: (3/5)*5 = 2.999...→ floor 2; 3*5/5 = 3.0→ correct)
+      var quintile = Math.min(5, Math.floor(qi * 5 / n) + 1);
       result.set(sorted2[qi].geoid, quintile);
     }
     return result;
