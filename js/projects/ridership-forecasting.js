@@ -266,7 +266,7 @@
     _demandSystemResult     = result;
 
     // Refit calibration from shared-pool CDI values if match data exists
-    if (_matchResult && _matchResult.matched.length >= 2) {
+    if (_matchResult && _matchResult.matched.length >= 3) {
       var newCalib = refitCalibrationFromCDI(_sharedCalibPerRouteCDI);
       if (newCalib) {
         _calibration = newCalib;
@@ -855,7 +855,7 @@
   // Returns an updated calibration object (with sharedPoolMode: true), or null if
   // insufficient data or column mapping is unavailable (import-only flow).
   function refitCalibrationFromCDI(calibPerRouteCDI) {
-    if (!_matchResult || _matchResult.matched.length < 2) return null;
+    if (!_matchResult || _matchResult.matched.length < 3) return null;
     if (!calibPerRouteCDI || calibPerRouteCDI.length === 0) return null;
 
     var colRidership = (document.getElementById("rfCalibColRidership") || {}).value || "";
@@ -1362,7 +1362,7 @@
         warnings = warnings.concat(_matchResult.duplicateWarnings);
       }
       if (_matchResult.matched.length < 3) {
-        warnings.push("Only " + _matchResult.matched.length + " route(s) matched. Recommend 3+ for reliable calibration.");
+        warnings.push("Only " + _matchResult.matched.length + " route(s) matched — 3 or more required to run calibration.");
       }
       if (warnings.length > 0) {
         warnEl.style.display = "";
@@ -1374,15 +1374,15 @@
 
     // Enable Step 3 if we have at least 2 matches
     var step3 = document.getElementById("rfCalibStep3");
-    if (step3 && _matchResult.matched.length >= 2) {
+    if (step3 && _matchResult.matched.length >= 3) {
       step3.style.opacity = "1";
       step3.style.pointerEvents = "auto";
     }
   }
 
   function runCalibration() {
-    if (!_matchResult || _matchResult.matched.length < 2) {
-      alert("Need at least 2 matched routes to calibrate.");
+    if (!_matchResult || _matchResult.matched.length < 3) {
+      alert("Need at least 3 matched routes to calibrate.");
       return;
     }
 
@@ -2400,7 +2400,7 @@
       var step2 = document.getElementById("rfCalibStep2");
       if (step2) { step2.style.opacity = "1"; step2.style.pointerEvents = "auto"; }
     }
-    if (_matchResult && _matchResult.matched.length >= 2) {
+    if (_matchResult && _matchResult.matched.length >= 3) {
       var step3 = document.getElementById("rfCalibStep3");
       if (step3) { step3.style.opacity = "1"; step3.style.pointerEvents = "auto"; }
     }
