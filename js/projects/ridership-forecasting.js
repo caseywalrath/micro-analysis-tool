@@ -1747,6 +1747,44 @@
     return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
   }
 
+  function _getCorridorLabel() {
+    if (!_selectedCorridor || _selectedCorridor === "all") return "All corridors (system-wide)";
+    var parts = _selectedCorridor.split(":");
+    var type = parts[0], idx = parseInt(parts[1], 10);
+    var arr = type === "route" ? (App.routes || []) : (App.lines || []);
+    var feat = arr[idx];
+    var name = (feat && feat.properties && feat.properties.name) || ((type === "route" ? "Route " : "Line ") + (idx + 1));
+    return name;
+  }
+
+  function _buildMetadata(extra) {
+    var sysResult = _demandSystemResult || _systemResult;
+    var meta = {
+      tool: "Micro Analysis Tool",
+      exportedAt: new Date().toISOString(),
+      geoLevel: sysResult ? sysResult.geoLevel : null,
+      acsYear: sysResult ? sysResult.year : null,
+      corridor: _getCorridorLabel()
+    };
+    if (extra) { for (var k in extra) { if (extra.hasOwnProperty(k)) meta[k] = extra[k]; } }
+    return meta;
+  }
+
+  function _metadataCSVHeader(meta) {
+    var lines = [];
+    lines.push("# Micro Analysis Tool — Export");
+    lines.push("# Exported: " + meta.exportedAt);
+    if (meta.geoLevel) lines.push("# Geography: " + meta.geoLevel);
+    if (meta.acsYear) lines.push("# ACS Year: " + meta.acsYear);
+    if (meta.corridor) lines.push("# Corridor: " + meta.corridor);
+    for (var k in meta) {
+      if (meta.hasOwnProperty(k) && ["tool", "exportedAt", "geoLevel", "acsYear", "corridor"].indexOf(k) === -1 && meta[k] != null) {
+        lines.push("# " + k + ": " + meta[k]);
+      }
+    }
+    return lines.join("\n");
+  }
+
   function _triggerDownload(content, mimeType, filename) {
     var blob = new Blob([content], { type: mimeType });
     var url = URL.createObjectURL(blob);
@@ -1780,8 +1818,13 @@
       return { type: "Feature", properties: props, geometry: geo.geometry };
     });
 
+    var geojson = {
+      type: "FeatureCollection",
+      metadata: _buildMetadata({ module: "Ridership Forecasting — Corridor Demand" }),
+      features: features
+    };
     _triggerDownload(
-      JSON.stringify({ type: "FeatureCollection", features: features }, null, 2),
+      JSON.stringify(geojson, null, 2),
       "application/geo+json",
       "corridor-demand-" + _dateStamp() + ".geojson"
     );
@@ -1792,9 +1835,10 @@
     var tpi = _lastResult.tpiResult;
     var factors = TPI.FACTORS;
 
+    var meta = _buildMetadata({ module: "Ridership Forecasting — Corridor Demand" });
     var header = ["GEOID", "cdiScore", "cdiClass"];
     factors.forEach(function (f) { header.push(f.id + "_raw", f.id + "_score"); });
-    var rows = [header.join(",")];
+    var rows = [_metadataCSVHeader(meta), header.join(",")];
 
     tpi.geoids.forEach(function (geoid) {
       var sd = tpi.scores.get(geoid);
@@ -1815,8 +1859,17 @@
 
   function exportScenariosCSV() {
     if (!_lastBuiltScenarios || _lastBuiltScenarios.length === 0) return;
+    var cdi = getActiveCDI();
+    var meta = _buildMetadata({
+      corridorCDI: Number.isFinite(cdi) ? cdi.toFixed(4) : "N/A",
+      corridorLengthMiles: getTargetCorridorLength().toFixed(2),
+      calibrationFactor: _calibration ? _calibration.factor : "N/A",
+      calibrationMethod: _calibration ? _calibration.method : "N/A",
+      spanElasticity: _spanElasticity,
+      baselineUncertaintyPct: (_baselineUncertaintyPct * 100).toFixed(0) + "%"
+    });
     var comp = RM.compareScenarios(_lastBuiltScenarios);
-    var rows = [comp.headers.join(",")];
+    var rows = [_metadataCSVHeader(meta), comp.headers.join(",")];
     for (var i = 0; i < _lastBuiltScenarios.length; i++) {
       rows.push(RM.scenarioToRow(_lastBuiltScenarios[i]).join(","));
     }
@@ -1825,8 +1878,26 @@
 
   function exportScenariosJSON() {
     if (!_lastBuiltScenarios) return;
+    var cdi = getActiveCDI();
+    var data = {
+      type: "ridership-scenarios",
+      version: 2,
+      metadata: _buildMetadata(),
+      corridorCDI: Number.isFinite(cdi) ? parseFloat(cdi.toFixed(4)) : null,
+      corridorLengthMiles: parseFloat(getTargetCorridorLength().toFixed(2)),
+      calibrationFactor: _calibration ? _calibration.factor : null,
+      calibrationIntercept: (_calibration && _calibration.intercept != null) ? _calibration.intercept : null,
+      calibrationMethod: _calibration ? _calibration.method : null,
+      calibrationN: _calibration ? _calibration.n : null,
+      calibrationRSquared: _calibration ? _calibration.rSquared : null,
+      weights: _weights ? Object.assign({}, _weights) : null,
+      spanElasticity: _spanElasticity,
+      baselineUncertaintyPct: _baselineUncertaintyPct,
+      scenarios: _lastBuiltScenarios,
+      exportedAt: new Date().toISOString()
+    };
     _triggerDownload(
-      JSON.stringify({ type: "ridership-scenarios", version: 1, scenarios: _lastBuiltScenarios, baselineUncertaintyPct: _baselineUncertaintyPct, exportedAt: new Date().toISOString() }, null, 2),
+      JSON.stringify(data, null, 2),
       "application/json",
       "ridership-scenarios-" + _dateStamp() + ".json"
     );
@@ -1843,6 +1914,7 @@
       year: _systemResult ? _systemResult.year : null
     });
     var data = JSON.parse(baseJson);
+    data.metadata = _buildMetadata({ module: "Ridership Forecasting — Calibration" });
     data.normalizationMode = _sharedPoolMode ? "shared" : "separate";
     data.baselineUncertaintyPct = _baselineUncertaintyPct;
     data.servicePremiums = Object.assign({}, _servicePremiums);

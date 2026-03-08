@@ -181,6 +181,8 @@
         }
       });
 
+      result.geoLevel = geoLevel;
+      result.year = year;
       _lastResult = result;
       _stale = false;
 
@@ -501,6 +503,27 @@
     document.body.removeChild(a); URL.revokeObjectURL(url);
   }
 
+  function _buildTpiMetadata() {
+    return {
+      tool: "Micro Analysis Tool",
+      module: "Transit Propensity Index",
+      exportedAt: new Date().toISOString(),
+      geoLevel: _lastResult ? _lastResult.geoLevel : null,
+      acsYear: _lastResult ? _lastResult.year : null,
+      apportionByArea: _apportionByArea
+    };
+  }
+
+  function _metadataCSVHeader(meta) {
+    var lines = [];
+    lines.push("# Micro Analysis Tool — Transit Propensity Index Export");
+    lines.push("# Exported: " + meta.exportedAt);
+    if (meta.geoLevel) lines.push("# Geography: " + meta.geoLevel);
+    if (meta.acsYear) lines.push("# ACS Year: " + meta.acsYear);
+    lines.push("# Apportion by Area: " + (meta.apportionByArea ? "yes" : "no"));
+    return lines.join("\n");
+  }
+
   function exportGeoJSON() {
     if (!_lastResult) return;
     var factors = TPI.FACTORS;
@@ -545,8 +568,13 @@
       var geom = (clippedLookup && geoid && clippedLookup[geoid]) ? clippedLookup[geoid] : geo.geometry;
       return { type: "Feature", properties: props, geometry: geom };
     });
+    var geojson = {
+      type: "FeatureCollection",
+      metadata: _buildTpiMetadata(),
+      features: features
+    };
     _triggerDownload(
-      JSON.stringify({ type: "FeatureCollection", features: features }, null, 2),
+      JSON.stringify(geojson, null, 2),
       "application/geo+json",
       "tpi-export-" + _dateStamp() + ".geojson"
     );
@@ -557,6 +585,7 @@
     var factors = TPI.FACTORS;
     var isApportioned = _lastResult.apportionByArea && _lastResult.apportionedRawValues;
 
+    var meta = _buildTpiMetadata();
     var header = ["GEOID", "tpiScore", "tpiClass"];
     if (isApportioned) header.push("areaFraction");
     factors.forEach(function (f) {
@@ -564,7 +593,7 @@
       if (isApportioned) header.push(f.id + "_raw_apportioned");
       header.push(f.id + "_score");
     });
-    var rows = [header.join(",")];
+    var rows = [_metadataCSVHeader(meta), header.join(",")];
 
     _lastResult.geoids.forEach(function (geoid) {
       var sd = _lastResult.scores.get(geoid);
