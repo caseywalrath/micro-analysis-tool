@@ -30,11 +30,9 @@ var pop = (popDens && Number.isFinite(popDens)) ? popDens * areaSqMi : 1;
 ```
 Unpopulated areas (parks, industrial zones) still contribute to the weighted average. Usually negligible, but could bias CDI in areas with many non-residential geographies.
 
-### 1.4 Calibration with N=2 — RED
+### 1.4 Calibration with N=2 — ✅ FIXED
 
-With 2 data points, ratio calibration always produces R²=1.0 (perfect fit by mathematical definition). The UI warns at N<5 (`ridership-forecasting.js:1481`) but does not block the user.
-
-**Impact**: A client could present "R² = 1.0" based on 2 routes. Any peer reviewer would immediately flag this as statistically meaningless.
+The minimum matched-route threshold has been raised from 2 to 3 at all three gate locations (`ridership-forecasting.js`): `onMatchRoutes()`, `onOpen()` restore path, and the initial restore check. Step 3 (Run Calibration) remains locked at `opacity:0.5; pointer-events:none` until ≥3 routes are matched. Warning text updated to "3 or more required to run calibration."
 
 ### 1.5 Elasticity Formulas — GREEN
 
@@ -167,7 +165,7 @@ The Readme says what the tool is NOT, but lacks a formal limitations section cov
 
 | # | Item | Description | Effort |
 |---|------|-------------|--------|
-| 1 | **Calibration N=2 gate** | Block or prominently warn (red banner) against calibration with <3 routes. R² from N=2 is statistically meaningless. | 2-4 hrs |
+| 1 | ✅ **Calibration N=2 gate** | Block or prominently warn (red banner) against calibration with <3 routes. R² from N=2 is statistically meaningless. | 2-4 hrs |
 | 2 | ✅ **Scenario export completeness** | Add CDI value, calibration factor, corridor name, weights, span elasticity, and corridor length to scenario exports (CSV and JSON). | 3-4 hrs |
 | 3 | ✅ **Export metadata headers** | Add methodology metadata (tool version, date, geography level, ACS year, corridor name) to all exports. | 4-6 hrs |
 | 4 | ✅ **Methodology white paper** | Write a 3-5 page document covering factor selection, normalization, CDI computation, calibration methods, elasticity models, with literature citations. | 2-3 days |
@@ -202,16 +200,16 @@ The Readme says what the tool is NOT, but lacks a formal limitations section cov
 
 | Category | TPI | RF | Key Concern |
 |----------|-----|-----|-------------|
-| Math Soundness | GREEN | RED | ~~Small-N quintile~~ ✅ fixed; N=2 calibration overconfidence remains |
+| Math Soundness | GREEN | GREEN | ~~Small-N quintile~~ ✅ fixed; ~~N=2 calibration~~ ✅ gated at N≥3 |
 | Data Validity | YELLOW | YELLOW | No Census API key; LODES vintage mismatch possible |
 | Circularity | YELLOW | GREEN | Study-area sensitivity inherent to method |
 | Transparency | GREEN | YELLOW | ~~Scenario exports~~ ✅ fixed; hardcoded reference values remain |
 | Missing Outputs | YELLOW | YELLOW | No PDF; ~~no methodology metadata~~ ✅ fixed |
 | Documentation | YELLOW | YELLOW | ~~No methodology white paper~~ ✅ drafted; default weight rationale still needed |
 
-**Status: 3 of 5 RED items resolved.** Remaining RED items: Calibration N=2 gate (#1) and Default weight rationale (#5).
+**Status: 4 of 5 RED items resolved.** Remaining RED item: Default weight rationale (#5).
 
-**Estimated remaining effort for RED items**: ~1-2 days (calibration gating + weight rationale documentation).
+**Estimated remaining effort for RED items**: ~1 day (weight rationale documentation).
 
 ---
 
@@ -220,8 +218,8 @@ The Readme says what the tool is NOT, but lacks a formal limitations section cov
 | File | What Needs to Change | Status |
 |------|---------------------|--------|
 | `js/projects/tpi-scoring.js` | ~~Quintile formula fix (line 383)~~ | ✅ Done |
-| `js/projects/ridership-scoring.js` | Calibration N-gate, costPerBoarding clamping, CDI fallback | Pending |
-| `js/projects/ridership-forecasting.js` | ~~Scenario exports, export metadata~~; calibration warnings | Partially done |
+| `js/projects/ridership-scoring.js` | ~~Calibration N-gate~~; costPerBoarding clamping, CDI fallback | Partially done |
+| `js/projects/ridership-forecasting.js` | ~~Scenario exports, export metadata, calibration N-gate~~ | ✅ Done |
 | `js/core/census.js` | Census API key support (optional) | Pending |
 | `Ridership_Forecast_Readme.md` | Limitations section, methodology references | Pending |
 | `TPI_Ridership_Forecast_Methodology.md` | ~~Methodology white paper~~ | ✅ Done (draft) |
@@ -230,7 +228,7 @@ The Readme says what the tool is NOT, but lacks a formal limitations section cov
 
 After fixes are implemented:
 1. ✅ ~~Run TPI with a corridor that has exactly 5 block groups — verify all quintile values (1-5) appear~~ (formula fix verified by IEEE 754 arithmetic analysis)
-2. Attempt calibration with 2 routes — verify gate/warning prevents misleading R²
+2. ✅ ~~Attempt calibration with 2 routes — verify gate/warning prevents misleading R²~~ (threshold raised to ≥3 at all gate locations)
 3. ✅ ~~Export scenarios — verify CDI, calibration factor, weights are present in the file~~
 4. ✅ ~~Open any exported CSV/JSON — verify metadata header is present~~
 5. ✅ ~~Review methodology white paper against code to confirm all stated formulas match implementation~~
