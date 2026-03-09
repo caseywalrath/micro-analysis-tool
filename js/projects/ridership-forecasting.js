@@ -2370,17 +2370,6 @@
       });
     }
 
-    var normCb = document.getElementById("rfNormalizeByLength");
-    if (normCb) {
-      normCb.checked = _normalizeByLength;
-      normCb.addEventListener("change", function () {
-        _normalizeByLength = normCb.checked;
-        var calibNormCb2 = document.getElementById("rfCalibNormalizeByLength");
-        if (calibNormCb2) calibNormCb2.checked = _normalizeByLength;
-        markStale();
-      });
-    }
-
     var corridorSel = document.getElementById("rfCorridorSelect");
     if (corridorSel) {
       corridorSel.addEventListener("change", function () {
