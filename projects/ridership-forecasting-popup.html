@@ -341,16 +341,20 @@
               </div>
             </div>
 
-            <!-- Segment breakdown -->
-            <div id="rfSegmentBreakdown" style="display:none;">
-              <div class="rf-section-title" style="margin-top:12px;">Segment Breakdown</div>
-              <div id="rfSegmentList" class="rf-segment-list"></div>
+            <!-- Corridor comparison -->
+            <div id="rfCorridorComparison" style="display:none;">
+              <div class="rf-section-title" style="margin-top:12px;">Corridor Comparison</div>
+              <div id="rfCorridorComparisonList" class="rf-segment-list"></div>
             </div>
           </div>
 
           <div class="rf-export-row" style="margin-top:12px;">
             <button id="rfExportDemandGeoJSON" type="button" class="rf-btn-sm" disabled>GeoJSON</button>
             <button id="rfExportDemandCSV" type="button" class="rf-btn-sm" disabled>CSV</button>
+            <label class="rf-toggle-row" style="margin-left:8px; font-size:11px;">
+              <input type="checkbox" id="rfExportIncludeSharedPool" disabled>
+              <span>Include Shared Pool data</span>
+            </label>
           </div>
         </div>
       </div>

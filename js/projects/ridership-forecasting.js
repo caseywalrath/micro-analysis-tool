@@ -309,6 +309,29 @@
       var year = document.getElementById("rfYearSelect").value;
       var segLen = parseFloat(document.getElementById("rfSegmentLength").value) || 0;
 
+      // Warn if demand settings differ from calibration settings
+      if (_systemResult) {
+        var mismatches = [];
+        if (_systemResult.geoLevel && geoLevel !== _systemResult.geoLevel)
+          mismatches.push("Geography level: calibration used " + _systemResult.geoLevel + ", demand uses " + geoLevel);
+        if (_systemResult.year && year !== _systemResult.year)
+          mismatches.push("ACS Year: calibration used " + _systemResult.year + ", demand uses " + year);
+        var calibApportioned = _systemResult.tpiResult && _systemResult.tpiResult.apportionByArea;
+        if (!!calibApportioned !== !!_apportionByArea)
+          mismatches.push("Apportion by Area: calibration " + (calibApportioned ? "on" : "off") + ", demand " + (_apportionByArea ? "on" : "off"));
+        if (mismatches.length > 0) {
+          var proceed = confirm("Demand settings differ from calibration:\n\n" +
+            mismatches.join("\n") +
+            "\n\nUsing different settings may make calibration and demand results less comparable.\nProceed anyway?");
+          if (!proceed) {
+            _running = false;
+            if (runBtn) runBtn.disabled = false;
+            if (statusEl) statusEl.style.display = "none";
+            return;
+          }
+        }
+      }
+
       var result;
       var tpiResult;
       var activeRouteCDIs;
@@ -456,6 +479,13 @@
       if (expGJ) expGJ.disabled = false;
       if (expCSV) expCSV.disabled = false;
 
+      // Enable "Include Shared Pool" toggle only when shared pool data exists
+      var spToggle = document.getElementById("rfExportIncludeSharedPool");
+      if (spToggle) {
+        spToggle.disabled = !_sharedCalibPerRouteCDI;
+        if (!_sharedCalibPerRouteCDI) spToggle.checked = false;
+      }
+
       // Show next step guidance
       var nextStep = document.getElementById("rfNextStep1");
       if (nextStep) nextStep.style.display = "";
@@ -502,27 +532,29 @@
     }
 
     var segCount = document.getElementById("rfSegmentCount");
-    if (segCount) segCount.textContent = result.segments.length > 0 ? String(result.segments.length) : "\u2014";
+    if (segCount) segCount.textContent = result.segments ? String(result.segments.length) : "\u2014";
 
-    // Segment breakdown
-    var segSection = document.getElementById("rfSegmentBreakdown");
-    var segList = document.getElementById("rfSegmentList");
-    if (result.segments.length > 0 && segSection && segList) {
-      segSection.style.display = "";
+    // Corridor comparison: show per-feature CDI from demand system
+    var compSection = document.getElementById("rfCorridorComparison");
+    var compList = document.getElementById("rfCorridorComparisonList");
+    var routeCDIs = _demandPerRouteCDI || _perRouteCDI;
+    if (routeCDIs && routeCDIs.length > 0 && compSection && compList) {
+      compSection.style.display = "";
       var html = "";
-      for (var i = 0; i < result.segments.length; i++) {
-        var seg = result.segments[i];
-        var cdi = Number.isFinite(seg.cdi) ? seg.cdi.toFixed(2) : "N/A";
+      for (var i = 0; i < routeCDIs.length; i++) {
+        var rc = routeCDIs[i];
+        var cdi = Number.isFinite(rc.cdi) ? rc.cdi.toFixed(2) : "N/A";
+        var cls = RM.classifyCDI({ value: rc.cdi });
         html += '<div class="rf-segment-row">' +
-          '<span class="rf-segment-label">Seg ' + (i + 1) + '</span>' +
+          '<span class="rf-segment-label" style="flex:1;">' + (rc.name || (rc.featureType + " " + (rc.featureIndex + 1))) + '</span>' +
           '<span class="rf-segment-cdi">' + cdi + '</span>' +
-          '<span class="rf-segment-class rf-cdi-' + seg.classification.toLowerCase().replace(/[^a-z]/g, "") + '">' + seg.classification + '</span>' +
-          '<span class="rf-segment-geos tiny">' + seg.geoCount + ' geos</span>' +
+          '<span class="rf-segment-class rf-cdi-' + cls.label.toLowerCase().replace(/[^a-z]/g, "") + '">' + cls.label + '</span>' +
+          '<span class="rf-segment-geos tiny">' + rc.geoCount + ' geos</span>' +
           '</div>';
       }
-      segList.innerHTML = html;
-    } else if (segSection) {
-      segSection.style.display = "none";
+      compList.innerHTML = html;
+    } else if (compSection) {
+      compSection.style.display = "none";
     }
 
   }
@@ -1084,6 +1116,13 @@
       // Clear demand state since calibration changed
       _demandSystemResult = null;
       _demandPerRouteCDI = null;
+
+      // Sync calibration settings to demand tab selectors for apples-to-apples defaults
+      var demandGeoEl = document.getElementById("rfGeoLevel");
+      if (demandGeoEl) demandGeoEl.value = geoLevel;
+      var demandYearEl = document.getElementById("rfYearSelect");
+      if (demandYearEl) demandYearEl.value = year;
+      // Apportion and NormalizeByLength already synced bidirectionally via shared _apportionByArea/_normalizeByLength
 
       // Render choropleth
       var tpi = result.tpiResult;
@@ -1794,67 +1833,138 @@
     document.body.removeChild(a); URL.revokeObjectURL(url);
   }
 
-  function exportDemandGeoJSON() {
-    if (!_lastResult) return;
-    var tpi = _lastResult.tpiResult;
+  // Collect per-corridor CDI rows for export. When includeSharedPool is true and
+  // shared-pool data exists, also includes the calibration system corridors (labelled
+  // with a "System" column so the user can compare calibration vs demand CDI).
+  function _collectCorridorExportRows(includeSharedPool) {
+    var rows = [];
     var factors = TPI.FACTORS;
 
-    var features = tpi.geos.map(function (geo) {
-      var geoid = geo.properties && geo.properties.GEOID;
-      var sd = geoid ? tpi.scores.get(geoid) : null;
-      var composite = (sd && Number.isFinite(sd.composite)) ? sd.composite : null;
+    function pushRouteCDIs(cdis, systemLabel) {
+      if (!cdis) return;
+      for (var i = 0; i < cdis.length; i++) {
+        var rc = cdis[i];
+        var cls = RM.classifyCDI({ value: rc.cdi });
+        var row = {
+          system: systemLabel,
+          corridor: rc.name || (rc.featureType + " " + (rc.featureIndex + 1)),
+          featureType: rc.featureType,
+          featureIndex: rc.featureIndex,
+          cdi: rc.cdi,
+          cdiClass: cls.label,
+          geoCount: rc.geoCount,
+          lengthMiles: rc.lengthMiles
+        };
+        // Per-factor breakdown if available
+        if (rc.factorBreakdown) {
+          for (var fi = 0; fi < factors.length; fi++) {
+            var fId = factors[fi].id;
+            row[fId + "_avg_quintile"] = rc.factorBreakdown[fId] != null ? rc.factorBreakdown[fId] : null;
+          }
+        }
+        rows.push(row);
+      }
+    }
+
+    // Demand system corridors
+    var demandCDIs = _demandPerRouteCDI || _perRouteCDI;
+    pushRouteCDIs(demandCDIs, "Demand");
+
+    // Shared pool calibration corridors (only when toggle is on and data exists)
+    if (includeSharedPool && _sharedCalibPerRouteCDI) {
+      pushRouteCDIs(_sharedCalibPerRouteCDI, "Calibration");
+    }
+
+    return rows;
+  }
+
+  function exportDemandGeoJSON() {
+    var demandCDIs = _demandPerRouteCDI || _perRouteCDI;
+    if (!demandCDIs || demandCDIs.length === 0) return;
+
+    var includeSharedCb = document.getElementById("rfExportIncludeSharedPool");
+    var includeShared = includeSharedCb && includeSharedCb.checked;
+    var exportRows = _collectCorridorExportRows(includeShared);
+    var factors = TPI.FACTORS;
+
+    var features = exportRows.map(function (row) {
       var props = {
-        GEOID: geoid || "",
-        cdiScore: composite != null ? parseFloat(composite.toFixed(4)) : null,
-        cdiClass: composite != null ? RM.classifyCDI({ value: composite }).label : "N/A"
+        system: row.system,
+        corridor: row.corridor,
+        featureType: row.featureType,
+        cdi: Number.isFinite(row.cdi) ? parseFloat(row.cdi.toFixed(4)) : null,
+        cdiClass: row.cdiClass,
+        geoCount: row.geoCount,
+        lengthMiles: Number.isFinite(row.lengthMiles) ? parseFloat(row.lengthMiles.toFixed(2)) : null
       };
-      factors.forEach(function (f) {
-        var rawMap = tpi.rawValues.get(f.id) || new Map();
-        var raw = rawMap.get(geoid);
-        props[f.id + "_raw"] = (raw != null && Number.isFinite(raw)) ? parseFloat(raw.toFixed(6)) : null;
-        var scoreMap = tpi.factorScores.get(f.id) || new Map();
-        props[f.id + "_score"] = scoreMap.get(geoid) || null;
-      });
-      return { type: "Feature", properties: props, geometry: geo.geometry };
+      for (var fi = 0; fi < factors.length; fi++) {
+        var key = factors[fi].id + "_avg_quintile";
+        props[key] = row[key] != null && Number.isFinite(row[key]) ? parseFloat(row[key].toFixed(4)) : null;
+      }
+      // Use the feature's buffer geometry for the GeoJSON feature
+      var geom = null;
+      var arr, bufArr;
+      if (row.featureType === "route") {
+        arr = App.routes || [];
+        bufArr = App.routeBuffers || [];
+      } else {
+        arr = App.lines || [];
+        bufArr = App.lineBuffers || [];
+      }
+      if (row.featureIndex < bufArr.length && bufArr[row.featureIndex]) {
+        geom = bufArr[row.featureIndex].geometry || null;
+      } else if (row.featureIndex < arr.length && arr[row.featureIndex]) {
+        geom = arr[row.featureIndex].geometry || null;
+      }
+      return { type: "Feature", properties: props, geometry: geom };
     });
 
     var geojson = {
       type: "FeatureCollection",
-      metadata: _buildMetadata({ module: "Ridership Forecasting — Corridor Demand" }),
+      metadata: _buildMetadata({ module: "Ridership Forecasting — Corridor CDI" }),
       features: features
     };
     _triggerDownload(
       JSON.stringify(geojson, null, 2),
       "application/geo+json",
-      "corridor-demand-" + _dateStamp() + ".geojson"
+      "corridor-cdi-" + _dateStamp() + ".geojson"
     );
   }
 
   function exportDemandCSV() {
-    if (!_lastResult) return;
-    var tpi = _lastResult.tpiResult;
+    var demandCDIs = _demandPerRouteCDI || _perRouteCDI;
+    if (!demandCDIs || demandCDIs.length === 0) return;
+
+    var includeSharedCb = document.getElementById("rfExportIncludeSharedPool");
+    var includeShared = includeSharedCb && includeSharedCb.checked;
+    var exportRows = _collectCorridorExportRows(includeShared);
     var factors = TPI.FACTORS;
 
-    var meta = _buildMetadata({ module: "Ridership Forecasting — Corridor Demand" });
-    var header = ["GEOID", "cdiScore", "cdiClass"];
-    factors.forEach(function (f) { header.push(f.id + "_raw", f.id + "_score"); });
-    var rows = [_metadataCSVHeader(meta), header.join(",")];
+    var meta = _buildMetadata({ module: "Ridership Forecasting — Corridor CDI" });
+    var header = ["System", "Corridor", "CDI", "CDI_Class", "Geo_Count", "Length_Miles"];
+    for (var fi = 0; fi < factors.length; fi++) {
+      header.push(factors[fi].id + "_avg_quintile");
+    }
+    var csvRows = [_metadataCSVHeader(meta), header.join(",")];
 
-    tpi.geoids.forEach(function (geoid) {
-      var sd = tpi.scores.get(geoid);
-      var composite = (sd && Number.isFinite(sd.composite)) ? sd.composite : null;
-      var row = [geoid, composite != null ? composite.toFixed(4) : "", composite != null ? RM.classifyCDI({ value: composite }).label : ""];
-      factors.forEach(function (f) {
-        var rawMap = tpi.rawValues.get(f.id) || new Map();
-        var raw = rawMap.get(geoid);
-        row.push((raw != null && Number.isFinite(raw)) ? raw.toFixed(6) : "");
-        var scoreMap = tpi.factorScores.get(f.id) || new Map();
-        row.push(scoreMap.get(geoid) || "");
-      });
-      rows.push(row.join(","));
-    });
+    for (var ri = 0; ri < exportRows.length; ri++) {
+      var row = exportRows[ri];
+      var line = [
+        '"' + (row.system || "").replace(/"/g, '""') + '"',
+        '"' + (row.corridor || "").replace(/"/g, '""') + '"',
+        Number.isFinite(row.cdi) ? row.cdi.toFixed(4) : "",
+        row.cdiClass || "",
+        row.geoCount != null ? String(row.geoCount) : "",
+        Number.isFinite(row.lengthMiles) ? row.lengthMiles.toFixed(2) : ""
+      ];
+      for (var fj = 0; fj < factors.length; fj++) {
+        var val = row[factors[fj].id + "_avg_quintile"];
+        line.push(val != null && Number.isFinite(val) ? val.toFixed(4) : "");
+      }
+      csvRows.push(line.join(","));
+    }
 
-    _triggerDownload(rows.join("\n"), "text/csv", "corridor-demand-" + _dateStamp() + ".csv");
+    _triggerDownload(csvRows.join("\n"), "text/csv", "corridor-cdi-" + _dateStamp() + ".csv");
   }
 
   function exportScenariosCSV() {
