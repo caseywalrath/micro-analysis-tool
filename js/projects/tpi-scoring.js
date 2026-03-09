@@ -710,12 +710,14 @@
       apportionedRawValues = apportionRawValues(rawValues, areaFractions);
     }
 
-    // 5c. Dynamic tract fallback: if any ACS factor produced zero finite values at BG level,
-    //     retry those vars at tract level and map values down to BG GEOIDs.
+    // 5c. Dynamic tract fallback: if any ACS factor has BGs with NaN values,
+    //     fetch those factor variables at tract level and fill in the missing BGs.
+    //     Handles both total-miss (no BG data at all) and partial-miss (some BGs
+    //     have data, others are suppressed/missing) cases.
     //     Skipped when area apportionment is on (fractions make the spatial weighting accurate).
     if (geoLevel === "bg" && !apportionByArea) {
       var dynamicFallbackVars = [];
-      var dynamicFallbackFactorIds = [];
+      var dynamicFallbackEntries = []; // { factor, nanGeoids: Set }
 
       for (var di = 0; di < FACTORS.length; di++) {
         var df = FACTORS[di];
@@ -723,20 +725,18 @@
         if (tractFallbackFactors.indexOf(df.id) !== -1) continue; // already handled statically
 
         var dfRawMap = rawValues.get(df.id);
-        var hasFinite = false;
-        if (dfRawMap) {
-          for (var dfEntry of dfRawMap.values()) {
-            if (Number.isFinite(dfEntry)) { hasFinite = true; break; }
-          }
+        var nanGeoids = new Set();
+        for (var ngi = 0; ngi < geoids.length; ngi++) {
+          if (!dfRawMap || !Number.isFinite(dfRawMap.get(geoids[ngi]))) nanGeoids.add(geoids[ngi]);
         }
 
-        if (!hasFinite) {
+        if (nanGeoids.size > 0) {
           for (var dvi = 0; dvi < df.acsVars.length; dvi++) {
             if (dynamicFallbackVars.indexOf(df.acsVars[dvi]) === -1) {
               dynamicFallbackVars.push(df.acsVars[dvi]);
             }
           }
-          dynamicFallbackFactorIds.push(df.id);
+          dynamicFallbackEntries.push({ factor: df, nanGeoids: nanGeoids });
         }
       }
 
@@ -745,36 +745,49 @@
         for (var bgi3 = 0; bgi3 < geoids.length; bgi3++) dynTractGeoidSet.add(geoids[bgi3].slice(0, 11));
         var dynTractGeoids = Array.from(dynTractGeoidSet);
 
-        onProgress("Fetching tract-level fallback for " + dynamicFallbackFactorIds.join(", ") + "...");
+        var fallbackNames = dynamicFallbackEntries.map(function (e) { return e.factor.id; });
+        onProgress("Fetching tract-level fallback for " + fallbackNames.join(", ") + "...");
         var dynTractData = await batchFetchACS("tract", year, dynTractGeoids, dynamicFallbackVars);
 
-        // Map tract values into each BG's acsData entry
-        for (var bgi4 = 0; bgi4 < geoids.length; bgi4++) {
-          var bgGeo2 = geoids[bgi4];
-          var parentTract2 = bgGeo2.slice(0, 11);
-          var tVals2 = dynTractData.get(parentTract2) || new Map();
-          if (!acsData.has(bgGeo2)) acsData.set(bgGeo2, new Map());
-          var bgEntry2 = acsData.get(bgGeo2);
-          for (var tEntry of tVals2.entries()) bgEntry2.set(tEntry[0], tEntry[1]);
+        // Build GEOID-to-feature lookup for efficient recomputation
+        var geoidToFeat = {};
+        for (var gli = 0; gli < geos.length; gli++) {
+          if (geos[gli].properties && geos[gli].properties.GEOID) {
+            geoidToFeat[geos[gli].properties.GEOID] = geos[gli];
+          }
         }
 
-        // Re-compute raw values and register each dynamic fallback factor
-        for (var dfi = 0; dfi < dynamicFallbackFactorIds.length; dfi++) {
-          var dfactor = null;
-          for (var dff = 0; dff < FACTORS.length; dff++) {
-            if (FACTORS[dff].id === dynamicFallbackFactorIds[dfi]) { dfactor = FACTORS[dff]; break; }
-          }
-          if (!dfactor) continue;
+        // For each factor with NaN BGs, fill in tract-level data and recompute
+        for (var dfi = 0; dfi < dynamicFallbackEntries.length; dfi++) {
+          var dEntry = dynamicFallbackEntries[dfi];
+          var dfactor = dEntry.factor;
+          var nanSet = dEntry.nanGeoids;
 
-          var newRaw = new Map();
-          for (var gIdx3 = 0; gIdx3 < geos.length; gIdx3++) {
-            var gf3 = geos[gIdx3];
-            var gid3 = gf3.properties.GEOID;
-            var geoVals3 = acsData.get(gid3) || new Map();
-            newRaw.set(gid3, dfactor.compute(geoVals3, gf3, unionFeat));
+          // For NaN BGs, overwrite their acsData with tract values for
+          // this factor's variables so numerator & denominator are consistent
+          for (var nanBg of nanSet) {
+            var parentTract2 = nanBg.slice(0, 11);
+            var tVals2 = dynTractData.get(parentTract2) || new Map();
+            if (!acsData.has(nanBg)) acsData.set(nanBg, new Map());
+            var bgEntry2 = acsData.get(nanBg);
+            for (var avi = 0; avi < dfactor.acsVars.length; avi++) {
+              var acsVar = dfactor.acsVars[avi];
+              if (tVals2.has(acsVar)) bgEntry2.set(acsVar, tVals2.get(acsVar));
+            }
           }
-          rawValues.set(dfactor.id, newRaw);
-          tractFallbackFactors.push(dfactor.id);
+
+          // Recompute raw values only for BGs that had NaN
+          var existingRaw = rawValues.get(dfactor.id) || new Map();
+          for (var nanBg2 of nanSet) {
+            var feat = geoidToFeat[nanBg2];
+            if (!feat) continue;
+            var geoVals3 = acsData.get(nanBg2) || new Map();
+            existingRaw.set(nanBg2, dfactor.compute(geoVals3, feat, unionFeat));
+          }
+          rawValues.set(dfactor.id, existingRaw);
+          if (tractFallbackFactors.indexOf(dfactor.id) === -1) {
+            tractFallbackFactors.push(dfactor.id);
+          }
         }
       }
     }
