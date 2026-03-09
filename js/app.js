@@ -77,26 +77,8 @@
     '<span id="lodesState" style="display:none"></span>' +
     '<span id="lodesLoaded" style="display:none"></span>' +
 
-    // ---- PPACG Pop Projection section ----
-    '<div class="sb2-section-label">PPACG Pop Projection</div>' +
-    '<div class="proj-row">' +
-      '<label class="proj-year-label">Projection year' +
-        '<select id="projYear" disabled>' +
-          '<option value="">Current (ACS)</option>' +
-          '<option value="2030">2030</option>' +
-          '<option value="2040">2040</option>' +
-          '<option value="2050">2050</option>' +
-        '</select>' +
-      '</label>' +
-      '<div class="proj-actions">' +
-        '<button type="button" id="projUploadBtn">Upload CSV</button>' +
-        '<button type="button" id="projClear" style="display:none;">Clear</button>' +
-      '</div>' +
-    '</div>' +
-    '<input id="projFile" type="file" accept=".csv" style="display:none" />' +
-    '<div id="projInfo" class="sb2-tiny" style="margin-top:4px;">' +
-      'No projection loaded \u2014 upload a growth factor CSV' +
-    '</div>';
+    // PPACG Pop Projection has moved to the Projections tab in Ridership Forecasting.
+    '';
 
   // ---- Module registry (replaces single-project system) ----
 
@@ -473,52 +455,7 @@
       });
     }
 
-    // Projection year dropdown
-    document.getElementById("projYear").addEventListener("change", function () {
-      App.projYear = this.value || null;
-      notifyProject();
-      if (typeof App.cache !== "undefined") App.cache.save();
-    });
-
-    // Projection "Upload CSV" button — triggers the hidden file input
-    document.getElementById("projUploadBtn").addEventListener("click", function () {
-      document.getElementById("projFile").click();
-    });
-
-    // Projection file upload
-    document.getElementById("projFile").addEventListener("change", async function (e) {
-      var file = e.target.files && e.target.files[0];
-      if (!file) return;
-      this.value = ""; // allow re-selecting the same file
-      try {
-        var data = await App.parseProjectionsCSV(file);
-        App.setProjectionsData(data, file.name);
-        // Default to 2030 on first upload if no year selected
-        var yearSel = document.getElementById("projYear");
-        if (yearSel && !yearSel.value) {
-          yearSel.value = "2030";
-          App.projYear = "2030";
-        }
-        App.setStatus("Ready");
-        notifyProject();
-        if (typeof App.cache !== "undefined") App.cache.save();
-      } catch (err) {
-        App.setStatus("Error");
-        var infoEl = document.getElementById("projInfo");
-        if (infoEl) infoEl.textContent = "Error loading " + file.name + ": " + String(err && err.message ? err.message : err);
-      }
-    });
-
-    // Projection clear button
-    var projClearBtn = document.getElementById("projClear");
-    if (projClearBtn) {
-      projClearBtn.addEventListener("click", function () {
-        if (!confirm("Remove loaded projection data?")) return;
-        App.clearProjectionsData();
-        notifyProject();
-        if (typeof App.cache !== "undefined") App.cache.save();
-      });
-    }
+    // PPACG Projection UI has moved to the Ridership Forecasting Projections tab.
 
     // Reset session button: clear everything AND localStorage
     var resetBtn = document.getElementById("reset");

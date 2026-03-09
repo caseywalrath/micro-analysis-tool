@@ -53,6 +53,10 @@
   var _sharedCalibPerRouteCDI = null;   // calibration-context CDI from most recent shared run
   var _sharedSystemResult = null;       // full TPI result from most recent shared run
 
+  // Projection state
+  var _projectionResults = null; // array of { year, cdi, scenarios } or null
+  var _projectionYears = ["2030", "2040", "2050"];
+
   // Default scenario names
   var SCENARIO_NAMES = ["Scenario A", "Scenario B", "Scenario C", "Scenario D"];
   for (var si = 0; si < 4; si++) {
@@ -715,6 +719,7 @@
     _sharedPoolMode = false;
     _sharedCalibPerRouteCDI = null;
     _sharedSystemResult = null;
+    _projectionResults = null;
     App.popup.hideFloatingWidget("rf-legend");
     if (isPopupVisible()) {
       var el = document.getElementById("rfDemandResults");
@@ -735,6 +740,12 @@
       if (spNoteEl) spNoteEl.style.display = "none";
       var spCbEl = document.getElementById("rfSharedPoolMode");
       if (spCbEl) { spCbEl.checked = false; spCbEl.disabled = false; }
+      // Reset projections tab
+      var projResults = document.getElementById("rfProjResults");
+      if (projResults) projResults.style.display = "none";
+      var projExp = document.getElementById("rfExportProjCSV");
+      if (projExp) projExp.disabled = true;
+      updateProjectionUI();
     }
     App.setStatus("Ridership analysis cleared");
   }
@@ -1779,6 +1790,287 @@
 
   var _lastBuiltScenarios = null;
 
+  // ---- Projections tab ----
+
+  // Build scenario results for a given CDI value (reuses current scenario form inputs + calibration).
+  // Returns array of built scenario objects (same shape as buildAndCompareScenarios output).
+  function buildScenariosForCDI(cdi) {
+    if (!Number.isFinite(cdi)) return null;
+
+    var routeLength = getTargetCorridorLength();
+    var calibFactor = (_calibration && _calibration.factor) ? _calibration.factor : 1;
+    var calibIntercept = (_calibration && Number.isFinite(_calibration.intercept)) ? _calibration.intercept : 0;
+    var lengthScale = (_normalizeByLength && _calibration) ? routeLength : 1;
+    var baseMid = Math.max(0, cdi * calibFactor * lengthScale,
+                              (calibIntercept + cdi * calibFactor) * lengthScale);
+    var freqElast = parseFloat((document.getElementById("rfFreqElastValue") || {}).value) || 0.5;
+    var baseBand = RM.applyBaselineUncertainty(baseMid, _baselineUncertaintyPct);
+    var BASELINE_SPAN = 14;
+
+    var builtScenarios = [];
+    for (var i = 0; i < 4; i++) {
+      var name = (document.getElementById("rfScenName_" + i) || {}).value || SCENARIO_NAMES[i];
+      var serviceTypeId = (document.getElementById("rfScenServiceType_" + i) || {}).value || "local_bus";
+      var headway = parseFloat((document.getElementById("rfScenHeadway_" + i) || {}).value) || 30;
+      var span = parseFloat((document.getElementById("rfScenSpan_" + i) || {}).value) || 14;
+      var avgSpeed = parseFloat((document.getElementById("rfScenSpeed_" + i) || {}).value) || 15;
+      var costPerRevenueHour = parseFloat((document.getElementById("rfScenCostPerHr_" + i) || {}).value) || 150;
+      var serviceDaysPerYear = parseInt((document.getElementById("rfScenServiceDays_" + i) || {}).value, 10) || 260;
+
+      var mult = RM.applyElasticity(1.0, {
+        serviceTypeId: serviceTypeId,
+        baseHeadway: 30,
+        newHeadway: headway,
+        customServicePremium: _servicePremiums[serviceTypeId],
+        freqElasticity: freqElast
+      });
+
+      var spanEffect = RM.computeSpanEffect(BASELINE_SPAN, span, _spanElasticity);
+
+      var adjustedElast = {
+        low:  baseBand.low  * mult.low  * spanEffect,
+        mid:  baseBand.mid  * mult.mid  * spanEffect,
+        high: baseBand.high * mult.high * spanEffect,
+        freqEffect: mult.freqEffect,
+        spanEffect: spanEffect,
+        serviceType: mult.serviceType
+      };
+
+      var built = RM.buildScenario({
+        name: name,
+        serviceTypeId: serviceTypeId,
+        routeLengthMiles: routeLength,
+        headway: headway,
+        span: span,
+        avgSpeed: avgSpeed,
+        costPerRevenueHour: costPerRevenueHour,
+        serviceDaysPerYear: serviceDaysPerYear,
+        baseDemandCDI: baseMid,
+        elasticityResult: adjustedElast,
+        calibrationFactor: 1
+      });
+      built.spanEffect = spanEffect;
+      builtScenarios.push(built);
+    }
+    return builtScenarios;
+  }
+
+  // Compute CDI for the selected corridor from a re-scored TPI result.
+  function computeCDIFromResult(tpiResult, featureFilter) {
+    var activeRouteCDIs = _demandPerRouteCDI || _perRouteCDI;
+
+    if (_selectedCorridor !== "all" && activeRouteCDIs) {
+      // For corridor-specific CDI, re-run per-route CDI with the projected TPI
+      var projRouteCDIs = RM.computePerRouteCDI(tpiResult, featureFilter);
+      var parts = _selectedCorridor.split(":");
+      var type = parts[0], idx = parseInt(parts[1], 10);
+      for (var i = 0; i < projRouteCDIs.length; i++) {
+        if (projRouteCDIs[i].featureType === type && projRouteCDIs[i].featureIndex === idx) {
+          return projRouteCDIs[i].cdi;
+        }
+      }
+    }
+
+    // System-wide CDI from the re-scored TPI
+    var sysCDI = RM.computeCorridorCDI(tpiResult);
+    return sysCDI ? sysCDI.value : NaN;
+  }
+
+  function runProjections() {
+    // Need projection data and a prior TPI result
+    if (!App.projData) {
+      alert("Upload a population projection CSV first.");
+      return;
+    }
+
+    // Find a TPI result to re-score from
+    var baseTpi = null;
+    var featureFilter = null;
+    if (_demandSystemResult && _demandSystemResult.tpiResult) {
+      baseTpi = _demandSystemResult.tpiResult;
+      featureFilter = _demandFeatureFilter;
+    } else if (_systemResult && _systemResult.tpiResult) {
+      baseTpi = _systemResult.tpiResult;
+      featureFilter = _calibFeatureFilter;
+    }
+
+    if (!baseTpi || !baseTpi.cachedAcsData) {
+      alert("Run Calibrate or Demand analysis first. The Projections tab re-scores cached TPI data.");
+      return;
+    }
+
+    if (!_calibration) {
+      alert("Complete calibration first (Calibrate tab) before running projections.");
+      return;
+    }
+
+    var statusEl = document.getElementById("rfProjStatus");
+    var statusText = document.getElementById("rfProjStatusText");
+    if (statusEl) statusEl.style.display = "";
+
+    // Get current (no growth factor) CDI for baseline column
+    var currentCDI = getActiveCDI();
+    var currentScenarios = buildScenariosForCDI(currentCDI);
+
+    var results = [];
+    results.push({ year: "Current", cdi: currentCDI, scenarios: currentScenarios });
+
+    // Re-score for each projection year
+    for (var yi = 0; yi < _projectionYears.length; yi++) {
+      var year = _projectionYears[yi];
+      if (statusText) statusText.textContent = "Re-scoring TPI for " + year + "...";
+
+      var gf = App.projGrowthFactorsForYear(year);
+      var reScored = TPI.recomputeWithGrowthFactors(baseTpi, gf);
+
+      // Compute CDI from re-scored result
+      var projCDI = computeCDIFromResult(reScored, featureFilter);
+      var projScenarios = buildScenariosForCDI(projCDI);
+      results.push({ year: year, cdi: projCDI, scenarios: projScenarios });
+    }
+
+    _projectionResults = results;
+    if (statusEl) statusEl.style.display = "none";
+
+    displayProjectionTimeline(results);
+
+    // Enable export
+    var expBtn = document.getElementById("rfExportProjCSV");
+    if (expBtn) expBtn.disabled = false;
+
+    if (typeof App.cache !== "undefined") App.cache.save();
+  }
+
+  function displayProjectionTimeline(results) {
+    var container = document.getElementById("rfProjResults");
+    var thead = document.getElementById("rfProjHead");
+    var tbody = document.getElementById("rfProjBody");
+    if (!container || !thead || !tbody) return;
+
+    container.style.display = "";
+
+    // Header: Metric | Current | 2030 | 2040 | 2050
+    thead.innerHTML = '<tr><th></th>' +
+      results.map(function (r) { return '<th>' + r.year + '</th>'; }).join("") +
+      '</tr>';
+
+    var rows = [];
+
+    // CDI row
+    rows.push('<tr class="rf-proj-cdi-row"><td>Corridor CDI</td>' +
+      results.map(function (r) {
+        return '<td>' + (Number.isFinite(r.cdi) ? r.cdi.toFixed(2) : "\u2014") + '</td>';
+      }).join("") + '</tr>');
+
+    // Scenario rows (use scenario names from first result)
+    if (results[0] && results[0].scenarios) {
+      for (var si = 0; si < results[0].scenarios.length; si++) {
+        var scenName = results[0].scenarios[si].name;
+        rows.push('<tr' + (si % 2 === 0 ? '' : '') + '><td>' + scenName + '</td>' +
+          results.map(function (r) {
+            if (!r.scenarios || !r.scenarios[si]) return '<td>\u2014</td>';
+            var s = r.scenarios[si];
+            var mid = Math.round(s.dailyRidership.mid).toLocaleString();
+            var low = Math.round(s.dailyRidership.low).toLocaleString();
+            var high = Math.round(s.dailyRidership.high).toLocaleString();
+            return '<td>' + mid + '<span class="rf-proj-range">(' + low + ' \u2013 ' + high + ')</span></td>';
+          }).join("") + '</tr>');
+      }
+    }
+
+    tbody.innerHTML = rows.join("");
+
+    // Note about methodology
+    var noteEl = container.querySelector(".rf-proj-note");
+    if (!noteEl) {
+      noteEl = document.createElement("div");
+      noteEl.className = "rf-proj-note";
+      container.appendChild(noteEl);
+    }
+    noteEl.textContent = "Growth factors modify Census population (B01003_001E) only. " +
+      "Other demographics (income, vehicle ownership, etc.) and employment are held constant.";
+  }
+
+  function exportProjectionsCSV() {
+    if (!_projectionResults || _projectionResults.length === 0) return;
+
+    var meta = _buildMetadata({ analysis: "Population Growth Projections" });
+    var lines = [_metadataCSVHeader(meta)];
+    lines.push("");
+
+    // Header
+    var header = ["Metric"];
+    for (var yi = 0; yi < _projectionResults.length; yi++) {
+      header.push(_projectionResults[yi].year);
+    }
+    lines.push(header.join(","));
+
+    // CDI row
+    var cdiRow = ["Corridor CDI"];
+    for (var ci = 0; ci < _projectionResults.length; ci++) {
+      cdiRow.push(Number.isFinite(_projectionResults[ci].cdi) ? _projectionResults[ci].cdi.toFixed(3) : "");
+    }
+    lines.push(cdiRow.join(","));
+
+    // Scenario rows (low, mid, high for each)
+    var firstScens = _projectionResults[0].scenarios;
+    if (firstScens) {
+      for (var si = 0; si < firstScens.length; si++) {
+        var scenName = firstScens[si].name;
+        ["Low", "Mid", "High"].forEach(function (level) {
+          var row = [scenName + " (" + level + ")"];
+          for (var pi = 0; pi < _projectionResults.length; pi++) {
+            var s = _projectionResults[pi].scenarios[si];
+            var key = level.toLowerCase();
+            row.push(s ? Math.round(s.dailyRidership[key]) : "");
+          }
+          lines.push(row.join(","));
+        });
+      }
+    }
+
+    _triggerDownload(lines.join("\n"), "text/csv", "projection-timeline_" + _dateStamp() + ".csv");
+  }
+
+  function updateProjectionUI() {
+    if (!isPopupVisible()) return;
+    var hasProj = !!App.projData;
+    var hasAnalysis = !!(_systemResult || _demandSystemResult);
+    var hasCalib = !!_calibration;
+
+    var infoEl = document.getElementById("rfProjFileInfo");
+    var clearBtn = document.getElementById("rfProjClear");
+    var readyDiv = document.getElementById("rfProjReady");
+    var prereqDiv = document.getElementById("rfProjPrereqs");
+
+    if (hasProj && infoEl) {
+      infoEl.textContent = "Loaded: " + App.projFileName +
+        " \u2014 " + App.projData.size.toLocaleString() + " tracts";
+      infoEl.style.color = "";
+    } else if (infoEl) {
+      infoEl.textContent = "No projection file loaded";
+      infoEl.style.color = "var(--muted)";
+    }
+
+    if (clearBtn) clearBtn.style.display = hasProj ? "" : "none";
+
+    // Show Run button only when prerequisites are met
+    var canRun = hasProj && hasAnalysis && hasCalib;
+    if (readyDiv) readyDiv.style.display = canRun ? "" : "none";
+    if (prereqDiv) {
+      if (canRun || hasProj) {
+        prereqDiv.style.display = "none";
+      } else {
+        prereqDiv.style.display = "";
+        prereqDiv.textContent = !hasAnalysis
+          ? "Complete the Calibrate tab first, then upload a projection CSV."
+          : !hasCalib
+          ? "Complete calibration (Step 3 in Calibrate) first."
+          : "Upload a projection CSV to run growth projections.";
+      }
+    }
+  }
+
   // ---- Export helpers ----
 
   function _dateStamp() {
@@ -2495,6 +2787,51 @@
     if (expScenCSV) expScenCSV.addEventListener("click", exportScenariosCSV);
     var expScenJSON = document.getElementById("rfExportScenariosJSON");
     if (expScenJSON) expScenJSON.addEventListener("click", exportScenariosJSON);
+
+    // Projections tab
+    var projUploadBtn = document.getElementById("rfProjUploadBtn");
+    var projFileInput = document.getElementById("rfProjFile");
+    if (projUploadBtn && projFileInput) {
+      projUploadBtn.addEventListener("click", function () { projFileInput.click(); });
+      projFileInput.addEventListener("change", async function (e) {
+        var file = e.target.files && e.target.files[0];
+        if (!file) return;
+        projFileInput.value = "";
+        try {
+          var data = await App.parseProjectionsCSV(file);
+          App.setProjectionsData(data, file.name);
+          App.setStatus("Ready");
+          updateProjectionUI();
+        } catch (err) {
+          App.setStatus("Error");
+          var infoEl = document.getElementById("rfProjFileInfo");
+          if (infoEl) {
+            infoEl.textContent = "Error: " + String(err && err.message ? err.message : err);
+            infoEl.style.color = "#e53e3e";
+          }
+        }
+      });
+    }
+
+    var projClearBtn = document.getElementById("rfProjClear");
+    if (projClearBtn) {
+      projClearBtn.addEventListener("click", function () {
+        if (!confirm("Remove loaded projection data?")) return;
+        App.clearProjectionsData();
+        _projectionResults = null;
+        updateProjectionUI();
+        var resultsEl = document.getElementById("rfProjResults");
+        if (resultsEl) resultsEl.style.display = "none";
+        var expBtn = document.getElementById("rfExportProjCSV");
+        if (expBtn) expBtn.disabled = true;
+      });
+    }
+
+    var runProjBtn = document.getElementById("rfRunProjections");
+    if (runProjBtn) runProjBtn.addEventListener("click", runProjections);
+
+    var expProjCSV = document.getElementById("rfExportProjCSV");
+    if (expProjCSV) expProjCSV.addEventListener("click", exportProjectionsCSV);
   }
 
   // ---- Popup lifecycle hooks ----
@@ -2599,6 +2936,10 @@
 
     // LODES warning
     updateLodesWarnings();
+
+    // Projections tab state
+    updateProjectionUI();
+    if (_projectionResults) displayProjectionTimeline(_projectionResults);
   }
 
   function onClose(core) {
@@ -2680,7 +3021,9 @@
       demandFeatureFilter: _demandFeatureFilter,
       demandUseSameSystem: _demandUseSameSystem,
       // Shared pool normalization (v3)
-      sharedPoolMode: _sharedPoolMode
+      sharedPoolMode: _sharedPoolMode,
+      // Projection results (lightweight — CDI + scenario objects per year)
+      projectionResults: _projectionResults
     };
 
     if (_systemResult) {
@@ -2785,6 +3128,11 @@
     if (_sharedPoolMode && _demandSystemResult && Array.isArray(_demandSystemResult.routeCDIs) && _demandSystemResult.routeCDIs.length > 0) {
       _sharedSystemResult = _demandSystemResult;
       _sharedCalibPerRouteCDI = filterRouteCDIs(_demandSystemResult.routeCDIs, _calibFeatureFilter);
+    }
+
+    // Restore projection results
+    if (Array.isArray(data.projectionResults)) {
+      _projectionResults = data.projectionResults;
     }
   }
 

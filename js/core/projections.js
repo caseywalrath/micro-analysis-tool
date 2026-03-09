@@ -123,7 +123,23 @@
     configurable: true
   });
 
+  // ---- Build growth factor Map for an explicit year (does NOT change App.projYear) ----
+
+  function projGrowthFactorsForYear(year) {
+    if (!PROJ_DATA || !year) return null;
+    var key = "gf_" + year;
+    var result = new Map();
+    PROJ_DATA.forEach(function (entry, geoid) {
+      var gf = entry[key];
+      if (Number.isFinite(gf) && gf !== 1.0) {
+        result.set(geoid, gf);
+      }
+    });
+    return result.size > 0 ? result : null;
+  }
+
   App.projGrowthFactors = projGrowthFactors;
+  App.projGrowthFactorsForYear = projGrowthFactorsForYear;
   App.parseProjectionsCSV = parseProjectionsCSV;
   App.setProjectionsData = setProjectionsData;
   App.clearProjectionsData = clearProjectionsData;

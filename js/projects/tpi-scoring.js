@@ -647,7 +647,13 @@
       acsData = await batchFetchACS("tract", year, geoids, allAcsVars);
     }
 
-    // 3b. Apply population growth factors (if provided)
+    // 3b. Deep-clone ACS data before growth factor application (for re-scoring later)
+    var cachedAcsData = new Map();
+    acsData.forEach(function (geoVals, geoid) {
+      cachedAcsData.set(geoid, new Map(geoVals));
+    });
+
+    // 3c. Apply population growth factors (if provided)
     if (growthFactors) {
       acsData.forEach(function (geoVals, geoid) {
         var tractId = geoid.slice(0, 11);
@@ -827,7 +833,9 @@
       rawValues: rawValues,
       effectiveWeights: effectiveWeights,
       tractFallbackFactors: tractFallbackFactors,
-      apportionByArea: apportionByArea
+      apportionByArea: apportionByArea,
+      cachedAcsData: cachedAcsData,
+      cachedLodesAgg: lodesAgg
     };
 
     if (apportionByArea) {
@@ -839,6 +847,105 @@
     return result;
   }
   TPI.computeTPI = computeTPI;
+
+  // =========================================================================
+  // Re-score TPI with different growth factors using cached ACS data.
+  // No Census API calls — instant recomputation.
+  // prevResult must include cachedAcsData (from a prior computeTPI call).
+  // Returns a full result object (geos, geoids, scores, factorScores, rawValues, effectiveWeights).
+  // =========================================================================
+
+  function recomputeWithGrowthFactors(prevResult, newGrowthFactors) {
+    if (!prevResult || !prevResult.cachedAcsData) {
+      throw new Error("Previous TPI result does not contain cached ACS data for re-scoring.");
+    }
+
+    var geos = prevResult.geos;
+    var geoids = prevResult.geoids;
+    var effectiveWeights = prevResult.effectiveWeights;
+    var lodesAgg = prevResult.cachedLodesAgg;
+    var apportionByArea = prevResult.apportionByArea;
+
+    // Deep-clone cached ACS data and apply new growth factors
+    var acsData = new Map();
+    prevResult.cachedAcsData.forEach(function (geoVals, geoid) {
+      acsData.set(geoid, new Map(geoVals));
+    });
+
+    if (newGrowthFactors) {
+      acsData.forEach(function (geoVals, geoid) {
+        var tractId = geoid.slice(0, 11);
+        var gf = newGrowthFactors.get(geoid) || newGrowthFactors.get(tractId) || 1.0;
+        var pop = geoVals.get("B01003_001E");
+        if (Number.isFinite(pop) && gf !== 1.0) geoVals.set("B01003_001E", pop * gf);
+      });
+    }
+
+    // Recompute raw factor values (same logic as computeTPI steps 5-7)
+    var rawValues = new Map();
+    for (var fi = 0; fi < FACTORS.length; fi++) {
+      var factor = FACTORS[fi];
+      if (effectiveWeights[factor.id] === 0) continue;
+
+      var raw = new Map();
+      if (factor.source === "LODES" && factor.id === "employment") {
+        if (lodesAgg) {
+          for (var gIdx = 0; gIdx < geos.length; gIdx++) {
+            var gf = geos[gIdx];
+            var gid = gf.properties.GEOID;
+            var jobs = lodesAgg.get(gid) || 0;
+            var areaSqMi = turf.area(gf) / SQM_PER_SQMI;
+            raw.set(gid, areaSqMi > 0 ? jobs / areaSqMi : NaN);
+          }
+        }
+      } else if (factor.compute) {
+        for (var gIdx2 = 0; gIdx2 < geos.length; gIdx2++) {
+          var gf2 = geos[gIdx2];
+          var gid2 = gf2.properties.GEOID;
+          var geoVals2 = acsData.get(gid2) || new Map();
+          raw.set(gid2, factor.compute(geoVals2, gf2));
+        }
+      }
+      rawValues.set(factor.id, raw);
+    }
+
+    // Area apportionment (reuse fractions from original result)
+    var scoringValues = rawValues;
+    if (apportionByArea && prevResult.areaFractions) {
+      scoringValues = apportionRawValues(rawValues, prevResult.areaFractions);
+    }
+
+    // Quintile normalize
+    var factorScores = new Map();
+    for (var ni = 0; ni < FACTORS.length; ni++) {
+      var nf = FACTORS[ni];
+      if (effectiveWeights[nf.id] === 0) continue;
+      var rawMap = scoringValues.get(nf.id);
+      if (!rawMap || rawMap.size === 0) continue;
+      var valArray = [];
+      for (var entry of rawMap.entries()) {
+        valArray.push({ geoid: entry[0], rawValue: entry[1] });
+      }
+      factorScores.set(nf.id, normalizeQuintiles(computeQuintiles(valArray), nf.higherIsBetter));
+    }
+
+    // Composite
+    var scores = computeComposite(factorScores, effectiveWeights, geoids);
+
+    return {
+      geos: geos,
+      geoids: geoids,
+      scores: scores,
+      factorScores: factorScores,
+      rawValues: rawValues,
+      effectiveWeights: effectiveWeights,
+      tractFallbackFactors: prevResult.tractFallbackFactors,
+      apportionByArea: apportionByArea,
+      cachedAcsData: prevResult.cachedAcsData,
+      cachedLodesAgg: lodesAgg
+    };
+  }
+  TPI.recomputeWithGrowthFactors = recomputeWithGrowthFactors;
 
   // =========================================================================
   // Utility: get default weights as an object

@@ -180,6 +180,8 @@
     };
   }
 
+  RM.computeCorridorCDI = computeCorridorCDI;
+
   // Per-route/line CDI: extract individual route CDI from system-wide TPI result.
   // Uses the same population-weighted intersection logic as computeSegments(),
   // but operates on full route/line buffers instead of segment chunks.

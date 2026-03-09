@@ -1530,6 +1530,36 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Libe
 .rf-compare-table tr:hover td { background: #f7fafc; }
 .rf-highlight-row td { background: #f0f7ff; font-weight: 600; }
 
+/* RF Projections tab */
+.rf-proj-upload-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.rf-proj-table th:first-child,
+.rf-proj-table td:first-child {
+  position: sticky;
+  left: 0;
+  background: #fff;
+  z-index: 1;
+  font-weight: 600;
+}
+.rf-proj-table th:first-child { background: #f7fafc; }
+.rf-proj-cdi-row td { font-weight: 600; background: #f0f7ff; }
+.rf-proj-range {
+  display: block;
+  font-size: 10px;
+  color: var(--muted);
+  font-weight: 400;
+}
+.rf-proj-note {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 8px;
+  font-style: italic;
+}
+
 /* RF Weight Adjustment Modal */
 .rf-weights-modal-overlay {
   position: absolute;

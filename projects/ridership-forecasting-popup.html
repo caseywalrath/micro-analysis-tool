@@ -7,6 +7,7 @@
     <button class="rf-tab" data-tab="demand">Demand</button>
     <button class="rf-tab" data-tab="elasticity">Elasticity</button>
     <button class="rf-tab" data-tab="scenarios">Scenarios</button>
+    <button class="rf-tab" data-tab="projections">Projections</button>
   </div>
 
   <!-- ================================================================ -->
@@ -632,6 +633,67 @@
         <button id="rfBuildScenarios" type="button" class="rf-action-primary">Build Scenarios</button>
         <button id="rfExportScenariosCSV" type="button" class="rf-btn-sm" disabled>Export CSV</button>
         <button id="rfExportScenariosJSON" type="button" class="rf-btn-sm" disabled>Export JSON</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- Tab 5: Projections -->
+  <!-- ================================================================ -->
+  <div class="rf-tab-content" data-tab="projections">
+    <div class="rf-tab-body">
+
+      <div class="rf-section-title">Population Growth Projections</div>
+      <div class="tiny" style="margin-bottom:8px;">
+        Upload a PPACG population growth factor CSV to project how your scenarios perform
+        under future population conditions. Growth factors are applied to Census population
+        data, re-scoring demand indices for each horizon year.
+      </div>
+
+      <div class="rf-proj-upload-row">
+        <button id="rfProjUploadBtn" type="button" class="rf-btn-sm">Upload CSV</button>
+        <button id="rfProjClear" type="button" class="rf-btn-sm" style="display:none;">Clear</button>
+        <input id="rfProjFile" type="file" accept=".csv" style="display:none" />
+        <span id="rfProjFileInfo" class="tiny" style="color:var(--muted);">No projection file loaded</span>
+      </div>
+
+      <div id="rfProjReady" style="display:none; margin-top:12px;">
+        <div class="tiny" style="margin-bottom:8px; color:var(--muted);">
+          Growth factors will be applied to population data and TPI will be re-scored
+          for each horizon year (2030, 2040, 2050). Scenario parameters from the Scenarios tab
+          are used. No additional Census API calls are needed.
+        </div>
+
+        <button id="rfRunProjections" type="button" class="rf-action-primary">
+          Run Projections
+        </button>
+      </div>
+
+      <div id="rfProjPrereqs" class="rf-info-box" style="margin-top:12px;">
+        Complete the Calibrate and Scenarios tabs first, then upload a projection CSV to run growth projections.
+      </div>
+
+      <div id="rfProjStatus" class="rf-status" style="display:none; margin-top:8px;">
+        <span id="rfProjStatusText">Ready</span>
+      </div>
+
+      <div id="rfProjResults" style="display:none; margin-top:16px;">
+        <div class="rf-section-title">Projection Timeline</div>
+        <div class="tiny" style="margin-bottom:8px; color:var(--muted);">
+          Daily ridership (Moderate estimate). Low&ndash;High range shown in parentheses.
+          CDI changes reflect projected population shifts across census geographies.
+        </div>
+
+        <div style="overflow-x:auto;">
+          <table class="rf-compare-table rf-proj-table">
+            <thead id="rfProjHead"></thead>
+            <tbody id="rfProjBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="rf-export-row" style="margin-top:12px;">
+        <button id="rfExportProjCSV" type="button" class="rf-btn-sm" disabled>Export CSV</button>
       </div>
     </div>
   </div>
