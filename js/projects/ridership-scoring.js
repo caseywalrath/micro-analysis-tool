@@ -755,14 +755,14 @@
       s.avgSpeed,
       s.vehiclesNeeded,
       s.revenueHoursPerDay.toFixed(1),
-      Math.round(s.annualRevenueHours).toLocaleString(),
-      "$" + Math.round(s.annualOperatingCost).toLocaleString(),
-      Math.round(s.dailyRidership.low).toLocaleString(),
-      Math.round(s.dailyRidership.mid).toLocaleString(),
-      Math.round(s.dailyRidership.high).toLocaleString(),
-      Math.round(s.annualRidership.mid).toLocaleString(),
+      Math.round(s.annualRevenueHours),
+      Math.round(s.annualOperatingCost),
+      Math.round(s.dailyRidership.low),
+      Math.round(s.dailyRidership.mid),
+      Math.round(s.dailyRidership.high),
+      Math.round(s.annualRidership.mid),
       s.boardingsPerRevHr.mid.toFixed(1),
-      "$" + s.costPerBoarding.mid.toFixed(2)
+      s.costPerBoarding.mid.toFixed(2)
     ];
   }
   RM.scenarioToRow = scenarioToRow;
