@@ -487,6 +487,73 @@
 
   // ---- Export helpers ----
 
+  // Build a GEOID -> feature-name(s) mapping by testing which drawn features'
+  // buffers/polygons overlap each census geography.  Computed at export time so
+  // it always reflects the latest feature names and positions.
+  function _buildGeoFeatureMap(geos) {
+    var allFeatures = [];
+
+    var stations = App.stations || [];
+    var stationBuffers = App.buffers || [];
+    for (var si = 0; si < stations.length; si++) {
+      if (si < stationBuffers.length && stationBuffers[si]) {
+        allFeatures.push({
+          name: (stations[si].properties && stations[si].properties.name) || ("Station " + (si + 1)),
+          coverage: stationBuffers[si]
+        });
+      }
+    }
+
+    var lines = App.lines || [];
+    var lineBuffers = App.lineBuffers || [];
+    for (var li = 0; li < lines.length; li++) {
+      if (li < lineBuffers.length && lineBuffers[li]) {
+        allFeatures.push({
+          name: (lines[li].properties && lines[li].properties.name) || ("Line " + (li + 1)),
+          coverage: lineBuffers[li]
+        });
+      }
+    }
+
+    var routes = App.routes || [];
+    var routeBuffers = App.routeBuffers || [];
+    for (var ri = 0; ri < routes.length; ri++) {
+      if (ri < routeBuffers.length && routeBuffers[ri]) {
+        allFeatures.push({
+          name: (routes[ri].properties && routes[ri].properties.name) || ("Route " + (ri + 1)),
+          coverage: routeBuffers[ri]
+        });
+      }
+    }
+
+    var polys = App.polygons || [];
+    for (var pi = 0; pi < polys.length; pi++) {
+      if (polys[pi] && polys[pi].geometry) {
+        allFeatures.push({
+          name: (polys[pi].properties && polys[pi].properties.name) || ("Polygon " + (pi + 1)),
+          coverage: polys[pi]
+        });
+      }
+    }
+
+    var map = {};
+    for (var gi = 0; gi < geos.length; gi++) {
+      var geo = geos[gi];
+      var geoid = geo.properties && geo.properties.GEOID;
+      if (!geoid) continue;
+      var names = [];
+      for (var fi = 0; fi < allFeatures.length; fi++) {
+        try {
+          if (turf.booleanIntersects(geo, allFeatures[fi].coverage)) {
+            names.push(allFeatures[fi].name);
+          }
+        } catch (_) { /* skip on invalid geometry */ }
+      }
+      map[geoid] = names.join("; ");
+    }
+    return map;
+  }
+
   function _dateStamp() {
     var d = new Date();
     return d.getFullYear() + "-" +
@@ -528,6 +595,7 @@
     if (!_lastResult) return;
     var factors = TPI.FACTORS;
     var isApportioned = _lastResult.apportionByArea && _lastResult.apportionedRawValues;
+    var featureMap = _buildGeoFeatureMap(_lastResult.geos);
 
     // Build clipped geometry lookup when apportioned
     var clippedLookup = null;
@@ -545,6 +613,7 @@
       var composite = (sd && Number.isFinite(sd.composite)) ? sd.composite : null;
       var props = {
         GEOID: geoid || "",
+        Feature: featureMap[geoid] || "",
         tpiScore: composite != null ? parseFloat(composite.toFixed(4)) : null,
         tpiClass: composite != null ? getTpiClass(composite) : "N/A"
       };
@@ -584,9 +653,10 @@
     if (!_lastResult) return;
     var factors = TPI.FACTORS;
     var isApportioned = _lastResult.apportionByArea && _lastResult.apportionedRawValues;
+    var featureMap = _buildGeoFeatureMap(_lastResult.geos);
 
     var meta = _buildTpiMetadata();
-    var header = ["GEOID", "tpiScore", "tpiClass"];
+    var header = ["GEOID", "Feature", "tpiScore", "tpiClass"];
     if (isApportioned) header.push("areaFraction");
     factors.forEach(function (f) {
       header.push(f.id + "_raw");
@@ -598,8 +668,10 @@
     _lastResult.geoids.forEach(function (geoid) {
       var sd = _lastResult.scores.get(geoid);
       var composite = (sd && Number.isFinite(sd.composite)) ? sd.composite : null;
+      var featVal = (featureMap[geoid] || "").replace(/"/g, '""');
       var row = [
         geoid,
+        '"' + featVal + '"',
         composite != null ? composite.toFixed(4) : "",
         composite != null ? getTpiClass(composite) : ""
       ];
