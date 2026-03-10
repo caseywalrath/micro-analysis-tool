@@ -1,5 +1,7 @@
 // js/core/projections.js
-// Population projection growth factors: upload/parse/store CSV, expose growth factor Map.
+// Population projections: upload/parse/store CSV, expose population addition Map.
+// The CSV provides absolute projected population counts per tract that are ADDED to
+// Census ACS baseline values (pop_new = pop_census + pop_addition).
 // Depends on: App namespace (utils.js — parseCSV, guessHeader, setStatus).
 // Exports: App.projData, App.projFileName, App.projYear, App.projGrowthFactors(),
 //          App.parseProjectionsCSV(file), App.setProjectionsData(data, fileName),
@@ -8,7 +10,7 @@
 (function () {
   var App = window.App = window.App || {};
 
-  var PROJ_DATA = null;     // Map<geoid(11-char), { gf_2030, gf_2040, gf_2050 }>
+  var PROJ_DATA = null;     // Map<geoid(11-char), { pop_2030, pop_2040, pop_2050 }>  (raw population additions)
   var PROJ_FILE_NAME = "";
   var PROJ_YEAR = null;     // "2030", "2040", "2050", or null (= current year)
 
@@ -20,7 +22,7 @@
     var yearSel = document.getElementById("projYear");
 
     if (!PROJ_DATA) {
-      if (infoEl) infoEl.textContent = "No projection loaded \u2014 upload a growth factor CSV";
+      if (infoEl) infoEl.textContent = "No projection loaded \u2014 upload a population projection CSV";
       if (clearBtn) clearBtn.style.display = "none";
       if (yearSel) yearSel.disabled = true;
     } else {
@@ -44,13 +46,13 @@
 
     // guessHeader returns the matching header string, or "" on miss
     var colGEOID = App.guessHeader(headers, ["GEOID", "geoid", "Geoid", "GeoID", "tract", "TRACT"]);
-    var col2030 = App.guessHeader(headers, ["gf_2030", "GF_2030", "growth_2030"]);
-    var col2040 = App.guessHeader(headers, ["gf_2040", "GF_2040", "growth_2040"]);
-    var col2050 = App.guessHeader(headers, ["gf_2050", "GF_2050", "growth_2050"]);
+    var col2030 = App.guessHeader(headers, ["pop_2030", "Pop_2030", "POP_2030", "population_2030"]);
+    var col2040 = App.guessHeader(headers, ["pop_2040", "Pop_2040", "POP_2040", "population_2040"]);
+    var col2050 = App.guessHeader(headers, ["pop_2050", "Pop_2050", "POP_2050", "population_2050"]);
 
     if (!colGEOID) throw new Error("Could not find GEOID column in projection CSV.");
     if (!col2030 && !col2040 && !col2050) {
-      throw new Error("Could not find any growth factor columns (gf_2030, gf_2040, gf_2050).");
+      throw new Error("Could not find any population projection columns (pop_2030, pop_2040, pop_2050).");
     }
 
     var data = new Map();
@@ -63,28 +65,32 @@
       while (geoid.length < 11) geoid = "0" + geoid;
 
       var entry = {
-        gf_2030: col2030 ? parseFloat(row[col2030]) || 1.0 : 1.0,
-        gf_2040: col2040 ? parseFloat(row[col2040]) || 1.0 : 1.0,
-        gf_2050: col2050 ? parseFloat(row[col2050]) || 1.0 : 1.0
+        pop_2030: col2030 ? parseFloat(row[col2030]) || 0 : 0,
+        pop_2040: col2040 ? parseFloat(row[col2040]) || 0 : 0,
+        pop_2050: col2050 ? parseFloat(row[col2050]) || 0 : 0
       };
+      // Skip rows that contribute nothing
+      if (entry.pop_2030 === 0 && entry.pop_2040 === 0 && entry.pop_2050 === 0) continue;
       data.set(geoid, entry);
     }
 
     if (data.size === 0) throw new Error("No valid rows found in projection CSV.");
-    App.setStatus("Parsed " + data.size + " tract growth factors");
+    App.setStatus("Parsed " + data.size + " tract population projections");
     return data;
   }
 
-  // ---- Build growth factor Map for the currently selected year ----
+  // ---- Build population-addition Map for the currently selected year ----
+  // Returns Map<geoid, popAddition> where values are raw population counts to add
+  // to Census ACS baselines. Returns null if no data or no year selected.
 
   function projGrowthFactors() {
     if (!PROJ_DATA || !PROJ_YEAR) return null;
-    var key = "gf_" + PROJ_YEAR;
+    var key = "pop_" + PROJ_YEAR;
     var result = new Map();
     PROJ_DATA.forEach(function (entry, geoid) {
-      var gf = entry[key];
-      if (Number.isFinite(gf) && gf !== 1.0) {
-        result.set(geoid, gf);
+      var popAdd = entry[key];
+      if (Number.isFinite(popAdd) && popAdd !== 0) {
+        result.set(geoid, popAdd);
       }
     });
     return result.size > 0 ? result : null;
@@ -123,16 +129,16 @@
     configurable: true
   });
 
-  // ---- Build growth factor Map for an explicit year (does NOT change App.projYear) ----
+  // ---- Build population-addition Map for an explicit year (does NOT change App.projYear) ----
 
   function projGrowthFactorsForYear(year) {
     if (!PROJ_DATA || !year) return null;
-    var key = "gf_" + year;
+    var key = "pop_" + year;
     var result = new Map();
     PROJ_DATA.forEach(function (entry, geoid) {
-      var gf = entry[key];
-      if (Number.isFinite(gf) && gf !== 1.0) {
-        result.set(geoid, gf);
+      var popAdd = entry[key];
+      if (Number.isFinite(popAdd) && popAdd !== 0) {
+        result.set(geoid, popAdd);
       }
     });
     return result.size > 0 ? result : null;

@@ -653,13 +653,13 @@
       cachedAcsData.set(geoid, new Map(geoVals));
     });
 
-    // 3c. Apply population growth factors (if provided)
+    // 3c. Apply population projections (if provided) — additive: pop_new = pop_census + pop_addition
     if (growthFactors) {
       acsData.forEach(function (geoVals, geoid) {
         var tractId = geoid.slice(0, 11);
-        var gf = growthFactors.get(geoid) || growthFactors.get(tractId) || 1.0;
+        var popAdd = growthFactors.get(geoid) || growthFactors.get(tractId) || 0;
         var pop = geoVals.get("B01003_001E");
-        if (Number.isFinite(pop) && gf !== 1.0) geoVals.set("B01003_001E", pop * gf);
+        if (Number.isFinite(pop) && popAdd !== 0) geoVals.set("B01003_001E", Math.max(0, pop + popAdd));
       });
     }
 
@@ -875,9 +875,9 @@
     if (newGrowthFactors) {
       acsData.forEach(function (geoVals, geoid) {
         var tractId = geoid.slice(0, 11);
-        var gf = newGrowthFactors.get(geoid) || newGrowthFactors.get(tractId) || 1.0;
+        var popAdd = newGrowthFactors.get(geoid) || newGrowthFactors.get(tractId) || 0;
         var pop = geoVals.get("B01003_001E");
-        if (Number.isFinite(pop) && gf !== 1.0) geoVals.set("B01003_001E", pop * gf);
+        if (Number.isFinite(pop) && popAdd !== 0) geoVals.set("B01003_001E", Math.max(0, pop + popAdd));
       });
     }
 
