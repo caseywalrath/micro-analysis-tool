@@ -732,4 +732,24 @@
     </div>
   </div>
 
+  <!-- ================================================================ -->
+  <!-- Analysis Confirmation Modal -->
+  <!-- ================================================================ -->
+  <div id="rfAnalysisConfirmModal" class="rf-weights-modal-overlay" style="display:none;"
+       role="dialog" aria-modal="true">
+    <div class="rf-weights-modal-box">
+      <div class="rf-weights-modal-title">Confirm Analysis Settings</div>
+      <div class="tiny" style="margin-bottom:10px; color:var(--muted);">
+        Please review your settings before running. Depending on the study area and geography
+        level, this analysis may take several minutes.
+      </div>
+      <div id="rfConfirmModalBody" style="margin-bottom:12px;"></div>
+      <div class="rf-weights-modal-actions">
+        <button id="rfConfirmModalCancel" type="button" class="rf-btn-sm">Cancel</button>
+        <span style="flex:1;"></span>
+        <button id="rfConfirmModalProceed" type="button" class="rf-action-primary">Proceed</button>
+      </div>
+    </div>
+  </div>
+
 </div>

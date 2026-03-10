@@ -109,7 +109,8 @@
 
   // ---- Weight modal (Adjust Weights) ----
 
-  var _pendingWeights = null; // temporary weight copy while modal is open
+  var _pendingWeights = null;  // temporary weight copy while modal is open
+  var _confirmCallback = null; // pending analysis to run on modal confirm
 
   function buildRFWeightSliders(weights) {
     var container = document.getElementById("rfWeightSliders");
@@ -212,6 +213,110 @@
     var modal = document.getElementById("rfWeightsModal");
     if (modal) modal.style.display = "none";
     _pendingWeights = null;
+  }
+
+  // ---- Analysis confirmation modal ----
+
+  function buildConfirmRow(label, value, warn) {
+    var valStyle = warn ? "color:#e53e3e; font-weight:600;" : "";
+    return "<tr>" +
+      "<td style=\"padding:4px 12px 4px 0; color:var(--muted); white-space:nowrap;" +
+            " vertical-align:top; font-size:12px;\">" + label + "</td>" +
+      "<td style=\"padding:4px 0; font-size:12px; font-weight:500;" + valStyle + "\">" +
+            value + "</td>" +
+      "</tr>";
+  }
+
+  function countCheckedFeatures(containerId) {
+    var cbs = document.querySelectorAll("#" + containerId + " input[type=\"checkbox\"]:checked");
+    var r = 0, l = 0;
+    for (var i = 0; i < cbs.length; i++) {
+      if (cbs[i].getAttribute("data-feature-type") === "route") r++;
+      else l++;
+    }
+    return { routes: r, lines: l, total: r + l };
+  }
+
+  function formatFeatLabel(counts) {
+    return counts.routes + " route" + (counts.routes !== 1 ? "s" : "") +
+      ", " + counts.lines + " line" + (counts.lines !== 1 ? "s" : "");
+  }
+
+  function getSelectText(id) {
+    var el = document.getElementById(id);
+    if (!el || !el.options.length) return "\u2014";
+    return el.options[el.selectedIndex] ? el.options[el.selectedIndex].text : el.value;
+  }
+
+  function buildCalibConfirmHTML() {
+    var counts = countCheckedFeatures("rfCalibFeatureList");
+    var lodesLoaded = !!App.lodesData;
+    var lodesVal = lodesLoaded
+      ? "Loaded (" + (App.lodesFileName || "file") + ")"
+      : "Not loaded \u2014 Employment factor will be excluded";
+    var apportionEl = document.getElementById("rfCalibApportionByArea");
+    var normEl      = document.getElementById("rfCalibNormalizeByLength");
+
+    return "<table style=\"width:100%; border-collapse:collapse;\">" +
+      buildConfirmRow("LODES Employment",    lodesVal,                                 !lodesLoaded) +
+      buildConfirmRow("Census Geometry",     getSelectText("rfCalibGeoLevel")) +
+      buildConfirmRow("ACS Year",            getSelectText("rfCalibYearSelect")) +
+      buildConfirmRow("Features Selected",   formatFeatLabel(counts),                  counts.total === 0) +
+      buildConfirmRow("Apportion by Area",   apportionEl && apportionEl.checked ? "Yes" : "No") +
+      buildConfirmRow("Normalize by Length", normEl      && normEl.checked      ? "Yes" : "No") +
+      "</table>";
+  }
+
+  function buildDemandConfirmHTML() {
+    var sameSystemEl  = document.getElementById("rfDemandUseSameSystem");
+    var useSameSystem = sameSystemEl && sameSystemEl.checked;
+    var featsVal      = useSameSystem
+      ? "Same as calibration system"
+      : formatFeatLabel(countCheckedFeatures("rfDemandFeatureList"));
+
+    var lodesLoaded = !!App.lodesData;
+    var lodesVal = lodesLoaded
+      ? "Loaded (" + (App.lodesFileName || "file") + ")"
+      : "Not loaded \u2014 Employment factor will be excluded";
+
+    var apportionEl  = document.getElementById("rfApportionByArea");
+    var sharedPoolEl = document.getElementById("rfSharedPoolMode");
+    var segLenEl     = document.getElementById("rfSegmentLength");
+    var segLen       = segLenEl ? (segLenEl.value + " mi") : "\u2014";
+
+    var html = "<table style=\"width:100%; border-collapse:collapse;\">" +
+      buildConfirmRow("LODES Employment",  lodesVal,  !lodesLoaded) +
+      buildConfirmRow("Census Geometry",   getSelectText("rfGeoLevel")) +
+      buildConfirmRow("ACS Year",          getSelectText("rfYearSelect")) +
+      buildConfirmRow("Features Selected", featsVal) +
+      buildConfirmRow("Apportion by Area", apportionEl && apportionEl.checked ? "Yes" : "No");
+
+    if (!useSameSystem) {
+      html += buildConfirmRow("Shared Pool Normalization",
+                              sharedPoolEl && sharedPoolEl.checked ? "Yes" : "No");
+    }
+
+    html +=
+      buildConfirmRow("Analysis Corridor", getSelectText("rfCorridorSelect")) +
+      buildConfirmRow("Segment Length",    segLen) +
+      "</table>";
+
+    return html;
+  }
+
+  function showAnalysisConfirm(bodyHtml, onConfirm) {
+    var modal = document.getElementById("rfAnalysisConfirmModal");
+    var body  = document.getElementById("rfConfirmModalBody");
+    if (!modal || !body) { onConfirm(); return; } // graceful fallback if modal missing
+    body.innerHTML = bodyHtml;
+    _confirmCallback = onConfirm;
+    modal.style.display = "";
+  }
+
+  function closeConfirmModal() {
+    var modal = document.getElementById("rfAnalysisConfirmModal");
+    if (modal) modal.style.display = "none";
+    _confirmCallback = null;
   }
 
   // ---- Tab management ----
@@ -2519,8 +2624,22 @@
       });
     }
 
+    // Analysis confirmation modal: Proceed / Cancel
+    var confirmProceedBtn = document.getElementById("rfConfirmModalProceed");
+    if (confirmProceedBtn) {
+      confirmProceedBtn.addEventListener("click", function () {
+        var cb = _confirmCallback;
+        closeConfirmModal();
+        if (cb) cb();
+      });
+    }
+    var confirmCancelBtn = document.getElementById("rfConfirmModalCancel");
+    if (confirmCancelBtn) confirmCancelBtn.addEventListener("click", closeConfirmModal);
+
     var sysBtn = document.getElementById("rfRunSystemAnalysis");
-    if (sysBtn) sysBtn.addEventListener("click", runSystemAnalysis);
+    if (sysBtn) sysBtn.addEventListener("click", function () {
+      showAnalysisConfirm(buildCalibConfirmHTML(), runSystemAnalysis);
+    });
 
     var calibApportionCb = document.getElementById("rfCalibApportionByArea");
     if (calibApportionCb) {
@@ -2663,7 +2782,9 @@
     }
 
     var runBtn = document.getElementById("rfRunDemand");
-    if (runBtn) runBtn.addEventListener("click", runDemand);
+    if (runBtn) runBtn.addEventListener("click", function () {
+      showAnalysisConfirm(buildDemandConfirmHTML(), runDemand);
+    });
 
     var apportionCb = document.getElementById("rfApportionByArea");
     if (apportionCb) {
