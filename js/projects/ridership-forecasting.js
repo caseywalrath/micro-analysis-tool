@@ -54,7 +54,7 @@
   var _systemResult = null;      // result from RM.computeSystemDemand() (calibration context)
   var _perRouteCDI = null;       // per-route CDI array (calibration context)
   var _matchResult = null;       // result from RM.matchRoutesToCSV()
-  var _selectedCorridor = "all"; // "all" or "route:N" / "line:N"
+  var _selectedCorridor = ""; // "route:N" / "line:N" (specific corridor required)
   var _calibFeatureFilter = null; // { routeIndices: [...], lineIndices: [...] } or null (all)
 
   // Demand-phase state (independent TPI context when analyzing a different system)
@@ -539,7 +539,7 @@
       // For Path A and B, build the result object from TPI data
       if (!result && tpiResult) {
         var displayCDI;
-        if (_selectedCorridor !== "all" && activeRouteCDIs) {
+        if (_selectedCorridor && activeRouteCDIs) {
           var parts = _selectedCorridor.split(":");
           var selType = parts[0];
           var selIdx = parseInt(parts[1], 10);
@@ -551,8 +551,7 @@
           }
         }
         if (!displayCDI) {
-          var sysResult = _demandSystemResult || _systemResult;
-          displayCDI = sysResult ? sysResult.systemCDI : { value: NaN, scored: 0, total: 0 };
+          displayCDI = { value: NaN, scored: 0, total: 0 };
         }
 
         var segments = [];
@@ -588,10 +587,8 @@
         title: "Demand Legend"
       });
 
-      // Render segment overlays
-      if (result.segments.length > 0) {
-        renderSegments(result.segments);
-      }
+      // Render corridor CDI lines (colored by per-route CDI score)
+      renderCorridorCDILines(_demandPerRouteCDI || _perRouteCDI);
 
       displayDemandResults(result);
 
@@ -690,9 +687,9 @@
   var RF_SOURCE = "rf-choropleth";
   var RF_FILL_LAYER = "rf-choropleth-fill";
   var RF_LINE_LAYER = "rf-choropleth-line";
-  var RF_SEG_SOURCE = "rf-segments";
-  var RF_SEG_FILL_LAYER = "rf-segments-fill";
-  var RF_SEG_LINE_LAYER = "rf-segments-line";
+  var RF_CORRIDOR_SOURCE = "rf-corridor-cdi";
+  var RF_CORRIDOR_LAYER = "rf-corridor-cdi-layer";
+  var _corridorPopup = null; // MapLibre Popup instance for corridor CDI hover
 
   function renderChoropleth(result) {
     var map = App.map;
@@ -772,43 +769,77 @@
     }
   }
 
-  function renderSegments(segments) {
+  // Render corridor route lines colored by per-route CDI score.
+  // routeCDIs: array from computePerRouteCDI / computeSystemDemand.
+  function renderCorridorCDILines(routeCDIs) {
     var map = App.map;
-    if (!map || segments.length === 0) return;
+    if (!map || !routeCDIs || routeCDIs.length === 0) return;
 
     var features = [];
-    for (var i = 0; i < segments.length; i++) {
-      var seg = segments[i];
+    for (var i = 0; i < routeCDIs.length; i++) {
+      var pr = routeCDIs[i];
+      var feat = pr.featureType === "route"
+        ? (App.routes || [])[pr.featureIndex]
+        : (App.lines  || [])[pr.featureIndex];
+      if (!feat || !feat.geometry) continue;
       features.push({
         type: "Feature",
         properties: {
-          segmentIndex: i,
-          cdi: seg.cdi,
-          classification: seg.classification
+          name: pr.name || (pr.featureType + " " + (pr.featureIndex + 1)),
+          cdiScore: Number.isFinite(pr.cdi) ? pr.cdi : 0,
+          featureType: pr.featureType,
+          featureIndex: pr.featureIndex
         },
-        geometry: seg.bufferGeometry
+        geometry: feat.geometry
       });
     }
 
     var fc = { type: "FeatureCollection", features: features };
 
-    var colorExpr = [
-      "interpolate", ["linear"], ["coalesce", ["get", "cdi"], 0],
-      0, "rgba(255,200,200,0.2)",
-      2, "rgba(255,200,100,0.3)",
-      3, "rgba(100,200,100,0.3)",
-      5, "rgba(50,100,200,0.3)"
-    ];
-
-    if (map.getSource(RF_SEG_SOURCE)) {
-      map.getSource(RF_SEG_SOURCE).setData(fc);
-    } else {
-      map.addSource(RF_SEG_SOURCE, { type: "geojson", data: fc });
-      map.addLayer({
-        id: RF_SEG_LINE_LAYER, type: "line", source: RF_SEG_SOURCE,
-        paint: { "line-color": "#e65100", "line-width": 2, "line-opacity": 0.7, "line-dasharray": [4, 2] }
-      });
+    if (map.getSource(RF_CORRIDOR_SOURCE)) {
+      map.getSource(RF_CORRIDOR_SOURCE).setData(fc);
+      return;
     }
+
+    map.addSource(RF_CORRIDOR_SOURCE, { type: "geojson", data: fc });
+    map.addLayer({
+      id: RF_CORRIDOR_LAYER,
+      type: "line",
+      source: RF_CORRIDOR_SOURCE,
+      paint: {
+        "line-width": 5,
+        "line-opacity": 0.85,
+        "line-color": [
+          "interpolate", ["linear"], ["get", "cdiScore"],
+          0, "#d3d3d3",
+          1, "#eff3ff",
+          2, "#bdd7e7",
+          3, "#6baed6",
+          4, "#3182bd",
+          5, "#08519c"
+        ]
+      }
+    });
+
+    // Move above choropleth polygons
+    try { map.moveLayer(RF_CORRIDOR_LAYER); } catch (e) { /* layer order not critical */ }
+
+    // Hover popup showing Feature Name + CDI
+    _corridorPopup = new maplibregl.Popup({ closeButton: false, closeOnClick: false });
+    map.on("mousemove", RF_CORRIDOR_LAYER, function (e) {
+      map.getCanvas().style.cursor = "pointer";
+      if (e.features && e.features.length > 0) {
+        var props = e.features[0].properties;
+        var cdiVal = Number.isFinite(props.cdiScore) ? Number(props.cdiScore).toFixed(2) : "N/A";
+        _corridorPopup.setLngLat(e.lngLat)
+          .setHTML('<div style="font-size:12px;line-height:1.5;"><b>' + props.name + '</b><br>CDI: ' + cdiVal + '</div>')
+          .addTo(map);
+      }
+    });
+    map.on("mouseleave", RF_CORRIDOR_LAYER, function () {
+      map.getCanvas().style.cursor = App.drawMode ? "crosshair" : "grab";
+      if (_corridorPopup) _corridorPopup.remove();
+    });
   }
 
   function removeChoropleth() {
@@ -817,9 +848,9 @@
     if (map.getLayer(RF_FILL_LAYER)) map.removeLayer(RF_FILL_LAYER);
     if (map.getLayer(RF_LINE_LAYER)) map.removeLayer(RF_LINE_LAYER);
     if (map.getSource(RF_SOURCE)) map.removeSource(RF_SOURCE);
-    if (map.getLayer(RF_SEG_FILL_LAYER)) map.removeLayer(RF_SEG_FILL_LAYER);
-    if (map.getLayer(RF_SEG_LINE_LAYER)) map.removeLayer(RF_SEG_LINE_LAYER);
-    if (map.getSource(RF_SEG_SOURCE)) map.removeSource(RF_SEG_SOURCE);
+    if (map.getLayer(RF_CORRIDOR_LAYER)) map.removeLayer(RF_CORRIDOR_LAYER);
+    if (map.getSource(RF_CORRIDOR_SOURCE)) map.removeSource(RF_CORRIDOR_SOURCE);
+    if (_corridorPopup) { _corridorPopup.remove(); _corridorPopup = null; }
   }
 
   function clearAll() {
@@ -833,7 +864,7 @@
     _systemResult = null;
     _perRouteCDI = null;
     _matchResult = null;
-    _selectedCorridor = "all";
+    _selectedCorridor = "";
     _calibFeatureFilter = null;
     _demandSystemResult = null;
     _demandPerRouteCDI = null;
@@ -886,8 +917,8 @@
     // Determine which per-route CDI array to use (demand context first, then calibration)
     var activeRouteCDIs = _demandPerRouteCDI || _perRouteCDI;
 
-    // If a specific corridor is selected and we have per-route data, use its CDI
-    if (_selectedCorridor !== "all" && activeRouteCDIs) {
+    // Look up per-route CDI for the selected corridor
+    if (_selectedCorridor && activeRouteCDIs) {
       var parts = _selectedCorridor.split(":");
       var type = parts[0];
       var idx = parseInt(parts[1], 10);
@@ -897,9 +928,7 @@
         }
       }
     }
-    // Fall back to system CDI: demand context, then calibration, then legacy demand
-    if (_demandSystemResult && _demandSystemResult.systemCDI) return _demandSystemResult.systemCDI.value;
-    if (_systemResult && _systemResult.systemCDI) return _systemResult.systemCDI.value;
+    // Legacy fallback for uncalibrated demand (computeCorridorDemand path)
     if (_lastResult && _lastResult.corridorCDI) return _lastResult.corridorCDI.value;
     return NaN;
   }
@@ -908,7 +937,7 @@
     // Return length in miles for the currently selected corridor.
     // Prefer demand context, then calibration context.
     var activeRouteCDIs = _demandPerRouteCDI || _perRouteCDI;
-    if (_selectedCorridor !== "all" && activeRouteCDIs) {
+    if (_selectedCorridor && activeRouteCDIs) {
       var parts = _selectedCorridor.split(":");
       var type = parts[0];
       var idx = parseInt(parts[1], 10);
@@ -1133,12 +1162,13 @@
 
   // Populate the corridor dropdown from a CDI array.
   // If no routeCDIs param, uses demand context first, then calibration context.
+  // Auto-selects the first option and syncs _selectedCorridor.
   function populateCorridorDropdown(routeCDIs) {
     var sel = document.getElementById("rfCorridorSelect");
     if (!sel) return;
-    sel.innerHTML = '<option value="all">All corridors (system-wide)</option>';
+    sel.innerHTML = "";
     var data = routeCDIs || _demandPerRouteCDI || _perRouteCDI;
-    if (!data) return;
+    if (!data || data.length === 0) return;
     for (var i = 0; i < data.length; i++) {
       var pr = data[i];
       var opt = document.createElement("option");
@@ -1146,6 +1176,14 @@
       opt.textContent = pr.name + " (CDI: " + (Number.isFinite(pr.cdi) ? pr.cdi.toFixed(2) : "N/A") + ")";
       sel.appendChild(opt);
     }
+    // Restore previous selection if still available; otherwise default to first
+    if (_selectedCorridor) {
+      sel.value = _selectedCorridor;
+    }
+    if (!sel.value || sel.selectedIndex < 0) {
+      sel.selectedIndex = 0;
+    }
+    _selectedCorridor = sel.value;
   }
 
   // Populate corridor dropdown from checked demand feature checkboxes.
@@ -1161,12 +1199,12 @@
 
   // Shows feature names immediately (before analysis). Enriches with CDI values from
   // _demandPerRouteCDI when available (i.e. after demand analysis has run).
-  // Restores _selectedCorridor if still present; falls back to "all" if feature was unchecked.
+  // Restores _selectedCorridor if still present; falls back to first option if unchecked.
   function populateCorridorDropdownFromCheckedFeatures() {
     var sel = document.getElementById("rfCorridorSelect");
     if (!sel) return;
-    var prevValue = _selectedCorridor || "all";
-    sel.innerHTML = '<option value="all">All corridors (system-wide)</option>';
+    var prevValue = _selectedCorridor || "";
+    sel.innerHTML = "";
 
     var container = document.getElementById("rfDemandFeatureList");
     if (!container) return;
@@ -1200,11 +1238,14 @@
       sel.appendChild(opt);
     }
 
-    // Restore previous corridor selection if still present in dropdown
-    if (prevValue && prevValue !== "all") {
+    // Restore previous corridor selection if still present in dropdown; else first option
+    if (prevValue) {
       sel.value = prevValue;
-      if (sel.value !== prevValue) sel.value = "all"; // feature was unchecked
     }
+    if (!sel.value || sel.selectedIndex < 0) {
+      sel.selectedIndex = 0;
+    }
+    _selectedCorridor = sel.value || "";
   }
 
   // ---- Layer 2: Calibration (system analysis + CSV matching) ----
@@ -1276,6 +1317,9 @@
 
       // Display per-route CDI results
       displaySystemResults(result);
+
+      // Render corridor CDI lines on map (colored by per-route CDI)
+      renderCorridorCDILines(_perRouteCDI);
 
       // Populate the Demand tab corridor dropdown (context-aware)
       if (_demandUseSameSystem) {
@@ -1388,11 +1432,6 @@
     if (!isPopupVisible()) return;
     var el = document.getElementById("rfSystemResults");
     if (el) el.style.display = "";
-
-    // System CDI
-    var sysEl = document.getElementById("rfSystemCDI");
-    if (sysEl) sysEl.textContent = Number.isFinite(result.systemCDI.value)
-      ? result.systemCDI.value.toFixed(2) : "\u2014";
 
     // Feature count
     var countEl = document.getElementById("rfSystemFeatureCount");
@@ -2158,7 +2197,7 @@
   function computeCDIFromResult(tpiResult, featureFilter) {
     var activeRouteCDIs = _demandPerRouteCDI || _perRouteCDI;
 
-    if (_selectedCorridor !== "all" && activeRouteCDIs) {
+    if (_selectedCorridor && activeRouteCDIs) {
       // For corridor-specific CDI, re-run per-route CDI with the projected TPI
       var projRouteCDIs = RM.computePerRouteCDI(tpiResult, featureFilter);
       var parts = _selectedCorridor.split(":");
@@ -2378,7 +2417,7 @@
   }
 
   function _getCorridorLabel() {
-    if (!_selectedCorridor || _selectedCorridor === "all") return "All corridors (system-wide)";
+    if (!_selectedCorridor) return "No corridor selected";
     var parts = _selectedCorridor.split(":");
     var type = parts[0], idx = parseInt(parts[1], 10);
     var arr = type === "route" ? (App.routes || []) : (App.lines || []);
@@ -3384,7 +3423,7 @@
     if (Array.isArray(data.scenarios) && data.scenarios.length === 4) {
       for (var i = 0; i < 4; i++) _scenarios[i] = Object.assign({}, data.scenarios[i]);
     }
-    if (data.selectedCorridor) _selectedCorridor = data.selectedCorridor;
+    if (data.selectedCorridor && data.selectedCorridor !== "all") _selectedCorridor = data.selectedCorridor;
     if (data.activeTab) _activeTab = data.activeTab;
     if (Array.isArray(data.perRouteCDI)) _perRouteCDI = data.perRouteCDI.slice();
 
@@ -3414,12 +3453,13 @@
       };
       _stale = false;
 
-      // If geometry was saved, render RF choropleth immediately
+      // If geometry was saved, render RF choropleth and corridor lines immediately
       if (tpiRestored && tpiRestored.geos && tpiRestored.geos.length > 0) {
         var displayCDI = _systemResult.systemCDI ||
           { value: NaN, scored: tpiRestored.geoids.length, total: tpiRestored.geoids.length };
         renderChoropleth({ tpiResult: tpiRestored, corridorCDI: displayCDI });
         App.renderCensusOverlay(tpiRestored.geos);
+        if (_perRouteCDI && _perRouteCDI.length > 0) renderCorridorCDILines(_perRouteCDI);
         App.popup.showFloatingWidget("rf-legend", "projects/ridership-legend.html", {
           position: "bottom-left", width: 170, title: "Demand Legend"
         });
