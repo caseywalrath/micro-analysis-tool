@@ -109,8 +109,10 @@
 
   // ---- Weight modal (Adjust Weights) ----
 
-  var _pendingWeights = null;  // temporary weight copy while modal is open
-  var _confirmCallback = null; // pending analysis to run on modal confirm
+  var _pendingWeights = null;   // temporary weight copy while modal is open
+  var _confirmCallback = null;  // pending analysis to run on modal confirm
+  var _calibChartMouseMove  = null; // canvas tooltip listener refs
+  var _calibChartMouseLeave = null;
 
   function buildRFWeightSliders(weights) {
     var container = document.getElementById("rfWeightSliders");
@@ -860,6 +862,11 @@
       if (spNoteEl) spNoteEl.style.display = "none";
       var spCbEl = document.getElementById("rfSharedPoolMode");
       if (spCbEl) { spCbEl.checked = false; spCbEl.disabled = false; }
+      // Reset calibration results + chart
+      var calibResults = document.getElementById("rfCalibResults");
+      if (calibResults) calibResults.style.display = "none";
+      var chartWrap = document.getElementById("rfCalibChartWrap");
+      if (chartWrap) chartWrap.style.display = "none";
       // Reset projections tab
       var projResults = document.getElementById("rfProjResults");
       if (projResults) projResults.style.display = "none";
@@ -1594,7 +1601,7 @@
           }
         }
       }
-      obs.push({ ridership: ridership, demandIndex: routeCDI });
+      obs.push({ ridership: ridership, demandIndex: routeCDI, name: match.routeCDI.name || ("Route " + i) });
     }
 
     if (obs.length < 2) {
@@ -1622,6 +1629,9 @@
     // Display results
     var resultsEl = document.getElementById("rfCalibResults");
     if (resultsEl) resultsEl.style.display = "";
+
+    // Render fit visualization (must be after resultsEl is shown so canvas has clientWidth)
+    renderCalibChart(obs, _calibration);
 
     var factorEl = document.getElementById("rfCalibFactor");
     if (factorEl) factorEl.textContent = _calibration.factor.toFixed(4);
@@ -1663,6 +1673,175 @@
     // Show next step
     var nextStep = document.getElementById("rfCalibNextStep");
     if (nextStep) nextStep.style.display = "";
+  }
+
+  // ---- Calibration fit chart ----
+
+  function renderCalibChart(points, calibration) {
+    var wrap   = document.getElementById("rfCalibChartWrap");
+    var canvas = document.getElementById("rfCalibChart");
+    if (!wrap || !canvas) return;
+
+    wrap.style.display = "";
+    var dpr  = window.devicePixelRatio || 1;
+    var cssW = canvas.clientWidth  || 500;
+    var cssH = canvas.clientHeight || 260;
+    canvas.width  = cssW * dpr;
+    canvas.height = cssH * dpr;
+    var ctx = canvas.getContext("2d");
+    ctx.scale(dpr, dpr);
+
+    var PAD = { top: 18, right: 18, bottom: 48, left: 64 };
+    var plotW = cssW - PAD.left - PAD.right;
+    var plotH = cssH - PAD.top  - PAD.bottom;
+
+    // Axis ranges
+    var maxX = 0, maxY = 0;
+    for (var i = 0; i < points.length; i++) {
+      if (points[i].demandIndex > maxX) maxX = points[i].demandIndex;
+      if (points[i].ridership   > maxY) maxY = points[i].ridership;
+    }
+    maxX = Math.max(maxX * 1.15, 0.5);
+    var lineYatMax = (calibration.method === "regression")
+      ? (calibration.intercept || 0) + calibration.factor * maxX
+      : calibration.factor * maxX;
+    maxY = Math.max(maxY, lineYatMax) * 1.15;
+    if (maxY <= 0) maxY = 1;
+
+    function toX(v) { return PAD.left + (v / maxX) * plotW; }
+    function toY(v) { return PAD.top  + plotH - (v / maxY) * plotH; }
+
+    // Background
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, cssW, cssH);
+
+    // Light grid
+    ctx.strokeStyle = "#f0f0f0";
+    ctx.lineWidth = 1;
+    var xTicks = 5, yTicks = 4;
+    for (var xi = 0; xi <= xTicks; xi++) {
+      var gx = toX((xi / xTicks) * maxX);
+      ctx.beginPath(); ctx.moveTo(gx, PAD.top); ctx.lineTo(gx, PAD.top + plotH); ctx.stroke();
+    }
+    for (var yi = 0; yi <= yTicks; yi++) {
+      var gy = toY((yi / yTicks) * maxY);
+      ctx.beginPath(); ctx.moveTo(PAD.left, gy); ctx.lineTo(PAD.left + plotW, gy); ctx.stroke();
+    }
+
+    // Axes
+    ctx.strokeStyle = "#718096";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(PAD.left, PAD.top);
+    ctx.lineTo(PAD.left, PAD.top + plotH);
+    ctx.lineTo(PAD.left + plotW, PAD.top + plotH);
+    ctx.stroke();
+
+    // Tick labels — X
+    ctx.fillStyle = "#718096";
+    ctx.font = "10px sans-serif";
+    ctx.textAlign = "center";
+    for (var xi2 = 0; xi2 <= xTicks; xi2++) {
+      var tvx = (xi2 / xTicks) * maxX;
+      ctx.fillText(tvx.toFixed(1), toX(tvx), PAD.top + plotH + 14);
+    }
+    // Tick labels — Y
+    ctx.textAlign = "right";
+    for (var yi2 = 0; yi2 <= yTicks; yi2++) {
+      var tvy = (yi2 / yTicks) * maxY;
+      var lbl = tvy >= 1000 ? (tvy / 1000).toFixed(1) + "k" : Math.round(tvy).toString();
+      ctx.fillText(lbl, PAD.left - 6, toY(tvy) + 3.5);
+    }
+
+    // Axis titles
+    ctx.fillStyle = "#4a5568";
+    ctx.font = "11px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("CDI Score", PAD.left + plotW / 2, cssH - 4);
+    ctx.save();
+    ctx.translate(13, PAD.top + plotH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText("Ridership", 0, 0);
+    ctx.restore();
+
+    // Best-fit line
+    var lineX0, lineY0, lineY1;
+    if (calibration.method === "regression") {
+      var intercept = calibration.intercept || 0;
+      lineX0 = (intercept < 0) ? (-intercept / calibration.factor) : 0;
+      lineY0 = Math.max(0, intercept + calibration.factor * lineX0);
+      lineY1 = intercept + calibration.factor * maxX;
+    } else {
+      lineX0 = 0;
+      lineY0 = 0;
+      lineY1 = calibration.factor * maxX;
+    }
+    ctx.beginPath();
+    ctx.moveTo(toX(lineX0), toY(lineY0));
+    ctx.lineTo(toX(maxX),   toY(lineY1));
+    ctx.strokeStyle = "#e53e3e";
+    ctx.lineWidth = 1.8;
+    ctx.setLineDash([5, 3]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Line equation label
+    var lineLabel = (calibration.method === "regression")
+      ? "y = " + (calibration.intercept || 0).toFixed(1) + " + " + calibration.factor.toFixed(2) + "x"
+      : "y = " + calibration.factor.toFixed(2) + "x";
+    ctx.fillStyle = "#e53e3e";
+    ctx.font = "10px sans-serif";
+    ctx.textAlign = "left";
+    var labelX = toX(maxX * 0.55);
+    var labelY = toY(lineY1 * 0.80);
+    // Keep label inside plot area
+    if (labelY < PAD.top + 12) labelY = PAD.top + 12;
+    ctx.fillText(lineLabel, labelX, labelY);
+
+    // Data points (drawn after line so dots appear on top)
+    ctx.fillStyle = "#3182ce";
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 1.5;
+    for (var pi = 0; pi < points.length; pi++) {
+      var ppx = toX(points[pi].demandIndex);
+      var ppy = toY(points[pi].ridership);
+      ctx.beginPath();
+      ctx.arc(ppx, ppy, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // Tooltip via mousemove (store listener refs so re-renders don't stack)
+    var tooltip = document.getElementById("rfCalibChartTooltip");
+    if (_calibChartMouseMove)  canvas.removeEventListener("mousemove",  _calibChartMouseMove);
+    if (_calibChartMouseLeave) canvas.removeEventListener("mouseleave", _calibChartMouseLeave);
+
+    // Capture cssW/toX/toY in closure via the already-computed values above
+    _calibChartMouseMove = function (e) {
+      var rect = canvas.getBoundingClientRect();
+      var mx = e.clientX - rect.left;
+      var my = e.clientY - rect.top;
+      var hit = null, bestDist = 12;
+      for (var ti = 0; ti < points.length; ti++) {
+        var tx = toX(points[ti].demandIndex);
+        var ty = toY(points[ti].ridership);
+        var dist = Math.sqrt((mx - tx) * (mx - tx) + (my - ty) * (my - ty));
+        if (dist < bestDist) { bestDist = dist; hit = points[ti]; }
+      }
+      if (hit && tooltip) {
+        tooltip.innerHTML = "<b>" + hit.name + "</b><br>CDI: " + hit.demandIndex.toFixed(2) +
+          "&nbsp; Ridership: " + Math.round(hit.ridership).toLocaleString();
+        tooltip.style.display = "";
+        var tipX = Math.min(mx + 10, cssW - tooltip.offsetWidth - 4);
+        tooltip.style.left = tipX + "px";
+        tooltip.style.top  = (my - 36) + "px";
+      } else if (tooltip) {
+        tooltip.style.display = "none";
+      }
+    };
+    _calibChartMouseLeave = function () { if (tooltip) tooltip.style.display = "none"; };
+    canvas.addEventListener("mousemove",  _calibChartMouseMove);
+    canvas.addEventListener("mouseleave", _calibChartMouseLeave);
   }
 
   // ---- Layer 3: Elasticity ----

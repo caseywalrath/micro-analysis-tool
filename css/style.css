@@ -1313,6 +1313,8 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Libe
 }
 .rf-radio-group { display: flex; flex-direction: column; gap: 4px; }
 .rf-radio-label { font-size: 12px; display: flex; align-items: center; gap: 4px; cursor: pointer; }
+#rfCalibChart { border: 1px solid var(--border, #e2e8f0); border-radius: 4px; }
+
 .rf-warning {
   padding: 6px 10px;
   border-radius: 6px;

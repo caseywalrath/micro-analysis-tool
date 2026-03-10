@@ -180,6 +180,17 @@
                 <span id="rfCalibSampleSize" class="rf-stat-value">&mdash;</span>
               </div>
             </div>
+
+            <div id="rfCalibChartWrap" style="display:none; margin-top:14px; position:relative;">
+              <div class="rf-section-title" style="margin-bottom:6px;">Fit Visualization</div>
+              <canvas id="rfCalibChart" style="width:100%; height:260px; display:block;"></canvas>
+              <div id="rfCalibChartTooltip" style="
+                display:none; position:absolute; pointer-events:none;
+                background:rgba(0,0,0,0.75); color:#fff; font-size:11px;
+                padding:4px 7px; border-radius:4px; white-space:nowrap; z-index:10;">
+              </div>
+            </div>
+
             <div id="rfCalibHeadwayNote" class="rf-note" style="display:none;"></div>
             <div id="rfCalibSharedPoolNote" class="rf-note" style="display:none;"></div>
             <div id="rfCalibWarning" class="rf-warning" style="display:none;"></div>
