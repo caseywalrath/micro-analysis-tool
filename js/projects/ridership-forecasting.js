@@ -11,10 +11,25 @@
   var RM = window.RidershipModel;
   var TPI = window.TPI;
 
+  // ---- RF-specific default weights (independent from TPI defaults) ----
+  // Population and employment density are the primary demand drivers for corridor analysis.
+  // Equity/transit-dependence factors are intentionally excluded (weight = 0) by default.
+  var RF_DEFAULT_WEIGHTS = {
+    pop_density: 50,
+    employment:  50,
+    zero_car:     0,
+    poverty:      0,
+    senior:       0,
+    disability:   0,
+    poc:          0,
+    youth:        0,
+    lep:          0
+  };
+
   // ---- Module-local state ----
 
   var _lastResult = null;       // last computeCorridorDemand result
-  var _weights = TPI.getDefaultWeights();
+  var _weights = Object.assign({}, RF_DEFAULT_WEIGHTS);
   var _stale = false;
   var _running = false;
   var _initialized = false;
@@ -2488,7 +2503,7 @@
     if (resetBtn) {
       resetBtn.addEventListener("click", function () {
         if (!_pendingWeights) return;
-        applyWeightsToModalSliders(TPI.getDefaultWeights());
+        applyWeightsToModalSliders(Object.assign({}, RF_DEFAULT_WEIGHTS));
       });
     }
 
@@ -3050,7 +3065,7 @@
   function restoreRfState(data) {
     if (!data) return;
 
-    if (data.weights) _weights = Object.assign({}, data.weights);
+    if (data.weights) _weights = Object.assign({}, RF_DEFAULT_WEIGHTS, data.weights);
     if (data.apportionByArea != null) _apportionByArea = !!data.apportionByArea;
     if (data.normalizeByLength != null) _normalizeByLength = !!data.normalizeByLength;
     _baselineUncertaintyPct = (data.baselineUncertaintyPct != null && Number.isFinite(data.baselineUncertaintyPct))
