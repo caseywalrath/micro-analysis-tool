@@ -1,0 +1,193 @@
+<!-- FTA Small Starts (Land Use) — Popup Body -->
+
+<!-- Tab bar -->
+<div class="fta-tabs">
+  <button class="fta-tab fta-tab-active" data-tab="ratings">Ratings</button>
+  <button class="fta-tab" data-tab="data-inputs">Data Inputs</button>
+</div>
+
+<!-- ======== Tab 1: Ratings ======== -->
+<div class="fta-tab-content fta-tab-visible" data-tab="ratings">
+  <div class="fta-tab-body">
+    <div class="rf-section-row" style="align-items:flex-start;min-height:380px;">
+
+      <!-- Left: settings -->
+      <div class="rf-settings-col">
+        <div class="rf-section-title">Geography</div>
+
+        <label class="tiny">Level</label>
+        <select id="ftaGeoLevel" class="rf-select">
+          <option value="tract">Census Tracts</option>
+          <option value="bg" selected>Block Groups</option>
+        </select>
+
+        <label class="tiny" style="margin-top:10px;">ACS Year</label>
+        <select id="ftaYearSelect" class="rf-select">
+          <option value="2024">2024</option>
+          <option value="2023">2023</option>
+          <option value="2022">2022</option>
+          <option value="2021">2021</option>
+        </select>
+
+        <button id="ftaRun" type="button" class="rf-action-primary" style="margin-top:16px;">
+          Compute Ratings
+        </button>
+
+        <div id="ftaDataSummary" style="margin-top:16px;">
+          <div class="rf-section-title">Loaded Data</div>
+          <div class="tiny" style="line-height:1.6;">
+            <span id="ftaLodesIndicator" style="color:var(--muted);">LODES: not loaded</span><br>
+            <span id="ftaCreIndicator" style="color:var(--muted);">CRE: not loaded</span><br>
+            <span id="ftaEssIndicator" style="color:var(--muted);">ESS: not loaded</span><br>
+            <span id="ftaLbarIndicator" style="color:var(--muted);">LBAR: not loaded</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: ratings -->
+      <div class="rf-results-col">
+        <div id="ftaStatus" class="rf-status" style="display:none;">
+          <span id="ftaStatusText">Ready</span>
+        </div>
+
+        <div id="ftaRatingsGrid" class="bpGrid">
+
+          <div class="bpItem">
+            <div class="bpTitle">Average Population Density</div>
+            <div><span id="bpPopPill" class="pill na">N/A</span></div>
+            <div class="bpMeta">Value: <span id="bpPopValue">&mdash;</span></div>
+            <div class="bpMeta">Source: ACS B01003_001E / buffer union area</div>
+          </div>
+
+          <div class="bpItem">
+            <div class="bpTitle">Employment Served by System</div>
+            <div><span id="bpEmpPill" class="pill na">N/A</span></div>
+            <div class="bpMeta">Value: <span id="bpEmpValue">&mdash;</span></div>
+            <div class="bpMeta">Source: LODES WAC C000</div>
+          </div>
+
+          <div class="bpItem">
+            <div class="bpTitle">LBAR Ratio (station areas / project counties)</div>
+            <div><span id="bpLbarPill" class="pill na">N/A</span></div>
+            <div class="bpMeta">Value: <span id="bpLbarValue">&mdash;</span></div>
+            <div class="bpMeta"><span id="bpLbarNote">Requires LBAR inventory + counties</span></div>
+          </div>
+
+          <div class="bpItem">
+            <div class="bpTitle">Community Risk (High-Risk %)</div>
+            <div><span id="bpCrePill" class="pill na">N/A</span></div>
+            <div class="bpMeta">Value: <span id="bpCreValue">&mdash;</span></div>
+            <div class="bpMeta"><span id="bpCreNote">Requires CRE upload</span></div>
+          </div>
+
+          <div class="bpItem">
+            <div class="bpTitle">Avg Essential Services per Station Area</div>
+            <div><span id="bpEssPill" class="pill na">N/A</span></div>
+            <div class="bpMeta">Value: <span id="bpEssValue">&mdash;</span></div>
+            <div class="bpMeta"><span id="bpEssNote">Requires ESS upload + stations</span></div>
+          </div>
+
+        </div>
+
+        <!-- Export -->
+        <div style="margin-top:14px;">
+          <button id="ftaExportCSV" type="button" class="rf-btn-sm" disabled>Export Ratings CSV</button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======== Tab 2: Data Inputs ======== -->
+<div class="fta-tab-content" data-tab="data-inputs">
+  <div class="fta-tab-body">
+    <div class="rf-section-row" style="align-items:flex-start;min-height:380px;">
+
+      <!-- Left: CRE + ESS -->
+      <div class="rf-settings-col" style="width:320px;">
+
+        <!-- CRE section -->
+        <div class="rf-section-title">Community Risk (CRE)</div>
+        <div class="tiny" style="margin-bottom:6px;color:var(--muted);">
+          Upload tract-level CSV with GEOID, total population, and high-risk population columns.
+        </div>
+        <label class="tiny">Upload CRE CSV
+          <input id="ftaCreFile" type="file" accept=".csv" style="font-size:12px;margin-top:2px;">
+        </label>
+        <label class="tiny" style="margin-top:6px;">GEOID column
+          <select id="ftaCreColGEOID" class="rf-select" disabled></select>
+        </label>
+        <label class="tiny" style="margin-top:4px;">Total pop column
+          <select id="ftaCreColTotal" class="rf-select" disabled></select>
+        </label>
+        <label class="tiny" style="margin-top:4px;">High-risk pop column
+          <select id="ftaCreColHigh" class="rf-select" disabled></select>
+        </label>
+        <div id="ftaCreInfo" class="tiny" style="margin-top:6px;color:var(--muted);">No file loaded.</div>
+
+        <div style="border-top:1px solid var(--border);margin:14px 0;"></div>
+
+        <!-- ESS section -->
+        <div class="rf-section-title">Essential Services (ESS)</div>
+        <div class="tiny" style="margin-bottom:6px;color:var(--muted);">
+          Upload GeoJSON points or CSV with latitude/longitude of service locations.
+        </div>
+        <label class="tiny">Upload ESS file (GeoJSON or CSV)
+          <input id="ftaEssFile" type="file" accept=".json,.geojson,.csv" style="font-size:12px;margin-top:2px;">
+        </label>
+        <label class="tiny" style="margin-top:6px;">Latitude column (CSV)
+          <select id="ftaEssColLat" class="rf-select" disabled></select>
+        </label>
+        <label class="tiny" style="margin-top:4px;">Longitude column (CSV)
+          <select id="ftaEssColLon" class="rf-select" disabled></select>
+        </label>
+        <div id="ftaEssInfo" class="tiny" style="margin-top:6px;color:var(--muted);">No file loaded.</div>
+
+      </div>
+
+      <!-- Right: LBAR -->
+      <div class="rf-results-col">
+
+        <div class="rf-section-title">LBAR Housing Inventory</div>
+        <div class="tiny" style="margin-bottom:6px;color:var(--muted);">
+          Upload GeoJSON points (properties.units, optional properties.county) or CSV with lat/lon/units and optional county FIPS.
+          Enter project counties as comma-separated 5-digit FIPS.
+        </div>
+        <label class="tiny">Upload LBAR file (GeoJSON or CSV)
+          <input id="ftaLbarFile" type="file" accept=".json,.geojson,.csv" style="font-size:12px;margin-top:2px;">
+        </label>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px;">
+          <label class="tiny">Latitude column
+            <select id="ftaLbarColLat" class="rf-select" disabled></select>
+          </label>
+          <label class="tiny">Longitude column
+            <select id="ftaLbarColLon" class="rf-select" disabled></select>
+          </label>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px;">
+          <label class="tiny">Units column
+            <select id="ftaLbarColUnits" class="rf-select" disabled></select>
+          </label>
+          <label class="tiny">County FIPS column (optional)
+            <select id="ftaLbarColCounty" class="rf-select" disabled></select>
+          </label>
+        </div>
+
+        <label class="tiny" style="margin-top:8px;">
+          Project counties (comma-separated 5-digit FIPS)
+          <input id="ftaLbarCounties" type="text" class="rf-select" placeholder="e.g., 06075, 06081" style="margin-top:2px;">
+        </label>
+
+        <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12px;cursor:pointer;">
+          <input id="ftaToggleLbarLayer" type="checkbox" style="width:auto;margin:0;">
+          Show LBAR points on map
+        </label>
+
+        <div id="ftaLbarInfo" class="tiny" style="margin-top:6px;color:var(--muted);">No file loaded.</div>
+
+      </div>
+    </div>
+  </div>
+</div>
