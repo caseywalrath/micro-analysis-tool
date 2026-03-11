@@ -1,106 +1,139 @@
-<div class="tpi-popup-layout">
-
-  <!-- Column 1: Weights -->
-  <div class="tpi-popup-weights">
-    <div class="tpi-popup-section-title">Factor Weights</div>
-    <div class="tiny" style="margin-bottom:8px;">
-      Adjust weights (must sum to 100). Set a factor to 0 to exclude it.
+<!-- Weights modal overlay (position:absolute covers entire popup) -->
+<div id="tpiWeightsModal" class="rf-weights-modal-overlay" style="display:none;" role="dialog" aria-modal="true">
+  <div class="rf-weights-modal-box">
+    <div class="rf-weights-modal-title">Adjust Factor Weights</div>
+    <div class="tiny" style="margin-bottom:10px;color:var(--muted);">
+      Weights must sum to 100. Set a factor to 0 to exclude it.
+      Employment requires a LODES file; its weight is redistributed automatically if absent.
     </div>
 
     <div id="tpiWeightSliders"></div>
 
-    <div id="tpiWeightTotal" class="tpi-weight-total">
+    <div class="tpi-weight-total" style="margin-top:8px;">
       <span>Total:</span>
       <span id="tpiWeightSum">100</span><span>%</span>
     </div>
-
     <div id="tpiWeightWarn" class="tpi-weight-warn" style="visibility:hidden;">
       Weights must sum to 100%.
     </div>
 
-    <div class="tpi-weight-actions">
-      <button id="tpiResetWeights" type="button">Reset to defaults</button>
-    </div>
-
-    <div id="tpiLodesNote" class="tiny" style="margin-top:6px;">
-      Employment factor requires a LODES file. If absent, its weight is redistributed automatically.
+    <div class="rf-weights-modal-actions">
+      <button id="tpiResetWeights" class="rf-btn-sm" type="button">Reset to Defaults</button>
+      <span style="flex:1;"></span>
+      <button id="tpiWeightsCancel" class="rf-btn-sm" type="button">Cancel</button>
+      <button id="tpiWeightsConfirm" class="rf-action-primary" type="button" style="width:auto;padding:5px 16px;">Confirm</button>
     </div>
   </div>
+</div>
 
-  <!-- Column 2: Results -->
-  <div class="tpi-popup-results">
-    <div class="tpi-popup-section-title">Results</div>
+<!-- Main two-column layout -->
+<div class="tpi-body">
+  <div class="rf-section-row" style="align-items:flex-start;min-height:400px;">
 
-    <div id="tpiStatus" class="tpi-status" style="display:none;">
-      <span id="tpiStatusText">Ready</span>
-    </div>
+    <!-- Left: settings column (240px) -->
+    <div class="rf-settings-col">
 
-    <div id="tpiResults" class="tpi-results-card" style="display:none;">
-      <div class="tpi-results-header">
-        <b>Scoring Summary</b>
-        <span id="tpiGeoCount" class="tiny"></span>
+      <div class="rf-section-title">Geography</div>
+
+      <label class="tiny">Level</label>
+      <select id="tpiGeoLevel" class="rf-select">
+        <option value="tract">Census Tracts</option>
+        <option value="bg" selected>Block Groups</option>
+      </select>
+
+      <label class="tiny" style="margin-top:10px;">
+        ACS Year&nbsp;<button id="tpiLodesWarnBtn" class="rf-info-btn" type="button"
+          title="LODES data not loaded — Employment factor will be excluded and its weight redistributed automatically."
+          style="color:#f59e0b;display:none;">&#9888;</button>
+      </label>
+      <select id="tpiYearSelect" class="rf-select">
+        <option value="2024">2024</option>
+        <option value="2023">2023</option>
+        <option value="2022">2022</option>
+        <option value="2021">2021</option>
+      </select>
+
+      <div class="tpi-toggle-row" style="margin-top:10px;">
+        <input type="checkbox" id="tpiApportionByArea">
+        <label for="tpiApportionByArea" class="tiny">Apportion by area</label>
       </div>
 
-      <div id="tpiFactorSummary" class="tpi-factor-summary"></div>
-
-      <div class="tpi-composite-summary">
-        <div class="tpi-composite-row">
-          <span class="tpi-composite-label">Composite TPI (weighted avg)</span>
-          <span id="tpiCompositeAvg" class="tpi-composite-value">&mdash;</span>
-        </div>
-        <div class="tpi-composite-row">
-          <span class="tpi-composite-label">Max TPI score</span>
-          <span id="tpiCompositeMax" class="tpi-composite-value">&mdash;</span>
-        </div>
-        <div class="tpi-composite-row">
-          <span class="tpi-composite-label">Geographies scored</span>
-          <span id="tpiScoredCount" class="tpi-composite-value">&mdash;</span>
-        </div>
+      <div class="rf-section-title" style="margin-top:16px;">TPI Features</div>
+      <div class="rf-feature-select-actions" style="margin-bottom:4px;">
+        <a href="#" id="tpiSelectAll">Select all</a>&nbsp;<span style="color:var(--muted);">|</span>&nbsp;<a href="#" id="tpiSelectNone">Clear</a>
       </div>
+      <div id="tpiFeatureChecklist" class="rf-feature-checklist">
+        <div style="padding:6px;color:var(--muted);font-size:12px;">No features drawn.</div>
+      </div>
+
+      <label class="tiny" style="margin-top:10px;">Analysis corridor</label>
+      <select id="tpiCorridorSelect" class="rf-select">
+        <option value="all">All features (system-wide)</option>
+      </select>
+
+      <button id="tpiAdjustWeights" type="button" class="rf-btn-sm" style="margin-top:12px;width:100%;">
+        Adjust Weights
+      </button>
+      <button id="tpiRun" type="button" class="rf-action-primary" style="margin-top:8px;">
+        Analyze System
+      </button>
+
     </div>
 
-    <div class="tiny" style="margin-top:8px;">
-      Scores are normalized within the corridor using quintiles (1&ndash;5).
-      A &ldquo;5&rdquo; means highest propensity <em>relative to other geographies
-      in this study area</em>.
+    <!-- Right: results column (flex:1) -->
+    <div class="rf-results-col">
+
+      <div id="tpiStatus" class="rf-status" style="display:none;">
+        <span id="tpiStatusText">Ready</span>
+      </div>
+
+      <!-- Results (shown after a successful run) -->
+      <div id="tpiResults" style="display:none;">
+
+        <div class="rf-section-title">
+          Analysis Corridor
+          <span id="tpiCorridorLabel" style="font-weight:normal;text-transform:none;letter-spacing:0;font-size:12px;color:#333;"></span>
+        </div>
+
+        <!-- Scrollable geography list -->
+        <div id="tpiGeoList" class="rf-route-score-list" style="max-height:300px;"></div>
+
+        <!-- Summary stats -->
+        <div class="rf-section-title" style="margin-top:14px;">Summary</div>
+        <div class="rf-stats-grid">
+          <div class="rf-stat">
+            <span class="rf-stat-label">Corridor TPI Score</span>
+            <span id="tpiCorridorScore" class="rf-stat-value">&mdash;</span>
+          </div>
+          <div class="rf-stat">
+            <span class="rf-stat-label">Geographies scored</span>
+            <span id="tpiScoredCount" class="rf-stat-value">&mdash;</span>
+          </div>
+        </div>
+
+        <!-- Footnotes -->
+        <p id="tpiFallbackNote" class="tpi-footnote" style="display:none;margin-top:8px;"></p>
+        <p id="tpiApportionNote" class="tpi-footnote" style="display:none;"></p>
+
+        <!-- Export buttons -->
+        <div style="display:flex;gap:8px;margin-top:14px;">
+          <button id="tpiExportGeoJSON" type="button" class="rf-btn-sm" disabled>Export GeoJSON</button>
+          <button id="tpiExportCSV" type="button" class="rf-btn-sm" disabled>Export CSV</button>
+        </div>
+
+        <p class="tiny" style="margin-top:8px;color:var(--muted);">
+          Scores are quintile-normalized within the selected TPI features pool.
+          Exports include all analyzed geographies.
+        </p>
+
+      </div>
+
+      <!-- Pre-run empty state -->
+      <div id="tpiEmptyState" class="rf-info-box">
+        <p>Select features and click <strong>Analyze System</strong> to compute the Transit Propensity Index.</p>
+      </div>
+
     </div>
+
   </div>
-
-  <!-- Column 3: Actions -->
-  <div class="tpi-popup-actions">
-    <div class="tpi-popup-section-title">Settings</div>
-
-    <label class="tiny" style="margin-bottom:2px;">Geography level</label>
-    <select id="tpiGeoLevel" style="width:100%;font-size:12px;padding:4px;">
-      <option value="tract">Tracts (faster)</option>
-      <option value="bg" selected>Block Groups</option>
-    </select>
-
-    <label class="tiny" style="margin-bottom:2px;margin-top:6px;">ACS Year <button id="tpiLodesWarnBtn" class="rf-info-btn" type="button" title="LODES data not loaded. The Employment Density factor will be excluded and its weight redistributed to other factors automatically. Upload a LODES file via the sidebar to include employment in the analysis." style="display:none;color:#b45309;">&#9888;</button></label>
-    <select id="tpiYearSelect" style="width:100%;font-size:12px;padding:4px;">
-      <option value="2024">2024</option>
-      <option value="2023">2023</option>
-      <option value="2022">2022</option>
-      <option value="2021">2021</option>
-    </select>
-
-    <div style="margin-top:12px;">
-      <div class="tpi-popup-section-title">Actions</div>
-    </div>
-
-    <label class="tpi-toggle-row">
-      <input type="checkbox" id="tpiApportionByArea">
-      <span>Apportion by Area</span>
-    </label>
-
-    <button id="tpiRun" type="button" class="tpi-action-primary">Calculate</button>
-    <button id="tpiShowLegend" type="button">Show Legend</button>
-
-    <div style="margin-top:auto; padding-top:12px; border-top:1px solid var(--border);">
-      <div class="tpi-popup-section-title">Export</div>
-      <button id="tpiExportGeoJSON" type="button">GeoJSON</button>
-      <button id="tpiExportCSV" type="button" style="margin-top:6px;">CSV</button>
-    </div>
-  </div>
-
 </div>

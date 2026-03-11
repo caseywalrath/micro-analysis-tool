@@ -658,7 +658,14 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Libe
   padding: 8px 10px;
 }
 
-/* ---- TPI popup multi-column layout ---- */
+/* ---- TPI popup body wrapper (new 2-column layout) ---- */
+.tpi-body {
+  padding: 16px;
+  overflow-y: auto;
+  max-height: 62vh;
+}
+
+/* ---- TPI popup multi-column layout (legacy, kept for reference) ---- */
 .tpi-popup-layout {
   display: flex;
   gap: 16px;
