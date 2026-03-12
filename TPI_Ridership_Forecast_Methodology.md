@@ -36,7 +36,7 @@ The Transit Propensity Index evaluates latent transit demand using nine demograp
 | 4 | Low-Income (Poverty) | % of persons below the poverty level | ACS B17001, B01003 | 5 |
 | 5 | Senior Population (65+) | % of population aged 65 and over | ACS B01001 (12 cohorts) | 5 |
 | 6 | Disability Status | % of civilian noninstitutionalized population with a disability | ACS B18101 (12 cohorts) | 5 |
-| 7 | People of Color | % of population who are not non-Hispanic White | ACS B03002 | 5 |
+| 7 | Minority | % of population who are not non-Hispanic White | ACS B03002 | 5 |
 | 8 | Youth (<18) | % of population under age 18 | ACS B01001 (8 cohorts) | 0 |
 | 9 | Limited English Proficiency | % of population age 5+ who speak English less than "very well" | ACS C16001 (12 categories) | 5 |
 
@@ -409,7 +409,7 @@ The following table provides the complete ACS variable codes used for each TPI f
 | Low-Income | B17001, B01003 | B17001_002E | B01003_001E |
 | Senior 65+ | B01001 | B01001_020E through _025E, _044E through _049E (12 cohorts, male + female) | B01003_001E |
 | Disability | B18101 | B18101_004E, _007E, _010E, _013E, _016E, _019E, _023E, _026E, _029E, _032E, _035E, _038E (12 cohorts) | B18101_001E |
-| People of Color | B03002 | B03002_001E − B03002_003E | B03002_001E |
+| Minority | B03002 | B03002_001E − B03002_003E | B03002_001E |
 | Youth <18 | B01001 | B01001_003E through _006E, _027E through _030E (8 cohorts) | B01003_001E |
 | LEP | C16001 | C16001_005E, _008E, _011E, _014E, _017E, _020E, _023E, _026E, _029E, _032E, _035E, _038E (12 language categories) | C16001_001E |
 | Employment Density | LODES WAC | C000 (total jobs, block-level, aggregated to analysis geography) | Geography area (sq mi) |

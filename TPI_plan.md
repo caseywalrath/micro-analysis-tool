@@ -90,7 +90,7 @@ This plan is organized into **4 phases**, from core scoring engine through ArcGI
 | **Senior 65+** | Males: `B01001_020E` thru `B01001_025E` (6 vars); Females: `B01001_044E` thru `B01001_049E` (6 vars) | Sum 12 age bins |
 | **Youth <18** | Males: `B01001_003E` thru `B01001_006E` (4 vars); Females: `B01001_027E` thru `B01001_030E` (4 vars) | Sum 8 age bins |
 | **Disability** | Males w/ disability: `B18101_004E`, `_007E`, `_010E`, `_013E`, `_016E`, `_019E`; Females: `_023E`, `_026E`, `_029E`, `_032E`, `_035E`, `_038E`; Denominator: `B18101_001E` | Sum 12 vars / denominator |
-| **People of Color** | Total: `B03002_001E`; NH White alone: `B03002_003E` | `(total − NH White) / total` |
+| **Minority** | Total: `B03002_001E`; NH White alone: `B03002_003E` | `(total − NH White) / total` |
 | **LEP** | 12 "speak less than very well" vars: `C16001_005E`, `_008E`, `_011E`, `_014E`, `_017E`, `_020E`, `_023E`, `_026E`, `_029E`, `_032E`, `_035E`, `_038E`; Denominator: `C16001_001E` | Sum 12 vars / denominator |
 
 **Total new ACS codes: ~35.** The Census API allows up to 50 variables per GET request, so all codes fit in a single batch call per state-county group.
@@ -107,7 +107,7 @@ This plan is organized into **4 phases**, from core scoring engine through ArcGI
 | 4 | Low-Income % | `B17001_002E / B01003_001E × 100` | 12% |
 | 5 | Senior 65+ % | `sum(age 65+ bins) / B01003_001E × 100` | 10% |
 | 6 | Disability % | `sum(disability vars) / B18101_001E × 100` | 10% |
-| 7 | People of Color % | `(B03002_001E − B03002_003E) / B03002_001E × 100` | 10% |
+| 7 | Minority % | `(B03002_001E − B03002_003E) / B03002_001E × 100` | 10% |
 | 8 | Youth <18 % | `sum(age <18 bins) / B01003_001E × 100` | 8% |
 | 9 | LEP % | `sum(LEP vars) / C16001_001E × 100` | 8% |
 

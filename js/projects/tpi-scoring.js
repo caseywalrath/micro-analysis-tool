@@ -145,7 +145,7 @@
     },
     {
       id: "poc",
-      label: "People of Color %",
+      label: "Minority %",
       category: "Equity",
       acsVars: ["B03002_001E", "B03002_003E"],
       source: "ACS",
