@@ -48,7 +48,10 @@ Waypoint-based line drawing that snaps to the street network via the OSRM public
 
 **Potential future improvements:**
 - Add a travel mode selector (walking, cycling) per route
-- Midpoint insertion: click along an existing route in vertex edit mode to insert a new waypoint between existing ones
+
+
+### Midpoint Insertion — Medium Priority
+Click along an existing route in vertex edit mode to insert a new waypoint between existing ones
 
 ### Walkshed polygons — Low Priority
 Compute an isochrone/walkshed polygon from a selected point (e.g., 10-minute walk). Requires a network analysis service. The walkshed polygon could replace or supplement the circular buffer.
@@ -99,6 +102,8 @@ Computes a composite Transit Propensity Index for all census tracts or block gro
 - Methodology/inputs for manual land use scoring
 - Manual placement of destinations by type on map (possibly similar to Stations)
 
+### Transit Costing module
+Produce estimates for service and revenue miles, hours, potential blocking scenarioss, pullout requirements, and staffing
 
 ### More census categories — Priority To Be Determined
 Expand `VAR_META` in utils.js with additional ACS variables (e.g., vehicle ownership, commute mode, housing tenure, age distribution). Each entry needs a variable code, label, category, aggregation mode, and format.
@@ -115,14 +120,14 @@ The current LBAR workflow requires uploading a pre-formatted inventory file with
 ### Clear census overlay on data change — Implemented
 Census tract/block group overlays shown after running "Update summary" disappear when the user clicks Clear or adjusts a buffer radius or draws/edits features that change the buffer union. `clearCensusOverlay()` in `census.js` sets the `census-geos` source to an empty FeatureCollection (no-op if the overlay has never been rendered). Called from `rebuildBuffers()` in stations.js, `rebuildLineBuffers()` / `clearLines()` / `undoLastLine()` in lines.js, and the Clear and Reset Session handlers in app.js.
 
-### Additional Census Years - Medium Priority
+### Additional Census Years - Implemented
 Investigate possibility of including more recent ACS data
 
-### Mixed-geography analysis - Medium Priority
+### Mixed-geography analysis - Implemented
 Allow the tool to simultanesly analyze variables that are only available at different geographies (eg, Census Tract vs Block Group) with proper documentation
 
 ### Title VI Analysis Module — Not started
-A new analysis module for Title VI civil rights compliance reporting. Title VI of the Civil Rights Act of 1964 requires that federally funded transit projects do not disproportionately burden minority and low-income populations. This module would leverage existing TPI/ACS infrastructure to automate the demographic analysis portion of a Title VI equity assessment.
+A new analysis module for Title VI civil rights compliance reporting. Title VI of the Civil Rights Act of 1964 requires that federally funded transit projects do not disproportionately burden minority and low-income populations. This module would leverage existing TPI/ACS infrastructure to automate the demographic analysis portion of a Title VI equity assessment. See document Title_VI_Module_Overview.md
 
 **Core concept:** Compare demographic composition inside the project corridor (buffer union) against a reference area (county, metro area, or user-defined region) to identify whether protected populations are disproportionately affected.
 
@@ -159,7 +164,7 @@ A "Reset Session" button in the toolbar clears all features and form settings, d
 ### Export/import session data — Implemented
 Export downloads the full session as `analysis-YYYY-MM-DD.json`. Import loads a `.json` file and replaces the current session (with a confirmation dialog if features exist). File format is identical to the localStorage cache schema (`version: 1`), so exported files and cached sessions are interchangeable. Implemented via `App.cache.exportToFile()` and `App.cache.importFromFile(file)` in `js/core/cache.js`. Import/Export buttons in the Features panel (right sidebar) trigger the operations; buttons are anchored to the bottom of the panel.
 
-### External Data Import
+### External Data Import - Low Priority
 Investigate possibility of importing external data such as .KML Files
 
 
