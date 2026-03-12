@@ -41,7 +41,7 @@ Browser-based geospatial analysis tool. Pure front-end (no build step, no backen
 ```
 index.html                  App shell: toolbar, sidebar, map, feature panel, module popup container, script tags
 css/
-  style.css                 Core layout, toolbar, feature panel, module popup, floating widgets, basemap switcher, BAS styles (.bas- prefix), TPI styles, RF styles (.rf- prefix)
+  style.css                 Core layout, toolbar, feature panel, module popup, floating widgets, basemap switcher, BAS styles (.bas- prefix), TPI styles, RF styles (.rf- prefix), FTA styles (.fta- prefix), pill rating colors
   sidebar-v2.css            Sidebar panel system styles (scoped under #sidebar), variable checkbox list, section labels
 js/
   app.js                    Startup, module registry, sidebar panel HTML (Data Inputs), event wiring. Note: CHECKBOX_GROUPS, DENOM_MAP, and runSummary() have moved to buffer-summary.js.
@@ -61,15 +61,16 @@ js/
     popup.js                Analysis popup manager: open/close module popups, floating map widgets (legend)
   projects/
     buffer-summary.js       Buffer-Area Summary module: CHECKBOX_GROUPS, MANDATORY_VARS, DENOM_MAP, expandGroups, runSummary (moved from app.js). Registered as popup-based module.
-    fta-small-starts.js     FTA Small Starts: breakpoint classification, CRE/ESS/LBAR (registered as disabled module)
+    fta-small-starts.js     FTA Small Starts: breakpoint classification, CRE/ESS/LBAR, popup-based 2-tab UI (Ratings | Data Inputs), session persistence, CSV export
     tpi-scoring.js          TPI scoring engine: 9-factor definitions, batch ACS fetch, LODES aggregation, quintile normalization, composite scoring
-    transit-propensity.js   TPI module: popup-based UI with weight sliders, choropleth rendering, hover tooltips, floating legend, GeoJSON/CSV export, stale detection
+    transit-propensity.js   TPI module: popup-based 2-column UI (Settings | Results), weights modal overlay, feature checklist (normalization pool), analysis corridor dropdown, scrollable geography list with expandable factor breakdowns, choropleth rendering, hover tooltips, floating legend (auto-shown on run), GeoJSON/CSV export, stale detection
     ridership-scoring.js    Ridership scoring engine: corridor CDI computation, per-route CDI extraction, system-wide demand orchestration, CSV route matching, segment analysis, service type presets, elasticity formulas, scenario builder, ratio/OLS calibration (window.RidershipModel namespace)
     ridership-forecasting.js  Ridership Forecasting module: 4-tab popup (Calibrate | Demand | Elasticity | Scenarios), 3-step calibration workflow, corridor dropdown, choropleth + segment map, scenario comparison table, GeoJSON/CSV/JSON export; shared-pool normalization mode for cross-system calibration
 projects/
   buffer-summary-popup.html   Buffer-Area Summary popup body: settings (geography, year, apportion) + results table
-  fta-small-starts.html     FTA sidebar HTML fragment (legacy, kept for future popup migration)
-  transit-propensity-popup.html  TPI popup body: 3-column layout (Weights | Results | Actions); LODES warning icon (⚠) next to ACS Year selector in Actions column (shows tooltip when LODES not loaded)
+  fta-small-starts-popup.html  FTA popup body: 2-tab layout (Ratings | Data Inputs); Ratings tab has 2-column layout (settings + 5 rating cards); Data Inputs tab has CRE/ESS/LBAR file uploads with column mapping selects
+  fta-small-starts.html     FTA sidebar HTML fragment (legacy, replaced by popup version)
+  transit-propensity-popup.html  TPI popup body: 2-column layout (Settings | Results); Settings column has geography/year selectors, apportion toggle, feature checklist (normalization pool), analysis corridor dropdown, Adjust Weights button (opens modal overlay with 9 factor sliders + Confirm/Cancel/Reset), Analyze System button; Results column has scrollable geography list with expandable per-geo factor breakdowns, summary stats, export buttons; LODES warning icon (⚠) next to ACS Year selector
   transit-propensity.html   TPI sidebar panel (legacy, replaced by popup version)
   tpi-weights.html          TPI weight sliders (legacy, merged into popup)
   tpi-legend.html           TPI legend: 5-class Blues color swatches (reused by floating widget)
@@ -87,9 +88,9 @@ Ridership_Forecast_Readme.md    User-facing documentation for the Ridership Fore
 - **Module-local state stays private.** Variables like `CRE_MAP`, `ESS_POINTS`, `LBAR_SITES` (FTA) and `_lastResult`, `_stale`, `_running` (TPI, RF) are declared inside the module IIFE closure, not on `App`. Scoring engines use separate window namespaces: `window.TPI` (TPI scoring), `window.RidershipModel` (ridership scoring).
 - **Panel-based sidebar.** Sidebar content is registered via `App.sidebar.addPanel()` and rendered on map load. Panel HTML is defined as strings in `app.js`, not hardcoded in `index.html`. Call `render()` once after all panels are registered (avoids destroying event listeners).
 - **Analysis popups.** Analysis modules open in popup windows (not the sidebar). The popup system (`App.popup`) handles HTML loading, init/open/close lifecycle, and Escape key. Floating widgets (like the TPI and RF legends) persist on the map independently of the popup.
-- **Tabbed popup layout.** Multi-step analysis modules (e.g., Ridership Forecasting) use a tab bar (`<div class="rf-tabs">` with `[data-tab]` buttons) and tab content panels (`<div class="rf-tab-content" data-tab="...">`) toggled via a `switchTab(id)` function in the module JS. State is saved to closure variables on tab switch; the form is not reset.
+- **Tabbed popup layout.** Multi-step analysis modules (e.g., Ridership Forecasting, FTA Small Starts) use a tab bar (`<div class="rf-tabs">` / `<div class="fta-tabs">` with `[data-tab]` buttons) and tab content panels toggled via a `switchTab(id)` function in the module JS. State is saved to closure variables on tab switch; the form is not reset.
 - **Inline info buttons.** Contextual help uses a small `<button class="rf-info-btn">ⓘ</button>` element adjacent to the label, wired in `init()` to toggle a sibling explanation `<div>` via `style.display`. No tooltip libraries needed.
-- **CSS namespacing.** TPI styles use `.tpi-` prefix. Ridership Forecasting styles use `.rf-` prefix. Both live in `css/style.css`.
+- **CSS namespacing.** TPI styles use `.tpi-` prefix. Ridership Forecasting styles use `.rf-` prefix. FTA Small Starts styles use `.fta-` prefix. Rating pill colors use `.pill.high` through `.pill.low`. All live in `css/style.css`.
 - **External libraries via CDN:** MapLibre GL JS, Turf.js, pako (gzip), PapaParse (CSV).
 
 ## Script Load Order
@@ -113,14 +114,14 @@ popup.js    (needs App namespace; defines App.popup)
 app.js              (wires everything; registers sidebar panels; defines App.registerModule; calls cache.restore)
 <modules>           (call App.registerModule)
   buffer-summary.js     (needs App namespace, App.cache; registers Buffer-Area Summary module; contains CHECKBOX_GROUPS, DENOM_MAP, runSummary)
-  fta-small-starts.js   (needs App namespace; registers as disabled module)
+  fta-small-starts.js   (needs App namespace, App.cache; registers FTA Small Starts module; popup-based 2-tab UI)
   tpi-scoring.js        (needs App namespace, turf; defines window.TPI)
   transit-propensity.js (needs TPI, App.registerModule, App.popup, App.map, App.renderCensusOverlay)
   ridership-scoring.js  (needs window.TPI, App namespace, turf; defines window.RidershipModel)
   ridership-forecasting.js (needs RidershipModel, TPI, App.registerModule, App.popup, App.map, App.renderCensusOverlay)
 ```
 
-**Active modules:** Buffer-Area Summary is enabled (popup-based, settings + results table). TPI is enabled (popup-based). Ridership Forecasting is enabled (popup-based, 4-tab). FTA Small Starts is registered but disabled (button shown grayed out).
+**Active modules:** Buffer-Area Summary is enabled (popup-based, settings + results table). TPI is enabled (popup-based, 2-column). FTA Small Starts is enabled (popup-based, 2-tab). Ridership Forecasting is enabled (popup-based, 4-tab).
 
 ## App Namespace (Public API)
 
@@ -188,9 +189,30 @@ Floating widget options: `{ position: "bottom-left"|"bottom-right"|"top-left"|"t
 **Tract-level fallbacks** (within `TPI.computeTPI()`): When `geoLevel === "bg"` and `apportionByArea` is false, TPI runs two fallback passes: (1) *static* — factors flagged `tractOnly: true` (currently only LEP / C16001) are always fetched at tract level and mapped down to block groups via parent-tract GEOID slicing; (2) *dynamic* — after computing raw values, any ACS factor that produced zero finite values at BG level is automatically re-fetched at tract level and remapped. Both fallbacks are skipped when `apportionByArea: true`. All downstream modules (RF included) benefit automatically since they delegate to `TPI.computeTPI()`.
 
 ### transit-propensity.js (analysis module)
-Registers module `"transit-propensity"` as a popup-based analysis. Opens in a 3-column popup (Weights | Results | Actions) with its own geography/year selectors. Internal functions: `runTPI()`, `runInstantRescore()`, `renderChoropleth(result)`, `clearChoropleth()`, `displayResults(result)`, `exportGeoJSON()`, `exportCSV()`, `markStale()`. All state is private to the IIFE closure. DOM writes are guarded with `isPopupVisible()` so `update()` can safely fire when the popup is closed. LODES warning icon (`#tpiLodesWarnBtn`, ⚠ button) shows/hides next to the ACS Year selector in the Actions column: shown when `App.lodesData` is null (Employment factor excluded), hidden when LODES is loaded. Visibility updated in `onOpen()` (every popup open) and `update()` (when LODES uploaded/cleared while popup open).
+Registers module `"transit-propensity"` as a popup-based analysis. Opens in a 2-column popup (960px wide): left Settings column (240px fixed) and right Results column (flex). All state is private to the IIFE closure. DOM writes are guarded with `isPopupVisible()` so `update()` can safely fire when the popup is closed. LODES warning icon (`#tpiLodesWarnBtn`, ⚠ button) shows/hides next to the ACS Year selector: shown when `App.lodesData` is null (Employment factor excluded), hidden when LODES is loaded. Visibility updated in `onOpen()` and `update()`.
+
+**Settings column (left):** Geography level dropdown, ACS Year selector (with LODES warning), apportion-by-area toggle, **TPI Features checklist** (checkboxes to select which routes/lines define the normalization pool — only selected features' union polygon is used for quintile computation), **Analysis Corridor dropdown** (filters the geography list display to a specific route/line without re-running the computation), **"Adjust Weights" button** (opens a modal overlay with 9 factor weight sliders; Confirm copies `_pendingWeights` → `_weights` and triggers instant rescore, Cancel discards, Reset to Defaults restores default weights), and "Analyze System" button.
+
+**Results column (right):** Status indicator, scrollable geography list (each row shows geo GEOID + composite TPI score; click to expand and see per-factor quintile bars), aggregate TPI Score for the selected corridor, summary stats (geographies scored, factors included), footnotes (LODES status, apportion mode), GeoJSON and CSV export buttons. Legend auto-shows on the map when analysis runs (no manual "Show Legend" button).
+
+**Internal functions:** `runTPI()`, `runInstantRescore()`, `renderChoropleth(result)`, `clearChoropleth()`, `displayGeographyList(result)`, `updateSummaryStats()`, `updateFootnotes()`, `updateExportButtons()`, `exportGeoJSON()`, `exportCSV()`, `markStale()`, `buildFeatureChecklist()`, `buildCorridorDropdown()`, `getFeatureFilter()`, `buildUnionFromFilter()`, `getGeosInCorridor()`, `openWeightsModal()`, `closeWeightsModal()`, `resetModalToDefaults()`, `syncSlidersToWeights()`, `onModalSliderChange()`, `onModalNumberChange()`, `updateModalWeightSum()`.
+
+**Module-local state:** `_tpiFeatureFilter` (which features selected for normalization pool), `_selectedCorridor` ("all" or "route:N"/"line:N"), `_pendingWeights` (temporary copy while weights modal is open), `_weights`, `_lastResult`, `_stale`, `_running`, `_initialized`, `_apportionByArea`.
 
 **Public API (on `App`):** `App.getTpiWeights()` — returns a shallow copy of TPI's current `_weights` object. Used by the RF module's "Copy From TPI" button to read TPI's live weight settings without tight coupling.
+
+### fta-small-starts.js (analysis module, no public API)
+Registers module `"fta-small-starts"` as a popup-based analysis. Opens in a 2-tab popup (960px wide). All state is private to the IIFE closure. DOM writes are guarded with `isPopupVisible()`. All DOM element IDs use `fta` prefix (e.g., `ftaGeoLevel`, `ftaYearSelect`, `ftaCreFile`) to avoid collisions with other modules.
+
+**Tab 1 – Ratings**: 2-column layout. Left column: geography level dropdown, ACS Year selector, "Compute Breakpoints" button, loaded-data indicators (CRE/ESS/LBAR status). Right column: 5 rating cards (`bpItem` class) for Cost Effectiveness (CRE), Existing Ridership (ESS), Transit-Supportive Land Use (LBAR), Mobility Improvement, and Congestion Relief — each showing a color-coded pill (High/Medium-High/Medium/Medium-Low/Low) with numeric value and classification range. CSV export button below ratings.
+
+**Tab 2 – Data Inputs**: 2-column layout. Left column: CRE file upload (3 column selects: route name, annualized cost, new annual riders) and ESS file upload (2 column selects: route name, avg weekday boardings). Right column: LBAR file upload (4 column selects: block GEOID, residential density, employment density, CBD dummy) with county FIPS input and map layer toggle.
+
+**Pill color coding:** `.pill.high` (green), `.pill.mh` (blue), `.pill.med` (yellow), `.pill.ml` (orange), `.pill.low` (red) — defined in `css/style.css`.
+
+**Internal functions:** `_doUpdateBreakpointRatings()` (async, computes all 5 ratings from uploaded data + ACS), `computeCRE()`, `computeESS()`, `computeLbarRatio()`, `switchTab()`, `updateDataIndicators()`, `exportRatingsCSV()`, `restoreRatingsDisplay()`, `saveFtaState()`, `restoreFtaState()`.
+
+**Module-local state:** `CRE_MAP`, `ESS_POINTS`, `LBAR_SITES` (uploaded data), `_lastRatings` (computed rating results for session persistence), `_initialized`, `_activeTab`, `_bpRunning`, `_bpQueued` (concurrency guard). Session persistence via `App.cache.registerModule("fta", ...)` — persists computed ratings only, not raw uploaded file data.
 
 ### ridership-scoring.js (window.RidershipModel namespace, not on App)
 Scoring engine for the Ridership Forecasting module. Depends on `window.TPI` for demand computation.
@@ -310,7 +332,7 @@ Passed to `init()`, `onOpen()`, `onClose()`, and `update()`. Provides the module
 | `fetchBlocksInternalPointsInUnion(union)` | Function | TIGERweb block internal points |
 | `utils.*` | Object | Shared helpers: `setStatus`, `parseCSV`, `toNumberSafe`, `normalizeTractGEOID`, `guessHeader`, `fillSelect`, `enableSelect`, `formatValue`, `getMeta`, `setAggUI` |
 
-The existing FTA module still accesses `App.*` directly in its internal functions. New modules should prefer `core.*` for cleaner dependency boundaries.
+The FTA module still accesses `App.*` directly in its internal computation functions. New modules should prefer `core.*` for cleaner dependency boundaries.
 
 ### How to add a new analysis module
 
@@ -353,13 +375,13 @@ The sidebar is an empty `<div id="sidebar">` populated at runtime by `App.sideba
 +-----------------------------+
 |  ▾ Analysis                 |  Collapsible panel (order 30)
 |  [Buffer-Area Summary]      |  Button: opens BAS popup (settings + results table)
-|  [Transit Propensity Index] |  Button: opens TPI popup (3-column layout)
+|  [Transit Propensity Index] |  Button: opens TPI popup (2-column layout)
+|  [FTA Small Starts]         |  Button: opens FTA popup (2-tab layout)
 |  [Ridership Forecasting]    |  Button: opens RF popup (4-tab layout)
-|  [FTA Small Starts] (gray)  |  Button: disabled (coming soon)
 +-----------------------------+
 ```
 
-Clicking an analysis module button opens a popup window over the map. The Buffer-Area Summary popup contains geography/year settings and a results table. The TPI popup has a 3-column layout (Weights | Results | Actions). The Ridership Forecasting popup has a 4-tab layout (Calibrate | Demand | Elasticity | Scenarios). Each active choropleth shows a floating legend widget at bottom-left of the map.
+Clicking an analysis module button opens a popup window over the map. The Buffer-Area Summary popup contains geography/year settings and a results table. The TPI popup has a 2-column layout (Settings | Results) with an Adjust Weights modal overlay. The FTA Small Starts popup has a 2-tab layout (Ratings | Data Inputs). The Ridership Forecasting popup has a 4-tab layout (Calibrate | Demand | Elasticity | Scenarios). Each active choropleth shows a floating legend widget at bottom-left of the map.
 
 ### Feature Panel (right)
 
