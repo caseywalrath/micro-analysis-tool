@@ -72,20 +72,97 @@
   }
 
   // --- Variable metadata ---
+  // Entries may have a `codes` array for multi-code ACS variables (values are summed per GEOID).
+  // Entries without `codes` use their key directly as the ACS variable code.
 
   var VAR_META = {
-    "B01003_001E": { source: "ACS", agg: "sum", fmt: "int", label: "Total population", category: "Land Use" },
-    "B11001_001E": { source: "ACS", agg: "sum", fmt: "int", label: "Total households", category: "Land Use" },
-    "B25001_001E": { source: "ACS", agg: "sum", fmt: "int", label: "Total housing units", category: "Land Use" },
-    "B25002_001E": { source: "ACS", agg: "sum", fmt: "int", label: "Occupied housing units", category: "Land Use" },
-    "B25002_003E": { source: "ACS", agg: "sum", fmt: "int", label: "Vacant housing units", category: "Land Use" },
-    "B08201_002E": { source: "ACS", agg: "sum", fmt: "int", label: "Zero-car households", category: "Mobility", tractOnly: true },
-    "B17001_002E": { source: "ACS", agg: "sum", fmt: "int", label: "Persons below poverty level", category: "Mobility" },
+    // ---- Demographics ----
+    "B01003_001E": { source: "ACS", agg: "sum", fmt: "int",     label: "Total population",            category: "Demographics" },
+    "B11001_001E": { source: "ACS", agg: "sum", fmt: "int",     label: "Total households",             category: "Demographics" },
+    "DERIVED_PPH":  { source: "ACS", agg: "ratio", fmt: "decimal", label: "Average persons per household", category: "Demographics",
+                      numerator: "B01003_001E", denominator: "B11001_001E",
+                      ratioLabel: "Calculated: Total Population / Total Households" },
+    "B19013_001E": { source: "ACS", agg: "avg", fmt: "usd",     label: "Median household income",      category: "Demographics", tractOnly: true },
+    "B01002_001E": { source: "ACS", agg: "avg", fmt: "decimal", label: "Median age",                   category: "Demographics" },
+    "B01001_002E": { source: "ACS", agg: "sum", fmt: "int",     label: "Male population",              category: "Demographics" },
+    "B01001_026E": { source: "ACS", agg: "sum", fmt: "int",     label: "Female population",            category: "Demographics" },
+    "B02001_002E": { source: "ACS", agg: "sum", fmt: "int",     label: "White alone",                  category: "Demographics" },
+    "B02001_003E": { source: "ACS", agg: "sum", fmt: "int",     label: "Black or African American alone", category: "Demographics" },
+    "B02001_004E": { source: "ACS", agg: "sum", fmt: "int",     label: "American Indian and Alaska Native alone", category: "Demographics" },
+    "B02001_005E": { source: "ACS", agg: "sum", fmt: "int",     label: "Asian alone",                  category: "Demographics" },
+    "B02001_006E": { source: "ACS", agg: "sum", fmt: "int",     label: "Native Hawaiian and Other Pacific Islander alone", category: "Demographics" },
+    "B02001_007E": { source: "ACS", agg: "sum", fmt: "int",     label: "Some other race alone",        category: "Demographics" },
+    "B02001_008E": { source: "ACS", agg: "sum", fmt: "int",     label: "Two or more races",            category: "Demographics" },
+    "B03003_003E": { source: "ACS", agg: "sum", fmt: "int",     label: "Hispanic or Latino",           category: "Demographics" },
+    "B03003_002E": { source: "ACS", agg: "sum", fmt: "int",     label: "Not Hispanic or Latino",       category: "Demographics" },
 
-    "B19013_001E": { source: "ACS", agg: "avg", fmt: "usd", label: "Median household income", category: "Non-additive Medians", tractOnly: true },
-    "B25064_001E": { source: "ACS", agg: "avg", fmt: "usd", label: "Median gross rent", category: "Non-additive Medians" },
-    "B25077_001E": { source: "ACS", agg: "avg", fmt: "usd", label: "Median home value", category: "Non-additive Medians" },
+    // ---- Equity ----
+    "DERIVED_DISABILITY":     { source: "ACS", agg: "sum", fmt: "int", label: "With a disability",                                        category: "Equity", tractOnly: true,
+      codes: ["B18101_004E","B18101_007E","B18101_010E","B18101_013E","B18101_016E","B18101_019E",
+              "B18101_023E","B18101_026E","B18101_029E","B18101_032E","B18101_035E","B18101_038E"] },
+    "B17001_002E":            { source: "ACS", agg: "sum", fmt: "int", label: "Persons below poverty level",                              category: "Equity", tractOnly: true },
+    "DERIVED_EDU_LT_HS":      { source: "ACS", agg: "sum", fmt: "int", label: "Less than high school diploma",                            category: "Equity",
+      codes: ["B15003_002E","B15003_003E","B15003_004E","B15003_005E","B15003_006E","B15003_007E","B15003_008E",
+              "B15003_009E","B15003_010E","B15003_011E","B15003_012E","B15003_013E","B15003_014E","B15003_015E","B15003_016E"] },
+    "DERIVED_EDU_HS":         { source: "ACS", agg: "sum", fmt: "int", label: "High school diploma or GED",                              category: "Equity",
+      codes: ["B15003_017E","B15003_018E"] },
+    "DERIVED_EDU_SOME_COLLEGE":{ source: "ACS", agg: "sum", fmt: "int", label: "Some college or associate's degree",                     category: "Equity",
+      codes: ["B15003_019E","B15003_020E","B15003_021E"] },
+    "DERIVED_EDU_BA_PLUS":    { source: "ACS", agg: "sum", fmt: "int", label: "Bachelor's degree or higher",                             category: "Equity",
+      codes: ["B15003_022E","B15003_023E","B15003_024E","B15003_025E"] },
+    "DERIVED_LEP":            { source: "ACS", agg: "sum", fmt: "int", label: "Limited English proficient",                              category: "Equity", tractOnly: true,
+      codes: ["C16001_005E","C16001_008E","C16001_011E","C16001_014E","C16001_017E","C16001_020E",
+              "C16001_023E","C16001_026E","C16001_029E","C16001_032E","C16001_035E","C16001_038E"] },
+    "B05001_002E":            { source: "ACS", agg: "sum", fmt: "int", label: "Born in US, citizen",                                     category: "Equity", tractOnly: true },
+    "B05001_005E":            { source: "ACS", agg: "sum", fmt: "int", label: "Naturalized US citizen",                                  category: "Equity", tractOnly: true },
+    "B05001_006E":            { source: "ACS", agg: "sum", fmt: "int", label: "Not a US citizen",                                        category: "Equity", tractOnly: true },
+    "B11016_002E":            { source: "ACS", agg: "sum", fmt: "int", label: "1-person household",                                      category: "Equity" },
+    "B11016_003E":            { source: "ACS", agg: "sum", fmt: "int", label: "2-person household",                                      category: "Equity" },
+    "B11016_004E":            { source: "ACS", agg: "sum", fmt: "int", label: "3-person household",                                      category: "Equity" },
+    "B11016_005E":            { source: "ACS", agg: "sum", fmt: "int", label: "4-person household",                                      category: "Equity" },
+    "B11016_006E":            { source: "ACS", agg: "sum", fmt: "int", label: "5-person household",                                      category: "Equity" },
+    "B11016_007E":            { source: "ACS", agg: "sum", fmt: "int", label: "6-person household",                                      category: "Equity" },
+    "B11016_008E":            { source: "ACS", agg: "sum", fmt: "int", label: "7+-person household",                                     category: "Equity" },
+    "B08201_002E":            { source: "ACS", agg: "sum", fmt: "int", label: "Zero-car households",                                     category: "Equity", tractOnly: true },
+    "B23025_004E":            { source: "ACS", agg: "sum", fmt: "int", label: "Employed (civilian labor force)",                         category: "Equity" },
+    "B23025_005E":            { source: "ACS", agg: "sum", fmt: "int", label: "Unemployed (civilian labor force)",                       category: "Equity" },
+    "B23025_007E":            { source: "ACS", agg: "sum", fmt: "int", label: "Not in labor force",                                      category: "Equity" },
 
+    // ---- Travel ----
+    "DERIVED_VEH_0":          { source: "ACS", agg: "sum", fmt: "int", label: "0 vehicles available",          category: "Travel", tractOnly: true, codes: ["B08201_002E"] },
+    "B08201_003E":            { source: "ACS", agg: "sum", fmt: "int", label: "1 vehicle available",            category: "Travel", tractOnly: true },
+    "B08201_004E":            { source: "ACS", agg: "sum", fmt: "int", label: "2 vehicles available",           category: "Travel", tractOnly: true },
+    "B08201_005E":            { source: "ACS", agg: "sum", fmt: "int", label: "3 vehicles available",           category: "Travel", tractOnly: true },
+    "B08201_006E":            { source: "ACS", agg: "sum", fmt: "int", label: "4+ vehicles available",          category: "Travel", tractOnly: true },
+    "B08301_003E":            { source: "ACS", agg: "sum", fmt: "int", label: "Commute: drove alone",            category: "Travel" },
+    "B08301_004E":            { source: "ACS", agg: "sum", fmt: "int", label: "Commute: carpooled",              category: "Travel" },
+    "B08301_010E":            { source: "ACS", agg: "sum", fmt: "int", label: "Commute: public transit",         category: "Travel" },
+    "B08301_019E":            { source: "ACS", agg: "sum", fmt: "int", label: "Commute: walked",                 category: "Travel" },
+    "B08301_018E":            { source: "ACS", agg: "sum", fmt: "int", label: "Commute: biked",                  category: "Travel" },
+    "B08301_021E":            { source: "ACS", agg: "sum", fmt: "int", label: "Commute: worked from home",       category: "Travel" },
+    "DERIVED_COMMTIME_LT15":  { source: "ACS", agg: "sum", fmt: "int", label: "Commute time: under 15 min",     category: "Travel",
+      codes: ["B08303_002E","B08303_003E","B08303_004E"] },
+    "DERIVED_COMMTIME_15_29": { source: "ACS", agg: "sum", fmt: "int", label: "Commute time: 15\u201329 min",   category: "Travel",
+      codes: ["B08303_005E","B08303_006E","B08303_007E"] },
+    "DERIVED_COMMTIME_30_44": { source: "ACS", agg: "sum", fmt: "int", label: "Commute time: 30\u201344 min",   category: "Travel",
+      codes: ["B08303_008E","B08303_009E","B08303_010E"] },
+    "B08303_011E":            { source: "ACS", agg: "sum", fmt: "int", label: "Commute time: 45\u201359 min",   category: "Travel" },
+    "DERIVED_COMMTIME_60PLUS":{ source: "ACS", agg: "sum", fmt: "int", label: "Commute time: 60+ min",          category: "Travel",
+      codes: ["B08303_012E","B08303_013E"] },
+
+    // ---- Housing ----
+    "B25001_001E": { source: "ACS", agg: "sum", fmt: "int", label: "Total housing units",  category: "Housing" },
+    "B25003_002E": { source: "ACS", agg: "sum", fmt: "int", label: "Owner-occupied units", category: "Housing" },
+    "B25003_003E": { source: "ACS", agg: "sum", fmt: "int", label: "Renter-occupied units", category: "Housing" },
+    "DERIVED_RENT_NOT_BURDENED": { source: "ACS", agg: "sum", fmt: "int", label: "Gross rent < 30% of income",              category: "Housing",
+      codes: ["B25070_002E","B25070_003E","B25070_004E","B25070_005E","B25070_006E"] },
+    "DERIVED_RENT_BURDENED":     { source: "ACS", agg: "sum", fmt: "int", label: "Gross rent 30\u201349.9% of income (cost burdened)", category: "Housing",
+      codes: ["B25070_007E","B25070_008E","B25070_009E"] },
+    "B25070_010E": { source: "ACS", agg: "sum", fmt: "int", label: "Gross rent 50%+ of income (severely cost burdened)", category: "Housing" },
+    "B25064_001E": { source: "ACS", agg: "avg", fmt: "usd", label: "Median gross rent",   category: "Housing" },
+    "B25077_001E": { source: "ACS", agg: "avg", fmt: "usd", label: "Median home value",   category: "Housing" },
+
+    // ---- Employment ----
     "LODES_WAC_C000": { source: "LODES", agg: "sum", fmt: "int", label: "Total existing employment (LODES)", category: "Employment" }
   };
 
@@ -124,6 +201,9 @@
     if (meta.fmt === "usd") {
       return val.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 });
     }
+    if (meta.fmt === "decimal") {
+      return val.toLocaleString(undefined, { maximumFractionDigits: 1 });
+    }
     return val.toLocaleString(undefined, { maximumFractionDigits: 0 });
   }
 
@@ -133,7 +213,44 @@
     for (var i = 0; i < boxes.length; i++) {
       codes.push(boxes[i].value);
     }
+    // Also check standalone LODES checkbox (outside fieldset)
+    var lodesCb = document.getElementById("lodesCheckbox");
+    if (lodesCb && lodesCb.checked) codes.push(lodesCb.value);
     return codes;
+  }
+
+  // --- Map serialization helpers (for saving/restoring TPI/RF results) ---
+
+  // Convert Map<k, v> → plain Object { k: v } (for JSON serialization)
+  function mapToObj(map) {
+    if (!map) return null;
+    var obj = {};
+    map.forEach(function (v, k) { obj[k] = v; });
+    return obj;
+  }
+
+  // Convert plain Object { k: v } → Map<k, v>
+  function objToMap(obj) {
+    var m = new Map();
+    if (!obj) return m;
+    Object.keys(obj).forEach(function (k) { m.set(k, obj[k]); });
+    return m;
+  }
+
+  // Convert Map<k, Map<k2, v>> → nested Object { k: { k2: v } }
+  function nestedMapToObj(outerMap) {
+    if (!outerMap) return null;
+    var obj = {};
+    outerMap.forEach(function (innerMap, key) { obj[key] = mapToObj(innerMap); });
+    return obj;
+  }
+
+  // Convert nested Object { k: { k2: v } } → Map<k, Map<k2, v>>
+  function nestedObjToMap(obj) {
+    var m = new Map();
+    if (!obj) return m;
+    Object.keys(obj).forEach(function (k) { m.set(k, objToMap(obj[k])); });
+    return m;
   }
 
   // --- Expose on App namespace ---
@@ -151,4 +268,8 @@
   App.setAggUI = setAggUI;
   App.formatValue = formatValue;
   App.getSelectedVars = getSelectedVars;
+  App.mapToObj = mapToObj;
+  App.objToMap = objToMap;
+  App.nestedMapToObj = nestedMapToObj;
+  App.nestedObjToMap = nestedObjToMap;
 })();

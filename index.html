@@ -45,8 +45,17 @@
       <div id="map"></div>
 
       <div id="feature-panel">
-        <div class="fp-content">
+        <button id="fp-collapse-btn" title="Hide panel" aria-label="Toggle feature panel">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2.5"
+               stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </button>
+        <div class="fp-header">
           <h3>Features</h3>
+        </div>
+        <div class="fp-content">
 
           <div class="fp-section">
             <div class="fp-section-header">Stations</div>
@@ -96,32 +105,6 @@
       </div>
       </div><!-- #main-content -->
 
-      <!-- Results modal -->
-      <div id="results-modal" class="results-modal" style="display:none;">
-        <div class="results-modal-backdrop"></div>
-        <div class="results-modal-dialog">
-          <div class="results-modal-header">
-            <h3 class="results-modal-title">Buffer-Area Summary Results</h3>
-            <button class="results-modal-close" aria-label="Close">&times;</button>
-          </div>
-          <div class="results-modal-body">
-            <div id="results-progress" class="results-progress"></div>
-            <table id="results-table" class="results-table">
-              <thead>
-                <tr>
-                  <th>Census Category</th>
-                  <th>Variable</th>
-                  <th>Result</th>
-                  <th>Aggregation Method</th>
-                </tr>
-              </thead>
-              <tbody id="results-tbody"></tbody>
-            </table>
-            <div id="results-notes" class="results-notes"></div>
-          </div>
-        </div>
-      </div>
-
       <!-- Analysis module popup (generic container, reused per-module) -->
       <div id="module-popup" class="module-popup" style="display:none;">
         <div class="module-popup-backdrop"></div>
@@ -147,13 +130,17 @@
     <script src="js/core/features.js"></script>
     <script src="js/core/census.js"></script>
     <script src="js/core/lodes.js"></script>
+    <script src="js/core/projections.js"></script>
     <script src="js/core/cache.js"></script>
     <script src="js/core/popup.js"></script>
     <script src="js/app.js"></script>
 
     <!-- Analysis modules (all load simultaneously; disabled modules show grayed-out buttons) -->
+    <script src="js/projects/buffer-summary.js"></script>
     <script src="js/projects/fta-small-starts.js"></script>
     <script src="js/projects/tpi-scoring.js"></script>
     <script src="js/projects/transit-propensity.js"></script>
+    <script src="js/projects/ridership-scoring.js"></script>
+    <script src="js/projects/ridership-forecasting.js"></script>
   </body>
 </html>

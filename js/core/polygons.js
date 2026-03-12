@@ -292,9 +292,19 @@
     renderPolygonLayers();
   }
 
+  /* ---- Union polygon for spatial analysis ---- */
+
+  function polygonUnionPolygon() {
+    if (polygons.length === 0) return null;
+    var u = polygons[0];
+    for (var i = 1; i < polygons.length; i++) u = turf.union(u, polygons[i]);
+    return u;
+  }
+
   /* ---- Expose on App namespace ---- */
 
   App.polygons = polygons;
+  App.polygonUnionPolygon = polygonUnionPolygon;
   App.handlePolygonClick = handlePolygonClick;
   App.removePolygon = removePolygon;
   App.clearPolygons = clearPolygons;

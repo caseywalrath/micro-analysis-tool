@@ -36,6 +36,19 @@
         '&copy; <a href="https://carto.com/attributions">CARTO</a>'
     },
     {
+      id: "carto-voyager",
+      name: "Carto Voyager",
+      tiles: [
+        "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+        "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+        "https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+        "https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"
+      ],
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors ' +
+        '&copy; <a href="https://carto.com/attributions">CARTO</a>'
+    },
+    {
       id: "osm",
       name: "OpenStreetMap",
       tiles: [
@@ -58,6 +71,13 @@
   ];
 
   var currentBasemapId = "carto-light";
+
+  // ---- Municipal boundaries overlay state ----
+
+  var _muniBoundariesVisible = false;
+  var _muniMoveHandler = null;
+  var MUNI_SOURCE = "muni-boundaries";
+  var MUNI_LAYER  = "muni-boundaries-line";
 
   // ---- Initial map style (Carto Light) ----
 
@@ -142,6 +162,72 @@
     currentBasemapId = basemapId;
   }
 
+  // ---- Municipal boundaries overlay ----
+
+  async function fetchAndRenderMuniBoundaries() {
+    try {
+      var bounds = map.getBounds();
+      var bbox = bounds.getWest() + "," + bounds.getSouth() + "," +
+                 bounds.getEast() + "," + bounds.getNorth();
+
+      var layerUrl = "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Places_CouSub_ConCity_SubMCD/MapServer/4";
+      var params = new URLSearchParams({
+        where: "1=1",
+        geometry: bbox,
+        geometryType: "esriGeometryEnvelope",
+        inSR: "4326",
+        outSR: "4326",
+        spatialRel: "esriSpatialRelIntersects",
+        outFields: "NAME,GEOID",
+        returnGeometry: "true",
+        f: "geojson"
+      });
+      var features = await App.fetchAllTigerwebFeatures(layerUrl, params);
+
+      var fc = { type: "FeatureCollection", features: features };
+
+      if (map.getSource(MUNI_SOURCE)) {
+        map.getSource(MUNI_SOURCE).setData(fc);
+      } else {
+        map.addSource(MUNI_SOURCE, { type: "geojson", data: fc });
+        map.addLayer({
+          id: MUNI_LAYER,
+          type: "line",
+          source: MUNI_SOURCE,
+          paint: {
+            "line-color": "#e05c00",
+            "line-width": 1.5,
+            "line-dasharray": [4, 3],
+            "line-opacity": 0.8
+          }
+        });
+      }
+    } catch (e) {
+      // Leave existing layer data in place if fetch fails
+    }
+  }
+
+  function toggleMuniBoundaries(show) {
+    _muniBoundariesVisible = show;
+
+    if (!show) {
+      if (map.getLayer(MUNI_LAYER))   map.removeLayer(MUNI_LAYER);
+      if (map.getSource(MUNI_SOURCE)) map.removeSource(MUNI_SOURCE);
+      if (_muniMoveHandler) {
+        map.off("moveend", _muniMoveHandler);
+        _muniMoveHandler = null;
+      }
+      return;
+    }
+
+    fetchAndRenderMuniBoundaries();
+
+    _muniMoveHandler = function () {
+      if (_muniBoundariesVisible) fetchAndRenderMuniBoundaries();
+    };
+    map.on("moveend", _muniMoveHandler);
+  }
+
   // ---- Basemap switcher control (bottom-right) ----
 
   var LAYERS_SVG =
@@ -187,6 +273,25 @@
       })(BASEMAPS[i].id));
       dropdown.appendChild(opt);
     }
+
+    // Divider + municipal boundaries toggle
+    var divider = document.createElement("div");
+    divider.className = "basemap-divider";
+    dropdown.appendChild(divider);
+
+    var toggleRow = document.createElement("label");
+    toggleRow.className = "basemap-toggle-row";
+
+    var cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = _muniBoundariesVisible;
+    cb.addEventListener("change", function () {
+      toggleMuniBoundaries(cb.checked);
+    });
+
+    toggleRow.appendChild(cb);
+    toggleRow.appendChild(document.createTextNode(" Municipal boundaries"));
+    dropdown.appendChild(toggleRow);
 
     btn.addEventListener("click", function (e) {
       e.stopPropagation();

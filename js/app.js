@@ -11,15 +11,14 @@
 
   App.drawMode = null; // null | "station" | "line" | "route" | "polygon"
 
-  // ---- Buffer-Area Data panel ----
+  // ---- Data Inputs panel ----
 
-  var STATION_DATA_PANEL_HTML =
-    '<label>Geography level (ACS only)' +
-      '<select id="geoLevel">' +
-        '<option value="tract">Census Tracts (faster)</option>' +
-        '<option value="bg" selected>Block Groups (more detailed)</option>' +
-      '</select>' +
-    '</label>' +
+  // Reusable ⚠ tooltip markup for median (non-additive) variables.
+  var WARN_ICON = '<span class="var-warn-icon" title="Median estimate \u2014 displayed as an area-weighted average of overlapping geographies\u2019 values. This is not a true median for the buffer area. Use with caution.">\u26A0</span>';
+
+  var DATA_INPUTS_PANEL_HTML =
+    // ---- Census section ----
+    '<div class="sb2-section-label">Census</div>' +
 
     '<div class="var-actions">' +
       '<button type="button" id="varSelectAll" class="var-action-btn">Select all</button>' +
@@ -29,51 +28,57 @@
     '<fieldset id="varSelect" class="var-checklist">' +
       '<legend>Variables (select one or more)</legend>' +
 
-      '<div class="var-group-label">Land Use (ACS: additive sums)</div>' +
+      // ---- Demographics ----
+      '<div class="var-group-label">Demographics</div>' +
       '<label class="var-check"><input type="checkbox" value="B01003_001E"> Total population</label>' +
       '<label class="var-check"><input type="checkbox" value="B11001_001E"> Total households</label>' +
-      '<label class="var-check"><input type="checkbox" value="B25001_001E"> Total housing units</label>' +
-      '<label class="var-check"><input type="checkbox" value="B25002_001E"> Occupied housing units</label>' +
-      '<label class="var-check"><input type="checkbox" value="B25002_003E"> Vacant housing units</label>' +
+      '<label class="var-check"><input type="checkbox" value="DERIVED_PPH"> Average persons per household</label>' +
+      '<label class="var-check"><input type="checkbox" value="B19013_001E"> Median household income ' + WARN_ICON + '</label>' +
+      '<label class="var-check"><input type="checkbox" value="B01002_001E"> Median age ' + WARN_ICON + '</label>' +
+      '<label class="var-check"><input type="checkbox" value="GROUP_SEX"> Sex</label>' +
+      '<label class="var-check"><input type="checkbox" value="GROUP_RACE"> Race</label>' +
+      '<label class="var-check"><input type="checkbox" value="GROUP_ETHNICITY"> Ethnicity</label>' +
 
-      '<div class="var-group-label">Mobility / Transit-dependent (ACS: additive sums)</div>' +
-      '<label class="var-check"><input type="checkbox" value="B08201_002E"> Zero-car households</label>' +
+      // ---- Equity ----
+      '<div class="var-group-label">Equity</div>' +
+      '<label class="var-check"><input type="checkbox" value="DERIVED_DISABILITY"> With a disability</label>' +
       '<label class="var-check"><input type="checkbox" value="B17001_002E"> Persons below poverty level</label>' +
+      '<label class="var-check"><input type="checkbox" value="GROUP_EDUCATION"> Education</label>' +
+      '<label class="var-check"><input type="checkbox" value="DERIVED_LEP"> Limited English proficient</label>' +
+      '<label class="var-check"><input type="checkbox" value="GROUP_CITIZENSHIP"> Citizenship</label>' +
+      '<label class="var-check"><input type="checkbox" value="B08201_002E"> Zero-car households</label>' +
+      '<label class="var-check"><input type="checkbox" value="GROUP_EMPLOYMENT"> Employment status</label>' +
 
-      '<div class="var-group-label">Non-additive (ACS medians: area-weighted avg estimate)</div>' +
-      '<label class="var-check"><input type="checkbox" value="B19013_001E"> Median household income \u26A0</label>' +
-      '<label class="var-check"><input type="checkbox" value="B25064_001E"> Median gross rent \u26A0</label>' +
-      '<label class="var-check"><input type="checkbox" value="B25077_001E"> Median home value \u26A0</label>' +
+      // ---- Travel ----
+      '<div class="var-group-label">Travel</div>' +
+      '<label class="var-check"><input type="checkbox" value="GROUP_COMMUTE"> Commute mode</label>' +
+      '<label class="var-check"><input type="checkbox" value="GROUP_COMMTIME"> Commute time</label>' +
 
-      '<div class="var-group-label">Employment (LODES: additive sum)</div>' +
-      '<label class="var-check"><input type="checkbox" value="LODES_WAC_C000"> Total existing employment \u2014 file required</label>' +
-      '<div class="lodes-actions">' +
-        '<button type="button" id="downloadLodes">Download</button>' +
-        '<button type="button" id="lodesOpenFile">Add</button>' +
-      '</div>' +
-      '<input id="lodesFile" type="file" accept=".gz,.csv.gz" style="display:none" />' +
-      '<div id="lodesInfo" class="sb2-tiny" style="margin-top:4px;"></div>' +
-      '<span id="lodesState" style="display:none"></span>' +
-      '<span id="lodesLoaded" style="display:none"></span>' +
+      // ---- Housing ----
+      '<div class="var-group-label">Housing</div>' +
+      '<label class="var-check"><input type="checkbox" value="B25001_001E"> Total housing units</label>' +
+      '<label class="var-check"><input type="checkbox" value="GROUP_OCCUPANCY"> Occupancy</label>' +
+      '<label class="var-check"><input type="checkbox" value="GROUP_RENT_BURDEN"> Rent burden</label>' +
+      '<label class="var-check"><input type="checkbox" value="B25064_001E"> Median gross rent ' + WARN_ICON + '</label>' +
+      '<label class="var-check"><input type="checkbox" value="B25077_001E"> Median home value ' + WARN_ICON + '</label>' +
+
     '</fieldset>' +
 
-    '<label>Year' +
-      '<select id="yearSelect">' +
-        '<option value="2024">2024</option>' +
-        '<option value="2023">2023</option>' +
-        '<option value="2022">2022</option>' +
-        '<option value="2021">2021</option>' +
-      '</select>' +
-    '</label>' +
+    // ---- Employment (LODES) section ----
+    '<div class="sb2-section-label">Employment (LODES)</div>' +
+    '<label class="var-check"><input type="checkbox" id="lodesCheckbox" value="LODES_WAC_C000"> Total existing employment \u2014 file required</label>' +
+    '<div class="lodes-actions">' +
+      '<button type="button" id="downloadLodes">Download</button>' +
+      '<button type="button" id="lodesOpenFile">Add State</button>' +
+      '<button type="button" id="lodesClearAll" style="display:none;">Clear All</button>' +
+    '</div>' +
+    '<input id="lodesFile" type="file" accept=".gz,.csv.gz" style="display:none" />' +
+    '<div id="lodesInfo" class="sb2-tiny" style="margin-top:4px;"></div>' +
+    '<span id="lodesState" style="display:none"></span>' +
+    '<span id="lodesLoaded" style="display:none"></span>' +
 
-    '<button id="run">Calculate summary</button>' +
-
-    '<div id="summaryStatus" class="sb2-card" style="display:none;">' +
-      '<div class="sb2-kv"><b>Intersecting geographies:</b> <span id="nGeos">0</span></div>' +
-      '<div style="margin-top:6px;">' +
-        '<button id="viewResults" type="button">View Results Table</button>' +
-      '</div>' +
-    '</div>';
+    // PPACG Pop Projection has moved to the Projections tab in Ridership Forecasting.
+    '';
 
   // ---- Module registry (replaces single-project system) ----
 
@@ -93,9 +98,11 @@
     var su = _stationUnion();
     var lu = App.lineBufferUnionPolygon ? App.lineBufferUnionPolygon() : null;
     var ru = App.routeBufferUnionPolygon ? App.routeBufferUnionPolygon() : null;
+    var pu = App.polygonUnionPolygon ? App.polygonUnionPolygon() : null;
     var combined = su || null;
     if (lu) combined = combined ? turf.union(combined, lu) : lu;
     if (ru) combined = combined ? turf.union(combined, ru) : ru;
+    if (pu) combined = combined ? turf.union(combined, pu) : pu;
     return combined;
   };
 
@@ -155,219 +162,8 @@
     }
   }
 
-  // ---- Results modal helpers ----
-
-  function openResultsModal() {
-    document.getElementById("results-modal").style.display = "flex";
-  }
-
-  function closeResultsModal() {
-    document.getElementById("results-modal").style.display = "none";
-  }
-
-  function aggDescription(meta) {
-    if (meta.source === "LODES") return "Sum (block internal points)";
-    if (meta.agg === "sum") return "Sum (area-apportioned)";
-    return "Area-weighted average";
-  }
-
-  // ---- Summary runners ----
-
-  async function runSummary() {
-    var selectedVars = App.getSelectedVars();
-    if (selectedVars.length === 0) {
-      App.setStatus("No variables selected");
-      return;
-    }
-
-    var year = document.getElementById("yearSelect").value;
-    var geoLevel = document.getElementById("geoLevel").value;
-
-    // Separate ACS vs LODES selections
-    var acsVars = [];
-    var lodesVars = [];
-    for (var i = 0; i < selectedVars.length; i++) {
-      var meta = App.getMeta(selectedVars[i]);
-      if (meta.source === "LODES") {
-        lodesVars.push(selectedVars[i]);
-      } else {
-        acsVars.push(selectedVars[i]);
-      }
-    }
-
-    // Initialize modal table with "pending" rows
-    var tbody = document.getElementById("results-tbody");
-    tbody.innerHTML = "";
-    var progressEl = document.getElementById("results-progress");
-    var notesEl = document.getElementById("results-notes");
-    notesEl.textContent = "";
-
-    var rowEls = {};
-    for (var j = 0; j < selectedVars.length; j++) {
-      var code = selectedVars[j];
-      var m = App.getMeta(code);
-      var tr = document.createElement("tr");
-      tr.className = "result-pending";
-      tr.innerHTML =
-        "<td>" + (m.category || "\u2014") + "</td>" +
-        "<td>" + (m.label || code) + "</td>" +
-        "<td>Computing\u2026</td>" +
-        "<td>" + aggDescription(m) + "</td>";
-      tbody.appendChild(tr);
-      rowEls[code] = tr;
-    }
-
-    openResultsModal();
-
-    // Check for buffer union
-    var unionFeat = App.bufferUnionPolygon();
-    if (!unionFeat) {
-      var errMsg = App.stations.length === 0 ? "No stations placed" : "No buffers set";
-      for (var k = 0; k < selectedVars.length; k++) {
-        var errRow = rowEls[selectedVars[k]];
-        errRow.className = "result-error";
-        errRow.children[2].textContent = errMsg;
-      }
-      progressEl.textContent = "";
-      App.setStatus("No buffers");
-      return;
-    }
-
-    var completed = 0;
-    var total = selectedVars.length;
-    var nGeosEl = document.getElementById("nGeos");
-    var statusCard = document.getElementById("summaryStatus");
-
-    function updateProgress() {
-      completed++;
-      if (completed < total) {
-        progressEl.textContent = "Computing: " + completed + " / " + total + " variables done\u2026";
-      } else {
-        progressEl.textContent = "All " + total + " variables computed.";
-      }
-    }
-
-    // Shared TIGERweb geometry fetch for all ACS variables
-    var geos = null;
-    var tractGeosForFallback = null; // fetched lazily when any tract-only var is encountered at BG level
-    if (acsVars.length > 0) {
-      App.setStatus("Querying TIGERweb\u2026");
-      progressEl.textContent = "Fetching census geometries\u2026";
-      geos = await App.fetchTigerwebGeos(geoLevel, unionFeat);
-      App.renderCensusOverlay(geos);
-
-      if (geos.length === 0) {
-        for (var gi = 0; gi < acsVars.length; gi++) {
-          var gRow = rowEls[acsVars[gi]];
-          gRow.className = "result-error";
-          gRow.children[2].textContent = "No intersecting geographies";
-          updateProgress();
-        }
-      } else {
-        var geoids = geos.map(function (f) { return f.properties.GEOID; }).filter(Boolean);
-
-        // Fetch + aggregate each ACS variable
-        for (var ai = 0; ai < acsVars.length; ai++) {
-          var varCode = acsVars[ai];
-          var varMeta = App.getMeta(varCode);
-          var row = rowEls[varCode];
-          var useTractFallback = (geoLevel === "bg" && varMeta.tractOnly);
-
-          try {
-            App.setStatus("Fetching ACS: " + (varMeta.label || varCode) + "\u2026");
-            progressEl.textContent = "Computing " + (varMeta.label || varCode) +
-              " (" + (completed + 1) + "/" + total + ")\u2026";
-
-            var fetchGeoLevel, fetchGeos, fetchGeoids;
-            if (useTractFallback) {
-              // Lazy-fetch tract geometries once for all tract-only variables
-              if (!tractGeosForFallback) {
-                progressEl.textContent = "Fetching tract geometries for tract-level variables\u2026";
-                tractGeosForFallback = await App.fetchTigerwebGeos("tract", unionFeat);
-              }
-              fetchGeoLevel = "tract";
-              fetchGeos = tractGeosForFallback;
-              fetchGeoids = tractGeosForFallback.map(function (f) { return f.properties.GEOID; }).filter(Boolean);
-            } else {
-              fetchGeoLevel = geoLevel;
-              fetchGeos = geos;
-              fetchGeoids = geoids;
-            }
-
-            var valueMap = await App.fetchACSValues(fetchGeoLevel, year, varCode, fetchGeoids);
-            var result = App.aggregateWithinUnion(unionFeat, fetchGeos, valueMap, varMeta.agg);
-
-            row.className = "";
-            row.children[2].textContent = App.formatValue(result.value, varMeta);
-            if (useTractFallback) {
-              row.children[3].textContent += " \u2014 Tract-level data (not available at block group)";
-            }
-          } catch (e) {
-            row.className = "result-error";
-            row.children[2].textContent = "Error: " + (e.message || e);
-          }
-          updateProgress();
-        }
-      }
-    }
-
-    // LODES variables
-    for (var li = 0; li < lodesVars.length; li++) {
-      var lCode = lodesVars[li];
-      var lRow = rowEls[lCode];
-
-      if (!App.lodesData) {
-        lRow.className = "result-error";
-        lRow.children[2].textContent = "LODES file not loaded";
-        updateProgress();
-        continue;
-      }
-
-      try {
-        App.setStatus("Computing LODES employment\u2026");
-        progressEl.textContent = "Computing LODES employment (" + (completed + 1) + "/" + total + ")\u2026";
-
-        var blocksInside = await App.fetchBlocksInternalPointsInUnion(unionFeat);
-        var sum = 0;
-        var matched = 0;
-        for (var geoid of blocksInside) {
-          var v = App.lodesData.get(geoid);
-          if (v != null) { sum += v; matched++; }
-        }
-
-        lRow.className = "";
-        lRow.children[2].textContent = sum.toLocaleString(undefined, { maximumFractionDigits: 0 });
-      } catch (e) {
-        lRow.className = "result-error";
-        lRow.children[2].textContent = "Error: " + (e.message || e);
-      }
-      updateProgress();
-    }
-
-    // Build notes footer
-    var geoLabel = (geoLevel === "tract") ? "tracts" : "block groups";
-    var notesParts = [];
-    if (geos && geos.length > 0) {
-      notesParts.push("ACS " + year + " 5-year; " + geos.length + " intersecting " + geoLabel + ".");
-    }
-    if (tractGeosForFallback && tractGeosForFallback.length > 0) {
-      notesParts.push(tractGeosForFallback.length + " tract(s) used for variables not available at block group level.");
-    }
-    if (lodesVars.length > 0 && App.lodesData) {
-      notesParts.push("LODES file: " + App.lodesFileName + ".");
-    }
-    var methodNote = 'Summaries are computed within the <b>dissolved union</b> of all buffers. Set the buffer radius in the Features panel. For ACS, counts are area-apportioned and medians are shown as an area-weighted average estimate.';
-    notesEl.innerHTML = (notesParts.length ? notesParts.join(" ") + "<br>" : "") + methodNote;
-
-    // Update sidebar status card
-    if (geos && geos.length > 0) {
-      nGeosEl.textContent = String(geos.length);
-    }
-    statusCard.style.display = "";
-
-    App.setStatus("Done");
-    await notifyProject();
-  }
+  // Note: runSummary() and helpers (CHECKBOX_GROUPS, MANDATORY_VARS, DENOM_MAP,
+  // expandGroups, aggDescription) have moved to js/projects/buffer-summary.js.
 
   // ---- Build Analysis sidebar panel HTML ----
 
@@ -409,8 +205,8 @@
     // ---- Register sidebar panels, render, then wire events ----
     App.sidebar.addPanel({
       id: "station-data",
-      title: "Buffer-Area Data",
-      html: STATION_DATA_PANEL_HTML,
+      title: "Data Inputs",
+      html: DATA_INPUTS_PANEL_HTML,
       collapsed: false,
       order: 10
     });
@@ -486,29 +282,22 @@
     document.getElementById("varSelectAll").addEventListener("click", function () {
       var boxes = document.querySelectorAll('#varSelect input[type="checkbox"]');
       for (var i = 0; i < boxes.length; i++) boxes[i].checked = true;
+      var lodesCb = document.getElementById("lodesCheckbox");
+      if (lodesCb) lodesCb.checked = true;
       if (typeof App.cache !== "undefined") App.cache.save();
     });
     document.getElementById("varClearAll").addEventListener("click", function () {
       var boxes = document.querySelectorAll('#varSelect input[type="checkbox"]');
       for (var i = 0; i < boxes.length; i++) boxes[i].checked = false;
+      var lodesCb = document.getElementById("lodesCheckbox");
+      if (lodesCb) lodesCb.checked = false;
       if (typeof App.cache !== "undefined") App.cache.save();
     });
 
-    // View Results button (re-opens modal)
-    document.getElementById("viewResults").addEventListener("click", openResultsModal);
-
-    // Results modal: close on X or backdrop click
-    document.querySelector(".results-modal-close").addEventListener("click", closeResultsModal);
-    document.querySelector(".results-modal-backdrop").addEventListener("click", closeResultsModal);
-
-    // Escape key: close in priority order (results modal first, then analysis popup)
+    // Escape key: close analysis popup
     document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape") {
-        if (document.getElementById("results-modal").style.display !== "none") {
-          closeResultsModal();
-        } else if (App.popup.isOpen()) {
-          App.popup.close();
-        }
+      if (e.key === "Escape" && App.popup.isOpen()) {
+        App.popup.close();
       }
     });
 
@@ -610,15 +399,6 @@
       }
     });
 
-    // Run summary
-    document.getElementById("run").addEventListener("click", async function () {
-      try {
-        await runSummary();
-      } catch (e) {
-        App.setStatus("Error: " + (e && e.message ? e.message : e));
-      }
-    });
-
     // LODES download
     document.getElementById("downloadLodes").addEventListener("click", async function () {
       try {
@@ -626,9 +406,9 @@
         var info = await App.getStateFromMapCenter();
         document.getElementById("lodesState").textContent = info.abbr.toUpperCase() + " (FIPS " + info.stateFips + ")";
 
-        var year = document.getElementById("yearSelect").value;
-        var url = "https://lehd.ces.census.gov/data/lodes/LODES8/" + info.abbr + "/wac/" + info.abbr + "_wac_S000_JT00_" + year + ".csv.gz";
-        var filename = info.abbr + "_wac_S000_JT00_" + year + ".csv.gz";
+        var lodesYear = "2024";
+        var url = "https://lehd.ces.census.gov/data/lodes/LODES8/" + info.abbr + "/wac/" + info.abbr + "_wac_S000_JT00_" + lodesYear + ".csv.gz";
+        var filename = info.abbr + "_wac_S000_JT00_" + lodesYear + ".csv.gz";
 
         document.getElementById("lodesInfo").textContent =
           "Downloading " + filename + ". Click Add to load into map data.";
@@ -646,39 +426,36 @@
       document.getElementById("lodesFile").click();
     });
 
-    // LODES file upload
+    // LODES file upload — merges into any already-loaded state data
     document.getElementById("lodesFile").addEventListener("change", async function (e) {
       var file = e.target.files && e.target.files[0];
       if (!file) return;
-
-      if (App.lodesData) {
-        var confirmed = confirm(
-          "A LODES file is already loaded (" + App.lodesFileName + ").\n\nLoad \"" + file.name + "\" and replace the existing data?"
-        );
-        if (!confirmed) {
-          this.value = "";
-          return;
-        }
-      }
-
+      this.value = ""; // allow re-selecting the same file
       try {
         var jobsMap = await App.parseLodesFromUploadedFile(file);
-        App.lodesData = jobsMap;
-        App.lodesFileName = file.name;
-        App.setLodesLoadedUI(true, file.name, jobsMap.size);
+        App.mergeLodesFile(jobsMap, file.name);
         App.setStatus("Ready");
         notifyProject();
         if (typeof App.cache !== "undefined") App.cache.save();
       } catch (err) {
-        App.lodesData = null;
-        App.lodesFileName = "";
-        App.setLodesLoadedUI(false, "", 0);
         App.setStatus("Error");
-        document.getElementById("lodesInfo").textContent = String(err && err.message ? err.message : err);
-        notifyProject();
-        if (typeof App.cache !== "undefined") App.cache.save();
+        var infoEl = document.getElementById("lodesInfo");
+        if (infoEl) infoEl.textContent = "Error loading " + file.name + ": " + String(err && err.message ? err.message : err);
       }
     });
+
+    // LODES clear-all button
+    var lodesClearBtn = document.getElementById("lodesClearAll");
+    if (lodesClearBtn) {
+      lodesClearBtn.addEventListener("click", function () {
+        if (!confirm("Remove all loaded LODES data?")) return;
+        App.clearLodesData();
+        notifyProject();
+        if (typeof App.cache !== "undefined") App.cache.save();
+      });
+    }
+
+    // PPACG Projection UI has moved to the Ridership Forecasting Projections tab.
 
     // Reset session button: clear everything AND localStorage
     var resetBtn = document.getElementById("reset");
@@ -714,12 +491,12 @@
         if (typeof App.cache !== "undefined") App.cache.save();
       });
     });
-    document.getElementById("geoLevel").addEventListener("change", function () {
-      if (typeof App.cache !== "undefined") App.cache.save();
-    });
-    document.getElementById("yearSelect").addEventListener("change", function () {
-      if (typeof App.cache !== "undefined") App.cache.save();
-    });
+    var lodesCbSave = document.getElementById("lodesCheckbox");
+    if (lodesCbSave) {
+      lodesCbSave.addEventListener("change", function () {
+        if (typeof App.cache !== "undefined") App.cache.save();
+      });
+    }
 
     // Restore cached session (runs after sidebar, events, and project init are all ready)
     if (typeof App.cache !== "undefined" && App.cache.restore()) {

@@ -1,8 +1,8 @@
 // js/projects/transit-propensity.js
-// Transit Propensity Index project: registers as an analysis module,
-// opens in a popup with 3-column layout, renders choropleth + floating legend.
+// Transit Propensity Index: registers as an analysis module, opens in a 2-column popup,
+// renders choropleth + floating legend.
 // Depends on: App namespace, TPI namespace (tpi-scoring.js), App.popup (popup.js), turf (CDN).
-// Exports: none (self-registers via App.registerModule)
+// Exports: App.getTpiWeights()
 
 (function () {
   "use strict";
@@ -11,13 +11,16 @@
 
   // ---- Project-local state (persists across popup open/close) ----
 
-  var _lastResult = null; // last TPI computation result
-  var _weights = TPI.getDefaultWeights(); // current weight settings
-  var _stale = false; // true when features changed since last compute
+  var _lastResult = null;
+  var _weights = TPI.getDefaultWeights();
+  var _pendingWeights = null;     // temporary copy while Adjust Weights modal is open
+  var _tpiFeatureFilter = null;   // { routeIndices, lineIndices, stationIndices, polygonIndices } or null (= all)
+  var _selectedCorridor = "all";  // "all" | "route:N" | "line:N" | "station:N" | "polygon:N"
+  var _stale = false;
   var _running = false;
   var _rescoreTimer = null;
-  var _initialized = false; // true after first init() call
-  var _apportionByArea = false; // true when "Apportion by Area" toggle is checked
+  var _initialized = false;
+  var _apportionByArea = false;
 
   function getTpiClass(score) {
     if (!Number.isFinite(score)) return "N/A";
@@ -34,7 +37,395 @@
     return App.popup.isOpen() && App.popup.currentModuleId() === "transit-propensity";
   }
 
-  // ---- Weight sliders ----
+  // ---- Feature filter & union polygon helpers ----
+
+  function buildUnionFromFilter(filter) {
+    if (!filter) return App.bufferUnionPolygon();
+    var polys = [];
+    var routeBuffers = App.routeBuffers || [];
+    var lineBuffers  = App.lineBuffers  || [];
+    var stationBufs  = App.buffers      || [];
+    var polygons     = App.polygons     || [];
+    var i, idx;
+
+    if (filter.routeIndices) {
+      for (i = 0; i < filter.routeIndices.length; i++) {
+        idx = filter.routeIndices[i];
+        if (routeBuffers[idx]) polys.push(routeBuffers[idx]);
+      }
+    }
+    if (filter.lineIndices) {
+      for (i = 0; i < filter.lineIndices.length; i++) {
+        idx = filter.lineIndices[i];
+        if (lineBuffers[idx]) polys.push(lineBuffers[idx]);
+      }
+    }
+    if (filter.stationIndices) {
+      for (i = 0; i < filter.stationIndices.length; i++) {
+        idx = filter.stationIndices[i];
+        if (stationBufs[idx]) polys.push(stationBufs[idx]);
+      }
+    }
+    if (filter.polygonIndices) {
+      for (i = 0; i < filter.polygonIndices.length; i++) {
+        idx = filter.polygonIndices[i];
+        if (polygons[idx]) polys.push(polygons[idx]);
+      }
+    }
+    if (!polys.length) return null;
+    var union = polys[0];
+    for (i = 1; i < polys.length; i++) {
+      try { union = turf.union(union, polys[i]); } catch (e) { /* skip invalid */ }
+    }
+    return union;
+  }
+
+  function getFeatureFilter() {
+    var el = document.getElementById("tpiFeatureChecklist");
+    if (!el) return null;
+    var boxes = el.querySelectorAll("input[type=checkbox]");
+    if (!boxes.length) return null;
+    var routeIndices = [], lineIndices = [], stationIndices = [], polygonIndices = [];
+    var allChecked = true;
+    for (var i = 0; i < boxes.length; i++) {
+      var cb = boxes[i];
+      var type = cb.getAttribute("data-type");
+      var idx  = parseInt(cb.getAttribute("data-idx"), 10);
+      if (cb.checked) {
+        if      (type === "route")   routeIndices.push(idx);
+        else if (type === "line")    lineIndices.push(idx);
+        else if (type === "station") stationIndices.push(idx);
+        else if (type === "polygon") polygonIndices.push(idx);
+      } else {
+        allChecked = false;
+      }
+    }
+    if (allChecked) return null; // no filter needed
+    return { routeIndices: routeIndices, lineIndices: lineIndices,
+             stationIndices: stationIndices, polygonIndices: polygonIndices };
+  }
+
+  // ---- Feature checklist ----
+
+  function buildFeatureChecklist() {
+    var el = document.getElementById("tpiFeatureChecklist");
+    if (!el) return;
+
+    // Capture current check state before rebuilding
+    var prevState = {};
+    var prev = el.querySelectorAll("input[type=checkbox]");
+    for (var pi = 0; pi < prev.length; pi++) {
+      prevState[prev[pi].getAttribute("data-type") + ":" + prev[pi].getAttribute("data-idx")] = prev[pi].checked;
+    }
+
+    el.innerHTML = "";
+    var hasFeatures = false;
+
+    function addRow(type, idx, name, badge) {
+      hasFeatures = true;
+      var key = type + ":" + idx;
+      var checked = (key in prevState) ? prevState[key] : true;
+      var row = document.createElement("div");
+      row.className = "rf-feature-check-row";
+
+      var cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.setAttribute("data-type", type);
+      cb.setAttribute("data-idx", String(idx));
+      cb.checked = checked;
+
+      var lbl = document.createElement("label");
+      lbl.style.cssText = "flex:1;cursor:pointer;";
+      lbl.textContent = name;
+
+      var badgeEl = document.createElement("span");
+      badgeEl.className = "rf-feature-type-badge";
+      badgeEl.textContent = badge;
+
+      lbl.addEventListener("click", function (e) { e.preventDefault(); cb.checked = !cb.checked; markStale(); });
+      cb.addEventListener("change", markStale);
+
+      row.appendChild(cb);
+      row.appendChild(lbl);
+      row.appendChild(badgeEl);
+      el.appendChild(row);
+    }
+
+    var routes   = App.routes   || [];
+    var lines    = App.lines    || [];
+    var stations = App.stations || [];
+    var polys    = App.polygons || [];
+
+    for (var ri = 0; ri < routes.length;   ri++) addRow("route",   ri, (routes[ri].properties   && routes[ri].properties.name)   || ("Route "   + (ri + 1)), "R");
+    for (var li = 0; li < lines.length;    li++) addRow("line",    li, (lines[li].properties    && lines[li].properties.name)    || ("Line "    + (li + 1)), "L");
+    for (var si = 0; si < stations.length; si++) addRow("station", si, (stations[si].properties && stations[si].properties.name) || ("Station " + (si + 1)), "S");
+    for (var gi = 0; gi < polys.length;    gi++) addRow("polygon", gi, (polys[gi].properties    && polys[gi].properties.name)    || ("Polygon " + (gi + 1)), "P");
+
+    if (!hasFeatures) {
+      el.innerHTML = '<div style="padding:6px;color:var(--muted);font-size:12px;">No features drawn.</div>';
+    }
+
+    buildCorridorDropdown();
+  }
+
+  // ---- Corridor dropdown ----
+
+  function buildCorridorDropdown() {
+    var sel = document.getElementById("tpiCorridorSelect");
+    if (!sel) return;
+    var prev = sel.value;
+    sel.innerHTML = '<option value="all">All features (system-wide)</option>';
+
+    var routes   = App.routes   || [];
+    var lines    = App.lines    || [];
+    var stations = App.stations || [];
+    var polys    = App.polygons || [];
+    var opt;
+
+    for (var ri = 0; ri < routes.length; ri++) {
+      opt = document.createElement("option");
+      opt.value = "route:" + ri;
+      opt.textContent = (routes[ri].properties && routes[ri].properties.name) || ("Route " + (ri + 1));
+      sel.appendChild(opt);
+    }
+    for (var li = 0; li < lines.length; li++) {
+      opt = document.createElement("option");
+      opt.value = "line:" + li;
+      opt.textContent = (lines[li].properties && lines[li].properties.name) || ("Line " + (li + 1));
+      sel.appendChild(opt);
+    }
+    for (var si = 0; si < stations.length; si++) {
+      opt = document.createElement("option");
+      opt.value = "station:" + si;
+      opt.textContent = (stations[si].properties && stations[si].properties.name) || ("Station " + (si + 1));
+      sel.appendChild(opt);
+    }
+    for (var gi = 0; gi < polys.length; gi++) {
+      opt = document.createElement("option");
+      opt.value = "polygon:" + gi;
+      opt.textContent = (polys[gi].properties && polys[gi].properties.name) || ("Polygon " + (gi + 1));
+      sel.appendChild(opt);
+    }
+
+    // Restore previous selection if still valid
+    if (prev && sel.querySelector('option[value="' + prev + '"]')) {
+      sel.value = prev;
+    } else {
+      _selectedCorridor = "all";
+      sel.value = "all";
+    }
+  }
+
+  // ---- Filter geos to selected corridor ----
+
+  function getGeosInCorridor(result, corridor) {
+    if (!corridor || corridor === "all") return result.geos;
+    var parts = corridor.split(":");
+    var type  = parts[0];
+    var idx   = parseInt(parts[1], 10);
+    var bufferPoly;
+    if      (type === "route")   bufferPoly = (App.routeBuffers || [])[idx];
+    else if (type === "line")    bufferPoly = (App.lineBuffers  || [])[idx];
+    else if (type === "station") bufferPoly = (App.buffers      || [])[idx];
+    else if (type === "polygon") bufferPoly = (App.polygons     || [])[idx];
+    if (!bufferPoly) return result.geos;
+    return result.geos.filter(function (geo) {
+      try { return turf.booleanIntersects(geo, bufferPoly); } catch (e) { return false; }
+    });
+  }
+
+  // ---- Geography list display ----
+
+  function displayGeographyList(result, corridor) {
+    if (!isPopupVisible()) return;
+
+    var resultsEl = document.getElementById("tpiResults");
+    var emptyEl   = document.getElementById("tpiEmptyState");
+    if (resultsEl) resultsEl.style.display = "";
+    if (emptyEl)   emptyEl.style.display   = "none";
+
+    // Update corridor label
+    var labelEl = document.getElementById("tpiCorridorLabel");
+    if (labelEl) {
+      if (!corridor || corridor === "all") {
+        labelEl.textContent = "";
+      } else {
+        var sel = document.getElementById("tpiCorridorSelect");
+        if (sel) {
+          var opt = sel.querySelector('option[value="' + corridor + '"]');
+          labelEl.textContent = opt ? "\u2014 " + opt.textContent : "";
+        }
+      }
+    }
+
+    var filteredGeos = getGeosInCorridor(result, corridor);
+    var listEl = document.getElementById("tpiGeoList");
+    if (!listEl) return;
+    listEl.innerHTML = "";
+
+    if (!filteredGeos.length) {
+      listEl.innerHTML = '<div style="padding:8px;color:var(--muted);font-size:12px;">No geographies found in selected corridor.</div>';
+      updateSummaryStats(result, []);
+      return;
+    }
+
+    // Sort by composite TPI descending
+    var sorted = filteredGeos.slice().sort(function (a, b) {
+      var sa = result.scores.get(a.properties && a.properties.GEOID);
+      var sb = result.scores.get(b.properties && b.properties.GEOID);
+      var ca = (sa && Number.isFinite(sa.composite)) ? sa.composite : -1;
+      var cb2 = (sb && Number.isFinite(sb.composite)) ? sb.composite : -1;
+      return cb2 - ca;
+    });
+
+    // Active factors (non-zero effective weight)
+    var activeFactors = TPI.FACTORS.filter(function (f) {
+      return (result.effectiveWeights[f.id] || 0) > 0;
+    });
+
+    sorted.forEach(function (geo) {
+      var geoid      = geo.properties && geo.properties.GEOID;
+      if (!geoid) return;
+      var scoreEntry = result.scores.get(geoid);
+      var composite  = (scoreEntry && Number.isFinite(scoreEntry.composite)) ? scoreEntry.composite : null;
+      var hasScore   = composite !== null;
+
+      // Main row
+      var row = document.createElement("div");
+      row.className = "rf-route-score-row";
+
+      var expandEl = document.createElement("span");
+      expandEl.className = "rf-route-score-expand";
+      expandEl.textContent = "\u25b6";
+
+      var nameEl = document.createElement("span");
+      nameEl.className = "rf-route-score-name";
+      nameEl.textContent = geoid;
+
+      var scoreEl = document.createElement("span");
+      scoreEl.className = "rf-route-score-cdi";
+      scoreEl.textContent = hasScore ? composite.toFixed(2) : "\u2014";
+
+      var scaleEl = document.createElement("span");
+      scaleEl.style.cssText = "font-size:10px;color:var(--muted);margin-left:2px;";
+      scaleEl.textContent = "/ 5";
+
+      row.appendChild(expandEl);
+      row.appendChild(nameEl);
+      row.appendChild(scoreEl);
+      row.appendChild(scaleEl);
+
+      // Detail panel
+      var detail = document.createElement("div");
+      detail.className = "rf-route-score-detail";
+      detail.style.display = "none";
+
+      if (hasScore && activeFactors.length) {
+        var factorList = document.createElement("div");
+        factorList.className = "rf-route-factor-list";
+
+        activeFactors.forEach(function (f) {
+          var fScore  = scoreEntry.factors[f.id];
+          var hasF    = (fScore != null && Number.isFinite(fScore));
+          var barPct  = hasF ? Math.round((fScore - 1) / 4 * 100) : 0;
+          var barColor = hasF
+            ? (fScore >= 4 ? "#68d391" : fScore >= 3 ? "#63b3ed" : "#fc8181")
+            : "#e2e8f0";
+          var ew = result.effectiveWeights[f.id] || 0;
+
+          var fr = document.createElement("div");
+          fr.className = "rf-route-factor-row";
+          fr.innerHTML =
+            '<span class="rf-route-factor-name">' + f.label + '</span>' +
+            '<span class="rf-route-factor-weight">' + Math.round(ew) + '%</span>' +
+            '<div class="rf-route-factor-bar-wrap">' +
+              '<div class="rf-route-factor-bar" style="width:' + barPct + '%;background:' + barColor + ';"></div>' +
+            '</div>' +
+            '<span class="rf-route-factor-score">' + (hasF ? fScore.toFixed(1) : "\u2014") + '</span>';
+          factorList.appendChild(fr);
+        });
+        detail.appendChild(factorList);
+      } else {
+        detail.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:4px;">No factor data available.</div>';
+      }
+
+      row.addEventListener("click", function () {
+        var expanded = detail.style.display !== "none";
+        detail.style.display = expanded ? "none" : "";
+        expandEl.textContent  = expanded ? "\u25b6" : "\u25bc";
+      });
+
+      listEl.appendChild(row);
+      listEl.appendChild(detail);
+    });
+
+    updateSummaryStats(result, filteredGeos);
+    updateFootnotes(result);
+    updateExportButtons(true);
+  }
+
+  function updateSummaryStats(result, filteredGeos) {
+    var scores = filteredGeos.map(function (g) {
+      var e = result.scores.get(g.properties && g.properties.GEOID);
+      return (e && Number.isFinite(e.composite)) ? e.composite : null;
+    }).filter(function (s) { return s !== null; });
+
+    var avg = scores.length
+      ? scores.reduce(function (a, b) { return a + b; }, 0) / scores.length
+      : null;
+
+    var scoreEl = document.getElementById("tpiCorridorScore");
+    if (scoreEl) scoreEl.textContent = avg !== null ? avg.toFixed(2) + " / 5" : "\u2014";
+
+    var countEl = document.getElementById("tpiScoredCount");
+    if (countEl) countEl.textContent = scores.length + " / " + filteredGeos.length;
+  }
+
+  function updateFootnotes(result) {
+    var fallbackEl = document.getElementById("tpiFallbackNote");
+    if (fallbackEl) {
+      var fallbacks = result.tractFallbackFactors || [];
+      if (fallbacks.length && !result.apportionByArea) {
+        fallbackEl.textContent = "\u2020 Some factors only available at tract level; values applied to all block groups within each tract.";
+        fallbackEl.style.display = "";
+      } else {
+        fallbackEl.style.display = "none";
+      }
+    }
+    var apportionEl = document.getElementById("tpiApportionNote");
+    if (apportionEl) {
+      if (result.apportionByArea) {
+        apportionEl.textContent = "Area apportionment active: values scaled by buffer overlap fraction.";
+        apportionEl.style.display = "";
+      } else {
+        apportionEl.style.display = "none";
+      }
+    }
+  }
+
+  function updateExportButtons(enabled) {
+    var gjBtn  = document.getElementById("tpiExportGeoJSON");
+    var csvBtn = document.getElementById("tpiExportCSV");
+    if (gjBtn)  gjBtn.disabled  = !enabled;
+    if (csvBtn) csvBtn.disabled = !enabled;
+  }
+
+  // ---- Stale indicator ----
+
+  function markStale() {
+    if (!_lastResult) return;
+    _stale = true;
+    if (!isPopupVisible()) return;
+    var statusEl = document.getElementById("tpiStatus");
+    var textEl   = document.getElementById("tpiStatusText");
+    if (statusEl && textEl) {
+      statusEl.style.display = "";
+      textEl.textContent     = "Data has changed \u2014 re-run to update scores.";
+      statusEl.className     = "rf-status rf-status-stale";
+    }
+  }
+
+  // ---- Weight sliders (live inside modal) ----
 
   function buildWeightSliders() {
     var container = document.getElementById("tpiWeightSliders");
@@ -44,110 +435,103 @@
     var factors = TPI.FACTORS;
     for (var i = 0; i < factors.length; i++) {
       var f = factors[i];
-      var w = _weights[f.id] != null ? _weights[f.id] : f.defaultWeight;
+      var w = (_weights[f.id] != null) ? _weights[f.id] : (f.defaultWeight || 0);
 
       var row = document.createElement("div");
       row.className = "tpi-slider-row";
-
       row.innerHTML =
         '<label class="tpi-slider-label" title="' + f.description + '">' + f.label + '</label>' +
-        '<input type="range" class="tpi-slider" min="0" max="100" step="5" value="' + w + '" data-factor="' + f.id + '" />' +
-        '<input type="number" class="tpi-slider-value" id="tpiW_' + f.id + '" value="' + w + '" min="0" max="100" step="1" data-factor="' + f.id + '" />';
-
+        '<input type="range" class="tpi-slider" min="0" max="100" step="5" value="' + w + '" data-factor="' + f.id + '">' +
+        '<input type="number" class="tpi-slider-value" id="tpiW_' + f.id + '" value="' + w + '" min="0" max="100" step="1" data-factor="' + f.id + '">';
       container.appendChild(row);
 
-      // Wire slider and number input
-      var slider = row.querySelector("input[type=range]");
-      slider.addEventListener("input", onSliderChange);
+      var slider   = row.querySelector("input[type=range]");
       var numInput = row.querySelector("input[type=number]");
-      numInput.addEventListener("change", onNumberChange);
+      slider.addEventListener("input",  onModalSliderChange);
+      numInput.addEventListener("change", onModalNumberChange);
     }
-
-    updateWeightSum();
+    updateModalWeightSum();
   }
 
-  function onSliderChange(e) {
-    var factorId = e.target.getAttribute("data-factor");
-    _weights[factorId] = parseInt(e.target.value, 10);
-    var numInput = document.getElementById("tpiW_" + factorId);
-    if (numInput) numInput.value = String(_weights[factorId]);
-    var sum = updateWeightSum();
-    if (_lastResult && sum === 100) {
-      clearTimeout(_rescoreTimer);
-      _rescoreTimer = setTimeout(runInstantRescore, 300);
-    } else {
-      markStale();
-    }
-  }
-
-  function onNumberChange(e) {
-    var factorId = e.target.getAttribute("data-factor");
-    var raw = parseInt(e.target.value, 10);
-    var clamped = isNaN(raw) ? 0 : Math.max(0, Math.min(100, raw));
-    e.target.value = String(clamped);
-    _weights[factorId] = clamped;
-    var slider = document.querySelector('.tpi-slider[data-factor="' + factorId + '"]');
-    if (slider) slider.value = String(clamped);
-    var sum = updateWeightSum();
-    if (_lastResult && sum === 100) {
-      clearTimeout(_rescoreTimer);
-      _rescoreTimer = setTimeout(runInstantRescore, 300);
-    } else {
-      markStale();
-    }
-  }
-
-  function updateWeightSum() {
-    var sum = 0;
-    var factors = TPI.FACTORS;
-    for (var i = 0; i < factors.length; i++) {
-      sum += (_weights[factors[i].id] || 0);
-    }
-    // DOM guard: only update UI if popup is visible
-    if (!isPopupVisible()) return sum;
-
-    var sumEl  = document.getElementById("tpiWeightSum");
-    var warnEl = document.getElementById("tpiWeightWarn");
-    var runBtn = document.getElementById("tpiRun");
-    if (sumEl) sumEl.textContent = String(sum);
-    var valid = (sum === 100);
-    if (warnEl) {
-      warnEl.style.visibility = valid ? "hidden" : "visible";
-      if (sumEl) sumEl.style.color = valid ? "" : "#e53e3e";
-    }
-    if (runBtn && !_running) runBtn.disabled = !valid;
-    return sum;
-  }
-
-  function resetWeights() {
-    _weights = TPI.getDefaultWeights();
-    // Update slider DOM
+  function syncSlidersToWeights(weights) {
     var factors = TPI.FACTORS;
     for (var i = 0; i < factors.length; i++) {
       var f = factors[i];
-      var slider = document.querySelector('.tpi-slider[data-factor="' + f.id + '"]');
-      if (slider) slider.value = String(f.defaultWeight);
+      var w = (weights[f.id] != null) ? weights[f.id] : 0;
+      var slider   = document.querySelector('.tpi-slider[data-factor="' + f.id + '"]');
       var numInput = document.getElementById("tpiW_" + f.id);
-      if (numInput) numInput.value = String(f.defaultWeight);
+      if (slider)   slider.value   = String(w);
+      if (numInput) numInput.value = String(w);
     }
-    updateWeightSum();
-    markStale();
+    updateModalWeightSum();
   }
 
-  // ---- Stale indicator ----
+  function onModalSliderChange(e) {
+    if (!_pendingWeights) return;
+    var factorId = e.target.getAttribute("data-factor");
+    _pendingWeights[factorId] = parseInt(e.target.value, 10);
+    var numInput = document.getElementById("tpiW_" + factorId);
+    if (numInput) numInput.value = String(_pendingWeights[factorId]);
+    updateModalWeightSum();
+  }
 
-  function markStale() {
-    if (!_lastResult) return; // nothing computed yet
-    _stale = true;
-    // DOM guard: only update UI if popup is visible
-    if (!isPopupVisible()) return;
-    var statusEl = document.getElementById("tpiStatus");
-    var textEl = document.getElementById("tpiStatusText");
-    if (statusEl && textEl) {
-      statusEl.style.display = "";
-      textEl.textContent = "Data has changed \u2014 re-run to update scores.";
-      statusEl.className = "tpi-status tpi-status-stale";
+  function onModalNumberChange(e) {
+    if (!_pendingWeights) return;
+    var factorId = e.target.getAttribute("data-factor");
+    var raw      = parseInt(e.target.value, 10);
+    var clamped  = isNaN(raw) ? 0 : Math.max(0, Math.min(100, raw));
+    e.target.value = String(clamped);
+    _pendingWeights[factorId] = clamped;
+    var slider = document.querySelector('.tpi-slider[data-factor="' + factorId + '"]');
+    if (slider) slider.value = String(clamped);
+    updateModalWeightSum();
+  }
+
+  function updateModalWeightSum() {
+    var weights = _pendingWeights || _weights;
+    var sum = 0;
+    var factors = TPI.FACTORS;
+    for (var i = 0; i < factors.length; i++) sum += (weights[factors[i].id] || 0);
+
+    var sumEl      = document.getElementById("tpiWeightSum");
+    var warnEl     = document.getElementById("tpiWeightWarn");
+    var confirmBtn = document.getElementById("tpiWeightsConfirm");
+    if (sumEl)      { sumEl.textContent = String(sum); sumEl.style.color = sum === 100 ? "" : "#e53e3e"; }
+    if (warnEl)     warnEl.style.visibility = sum === 100 ? "hidden" : "visible";
+    if (confirmBtn) confirmBtn.disabled = (sum !== 100);
+    return sum;
+  }
+
+  function openWeightsModal() {
+    _pendingWeights = Object.assign({}, _weights);
+    syncSlidersToWeights(_pendingWeights);
+    var modal = document.getElementById("tpiWeightsModal");
+    if (modal) modal.style.display = "";
+  }
+
+  function closeWeightsModal(confirm) {
+    var modal = document.getElementById("tpiWeightsModal");
+    if (modal) modal.style.display = "none";
+    if (confirm && _pendingWeights) {
+      var oldJSON = JSON.stringify(_weights);
+      _weights    = Object.assign({}, _pendingWeights);
+      if (JSON.stringify(_weights) !== oldJSON) {
+        var sum = 0;
+        TPI.FACTORS.forEach(function (f) { sum += (_weights[f.id] || 0); });
+        if (_lastResult && sum === 100) {
+          clearTimeout(_rescoreTimer);
+          _rescoreTimer = setTimeout(runInstantRescore, 300);
+        } else {
+          markStale();
+        }
+      }
     }
+    _pendingWeights = null;
+  }
+
+  function resetModalToDefaults() {
+    _pendingWeights = TPI.getDefaultWeights();
+    syncSlidersToWeights(_pendingWeights);
   }
 
   // ---- Run TPI ----
@@ -157,36 +541,47 @@
     _running = true;
 
     var statusEl = document.getElementById("tpiStatus");
-    var textEl = document.getElementById("tpiStatusText");
-    var runBtn = document.getElementById("tpiRun");
+    var textEl   = document.getElementById("tpiStatusText");
+    var runBtn   = document.getElementById("tpiRun");
 
-    if (runBtn) runBtn.disabled = true;
-    if (statusEl) { statusEl.style.display = ""; statusEl.className = "tpi-status"; }
+    if (runBtn)   runBtn.disabled = true;
+    if (statusEl) { statusEl.style.display = ""; statusEl.className = "rf-status"; }
 
     try {
-      // Read geo level and year from TPI's own selectors in the popup
       var geoLevel = document.getElementById("tpiGeoLevel").value;
-      var year = document.getElementById("tpiYearSelect").value;
+      var year     = document.getElementById("tpiYearSelect").value;
+
+      var featureFilter = getFeatureFilter();
+      var unionPolygon  = buildUnionFromFilter(featureFilter);
+
+      if (!unionPolygon) {
+        throw new Error("No features selected. Check at least one feature in the TPI Features list.");
+      }
 
       var result = await TPI.computeTPI({
-        geoLevel: geoLevel,
-        year: year,
-        weights: _weights,
-        lodesData: App.lodesData,
+        geoLevel:       geoLevel,
+        year:           year,
+        weights:        _weights,
+        lodesData:      App.lodesData,
         apportionByArea: _apportionByArea,
+        unionPolygon:   unionPolygon,
+        growthFactors:  App.projGrowthFactors ? App.projGrowthFactors() : null,
         onProgress: function (msg) {
           if (textEl) textEl.textContent = msg;
           App.setStatus(msg);
         }
       });
 
-      _lastResult = result;
-      _stale = false;
+      result.geoLevel = geoLevel;
+      result.year     = year;
+      _lastResult     = result;
+      _stale          = false;
 
       // Render census overlay (clipped when area apportionment is on)
-      App.renderCensusOverlay(result.apportionByArea && result.clippedGeos ? result.clippedGeos : result.geos);
+      App.renderCensusOverlay(result.apportionByArea && result.clippedGeos
+        ? result.clippedGeos : result.geos);
 
-      // Render choropleth + floating legend
+      // Render choropleth + auto-show legend
       renderChoropleth(result);
       App.popup.showFloatingWidget("tpi-legend", "projects/tpi-legend.html", {
         position: "bottom-left",
@@ -194,21 +589,27 @@
         title: "TPI Legend"
       });
 
-      // Update results summary
-      displayResults(result);
+      // Rebuild corridor dropdown (now has actual geos to pick from)
+      buildCorridorDropdown();
+
+      // Display geography list
+      displayGeographyList(result, _selectedCorridor);
 
       if (textEl) textEl.textContent = "TPI computed successfully.";
-      if (statusEl) statusEl.className = "tpi-status tpi-status-done";
+      if (statusEl) statusEl.className = "rf-status rf-status-done";
       App.setStatus("TPI computed");
 
     } catch (err) {
       console.error("TPI error:", err);
       if (textEl) textEl.textContent = "Error: " + (err.message || err);
-      if (statusEl) statusEl.className = "tpi-status tpi-status-error";
+      if (statusEl) statusEl.className = "rf-status rf-status-stale";
       App.setStatus("TPI error");
     } finally {
       _running = false;
-      updateWeightSum(); // restores button disabled state based on weight validity
+      // Re-enable run button if weights are valid
+      var wsum = 0;
+      TPI.FACTORS.forEach(function (f) { wsum += (_weights[f.id] || 0); });
+      if (runBtn) runBtn.disabled = (wsum !== 100);
     }
   }
 
@@ -223,118 +624,21 @@
     _lastResult.effectiveWeights = rescored.effectiveWeights;
     _stale = false;
     renderChoropleth(_lastResult);
-    displayResults(_lastResult);
-    var statusEl = document.getElementById("tpiStatus");
-    var textEl   = document.getElementById("tpiStatusText");
-    if (statusEl && textEl) {
-      statusEl.style.display = "";
-      statusEl.className = "tpi-status tpi-status-done";
-      textEl.textContent = "Scores updated from cached data.";
-    }
-  }
-
-  // ---- Display results summary ----
-
-  function displayResults(result) {
-    // DOM guard
-    if (!isPopupVisible()) return;
-    var resultsEl = document.getElementById("tpiResults");
-    if (!resultsEl) return;
-    resultsEl.style.display = "";
-
-    // Geography count
-    var geoCountEl = document.getElementById("tpiGeoCount");
-    if (geoCountEl) {
-      var geoLevelEl = document.getElementById("tpiGeoLevel");
-      var geoLabel = (geoLevelEl && geoLevelEl.value === "tract") ? "tracts" : "block groups";
-      geoCountEl.textContent = result.geoids.length + " " + geoLabel;
-    }
-
-    // Per-factor summary
-    var summaryEl = document.getElementById("tpiFactorSummary");
-    if (summaryEl) {
-      var html = "";
-      var factors = TPI.FACTORS;
-      var fallbackSet = result.tractFallbackFactors || [];
-      var suppressDagger = !!result.apportionByArea; // area apportionment makes tract-to-BG mapping accurate
-      var anyFallback = false;
-      for (var i = 0; i < factors.length; i++) {
-        var f = factors[i];
-        var w = result.effectiveWeights[f.id] || 0;
-
-        var scoreMap = result.factorScores.get(f.id);
-        var avgScore = NaN;
-        if (scoreMap && scoreMap.size > 0) {
-          var sum = 0; var cnt = 0;
-          for (var entry of scoreMap.values()) {
-            sum += entry; cnt++;
-          }
-          avgScore = cnt > 0 ? sum / cnt : NaN;
-        }
-
-        var statusClass = scoreMap && scoreMap.size > 0 ? "tpi-factor-ok" : "tpi-factor-na";
-        var statusLabel = scoreMap && scoreMap.size > 0
-          ? "avg " + avgScore.toFixed(1) + " / 5"
-          : "No Data";
-
-        var isFallback = fallbackSet.indexOf(f.id) !== -1;
-        if (isFallback && !suppressDagger) anyFallback = true;
-        var labelHtml = f.label + (isFallback && !suppressDagger ? ' <sup class="tpi-tract-marker" title="Tract-level data applied to block groups">\u2020</sup>' : "");
-
-        html +=
-          '<div class="tpi-factor-row">' +
-            '<span class="tpi-factor-name">' + labelHtml + '</span>' +
-            '<span class="tpi-factor-weight">' + Math.round(w) + '%</span>' +
-            '<span class="tpi-factor-score ' + statusClass + '">' + statusLabel + '</span>' +
-          '</div>';
+    if (isPopupVisible()) {
+      displayGeographyList(_lastResult, _selectedCorridor);
+      var statusEl = document.getElementById("tpiStatus");
+      var textEl   = document.getElementById("tpiStatusText");
+      if (statusEl && textEl) {
+        statusEl.style.display = "";
+        statusEl.className     = "rf-status rf-status-done";
+        textEl.textContent     = "Scores updated from cached data.";
       }
-      if (anyFallback) {
-        html += '<div class="tpi-footnote">\u2020 Only available at Census Tract level. Tract values applied to all block groups within each tract.</div>';
-      }
-      if (result.apportionByArea) {
-        html += '<div class="tpi-footnote">Area apportionment active: values scaled by buffer overlap fraction.</div>';
-      }
-      summaryEl.innerHTML = html;
-    }
-
-    // Composite summary
-    var compositeAvgEl = document.getElementById("tpiCompositeAvg");
-    var scoredCountEl = document.getElementById("tpiScoredCount");
-
-    if (compositeAvgEl) {
-      var compSum = 0; var compCnt = 0;
-      for (var entry2 of result.scores.values()) {
-        if (Number.isFinite(entry2.composite)) {
-          compSum += entry2.composite;
-          compCnt++;
-        }
-      }
-      var compAvg = compCnt > 0 ? compSum / compCnt : NaN;
-      compositeAvgEl.textContent = Number.isFinite(compAvg) ? compAvg.toFixed(2) + " / 5" : "\u2014";
-    }
-
-    if (scoredCountEl) {
-      var scored = 0;
-      for (var entry3 of result.scores.values()) {
-        if (Number.isFinite(entry3.composite)) scored++;
-      }
-      scoredCountEl.textContent = String(scored) + " / " + result.geoids.length;
-    }
-
-    var compositeMaxEl = document.getElementById("tpiCompositeMax");
-    if (compositeMaxEl) {
-      var compMax = NaN;
-      for (var entry4 of result.scores.values()) {
-        if (Number.isFinite(entry4.composite) && (isNaN(compMax) || entry4.composite > compMax))
-          compMax = entry4.composite;
-      }
-      compositeMaxEl.textContent = Number.isFinite(compMax) ? compMax.toFixed(2) + " / 5" : "\u2014";
     }
   }
 
   // ---- Choropleth rendering ----
 
-  var TPI_SOURCE = "tpi-choropleth";
+  var TPI_SOURCE     = "tpi-choropleth";
   var TPI_FILL_LAYER = "tpi-choropleth-fill";
   var TPI_LINE_LAYER = "tpi-choropleth-line";
 
@@ -342,35 +646,30 @@
     var map = App.map;
     if (!map || !result) return;
 
-    // When area apportionment is on, use clipped geometries for the choropleth
-    var useClipped = result.apportionByArea && result.clippedGeos;
+    var useClipped    = result.apportionByArea && result.clippedGeos;
     var clippedLookup = null;
     if (useClipped) {
       clippedLookup = {};
       for (var ci = 0; ci < result.clippedGeos.length; ci++) {
         var cg = result.clippedGeos[ci];
-        if (cg.properties && cg.properties.GEOID) {
-          clippedLookup[cg.properties.GEOID] = cg.geometry;
-        }
+        if (cg.properties && cg.properties.GEOID) clippedLookup[cg.properties.GEOID] = cg.geometry;
       }
     }
 
-    // Build GeoJSON with composite score as property
     var features = [];
     for (var i = 0; i < result.geos.length; i++) {
-      var geo = result.geos[i];
-      var geoid = geo.properties && geo.properties.GEOID;
+      var geo       = result.geos[i];
+      var geoid     = geo.properties && geo.properties.GEOID;
       var scoreData = geoid ? result.scores.get(geoid) : null;
       var composite = (scoreData && Number.isFinite(scoreData.composite)) ? scoreData.composite : null;
-
-      var geom = (clippedLookup && geoid && clippedLookup[geoid]) ? clippedLookup[geoid] : geo.geometry;
+      var geom      = (clippedLookup && geoid && clippedLookup[geoid]) ? clippedLookup[geoid] : geo.geometry;
 
       features.push({
         type: "Feature",
         properties: {
-          GEOID: geoid,
+          GEOID:    geoid,
           tpiScore: composite,
-          factors: scoreData ? scoreData.factors : {}
+          factors:  JSON.stringify(scoreData ? scoreData.factors : {})
         },
         geometry: geom
       });
@@ -378,7 +677,6 @@
 
     var fc = { type: "FeatureCollection", features: features };
 
-    // Color ramp: ColorBrewer Blues (sequential), 1=lightest -> 5=darkest
     var colorExpr = [
       "interpolate", ["linear"], ["coalesce", ["get", "tpiScore"], 0],
       0, "rgba(200,200,200,0.3)",
@@ -398,61 +696,53 @@
         id: TPI_FILL_LAYER,
         type: "fill",
         source: TPI_SOURCE,
-        paint: {
-          "fill-color": colorExpr,
-          "fill-opacity": 0.55
-        }
+        paint: { "fill-color": colorExpr, "fill-opacity": 0.55 }
       }, beforeLayer);
 
       map.addLayer({
         id: TPI_LINE_LAYER,
         type: "line",
         source: TPI_SOURCE,
-        paint: {
-          "line-color": "#333",
-          "line-width": 0.5,
-          "line-opacity": 0.4
-        }
+        paint: { "line-color": "#333", "line-width": 0.5, "line-opacity": 0.4 }
       }, beforeLayer);
 
       // Hover tooltip
-      var popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false });
+      var hoverPopup = new maplibregl.Popup({ closeButton: false, closeOnClick: false });
 
       map.on("mousemove", TPI_FILL_LAYER, function (e) {
         map.getCanvas().style.cursor = "pointer";
         if (e.features && e.features.length > 0) {
-          var props = e.features[0].properties;
-          var score = props.tpiScore;
+          var props  = e.features[0].properties;
+          var score  = props.tpiScore;
           var geoid2 = props.GEOID || "\u2014";
 
           var html = '<div style="font-size:12px;line-height:1.4;">';
-          html += '<b>GEOID:</b> ' + geoid2 + '<br>';
-          html += '<b>TPI Score:</b> ' + (score != null ? Number(score).toFixed(2) : 'N/A') + ' / 5';
+          html += "<b>GEOID:</b> " + geoid2 + "<br>";
+          html += "<b>TPI Score:</b> " + (score != null ? Number(score).toFixed(2) : "N/A") + " / 5";
 
-          var factors = null;
-          try { factors = JSON.parse(props.factors); } catch (_) {}
-          if (factors) {
+          var factorsObj = null;
+          try { factorsObj = JSON.parse(props.factors); } catch (_) {}
+          if (factorsObj) {
             html += '<br><span style="color:#666;font-size:11px;">';
-            var fNames = TPI.FACTORS;
+            var fNames     = TPI.FACTORS;
             var fallbackIds = (_lastResult && _lastResult.tractFallbackFactors) ? _lastResult.tractFallbackFactors : [];
             for (var fi = 0; fi < fNames.length; fi++) {
-              var fval = factors[fNames[fi].id];
+              var fval = factorsObj[fNames[fi].id];
               if (fval != null) {
                 var isFb = fallbackIds.indexOf(fNames[fi].id) !== -1;
-                html += fNames[fi].label + ': ' + fval + '/5' + (isFb ? ' <span style="color:#aaa">(T)</span>' : '') + '<br>';
+                html += fNames[fi].label + ": " + fval + "/5" + (isFb ? ' <span style="color:#aaa">(T)</span>' : "") + "<br>";
               }
             }
-            html += '</span>';
+            html += "</span>";
           }
-
-          html += '</div>';
-          popup.setLngLat(e.lngLat).setHTML(html).addTo(map);
+          html += "</div>";
+          hoverPopup.setLngLat(e.lngLat).setHTML(html).addTo(map);
         }
       });
 
       map.on("mouseleave", TPI_FILL_LAYER, function () {
         map.getCanvas().style.cursor = App.drawMode ? "crosshair" : "grab";
-        popup.remove();
+        hoverPopup.remove();
       });
 
     } else {
@@ -465,24 +755,68 @@
     if (!map) return;
     if (map.getLayer(TPI_FILL_LAYER)) map.removeLayer(TPI_FILL_LAYER);
     if (map.getLayer(TPI_LINE_LAYER)) map.removeLayer(TPI_LINE_LAYER);
-    if (map.getSource(TPI_SOURCE)) map.removeSource(TPI_SOURCE);
+    if (map.getSource(TPI_SOURCE))    map.removeSource(TPI_SOURCE);
   }
 
   function clearChoropleth() {
     removeChoropleth();
-    _lastResult = null; _stale = false;
+    _lastResult = null;
+    _stale      = false;
     App.popup.hideFloatingWidget("tpi-legend");
-    // DOM guard for popup elements
     if (isPopupVisible()) {
       var resultsEl = document.getElementById("tpiResults");
       if (resultsEl) resultsEl.style.display = "none";
-      var statusEl = document.getElementById("tpiStatus");
-      if (statusEl) statusEl.style.display = "none";
+      var statusEl  = document.getElementById("tpiStatus");
+      if (statusEl)  statusEl.style.display  = "none";
+      var emptyEl   = document.getElementById("tpiEmptyState");
+      if (emptyEl)   emptyEl.style.display   = "";
+      updateExportButtons(false);
     }
     App.setStatus("TPI cleared");
   }
 
   // ---- Export helpers ----
+
+  function _buildGeoFeatureMap(geos) {
+    var allFeatures = [];
+    var stations     = App.stations     || [];
+    var stationBufs  = App.buffers      || [];
+    var lines        = App.lines        || [];
+    var lineBuffers  = App.lineBuffers  || [];
+    var routes       = App.routeBuffers ? App.routes || [] : [];
+    var routeBuffers = App.routeBuffers || [];
+    var polys        = App.polygons     || [];
+
+    for (var si = 0; si < stations.length; si++) {
+      if (si < stationBufs.length && stationBufs[si])
+        allFeatures.push({ name: (stations[si].properties && stations[si].properties.name) || ("Station " + (si + 1)), coverage: stationBufs[si] });
+    }
+    for (var li = 0; li < lines.length; li++) {
+      if (li < lineBuffers.length && lineBuffers[li])
+        allFeatures.push({ name: (lines[li].properties && lines[li].properties.name) || ("Line " + (li + 1)), coverage: lineBuffers[li] });
+    }
+    for (var ri = 0; ri < routes.length; ri++) {
+      if (ri < routeBuffers.length && routeBuffers[ri])
+        allFeatures.push({ name: (routes[ri].properties && routes[ri].properties.name) || ("Route " + (ri + 1)), coverage: routeBuffers[ri] });
+    }
+    for (var pi = 0; pi < polys.length; pi++) {
+      if (polys[pi] && polys[pi].geometry)
+        allFeatures.push({ name: (polys[pi].properties && polys[pi].properties.name) || ("Polygon " + (pi + 1)), coverage: polys[pi] });
+    }
+
+    var map = {};
+    for (var gi = 0; gi < geos.length; gi++) {
+      var geo   = geos[gi];
+      var geoid = geo.properties && geo.properties.GEOID;
+      if (!geoid) continue;
+      var names = [];
+      for (var fi = 0; fi < allFeatures.length; fi++) {
+        try { if (turf.booleanIntersects(geo, allFeatures[fi].coverage)) names.push(allFeatures[fi].name); } catch (_) {}
+      }
+      map[geoid] = names.join("; ");
+    }
+    return map;
+  }
 
   function _dateStamp() {
     var d = new Date();
@@ -500,12 +834,33 @@
     document.body.removeChild(a); URL.revokeObjectURL(url);
   }
 
+  function _buildTpiMetadata() {
+    return {
+      tool:           "Micro Analysis Tool",
+      module:         "Transit Propensity Index",
+      exportedAt:     new Date().toISOString(),
+      geoLevel:       _lastResult ? _lastResult.geoLevel : null,
+      acsYear:        _lastResult ? _lastResult.year : null,
+      apportionByArea: _apportionByArea
+    };
+  }
+
+  function _metadataCSVHeader(meta) {
+    var lines = [];
+    lines.push("# Micro Analysis Tool \u2014 Transit Propensity Index Export");
+    lines.push("# Exported: " + meta.exportedAt);
+    if (meta.geoLevel) lines.push("# Geography: " + meta.geoLevel);
+    if (meta.acsYear)  lines.push("# ACS Year: "  + meta.acsYear);
+    lines.push("# Apportion by Area: " + (meta.apportionByArea ? "yes" : "no"));
+    return lines.join("\n");
+  }
+
   function exportGeoJSON() {
     if (!_lastResult) return;
-    var factors = TPI.FACTORS;
+    var factors      = TPI.FACTORS;
     var isApportioned = _lastResult.apportionByArea && _lastResult.apportionedRawValues;
+    var featureMap   = _buildGeoFeatureMap(_lastResult.geos);
 
-    // Build clipped geometry lookup when apportioned
     var clippedLookup = null;
     if (isApportioned && _lastResult.clippedGeos) {
       clippedLookup = {};
@@ -516,11 +871,12 @@
     }
 
     var features = _lastResult.geos.map(function (geo) {
-      var geoid = geo.properties && geo.properties.GEOID;
-      var sd = geoid ? _lastResult.scores.get(geoid) : null;
+      var geoid     = geo.properties && geo.properties.GEOID;
+      var sd        = geoid ? _lastResult.scores.get(geoid) : null;
       var composite = (sd && Number.isFinite(sd.composite)) ? sd.composite : null;
       var props = {
-        GEOID: geoid || "",
+        GEOID:    geoid || "",
+        Feature:  featureMap[geoid] || "",
         tpiScore: composite != null ? parseFloat(composite.toFixed(4)) : null,
         tpiClass: composite != null ? getTpiClass(composite) : "N/A"
       };
@@ -530,7 +886,7 @@
       }
       factors.forEach(function (f) {
         var rawMap = _lastResult.rawValues.get(f.id) || new Map();
-        var raw = rawMap.get(geoid);
+        var raw    = rawMap.get(geoid);
         props[f.id + "_raw"] = (raw != null && Number.isFinite(raw)) ? parseFloat(raw.toFixed(6)) : null;
         if (isApportioned) {
           var aMap = _lastResult.apportionedRawValues.get(f.id) || new Map();
@@ -538,14 +894,20 @@
           props[f.id + "_raw_apportioned"] = (aVal != null && Number.isFinite(aVal)) ? parseFloat(aVal.toFixed(6)) : null;
         }
         var scoreMap = _lastResult.factorScores.get(f.id) || new Map();
-        var sc = scoreMap.get(geoid);
+        var sc       = scoreMap.get(geoid);
         props[f.id + "_score"] = sc != null ? sc : null;
       });
       var geom = (clippedLookup && geoid && clippedLookup[geoid]) ? clippedLookup[geoid] : geo.geometry;
       return { type: "Feature", properties: props, geometry: geom };
     });
+
+    var geojson = {
+      type: "FeatureCollection",
+      metadata: _buildTpiMetadata(),
+      features: features
+    };
     _triggerDownload(
-      JSON.stringify({ type: "FeatureCollection", features: features }, null, 2),
+      JSON.stringify(geojson, null, 2),
       "application/geo+json",
       "tpi-export-" + _dateStamp() + ".geojson"
     );
@@ -553,23 +915,27 @@
 
   function exportCSV() {
     if (!_lastResult) return;
-    var factors = TPI.FACTORS;
+    var factors      = TPI.FACTORS;
     var isApportioned = _lastResult.apportionByArea && _lastResult.apportionedRawValues;
+    var featureMap   = _buildGeoFeatureMap(_lastResult.geos);
+    var meta         = _buildTpiMetadata();
 
-    var header = ["GEOID", "tpiScore", "tpiClass"];
+    var header = ["GEOID", "Feature", "tpiScore", "tpiClass"];
     if (isApportioned) header.push("areaFraction");
     factors.forEach(function (f) {
       header.push(f.id + "_raw");
       if (isApportioned) header.push(f.id + "_raw_apportioned");
       header.push(f.id + "_score");
     });
-    var rows = [header.join(",")];
 
+    var rows = [_metadataCSVHeader(meta), header.join(",")];
     _lastResult.geoids.forEach(function (geoid) {
-      var sd = _lastResult.scores.get(geoid);
+      var sd        = _lastResult.scores.get(geoid);
       var composite = (sd && Number.isFinite(sd.composite)) ? sd.composite : null;
+      var featVal   = (featureMap[geoid] || "").replace(/"/g, '""');
       var row = [
         geoid,
+        '"' + featVal + '"',
         composite != null ? composite.toFixed(4) : "",
         composite != null ? getTpiClass(composite) : ""
       ];
@@ -579,7 +945,7 @@
       }
       factors.forEach(function (f) {
         var rawMap = _lastResult.rawValues.get(f.id) || new Map();
-        var raw = rawMap.get(geoid);
+        var raw    = rawMap.get(geoid);
         row.push((raw != null && Number.isFinite(raw)) ? raw.toFixed(6) : "");
         if (isApportioned) {
           var aMap = _lastResult.apportionedRawValues.get(f.id) || new Map();
@@ -587,7 +953,7 @@
           row.push((aVal != null && Number.isFinite(aVal)) ? aVal.toFixed(6) : "");
         }
         var scoreMap = _lastResult.factorScores.get(f.id) || new Map();
-        var sc = scoreMap.get(geoid);
+        var sc       = scoreMap.get(geoid);
         row.push(sc != null ? String(sc) : "");
       });
       rows.push(row.join(","));
@@ -595,40 +961,65 @@
     _triggerDownload(rows.join("\n"), "text/csv", "tpi-export-" + _dateStamp() + ".csv");
   }
 
-  // ---- Project init (called once on first popup open) ----
+  // ---- Init (called once on first popup open) ----
 
   function init(core) {
     if (_initialized) return;
     _initialized = true;
 
-    // Wire "Compute TPI" button
+    // Analyze System
     var runBtn = document.getElementById("tpiRun");
     if (runBtn) runBtn.addEventListener("click", function () { runTPI(); });
 
-    // Wire reset weights button
-    var resetBtn = document.getElementById("tpiResetWeights");
-    if (resetBtn) resetBtn.addEventListener("click", resetWeights);
+    // Adjust Weights modal
+    var adjustBtn = document.getElementById("tpiAdjustWeights");
+    if (adjustBtn) adjustBtn.addEventListener("click", openWeightsModal);
 
-    // Wire show legend button
-    var legendBtn = document.getElementById("tpiShowLegend");
-    if (legendBtn) {
-      legendBtn.addEventListener("click", function () {
-        App.popup.showFloatingWidget("tpi-legend", "projects/tpi-legend.html", {
-          position: "bottom-left",
-          width: 160,
-          title: "TPI Legend"
-        });
+    var confirmBtn = document.getElementById("tpiWeightsConfirm");
+    if (confirmBtn) confirmBtn.addEventListener("click", function () { closeWeightsModal(true); });
+
+    var cancelBtn = document.getElementById("tpiWeightsCancel");
+    if (cancelBtn) cancelBtn.addEventListener("click", function () { closeWeightsModal(false); });
+
+    var resetBtn = document.getElementById("tpiResetWeights");
+    if (resetBtn) resetBtn.addEventListener("click", resetModalToDefaults);
+
+    // Select all / clear
+    var selectAllLink = document.getElementById("tpiSelectAll");
+    if (selectAllLink) {
+      selectAllLink.addEventListener("click", function (e) {
+        e.preventDefault();
+        document.querySelectorAll("#tpiFeatureChecklist input[type=checkbox]").forEach(function (cb) { cb.checked = true; });
+        markStale();
+      });
+    }
+    var selectNoneLink = document.getElementById("tpiSelectNone");
+    if (selectNoneLink) {
+      selectNoneLink.addEventListener("click", function (e) {
+        e.preventDefault();
+        document.querySelectorAll("#tpiFeatureChecklist input[type=checkbox]").forEach(function (cb) { cb.checked = false; });
+        markStale();
       });
     }
 
-    // Wire export buttons
+    // Corridor dropdown change
+    var corridorSel = document.getElementById("tpiCorridorSelect");
+    if (corridorSel) {
+      corridorSel.addEventListener("change", function () {
+        _selectedCorridor = corridorSel.value;
+        if (_lastResult && isPopupVisible()) {
+          displayGeographyList(_lastResult, _selectedCorridor);
+        }
+      });
+    }
+
+    // Export buttons
     var exportGeoJSONBtn = document.getElementById("tpiExportGeoJSON");
     if (exportGeoJSONBtn) exportGeoJSONBtn.addEventListener("click", exportGeoJSON);
-
     var exportCSVBtn = document.getElementById("tpiExportCSV");
     if (exportCSVBtn) exportCSVBtn.addEventListener("click", exportCSV);
 
-    // Wire "Apportion by Area" toggle
+    // Apportion by area
     var apportionCb = document.getElementById("tpiApportionByArea");
     if (apportionCb) {
       apportionCb.checked = _apportionByArea;
@@ -638,32 +1029,34 @@
       });
     }
 
-    // Build weight sliders
+    // Build weight sliders (in modal) with current _weights
     buildWeightSliders();
   }
 
   // ---- Popup lifecycle hooks ----
 
   function onOpen(core) {
-    // Sync toggle checkbox state
+    // Sync checkbox
     var apportionCb = document.getElementById("tpiApportionByArea");
     if (apportionCb) apportionCb.checked = _apportionByArea;
 
-    // Refresh display from current state each time popup opens
-    if (_lastResult) {
-      displayResults(_lastResult);
+    // Rebuild checklist (features may have changed since last open)
+    buildFeatureChecklist();
+
+    // Refresh results display
+    if (_lastResult && isPopupVisible()) {
+      displayGeographyList(_lastResult, _selectedCorridor);
     }
-    if (_stale) {
-      markStale();
-    }
-    updateWeightSum();
+    if (_stale) markStale();
+
+    // LODES warning
+    var lodesWarnBtn = document.getElementById("tpiLodesWarnBtn");
+    if (lodesWarnBtn) lodesWarnBtn.style.display = App.lodesData ? "none" : "";
   }
 
   function onClose(core) {
-    // No cleanup needed — state persists in closure
+    // State persists in closure
   }
-
-  // ---- Module update (called on feature changes, even when popup is closed) ----
 
   async function update(core) {
     if (_lastResult && !core.getUnion()) {
@@ -671,40 +1064,104 @@
     } else {
       markStale();
     }
+    if (isPopupVisible()) {
+      buildFeatureChecklist();
+      var lodesWarnBtn = document.getElementById("tpiLodesWarnBtn");
+      if (lodesWarnBtn) lodesWarnBtn.style.display = App.lodesData ? "none" : "";
+    }
   }
+
+  // ---- Session persistence ----
+
+  function saveTpiState(mode) {
+    var data = {
+      weights:          Object.assign({}, _weights),
+      apportionByArea:  _apportionByArea,
+      selectedCorridor: _selectedCorridor,
+      tpiFeatureFilter: _tpiFeatureFilter ? JSON.parse(JSON.stringify(_tpiFeatureFilter)) : null
+    };
+    if (!_lastResult) return data;
+    var tpi = _lastResult;
+    data.result = {
+      geoLevel:             tpi.geoLevel,
+      year:                 tpi.year,
+      geoids:               tpi.geoids ? tpi.geoids.slice() : [],
+      effectiveWeights:     tpi.effectiveWeights ? Object.assign({}, tpi.effectiveWeights) : {},
+      tractFallbackFactors: tpi.tractFallbackFactors ? tpi.tractFallbackFactors.slice() : [],
+      apportionByArea:      tpi.apportionByArea || false,
+      scores:               App.mapToObj(tpi.scores),
+      factorScores:         App.nestedMapToObj(tpi.factorScores),
+      rawValues:            App.nestedMapToObj(tpi.rawValues)
+    };
+    if (mode === "full" && tpi.geos) {
+      data.result.geos = tpi.geos.slice();
+    }
+    return data;
+  }
+
+  function restoreTpiState(data) {
+    if (!data) return;
+    if (data.weights)          _weights          = Object.assign({}, data.weights);
+    if (data.apportionByArea != null) _apportionByArea = !!data.apportionByArea;
+    if (data.selectedCorridor) _selectedCorridor = data.selectedCorridor;
+    if (data.tpiFeatureFilter !== undefined) _tpiFeatureFilter = data.tpiFeatureFilter;
+
+    if (!data.result) return;
+    var r = data.result;
+    var restored = {
+      geoLevel:             r.geoLevel,
+      year:                 r.year,
+      geoids:               r.geoids || [],
+      geos:                 r.geos   || [],
+      effectiveWeights:     r.effectiveWeights     || {},
+      tractFallbackFactors: r.tractFallbackFactors || [],
+      apportionByArea:      r.apportionByArea      || false,
+      scores:               App.objToMap(r.scores),
+      factorScores:         App.nestedObjToMap(r.factorScores),
+      rawValues:            App.nestedObjToMap(r.rawValues)
+    };
+    _lastResult = restored;
+    _stale      = false;
+
+    if (restored.geos && restored.geos.length > 0) {
+      renderChoropleth(restored);
+      App.renderCensusOverlay(restored.geos);
+      App.popup.showFloatingWidget("tpi-legend", "projects/tpi-legend.html", {
+        position: "bottom-left", width: 160, title: "TPI Legend"
+      });
+    }
+  }
+
+  // ---- Public API ----
+
+  App.getTpiWeights = function () { return Object.assign({}, _weights); };
 
   // ---- Register as analysis module ----
 
   App.registerModule({
-    id: "transit-propensity",
-    name: "Transit Propensity Index",
-    enabled: true,
-    popupWidth: 912,
-    popupHTML: "projects/transit-propensity-popup.html",
+    id:         "transit-propensity",
+    name:       "Transit Propensity Index",
+    enabled:    true,
+    popupWidth: 960,
+    popupHTML:  "projects/transit-propensity-popup.html",
 
     floatingWidgets: [
       { id: "tpi-legend", htmlFile: "projects/tpi-legend.html", position: "bottom-left", width: 160 }
     ],
 
-    init: function (core) {
-      init(core);
-    },
-
-    onOpen: function (core) {
-      onOpen(core);
-    },
-
-    onClose: function (core) {
-      onClose(core);
-    },
-
-    clear: function () {
-      clearChoropleth();
-    },
-
-    update: async function (core) {
-      await update(core);
-    }
+    init:  function (core) { init(core); },
+    onOpen: function (core) { onOpen(core); },
+    onClose: function (core) { onClose(core); },
+    clear:  function ()     { clearChoropleth(); },
+    update: async function (core) { await update(core); }
   });
+
+  // Register with session cache
+  if (App.cache && App.cache.registerModule) {
+    App.cache.registerModule("tpi", {
+      collect: saveTpiState,
+      apply:   restoreTpiState
+    });
+  }
 
 })();

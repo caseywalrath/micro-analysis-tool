@@ -197,7 +197,74 @@
     return out;
   }
 
-  function aggregateWithinUnion(unionFeat, geos, valueMap, aggMode) {
+  // Fetch multiple ACS variable codes in a single API call per state-county group,
+  // summing all code values per GEOID. Returns Map<GEOID, sum>.
+  async function fetchACSMultiValues(geoLevel, year, varCodes, geoids) {
+    var groups = new Map();
+    for (var gi = 0; gi < geoids.length; gi++) {
+      var p = parseGEOID(geoLevel, geoids[gi]);
+      var key = p.state + "-" + p.county;
+      if (!groups.has(key)) groups.set(key, { state: p.state, county: p.county });
+    }
+
+    var results = new Map();
+    var base = "https://api.census.gov/data/" + year + "/acs/acs5";
+
+    for (var entry of groups.values()) {
+      var forClause, inClause;
+      if (geoLevel === "tract") {
+        forClause = "tract:*";
+        inClause = "state:" + entry.state + "%20county:" + entry.county;
+      } else {
+        forClause = "block%20group:*";
+        inClause = "state:" + entry.state + "%20county:" + entry.county + "%20tract:*";
+      }
+
+      var codesParam = varCodes.map(encodeURIComponent).join(",");
+      var url = base + "?get=NAME," + codesParam + "&for=" + forClause + "&in=" + inClause + (App.CENSUS_API_KEY ? "&key=" + App.CENSUS_API_KEY : "");
+      var resp = await fetch(url);
+      if (!resp.ok) throw new Error("ACS API error " + resp.status + " for state " + entry.state + " county " + entry.county);
+      var rows = await resp.json();
+
+      var header = rows[0];
+      var idxVars = varCodes.map(function (c) { return header.indexOf(c); });
+
+      for (var i = 1; i < rows.length; i++) {
+        var r = rows[i];
+        var sum = 0;
+        var hasAny = false;
+        for (var vi = 0; vi < idxVars.length; vi++) {
+          if (idxVars[vi] === -1) continue;
+          var val = Number(r[idxVars[vi]]);
+          // Skip Census sentinel values (negative placeholders like -666666666)
+          if (Number.isFinite(val) && val >= 0) { sum += val; hasAny = true; }
+        }
+        if (!hasAny) continue;
+
+        var geoid;
+        if (geoLevel === "tract") {
+          var tract = r[header.indexOf("tract")];
+          var st = r[header.indexOf("state")];
+          var co = r[header.indexOf("county")];
+          geoid = st + co + tract;
+        } else {
+          var bg = r[header.indexOf("block group")];
+          var tract2 = r[header.indexOf("tract")];
+          var st2 = r[header.indexOf("state")];
+          var co2 = r[header.indexOf("county")];
+          geoid = st2 + co2 + tract2 + bg;
+        }
+        results.set(geoid, sum);
+      }
+    }
+    return results;
+  }
+
+  // aggregateWithinUnion: area-weighted aggregation of census values within a union polygon.
+  // options.apportionByArea (default true): when false, uses full geography values for any
+  // geo that intersects the union (no fractional area apportionment).
+  function aggregateWithinUnion(unionFeat, geos, valueMap, aggMode, options) {
+    var apportionByArea = !(options && options.apportionByArea === false);
     var numerator = 0;
     var denom = 0;
     var used = 0;
@@ -209,15 +276,22 @@
       var v = valueMap.get(geoid);
       if (v == null) continue;
 
-      var inter;
-      try { inter = turf.intersect(f, unionFeat); } catch (_) { continue; }
-      if (!inter) continue;
+      var frac;
+      if (apportionByArea) {
+        var inter;
+        try { inter = turf.intersect(f, unionFeat); } catch (_) { continue; }
+        if (!inter) continue;
+        var aInter = turf.area(inter);
+        var aGeo = turf.area(f);
+        if (aGeo <= 0) continue;
+        frac = Math.min(1, Math.max(0, aInter / aGeo));
+      } else {
+        var intersects;
+        try { intersects = turf.booleanIntersects(f, unionFeat); } catch (_) { continue; }
+        if (!intersects) continue;
+        frac = 1;
+      }
 
-      var aInter = turf.area(inter);
-      var aGeo = turf.area(f);
-      if (aGeo <= 0) continue;
-
-      var frac = Math.min(1, Math.max(0, aInter / aGeo));
       numerator += v * frac;
       denom += frac;
       used++;
@@ -250,6 +324,7 @@
   App.fetchTigerwebGeos = fetchTigerwebGeos;
   App.parseGEOID = parseGEOID;
   App.fetchACSValues = fetchACSValues;
+  App.fetchACSMultiValues = fetchACSMultiValues;
   App.fetchACSCountyValues = fetchACSCountyValues;
   App.aggregateWithinUnion = aggregateWithinUnion;
   App.computeAcsValueOnly = computeAcsValueOnly;

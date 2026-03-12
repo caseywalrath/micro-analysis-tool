@@ -41,7 +41,7 @@
         return areaSqMi > 0 ? pop / areaSqMi : NaN;
       },
       higherIsBetter: true,
-      defaultWeight: 15,
+      defaultWeight: 35,
       description: "Total population per square mile (ACS B01003_001E / geography area)"
     },
     {
@@ -52,7 +52,7 @@
       source: "LODES",
       compute: null, // computed separately via LODES block aggregation
       higherIsBetter: true,
-      defaultWeight: 15,
+      defaultWeight: 35,
       description: "LODES WAC C000 jobs aggregated to geography, divided by area"
     },
     {
@@ -68,7 +68,7 @@
         return (zeroCar / totalHH) * 100;
       },
       higherIsBetter: true,
-      defaultWeight: 12,
+      defaultWeight: 5,
       description: "Percent of households with zero vehicles (ACS B08201_002E / B11001_001E)"
     },
     {
@@ -84,7 +84,7 @@
         return (povPop / totalPop) * 100;
       },
       higherIsBetter: true,
-      defaultWeight: 12,
+      defaultWeight: 5,
       description: "Percent of persons below poverty level (ACS B17001_002E / B01003_001E)"
     },
     {
@@ -112,7 +112,7 @@
         return (seniorSum / totalPop) * 100;
       },
       higherIsBetter: true,
-      defaultWeight: 10,
+      defaultWeight: 5,
       description: "Percent of population age 65 and over (ACS B01001 males + females 65+ / B01003_001E)"
     },
     {
@@ -140,7 +140,7 @@
         return (disabSum / denom) * 100;
       },
       higherIsBetter: true,
-      defaultWeight: 10,
+      defaultWeight: 5,
       description: "Percent of civilian noninstitutionalized population with a disability (ACS B18101)"
     },
     {
@@ -156,7 +156,7 @@
         return ((total - nhWhite) / total) * 100;
       },
       higherIsBetter: true,
-      defaultWeight: 10,
+      defaultWeight: 5,
       description: "Percent of population who are people of color (ACS B03002: total minus NH White alone)"
     },
     {
@@ -184,7 +184,7 @@
         return (youthSum / totalPop) * 100;
       },
       higherIsBetter: true,
-      defaultWeight: 8,
+      defaultWeight: 0,
       description: "Percent of population under 18 years old (ACS B01001 males + females under 18 / B01003_001E)"
     },
     {
@@ -213,7 +213,7 @@
         return (lepSum / denom) * 100;
       },
       higherIsBetter: true,
-      defaultWeight: 8,
+      defaultWeight: 5,
       description: "Percent of population age 5+ who speak English less than very well (ACS C16001)"
     }
   ];
@@ -380,7 +380,9 @@
 
     for (var qi = 0; qi < n; qi++) {
       // Position 0..n-1 maps to quintile 1..5
-      var quintile = Math.min(5, Math.floor((qi / n) * 5) + 1);
+      // Multiply before dividing to avoid IEEE 754 rounding error at exact
+      // fractions (e.g. qi=3, n=5: (3/5)*5 = 2.999...→ floor 2; 3*5/5 = 3.0→ correct)
+      var quintile = Math.min(5, Math.floor(qi * 5 / n) + 1);
       result.set(sorted2[qi].geoid, quintile);
     }
     return result;
@@ -556,6 +558,7 @@
     var lodesData = options.lodesData || null;
     var onProgress = options.onProgress || function () {};
     var apportionByArea = !!options.apportionByArea;
+    var growthFactors = options.growthFactors || null;
 
     // Build effective weights: use defaults where not overridden
     var effectiveWeights = {};
@@ -579,9 +582,9 @@
       }
     }
 
-    // 1. Get buffer union
+    // 1. Get buffer union (use custom polygon if provided, else global union)
     onProgress("Getting buffer union...");
-    var unionFeat = App.bufferUnionPolygon();
+    var unionFeat = options.unionPolygon || App.bufferUnionPolygon();
     if (!unionFeat) throw new Error("No buffers set. Place stations, lines, or routes first.");
 
     // 2. Fetch census geographies
@@ -644,6 +647,22 @@
       acsData = await batchFetchACS("tract", year, geoids, allAcsVars);
     }
 
+    // 3b. Deep-clone ACS data before growth factor application (for re-scoring later)
+    var cachedAcsData = new Map();
+    acsData.forEach(function (geoVals, geoid) {
+      cachedAcsData.set(geoid, new Map(geoVals));
+    });
+
+    // 3c. Apply population projections (if provided) — additive: pop_new = pop_census + pop_addition
+    if (growthFactors) {
+      acsData.forEach(function (geoVals, geoid) {
+        var tractId = geoid.slice(0, 11);
+        var popAdd = growthFactors.get(geoid) || growthFactors.get(tractId) || 0;
+        var pop = geoVals.get("B01003_001E");
+        if (Number.isFinite(pop) && popAdd !== 0) geoVals.set("B01003_001E", Math.max(0, pop + popAdd));
+      });
+    }
+
     // 4. Aggregate LODES to geo level (if available and weighted)
     var lodesAgg = null;
     if (lodesData && effectiveWeights.employment > 0) {
@@ -697,12 +716,14 @@
       apportionedRawValues = apportionRawValues(rawValues, areaFractions);
     }
 
-    // 5c. Dynamic tract fallback: if any ACS factor produced zero finite values at BG level,
-    //     retry those vars at tract level and map values down to BG GEOIDs.
+    // 5c. Dynamic tract fallback: if any ACS factor has BGs with NaN values,
+    //     fetch those factor variables at tract level and fill in the missing BGs.
+    //     Handles both total-miss (no BG data at all) and partial-miss (some BGs
+    //     have data, others are suppressed/missing) cases.
     //     Skipped when area apportionment is on (fractions make the spatial weighting accurate).
     if (geoLevel === "bg" && !apportionByArea) {
       var dynamicFallbackVars = [];
-      var dynamicFallbackFactorIds = [];
+      var dynamicFallbackEntries = []; // { factor, nanGeoids: Set }
 
       for (var di = 0; di < FACTORS.length; di++) {
         var df = FACTORS[di];
@@ -710,20 +731,18 @@
         if (tractFallbackFactors.indexOf(df.id) !== -1) continue; // already handled statically
 
         var dfRawMap = rawValues.get(df.id);
-        var hasFinite = false;
-        if (dfRawMap) {
-          for (var dfEntry of dfRawMap.values()) {
-            if (Number.isFinite(dfEntry)) { hasFinite = true; break; }
-          }
+        var nanGeoids = new Set();
+        for (var ngi = 0; ngi < geoids.length; ngi++) {
+          if (!dfRawMap || !Number.isFinite(dfRawMap.get(geoids[ngi]))) nanGeoids.add(geoids[ngi]);
         }
 
-        if (!hasFinite) {
+        if (nanGeoids.size > 0) {
           for (var dvi = 0; dvi < df.acsVars.length; dvi++) {
             if (dynamicFallbackVars.indexOf(df.acsVars[dvi]) === -1) {
               dynamicFallbackVars.push(df.acsVars[dvi]);
             }
           }
-          dynamicFallbackFactorIds.push(df.id);
+          dynamicFallbackEntries.push({ factor: df, nanGeoids: nanGeoids });
         }
       }
 
@@ -732,36 +751,49 @@
         for (var bgi3 = 0; bgi3 < geoids.length; bgi3++) dynTractGeoidSet.add(geoids[bgi3].slice(0, 11));
         var dynTractGeoids = Array.from(dynTractGeoidSet);
 
-        onProgress("Fetching tract-level fallback for " + dynamicFallbackFactorIds.join(", ") + "...");
+        var fallbackNames = dynamicFallbackEntries.map(function (e) { return e.factor.id; });
+        onProgress("Fetching tract-level fallback for " + fallbackNames.join(", ") + "...");
         var dynTractData = await batchFetchACS("tract", year, dynTractGeoids, dynamicFallbackVars);
 
-        // Map tract values into each BG's acsData entry
-        for (var bgi4 = 0; bgi4 < geoids.length; bgi4++) {
-          var bgGeo2 = geoids[bgi4];
-          var parentTract2 = bgGeo2.slice(0, 11);
-          var tVals2 = dynTractData.get(parentTract2) || new Map();
-          if (!acsData.has(bgGeo2)) acsData.set(bgGeo2, new Map());
-          var bgEntry2 = acsData.get(bgGeo2);
-          for (var tEntry of tVals2.entries()) bgEntry2.set(tEntry[0], tEntry[1]);
+        // Build GEOID-to-feature lookup for efficient recomputation
+        var geoidToFeat = {};
+        for (var gli = 0; gli < geos.length; gli++) {
+          if (geos[gli].properties && geos[gli].properties.GEOID) {
+            geoidToFeat[geos[gli].properties.GEOID] = geos[gli];
+          }
         }
 
-        // Re-compute raw values and register each dynamic fallback factor
-        for (var dfi = 0; dfi < dynamicFallbackFactorIds.length; dfi++) {
-          var dfactor = null;
-          for (var dff = 0; dff < FACTORS.length; dff++) {
-            if (FACTORS[dff].id === dynamicFallbackFactorIds[dfi]) { dfactor = FACTORS[dff]; break; }
-          }
-          if (!dfactor) continue;
+        // For each factor with NaN BGs, fill in tract-level data and recompute
+        for (var dfi = 0; dfi < dynamicFallbackEntries.length; dfi++) {
+          var dEntry = dynamicFallbackEntries[dfi];
+          var dfactor = dEntry.factor;
+          var nanSet = dEntry.nanGeoids;
 
-          var newRaw = new Map();
-          for (var gIdx3 = 0; gIdx3 < geos.length; gIdx3++) {
-            var gf3 = geos[gIdx3];
-            var gid3 = gf3.properties.GEOID;
-            var geoVals3 = acsData.get(gid3) || new Map();
-            newRaw.set(gid3, dfactor.compute(geoVals3, gf3, unionFeat));
+          // For NaN BGs, overwrite their acsData with tract values for
+          // this factor's variables so numerator & denominator are consistent
+          for (var nanBg of nanSet) {
+            var parentTract2 = nanBg.slice(0, 11);
+            var tVals2 = dynTractData.get(parentTract2) || new Map();
+            if (!acsData.has(nanBg)) acsData.set(nanBg, new Map());
+            var bgEntry2 = acsData.get(nanBg);
+            for (var avi = 0; avi < dfactor.acsVars.length; avi++) {
+              var acsVar = dfactor.acsVars[avi];
+              if (tVals2.has(acsVar)) bgEntry2.set(acsVar, tVals2.get(acsVar));
+            }
           }
-          rawValues.set(dfactor.id, newRaw);
-          tractFallbackFactors.push(dfactor.id);
+
+          // Recompute raw values only for BGs that had NaN
+          var existingRaw = rawValues.get(dfactor.id) || new Map();
+          for (var nanBg2 of nanSet) {
+            var feat = geoidToFeat[nanBg2];
+            if (!feat) continue;
+            var geoVals3 = acsData.get(nanBg2) || new Map();
+            existingRaw.set(nanBg2, dfactor.compute(geoVals3, feat, unionFeat));
+          }
+          rawValues.set(dfactor.id, existingRaw);
+          if (tractFallbackFactors.indexOf(dfactor.id) === -1) {
+            tractFallbackFactors.push(dfactor.id);
+          }
         }
       }
     }
@@ -801,7 +833,9 @@
       rawValues: rawValues,
       effectiveWeights: effectiveWeights,
       tractFallbackFactors: tractFallbackFactors,
-      apportionByArea: apportionByArea
+      apportionByArea: apportionByArea,
+      cachedAcsData: cachedAcsData,
+      cachedLodesAgg: lodesAgg
     };
 
     if (apportionByArea) {
@@ -813,6 +847,105 @@
     return result;
   }
   TPI.computeTPI = computeTPI;
+
+  // =========================================================================
+  // Re-score TPI with different growth factors using cached ACS data.
+  // No Census API calls — instant recomputation.
+  // prevResult must include cachedAcsData (from a prior computeTPI call).
+  // Returns a full result object (geos, geoids, scores, factorScores, rawValues, effectiveWeights).
+  // =========================================================================
+
+  function recomputeWithGrowthFactors(prevResult, newGrowthFactors) {
+    if (!prevResult || !prevResult.cachedAcsData) {
+      throw new Error("Previous TPI result does not contain cached ACS data for re-scoring.");
+    }
+
+    var geos = prevResult.geos;
+    var geoids = prevResult.geoids;
+    var effectiveWeights = prevResult.effectiveWeights;
+    var lodesAgg = prevResult.cachedLodesAgg;
+    var apportionByArea = prevResult.apportionByArea;
+
+    // Deep-clone cached ACS data and apply new growth factors
+    var acsData = new Map();
+    prevResult.cachedAcsData.forEach(function (geoVals, geoid) {
+      acsData.set(geoid, new Map(geoVals));
+    });
+
+    if (newGrowthFactors) {
+      acsData.forEach(function (geoVals, geoid) {
+        var tractId = geoid.slice(0, 11);
+        var popAdd = newGrowthFactors.get(geoid) || newGrowthFactors.get(tractId) || 0;
+        var pop = geoVals.get("B01003_001E");
+        if (Number.isFinite(pop) && popAdd !== 0) geoVals.set("B01003_001E", Math.max(0, pop + popAdd));
+      });
+    }
+
+    // Recompute raw factor values (same logic as computeTPI steps 5-7)
+    var rawValues = new Map();
+    for (var fi = 0; fi < FACTORS.length; fi++) {
+      var factor = FACTORS[fi];
+      if (effectiveWeights[factor.id] === 0) continue;
+
+      var raw = new Map();
+      if (factor.source === "LODES" && factor.id === "employment") {
+        if (lodesAgg) {
+          for (var gIdx = 0; gIdx < geos.length; gIdx++) {
+            var gf = geos[gIdx];
+            var gid = gf.properties.GEOID;
+            var jobs = lodesAgg.get(gid) || 0;
+            var areaSqMi = turf.area(gf) / SQM_PER_SQMI;
+            raw.set(gid, areaSqMi > 0 ? jobs / areaSqMi : NaN);
+          }
+        }
+      } else if (factor.compute) {
+        for (var gIdx2 = 0; gIdx2 < geos.length; gIdx2++) {
+          var gf2 = geos[gIdx2];
+          var gid2 = gf2.properties.GEOID;
+          var geoVals2 = acsData.get(gid2) || new Map();
+          raw.set(gid2, factor.compute(geoVals2, gf2));
+        }
+      }
+      rawValues.set(factor.id, raw);
+    }
+
+    // Area apportionment (reuse fractions from original result)
+    var scoringValues = rawValues;
+    if (apportionByArea && prevResult.areaFractions) {
+      scoringValues = apportionRawValues(rawValues, prevResult.areaFractions);
+    }
+
+    // Quintile normalize
+    var factorScores = new Map();
+    for (var ni = 0; ni < FACTORS.length; ni++) {
+      var nf = FACTORS[ni];
+      if (effectiveWeights[nf.id] === 0) continue;
+      var rawMap = scoringValues.get(nf.id);
+      if (!rawMap || rawMap.size === 0) continue;
+      var valArray = [];
+      for (var entry of rawMap.entries()) {
+        valArray.push({ geoid: entry[0], rawValue: entry[1] });
+      }
+      factorScores.set(nf.id, normalizeQuintiles(computeQuintiles(valArray), nf.higherIsBetter));
+    }
+
+    // Composite
+    var scores = computeComposite(factorScores, effectiveWeights, geoids);
+
+    return {
+      geos: geos,
+      geoids: geoids,
+      scores: scores,
+      factorScores: factorScores,
+      rawValues: rawValues,
+      effectiveWeights: effectiveWeights,
+      tractFallbackFactors: prevResult.tractFallbackFactors,
+      apportionByArea: apportionByArea,
+      cachedAcsData: prevResult.cachedAcsData,
+      cachedLodesAgg: lodesAgg
+    };
+  }
+  TPI.recomputeWithGrowthFactors = recomputeWithGrowthFactors;
 
   // =========================================================================
   // Utility: get default weights as an object

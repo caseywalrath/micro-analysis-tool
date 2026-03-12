@@ -11,7 +11,7 @@
   // ---- Internal state ----
 
   var _currentModuleId = null;    // id of the module whose popup is open (or null)
-  var _loadedModules = {};        // { moduleId: true } — tracks which modules have had their HTML loaded
+  var _loadedModules = {};        // { moduleId: slotDOMNode } — per-module persistent body slot
   var _container = null;          // cached #module-popup element
   var _floatingWidgets = {};      // { widgetId: DOM element }
 
@@ -61,23 +61,31 @@
       dialog.style.width = "";
     }
 
-    // Load HTML on first open; skip if already loaded (DOM persists)
+    // Hide all existing module slot divs (show only the active module's slot)
+    var allSlots = bodyEl.querySelectorAll(".module-body-slot");
+    for (var i = 0; i < allSlots.length; i++) allSlots[i].style.display = "none";
+
+    // First open: create a dedicated slot div, fetch HTML, run init
     if (!_loadedModules[moduleId]) {
+      var slotEl = document.createElement("div");
+      slotEl.className = "module-body-slot";
+      bodyEl.appendChild(slotEl);
       try {
         var resp = await fetch(mod.popupHTML);
         if (resp.ok) {
-          bodyEl.innerHTML = await resp.text();
+          slotEl.innerHTML = await resp.text();
         }
       } catch (e) {
         console.warn("popup.open: could not load HTML for", moduleId, e);
       }
-      _loadedModules[moduleId] = true;
-
-      // First-time init
+      _loadedModules[moduleId] = slotEl;
       if (typeof mod.init === "function") {
         mod.init(buildCore());
       }
     }
+
+    // Show this module's slot
+    _loadedModules[moduleId].style.display = "";
 
     // Reset drag offset so popup re-centers
     _offsetX = 0;

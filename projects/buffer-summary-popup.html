@@ -1,0 +1,44 @@
+<div class="bas-popup-layout">
+  <div class="bas-settings">
+    <div class="bas-settings-row">
+      <label class="bas-label">Geography level
+        <select id="basGeoLevel">
+          <option value="tract">Census Tracts</option>
+          <option value="bg" selected>Block Groups</option>
+        </select>
+      </label>
+
+      <label class="bas-label">ACS Year
+        <select id="basYearSelect">
+          <option value="2024">2024 ACS 5-year</option>
+          <option value="2023">2023 ACS 5-year</option>
+          <option value="2022">2022 ACS 5-year</option>
+          <option value="2021">2021 ACS 5-year</option>
+        </select>
+      </label>
+    </div>
+
+    <label class="bas-check">
+      <input type="checkbox" id="basApportionByArea" checked> Apportion by area
+    </label>
+
+    <button id="basRun" type="button" class="bas-run-btn">Calculate Summary</button>
+  </div>
+
+  <div id="basResultsProgress" class="results-progress"></div>
+
+  <table id="basResultsTable" class="results-table" style="display:none;">
+    <thead>
+      <tr>
+        <th>Census Category</th>
+        <th>Variable</th>
+        <th>Result</th>
+        <th>Percent</th>
+        <th>Aggregation Method</th>
+      </tr>
+    </thead>
+    <tbody id="basResultsTbody"></tbody>
+  </table>
+
+  <div id="basResultsNotes" class="results-notes"></div>
+</div>

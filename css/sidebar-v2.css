@@ -140,6 +140,26 @@
   flex: 1;
   margin-top: 0;
 }
+#sidebar .proj-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+#sidebar .proj-row .proj-year-label {
+  flex: 1;
+}
+#sidebar .proj-row .proj-actions {
+  margin-top: 0;
+}
+#sidebar .proj-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+#sidebar .proj-actions button {
+  flex: 1;
+  margin-top: 0;
+}
 
 /* ---- Cards ---- */
 #sidebar .sb2-card {
@@ -183,7 +203,7 @@
   border-radius: 6px;
   padding: 8px 10px;
   margin: 8px 0;
-  max-height: 220px;
+  max-height: 300px;
   overflow-y: auto;
   background: #fff;
 }
@@ -191,6 +211,20 @@
   font-size: 13px;
   color: #333;
   padding: 0 4px;
+}
+#sidebar .sb2-section-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #333;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 12px 0 6px;
+  padding: 6px 0 4px;
+  border-top: 2px solid var(--border);
+}
+#sidebar .sb2-section-label:first-child {
+  border-top: none;
+  margin-top: 0;
 }
 #sidebar .var-group-label {
   font-size: 11px;

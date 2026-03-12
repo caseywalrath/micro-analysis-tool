@@ -1,27 +1,65 @@
 // js/projects/fta-small-starts.js
-// FTA Small Starts (Land Use) project: breakpoint classification,
-// CRE / Essential Services / LBAR upload + computation, ratings updater.
+// FTA Small Starts (Land Use): breakpoint classification, CRE / ESS / LBAR upload + computation.
+// Popup-based UI with 2 tabs (Ratings | Data Inputs).
 // Depends on: App namespace (utils, map, stations, census, lodes), turf (CDN).
-// Exports: none (self-registers via App.registerProject)
+// Exports: none (self-registers via App.registerModule)
 
 (function () {
+  "use strict";
   var App = window.App = window.App || {};
 
   // ---- FTA-local state ----
 
-  var CRE_MAP = null;    // Map(tractGEOID11 -> { total, high })
+  var CRE_MAP     = null;  // Map(tractGEOID11 -> { total, high })
   var CRE_HEADERS = [];
-  var CRE_ROWS = [];
+  var CRE_ROWS    = [];
 
-  var ESS_POINTS = null; // array of [lon,lat]
+  var ESS_POINTS  = null;  // array of [lon, lat]
   var ESS_HEADERS = [];
-  var ESS_ROWS = [];
+  var ESS_ROWS    = [];
 
-  var LBAR_SITES = null; // array {lon, lat, units, county5?}
+  var LBAR_SITES   = null;  // array of { lon, lat, units, county5? }
   var LBAR_HEADERS = [];
-  var LBAR_ROWS = [];
+  var LBAR_ROWS    = [];
 
-  // ---- LBAR plotting (map layer toggle) ----
+  var _bpRunning   = false;
+  var _bpQueued    = false;
+  var _initialized = false;
+  var _activeTab   = "ratings";
+
+  // Last computed rating values (for export + session persistence)
+  var _lastRatings = null;
+  // { popDensity: { value, label, pill }, employment: { ... }, lbar: { ... }, cre: { ... }, ess: { ... } }
+
+  // ---- DOM guard ----
+
+  function isPopupVisible() {
+    return App.popup.isOpen() && App.popup.currentModuleId() === "fta-small-starts";
+  }
+
+  // ---- Tab switching ----
+
+  function switchTab(id) {
+    _activeTab = id;
+    var tabs = document.querySelectorAll(".fta-tab");
+    var panes = document.querySelectorAll(".fta-tab-content");
+    for (var i = 0; i < tabs.length; i++) {
+      if (tabs[i].getAttribute("data-tab") === id) {
+        tabs[i].classList.add("fta-tab-active");
+      } else {
+        tabs[i].classList.remove("fta-tab-active");
+      }
+    }
+    for (var j = 0; j < panes.length; j++) {
+      if (panes[j].getAttribute("data-tab") === id) {
+        panes[j].classList.add("fta-tab-visible");
+      } else {
+        panes[j].classList.remove("fta-tab-visible");
+      }
+    }
+  }
+
+  // ---- LBAR map layer ----
 
   function lbarSitesToGeoJSON() {
     var feats = (LBAR_SITES || []).map(function (s, i) {
@@ -36,21 +74,15 @@
 
   function ensureLbarLayer() {
     var map = App.map;
-    var srcId = "lbar-sites";
+    if (!map) return;
+    var srcId   = "lbar-sites";
     var layerId = "lbar-sites-layer";
-    var data = lbarSitesToGeoJSON();
-
+    var data    = lbarSitesToGeoJSON();
     if (!map.getSource(srcId)) {
       map.addSource(srcId, { type: "geojson", data: data });
       map.addLayer({
-        id: layerId,
-        type: "circle",
-        source: srcId,
-        paint: {
-          "circle-radius": 3,
-          "circle-color": "#333333",
-          "circle-opacity": 0.85
-        }
+        id: layerId, type: "circle", source: srcId,
+        paint: { "circle-radius": 3, "circle-color": "#333333", "circle-opacity": 0.85 }
       });
     } else {
       map.getSource(srcId).setData(data);
@@ -59,25 +91,20 @@
 
   function removeLbarLayer() {
     var map = App.map;
-    var srcId = "lbar-sites";
-    var layerId = "lbar-sites-layer";
-    if (map.getLayer(layerId)) map.removeLayer(layerId);
-    if (map.getSource(srcId)) map.removeSource(srcId);
+    if (!map) return;
+    if (map.getLayer("lbar-sites-layer")) map.removeLayer("lbar-sites-layer");
+    if (map.getSource("lbar-sites"))      map.removeSource("lbar-sites");
   }
 
   function refreshLbarLayerVisibility() {
-    var cb = document.getElementById("toggleLbarLayer");
+    var cb = document.getElementById("ftaToggleLbarLayer");
     var on = cb && cb.checked;
-
-    if (!on) { removeLbarLayer(); return; }
-    if (!LBAR_SITES || LBAR_SITES.length === 0) { removeLbarLayer(); return; }
+    if (!on || !LBAR_SITES || LBAR_SITES.length === 0) { removeLbarLayer(); return; }
     ensureLbarLayer();
   }
 
   // ---- FTA breakpoint tables ----
 
-  // Breakpoint tables sorted high-to-low. classify() checks value >= min,
-  // returning the first (highest) match. No max needed — contiguous by design.
   var BP = {
     popDensity: [
       { label: "High",        pill: "high", min: 15000 },
@@ -134,8 +161,9 @@
 
   function setPill(elId, label, pillClass) {
     var el = document.getElementById(elId);
+    if (!el) return;
     el.textContent = label;
-    el.className = "pill " + (pillClass || "na");
+    el.className   = "pill " + (pillClass || "na");
   }
 
   // ---- CRE builder + compute ----
@@ -147,7 +175,7 @@
       var geoid11 = App.normalizeTractGEOID(r[geoidCol]);
       if (!geoid11) continue;
       var total = App.toNumberSafe(r[totalCol]);
-      var high = App.toNumberSafe(r[highCol]);
+      var high  = App.toNumberSafe(r[highCol]);
       if (!Number.isFinite(total) || !Number.isFinite(high)) continue;
       m.set(geoid11, { total: total, high: high });
     }
@@ -157,33 +185,27 @@
   async function computeCommunityRiskFromCre() {
     var unionFeat = App.bufferUnionPolygon();
     if (!unionFeat || !CRE_MAP) return { pct: NaN, highInUnion: 0, totalInUnion: 0, used: 0 };
-
-    var tracts = await App.fetchTigerwebGeos("tract", unionFeat);
-    var highSum = 0;
+    var tracts   = await App.fetchTigerwebGeos("tract", unionFeat);
+    var highSum  = 0;
     var totalSum = 0;
-    var used = 0;
-
+    var used     = 0;
     for (var i = 0; i < tracts.length; i++) {
-      var t = tracts[i];
+      var t     = tracts[i];
       var geoid = t.properties && t.properties.GEOID;
       if (!geoid) continue;
       var v = CRE_MAP.get(geoid);
       if (!v) continue;
-
       var inter;
       try { inter = turf.intersect(t, unionFeat); } catch (_) { continue; }
       if (!inter) continue;
-
       var aInter = turf.area(inter);
       var aTract = turf.area(t);
       if (aTract <= 0) continue;
       var frac = Math.min(1, Math.max(0, aInter / aTract));
-
-      highSum += v.high * frac;
+      highSum  += v.high  * frac;
       totalSum += v.total * frac;
       used++;
     }
-
     var pct = totalSum > 0 ? (highSum / totalSum) * 100 : NaN;
     return { pct: pct, highInUnion: highSum, totalInUnion: totalSum, used: used };
   }
@@ -195,12 +217,12 @@
     if (!obj || obj.type !== "FeatureCollection" || !Array.isArray(obj.features)) return pts;
     for (var i = 0; i < obj.features.length; i++) {
       var f = obj.features[i];
-      if (!f || !f.geometry) continue;
-      if (f.geometry.type === "Point" && Array.isArray(f.geometry.coordinates) && f.geometry.coordinates.length >= 2) {
-        var lon = Number(f.geometry.coordinates[0]);
-        var lat = Number(f.geometry.coordinates[1]);
-        if (Number.isFinite(lon) && Number.isFinite(lat)) pts.push([lon, lat]);
-      }
+      if (!f || !f.geometry || f.geometry.type !== "Point") continue;
+      var c = f.geometry.coordinates;
+      if (!Array.isArray(c) || c.length < 2) continue;
+      var lon = Number(c[0]);
+      var lat = Number(c[1]);
+      if (Number.isFinite(lon) && Number.isFinite(lat)) pts.push([lon, lat]);
     }
     return pts;
   }
@@ -208,24 +230,23 @@
   function buildPointsFromCsvRows(rows, latCol, lonCol) {
     var pts = [];
     for (var i = 0; i < rows.length; i++) {
-      var r = rows[i];
+      var r   = rows[i];
       var lat = App.toNumberSafe(r[latCol]);
       var lon = App.toNumberSafe(r[lonCol]);
-      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-      pts.push([lon, lat]);
+      if (Number.isFinite(lat) && Number.isFinite(lon)) pts.push([lon, lat]);
     }
     return pts;
   }
 
   function computeEssentialServicesAvg() {
     var stations = App.stations;
-    if (!ESS_POINTS || ESS_POINTS.length === 0 || stations.length === 0) return { avg: NaN, perStation: [] };
-
+    if (!ESS_POINTS || ESS_POINTS.length === 0 || stations.length === 0)
+      return { avg: NaN, perStation: [] };
     var perStation = [];
     for (var si = 0; si < stations.length; si++) {
       var coords = stations[si].geometry.coordinates;
-      var buf = turf.circle(turf.point([coords[0], coords[1]]), 1.0, { units: "miles", steps: 64 });
-      var count = 0;
+      var buf    = turf.circle(turf.point([coords[0], coords[1]]), 1.0, { units: "miles", steps: 64 });
+      var count  = 0;
       for (var qi = 0; qi < ESS_POINTS.length; qi++) {
         if (turf.booleanPointInPolygon(turf.point(ESS_POINTS[qi]), buf)) count++;
       }
@@ -248,12 +269,16 @@
       var lon = Number(c[0]);
       var lat = Number(c[1]);
       if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
-
-      var p = f.properties || {};
-      var units = App.toNumberSafe(p.units != null ? p.units : (p.UNITS != null ? p.UNITS : (p.lbar_units != null ? p.lbar_units : p.LBAR_UNITS)));
+      var p     = f.properties || {};
+      var units = App.toNumberSafe(
+        p.units != null ? p.units : (p.UNITS != null ? p.UNITS :
+        (p.lbar_units != null ? p.lbar_units : p.LBAR_UNITS))
+      );
       if (!Number.isFinite(units)) continue;
-
-      var county = String(p.county != null ? p.county : (p.COUNTY != null ? p.COUNTY : (p.county_fips != null ? p.county_fips : (p.COUNTY_FIPS != null ? p.COUNTY_FIPS : "")))).trim();
+      var county = String(
+        p.county != null ? p.county : (p.COUNTY != null ? p.COUNTY :
+        (p.county_fips != null ? p.county_fips : (p.COUNTY_FIPS != null ? p.COUNTY_FIPS : "")))
+      ).trim();
       var county5 = county.replace(/\D/g, "").slice(0, 5);
       sites.push({ lon: lon, lat: lat, units: units, county5: county5 || null });
     }
@@ -263,15 +288,14 @@
   function buildLbarSitesFromCsvRows(rows, latCol, lonCol, unitsCol, countyCol) {
     var sites = [];
     for (var i = 0; i < rows.length; i++) {
-      var r = rows[i];
-      var lat = App.toNumberSafe(r[latCol]);
-      var lon = App.toNumberSafe(r[lonCol]);
+      var r     = rows[i];
+      var lat   = App.toNumberSafe(r[latCol]);
+      var lon   = App.toNumberSafe(r[lonCol]);
       var units = App.toNumberSafe(r[unitsCol]);
       if (!Number.isFinite(lat) || !Number.isFinite(lon) || !Number.isFinite(units)) continue;
-
       var county5 = null;
       if (countyCol) {
-        var raw = String(r[countyCol] != null ? r[countyCol] : "").trim();
+        var raw    = String(r[countyCol] != null ? r[countyCol] : "").trim();
         var digits = raw.replace(/\D/g, "");
         if (digits.length >= 5) county5 = digits.slice(0, 5);
       }
@@ -281,9 +305,11 @@
   }
 
   function parseCountyListInput() {
-    var raw = document.getElementById("lbarCounties").value || "";
-    var parts = raw.split(/[\s,;]+/).map(function (x) { return x.trim(); }).filter(Boolean);
-    var cleaned = parts.map(function (x) { return x.replace(/\D/g, ""); }).filter(function (x) { return x.length === 5; });
+    var el = document.getElementById("ftaLbarCounties");
+    var raw = (el ? el.value : "") || "";
+    var parts   = raw.split(/[\s,;]+/).map(function (x) { return x.trim(); }).filter(Boolean);
+    var cleaned = parts.map(function (x) { return x.replace(/\D/g, ""); })
+                       .filter(function (x) { return x.length === 5; });
     return Array.from(new Set(cleaned));
   }
 
@@ -293,33 +319,31 @@
       return { ratio: NaN, shareStation: NaN, shareCounty: NaN, note: "LBAR inventory not loaded." };
     }
 
-    var year = document.getElementById("yearSelect").value;
-    var geoLevel = document.getElementById("geoLevel").value;
+    var year     = document.getElementById("ftaYearSelect").value;
+    var geoLevel = document.getElementById("ftaGeoLevel").value;
 
     // LBAR units in station union
     var lbarStation = 0;
     for (var i = 0; i < LBAR_SITES.length; i++) {
       var s = LBAR_SITES[i];
-      if (turf.booleanPointInPolygon(turf.point([s.lon, s.lat]), unionFeat)) {
-        lbarStation += s.units;
-      }
+      if (turf.booleanPointInPolygon(turf.point([s.lon, s.lat]), unionFeat)) lbarStation += s.units;
     }
 
     // Total housing units in station union
-    var huStationRes = await App.computeAcsValueOnly("B25001_001E", year, geoLevel);
-    var huStation = huStationRes.value;
-    var shareStation = (Number.isFinite(huStation) && huStation > 0) ? (lbarStation / huStation) : NaN;
+    var huStationRes  = await App.computeAcsValueOnly("B25001_001E", year, geoLevel);
+    var huStation     = huStationRes.value;
+    var shareStation  = (Number.isFinite(huStation) && huStation > 0) ? (lbarStation / huStation) : NaN;
 
-    // County share inputs
+    // County share
     var counties = parseCountyListInput();
-    if (counties.length === 0) {
-      return { ratio: NaN, shareStation: shareStation, shareCounty: NaN, note: "Enter project counties (5-digit FIPS) to compute county share." };
-    }
+    if (counties.length === 0)
+      return { ratio: NaN, shareStation: shareStation, shareCounty: NaN,
+               note: "Enter project counties (5-digit FIPS) to compute county share." };
 
     var sitesWithCounty = LBAR_SITES.filter(function (s) { return s.county5 && s.county5.length === 5; });
-    if (sitesWithCounty.length === 0) {
-      return { ratio: NaN, shareStation: shareStation, shareCounty: NaN, note: "LBAR inventory missing county FIPS per site; cannot compute county share." };
-    }
+    if (sitesWithCounty.length === 0)
+      return { ratio: NaN, shareStation: shareStation, shareCounty: NaN,
+               note: "LBAR inventory missing county FIPS per site; cannot compute county share." };
 
     var lbarCounty = 0;
     for (var j = 0; j < sitesWithCounty.length; j++) {
@@ -327,8 +351,7 @@
     }
 
     var huCountyMap = await App.fetchACSCountyValues(year, "B25001_001E", counties);
-    var huCounty = 0;
-    var huFound = 0;
+    var huCounty = 0, huFound = 0;
     for (var k = 0; k < counties.length; k++) {
       var v = huCountyMap.get(counties[k]);
       if (v != null) { huCounty += v; huFound++; }
@@ -336,20 +359,14 @@
 
     var shareCounty = (huFound > 0 && huCounty > 0) ? (lbarCounty / huCounty) : NaN;
     var ratio = (Number.isFinite(shareStation) && Number.isFinite(shareCounty) && shareCounty > 0)
-      ? (shareStation / shareCounty)
-      : NaN;
-
+      ? (shareStation / shareCounty) : NaN;
     var note = Number.isFinite(shareCounty)
-      ? "LBAR county share=" + (shareCounty * 100).toFixed(2) + "% (" + huFound + "/" + counties.length + " counties found in ACS)"
+      ? "LBAR county share=" + (shareCounty * 100).toFixed(2) + "% (" + huFound + "/" + counties.length + " counties found)"
       : "County share unavailable.";
-
     return { ratio: ratio, shareStation: shareStation, shareCounty: shareCounty, note: note };
   }
 
-  // ---- Breakpoint ratings updater (with concurrency guard) ----
-
-  var _bpRunning = false;
-  var _bpQueued = false;
+  // ---- Breakpoint ratings updater (concurrency guard) ----
 
   async function updateBreakpointRatings() {
     if (_bpRunning) { _bpQueued = true; return; }
@@ -365,148 +382,271 @@
   }
 
   async function _doUpdateBreakpointRatings() {
+    if (!isPopupVisible()) return;
+
     var unionFeat = App.bufferUnionPolygon();
-    var year = document.getElementById("yearSelect").value;
-    var geoLevel = document.getElementById("geoLevel").value;
+    var yearEl    = document.getElementById("ftaYearSelect");
+    var geoEl     = document.getElementById("ftaGeoLevel");
+    var year      = yearEl  ? yearEl.value  : "2023";
+    var geoLevel  = geoEl   ? geoEl.value   : "bg";
 
-    // Reset defaults
-    setPill("bpPopPill", "N/A", "na");
-    setPill("bpEmpPill", "N/A", "na");
+    var statusEl = document.getElementById("ftaStatus");
+    var textEl   = document.getElementById("ftaStatusText");
+    var runBtn   = document.getElementById("ftaRun");
+    if (runBtn) runBtn.disabled = true;
+
+    // Reset all pills
+    setPill("bpPopPill",  "N/A", "na");
+    setPill("bpEmpPill",  "N/A", "na");
     setPill("bpLbarPill", "N/A", "na");
-    setPill("bpCrePill", "N/A", "na");
-    setPill("bpEssPill", "N/A", "na");
+    setPill("bpCrePill",  "N/A", "na");
+    setPill("bpEssPill",  "N/A", "na");
 
-    document.getElementById("bpPopValue").textContent = "\u2014";
-    document.getElementById("bpEmpValue").textContent = "\u2014";
-    document.getElementById("bpLbarValue").textContent = "\u2014";
-    document.getElementById("bpCreValue").textContent = "\u2014";
-    document.getElementById("bpEssValue").textContent = "\u2014";
+    var setVal = function (id, txt) { var e = document.getElementById(id); if (e) e.textContent = txt; };
+    setVal("bpPopValue",  "\u2014");
+    setVal("bpEmpValue",  "\u2014");
+    setVal("bpLbarValue", "\u2014");
+    setVal("bpCreValue",  "\u2014");
+    setVal("bpEssValue",  "\u2014");
+    setVal("bpLbarNote",  "Requires LBAR inventory + counties");
+    setVal("bpCreNote",   "Requires CRE upload");
+    setVal("bpEssNote",   "Requires ESS upload + stations");
 
-    document.getElementById("bpLbarNote").textContent = "Requires LBAR inventory + counties";
-    document.getElementById("bpCreNote").textContent = "Requires CRE (tract) upload";
-    document.getElementById("bpEssNote").textContent = "Requires essential services upload";
+    _lastRatings = null;
 
-    if (!unionFeat) return;
+    if (!unionFeat) {
+      if (statusEl && textEl) {
+        statusEl.style.display = "";
+        statusEl.className     = "rf-status rf-status-stale";
+        textEl.textContent     = "Draw features on the map to define a study area.";
+      }
+      if (runBtn) runBtn.disabled = false;
+      return;
+    }
+
+    if (statusEl) { statusEl.style.display = ""; statusEl.className = "rf-status"; }
+    if (textEl)   textEl.textContent = "Computing breakpoint ratings\u2026";
+    App.setStatus("Computing breakpoint ratings\u2026");
+
+    var ratings = {
+      popDensity: { value: NaN, label: "N/A", pill: "na", formatted: "\u2014", source: "ACS B01003_001E / buffer union area" },
+      employment: { value: NaN, label: "N/A", pill: "na", formatted: "\u2014", source: "LODES WAC C000" },
+      lbar:       { value: NaN, label: "N/A", pill: "na", formatted: "\u2014", note: "Requires LBAR inventory + counties" },
+      cre:        { value: NaN, label: "N/A", pill: "na", formatted: "\u2014", note: "Requires CRE upload" },
+      ess:        { value: NaN, label: "N/A", pill: "na", formatted: "\u2014", note: "Requires ESS upload + stations" }
+    };
 
     try {
-      App.setStatus("Computing breakpoint ratings\u2026");
-
-      // Population density
+      // 1. Population density
       var SQM_PER_SQMI = 2589988.110336;
-      var areaSqMi = turf.area(unionFeat) / SQM_PER_SQMI;
-      var popRes = await App.computeAcsValueOnly("B01003_001E", year, geoLevel);
-      var popTotal = popRes.value;
-      var popDensity = (Number.isFinite(popTotal) && Number.isFinite(areaSqMi) && areaSqMi > 0)
-        ? (popTotal / areaSqMi) : NaN;
+      var areaSqMi   = turf.area(unionFeat) / SQM_PER_SQMI;
+      var popRes     = await App.computeAcsValueOnly("B01003_001E", year, geoLevel);
+      var popTotal   = popRes.value;
+      var popDensity = (Number.isFinite(popTotal) && areaSqMi > 0) ? (popTotal / areaSqMi) : NaN;
 
-      document.getElementById("bpPopValue").textContent = Number.isFinite(popDensity)
-        ? Math.round(popDensity).toLocaleString() + " persons/sq mile"
-        : "\u2014";
-
+      var popFmt = Number.isFinite(popDensity)
+        ? Math.round(popDensity).toLocaleString() + " persons/sq mi" : "\u2014";
+      setVal("bpPopValue", popFmt);
       var popClass = classify(popDensity, BP.popDensity);
       setPill("bpPopPill", popClass.label, popClass.pill);
+      ratings.popDensity = { value: popDensity, label: popClass.label, pill: popClass.pill, formatted: popFmt };
 
-      // Employment served
+      // 2. Employment
       if (App.lodesData) {
         var empRes = await App.computeEmploymentServedOnly();
-        var emp = empRes.value;
-        document.getElementById("bpEmpValue").textContent = Number.isFinite(emp) ? emp.toLocaleString() : "\u2014";
+        var emp    = empRes.value;
+        var empFmt = Number.isFinite(emp) ? emp.toLocaleString() + " jobs" : "\u2014";
+        setVal("bpEmpValue", empFmt);
         var empClass = classify(emp, BP.employment);
         setPill("bpEmpPill", empClass.label, empClass.pill);
+        ratings.employment = { value: emp, label: empClass.label, pill: empClass.pill, formatted: empFmt };
       }
 
-      // Community Risk
+      // 3. Community Risk
       if (CRE_MAP) {
-        var cre = await computeCommunityRiskFromCre();
-        var pct = cre.pct;
-        document.getElementById("bpCreValue").textContent = Number.isFinite(pct) ? pct.toFixed(2) + "%" : "\u2014";
+        var cre    = await computeCommunityRiskFromCre();
+        var pct    = cre.pct;
+        var creFmt = Number.isFinite(pct) ? pct.toFixed(2) + "%" : "\u2014";
+        setVal("bpCreValue", creFmt);
         var creClass = classify(pct, BP.communityRiskPct);
         setPill("bpCrePill", creClass.label, creClass.pill);
-        document.getElementById("bpCreNote").textContent = "Used " + cre.used + " intersecting tracts (area-apportioned).";
+        var creNote = "Used " + cre.used + " intersecting tracts (area-apportioned).";
+        setVal("bpCreNote", creNote);
+        ratings.cre = { value: pct, label: creClass.label, pill: creClass.pill, formatted: creFmt, note: creNote };
       }
 
-      // Essential services
+      // 4. Essential services
       if (ESS_POINTS && ESS_POINTS.length > 0 && App.stations.length > 0) {
-        var ess = computeEssentialServicesAvg();
-        document.getElementById("bpEssValue").textContent = Number.isFinite(ess.avg) ? ess.avg.toFixed(2) : "\u2014";
+        var ess    = computeEssentialServicesAvg();
+        var essFmt = Number.isFinite(ess.avg) ? ess.avg.toFixed(2) : "\u2014";
+        setVal("bpEssValue", essFmt);
         var essClass = classify(ess.avg, BP.essentialAvg);
         setPill("bpEssPill", essClass.label, essClass.pill);
-        document.getElementById("bpEssNote").textContent =
-          "1-mile buffers; " + App.stations.length + " stations; " + ESS_POINTS.length + " service points loaded.";
+        var essNote = "1-mi buffers; " + App.stations.length + " stations; " + ESS_POINTS.length + " service points.";
+        setVal("bpEssNote", essNote);
+        ratings.ess = { value: ess.avg, label: essClass.label, pill: essClass.pill, formatted: essFmt, note: essNote };
       }
 
-      // LBAR ratio + boost
+      // 5. LBAR
       if (LBAR_SITES && LBAR_SITES.length > 0) {
         var lbar = await computeLbarRatio();
-        document.getElementById("bpLbarNote").textContent = lbar.note || "";
+        setVal("bpLbarNote", lbar.note || "");
 
         if (Number.isFinite(lbar.ratio)) {
-          document.getElementById("bpLbarValue").textContent =
-            lbar.ratio.toFixed(2) + " (station share " + (lbar.shareStation * 100).toFixed(2) + "% / county share " + (lbar.shareCounty * 100).toFixed(2) + "%)";
+          var lbarFmt = lbar.ratio.toFixed(2) + " (station " +
+            (lbar.shareStation * 100).toFixed(2) + "% / county " +
+            (lbar.shareCounty * 100).toFixed(2) + "%)";
+          setVal("bpLbarValue", lbarFmt);
 
           var cls = classify(lbar.ratio, BP.lbarRatio);
 
+          // Boost if county share > 5%
           if (Number.isFinite(lbar.shareCounty) && lbar.shareCounty > 0.05) {
             var bumpedLabel = bumpOneLevel(cls.label);
-            var pillMap = { "Low": "low", "Medium-Low": "ml", "Medium": "med", "Medium-High": "mh", "High": "high" };
+            var pillMap     = { "Low": "low", "Medium-Low": "ml", "Medium": "med", "Medium-High": "mh", "High": "high" };
             cls = { label: bumpedLabel, pill: pillMap[bumpedLabel] || cls.pill };
-            document.getElementById("bpLbarNote").textContent += " | Boost applied (county share > 5%).";
+            setVal("bpLbarNote", (lbar.note || "") + " | Boost applied (county share > 5%).");
           }
-
           setPill("bpLbarPill", cls.label, cls.pill);
+          ratings.lbar = { value: lbar.ratio, label: cls.label, pill: cls.pill, formatted: lbarFmt,
+                           note: document.getElementById("bpLbarNote") ? document.getElementById("bpLbarNote").textContent : "" };
         }
       }
+
+      _lastRatings = ratings;
+
+      if (textEl) textEl.textContent = "Ratings computed successfully.";
+      if (statusEl) statusEl.className = "rf-status rf-status-done";
+      App.setStatus("FTA ratings computed");
+
+      // Enable export
+      var exportBtn = document.getElementById("ftaExportCSV");
+      if (exportBtn) exportBtn.disabled = false;
+
     } catch (e) {
-      console.error(e);
+      console.error("FTA ratings error:", e);
+      if (textEl) textEl.textContent = "Error: " + (e.message || e);
+      if (statusEl) statusEl.className = "rf-status rf-status-stale";
+      App.setStatus("FTA error");
     } finally {
-      App.setStatus("Ready");
+      if (runBtn) runBtn.disabled = false;
     }
   }
 
-  // ---- FTA event handler init (called by app.js after panel HTML is loaded) ----
+  // ---- Data indicators (left sidebar summary) ----
 
-  function init() {
+  function updateDataIndicators() {
+    if (!isPopupVisible()) return;
+    var setInd = function (id, loaded, detail) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.style.color = loaded ? "#065f46" : "var(--muted)";
+      el.textContent = detail;
+    };
+    setInd("ftaLodesIndicator", !!App.lodesData,
+      App.lodesData ? "LODES: loaded" : "LODES: not loaded");
+    setInd("ftaCreIndicator", !!CRE_MAP,
+      CRE_MAP ? "CRE: " + CRE_MAP.size + " tracts" : "CRE: not loaded");
+    setInd("ftaEssIndicator", !!(ESS_POINTS && ESS_POINTS.length),
+      ESS_POINTS && ESS_POINTS.length ? "ESS: " + ESS_POINTS.length + " points" : "ESS: not loaded");
+    setInd("ftaLbarIndicator", !!(LBAR_SITES && LBAR_SITES.length),
+      LBAR_SITES && LBAR_SITES.length ? "LBAR: " + LBAR_SITES.length + " sites" : "LBAR: not loaded");
+  }
+
+  // ---- Export ----
+
+  function exportRatingsCSV() {
+    if (!_lastRatings) return;
+    var yearEl   = document.getElementById("ftaYearSelect");
+    var geoEl    = document.getElementById("ftaGeoLevel");
+    var year     = yearEl ? yearEl.value : "";
+    var geoLevel = geoEl  ? geoEl.value  : "";
+
+    var lines = [];
+    lines.push("# FTA Small Starts (Land Use) — Breakpoint Ratings Export");
+    lines.push("# Exported: " + new Date().toISOString());
+    lines.push("# Geography: " + geoLevel);
+    lines.push("# ACS Year: " + year);
+    lines.push("");
+    lines.push("Metric,Rating,Value,Note");
+
+    var r = _lastRatings;
+    lines.push('"Population Density","' + r.popDensity.label + '","' + r.popDensity.formatted + '","' + (r.popDensity.source || "") + '"');
+    lines.push('"Employment Served","' + r.employment.label + '","' + r.employment.formatted + '","' + (r.employment.source || "") + '"');
+    lines.push('"LBAR Ratio","' + r.lbar.label + '","' + r.lbar.formatted + '","' + (r.lbar.note || "").replace(/"/g, '""') + '"');
+    lines.push('"Community Risk","' + r.cre.label + '","' + r.cre.formatted + '","' + (r.cre.note || "").replace(/"/g, '""') + '"');
+    lines.push('"Essential Services","' + r.ess.label + '","' + r.ess.formatted + '","' + (r.ess.note || "").replace(/"/g, '""') + '"');
+
+    var blob = new Blob([lines.join("\n")], { type: "text/csv" });
+    var url  = URL.createObjectURL(blob);
+    var a    = document.createElement("a");
+    var d    = new Date();
+    a.href = url;
+    a.download = "fta-ratings-" + d.getFullYear() + "-" +
+      String(d.getMonth() + 1).padStart(2, "0") + "-" +
+      String(d.getDate()).padStart(2, "0") + ".csv";
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+  }
+
+  // ---- Init (called once on first popup open) ----
+
+  function init(core) {
+    if (_initialized) return;
+    _initialized = true;
+
+    // Tab switching
+    var tabs = document.querySelectorAll(".fta-tab");
+    for (var t = 0; t < tabs.length; t++) {
+      tabs[t].addEventListener("click", function (e) {
+        switchTab(e.target.getAttribute("data-tab"));
+      });
+    }
+
+    // Compute Ratings
+    var runBtn = document.getElementById("ftaRun");
+    if (runBtn) runBtn.addEventListener("click", function () { updateBreakpointRatings(); });
+
+    // Export
+    var exportBtn = document.getElementById("ftaExportCSV");
+    if (exportBtn) exportBtn.addEventListener("click", exportRatingsCSV);
+
     // LBAR layer toggle
-    var toggleLbar = document.getElementById("toggleLbarLayer");
-    if (toggleLbar) {
-      toggleLbar.addEventListener("change", function () {
-        refreshLbarLayerVisibility();
-      });
-    }
+    var toggleLbar = document.getElementById("ftaToggleLbarLayer");
+    if (toggleLbar) toggleLbar.addEventListener("change", refreshLbarLayerVisibility);
 
-    // County FIPS input (debounced)
+    // County FIPS (debounced)
     var _countyTimer = null;
-    var lbarCountiesInput = document.getElementById("lbarCounties");
-    if (lbarCountiesInput) {
-      lbarCountiesInput.addEventListener("input", function () {
+    var countyInput  = document.getElementById("ftaLbarCounties");
+    if (countyInput) {
+      countyInput.addEventListener("input", function () {
         clearTimeout(_countyTimer);
-        _countyTimer = setTimeout(updateBreakpointRatings, 500);
+        _countyTimer = setTimeout(function () {
+          // don't auto-run; user will click Compute Ratings
+        }, 500);
       });
     }
 
-    // CRE upload
-    var creFileInput = document.getElementById("creFile");
+    // ---- CRE upload ----
+    var creFileInput = document.getElementById("ftaCreFile");
     if (creFileInput) {
       creFileInput.addEventListener("change", async function (e) {
         var file = e.target.files && e.target.files[0];
         if (!file) return;
-
         try {
           App.setStatus("Loading CRE CSV\u2026");
-          var text = await file.text();
+          var text   = await file.text();
           var parsed = App.parseCSV(text);
-
           CRE_HEADERS = parsed.headers;
-          CRE_ROWS = parsed.rows;
+          CRE_ROWS    = parsed.rows;
 
-          var sG = document.getElementById("creColGEOID");
-          var sT = document.getElementById("creColTotal");
-          var sH = document.getElementById("creColHigh");
+          var sG = document.getElementById("ftaCreColGEOID");
+          var sT = document.getElementById("ftaCreColTotal");
+          var sH = document.getElementById("ftaCreColHigh");
 
           App.fillSelect(sG, CRE_HEADERS, "Select GEOID column\u2026");
-          App.fillSelect(sT, CRE_HEADERS, "Select total population column\u2026");
-          App.fillSelect(sH, CRE_HEADERS, "Select high-risk population column\u2026");
-
+          App.fillSelect(sT, CRE_HEADERS, "Select total pop column\u2026");
+          App.fillSelect(sH, CRE_HEADERS, "Select high-risk pop column\u2026");
           App.enableSelect(sG, true);
           App.enableSelect(sT, true);
           App.enableSelect(sH, true);
@@ -518,145 +658,123 @@
           function rebuildCre() {
             if (!sG.value || !sT.value || !sH.value) {
               CRE_MAP = null;
-              document.getElementById("creInfo").textContent = "Select required columns to enable CRE computations.";
-              updateBreakpointRatings();
+              var info = document.getElementById("ftaCreInfo");
+              if (info) info.textContent = "Select required columns to enable CRE.";
+              updateDataIndicators();
               return;
             }
             CRE_MAP = buildCreMapFromRows(sG.value, sT.value, sH.value);
-
-            var sampleRaw = CRE_ROWS.length ? CRE_ROWS[0][sG.value] : "";
+            var sampleRaw  = CRE_ROWS.length ? CRE_ROWS[0][sG.value] : "";
             var sampleNorm = App.normalizeTractGEOID(sampleRaw);
-
-            document.getElementById("creInfo").textContent =
-              "Loaded " + file.name + ": " + CRE_MAP.size.toLocaleString() + " tracts mapped. " +
-              (sampleRaw ? 'Sample GEOID: "' + sampleRaw + '" -> "' + sampleNorm + '"' : "");
-
-            if (CRE_MAP.size === 0 && CRE_ROWS.length > 0) {
-              document.getElementById("creInfo").textContent +=
-                " | If this remains 0, confirm GEO_ID contains tract IDs ending in 11 digits and selected columns are numeric.";
+            var info2 = document.getElementById("ftaCreInfo");
+            if (info2) {
+              info2.textContent = "Loaded " + file.name + ": " + CRE_MAP.size.toLocaleString() + " tracts." +
+                (sampleRaw ? ' Sample: "' + sampleRaw + '" \u2192 "' + sampleNorm + '"' : "");
             }
-
-            updateBreakpointRatings();
+            updateDataIndicators();
           }
 
           sG.onchange = rebuildCre;
           sT.onchange = rebuildCre;
           sH.onchange = rebuildCre;
-
           rebuildCre();
           App.setStatus("Ready");
         } catch (err) {
-          CRE_MAP = null;
-          CRE_HEADERS = [];
-          CRE_ROWS = [];
-          document.getElementById("creInfo").textContent = "Error: " + String(err && err.message ? err.message : err);
+          CRE_MAP = null; CRE_HEADERS = []; CRE_ROWS = [];
+          var info3 = document.getElementById("ftaCreInfo");
+          if (info3) info3.textContent = "Error: " + (err.message || err);
           App.setStatus("Error");
-          updateBreakpointRatings();
+          updateDataIndicators();
         }
       });
     }
 
-    // Essential services upload
-    var essFileInput = document.getElementById("essFile");
+    // ---- ESS upload ----
+    var essFileInput = document.getElementById("ftaEssFile");
     if (essFileInput) {
       essFileInput.addEventListener("change", async function (e) {
         var file = e.target.files && e.target.files[0];
         if (!file) return;
-
         try {
           App.setStatus("Loading essential services\u2026");
           var name = file.name.toLowerCase();
-
-          ESS_POINTS = null;
-          ESS_HEADERS = [];
-          ESS_ROWS = [];
-
-          var latSel = document.getElementById("essColLat");
-          var lonSel = document.getElementById("essColLon");
+          ESS_POINTS = null; ESS_HEADERS = []; ESS_ROWS = [];
+          var latSel = document.getElementById("ftaEssColLat");
+          var lonSel = document.getElementById("ftaEssColLon");
 
           if (name.endsWith(".json") || name.endsWith(".geojson")) {
             var text = await file.text();
-            var obj = JSON.parse(text);
+            var obj  = JSON.parse(text);
             ESS_POINTS = extractPointsFromGeoJSON(obj);
-
             App.fillSelect(latSel, [], "N/A (GeoJSON)");
             App.fillSelect(lonSel, [], "N/A (GeoJSON)");
             App.enableSelect(latSel, false);
             App.enableSelect(lonSel, false);
-
-            document.getElementById("essInfo").textContent =
-              "Loaded " + file.name + ": " + ESS_POINTS.length.toLocaleString() + " points.";
+            var info = document.getElementById("ftaEssInfo");
+            if (info) info.textContent = "Loaded " + file.name + ": " + ESS_POINTS.length.toLocaleString() + " points.";
           } else if (name.endsWith(".csv")) {
             var csvText = await file.text();
-            var parsed = App.parseCSV(csvText);
+            var parsed  = App.parseCSV(csvText);
             ESS_HEADERS = parsed.headers;
-            ESS_ROWS = parsed.rows;
-
-            App.fillSelect(latSel, ESS_HEADERS, "Select latitude column\u2026");
-            App.fillSelect(lonSel, ESS_HEADERS, "Select longitude column\u2026");
+            ESS_ROWS    = parsed.rows;
+            App.fillSelect(latSel, ESS_HEADERS, "Select latitude\u2026");
+            App.fillSelect(lonSel, ESS_HEADERS, "Select longitude\u2026");
             App.enableSelect(latSel, true);
             App.enableSelect(lonSel, true);
-
             latSel.value = App.guessHeader(ESS_HEADERS, ["lat", "latitude", "y", "LAT", "Latitude"]);
             lonSel.value = App.guessHeader(ESS_HEADERS, ["lon", "lng", "longitude", "x", "LON", "Longitude"]);
 
             function rebuildEss() {
               if (!latSel.value || !lonSel.value) {
                 ESS_POINTS = null;
-                document.getElementById("essInfo").textContent = "Select lat/lon columns to enable essential services computations.";
-                updateBreakpointRatings();
+                var i = document.getElementById("ftaEssInfo");
+                if (i) i.textContent = "Select lat/lon columns.";
+                updateDataIndicators();
                 return;
               }
               ESS_POINTS = buildPointsFromCsvRows(ESS_ROWS, latSel.value, lonSel.value);
-              document.getElementById("essInfo").textContent =
-                "Loaded " + file.name + ": " + ESS_POINTS.length.toLocaleString() + " points from CSV.";
-              updateBreakpointRatings();
+              var i2 = document.getElementById("ftaEssInfo");
+              if (i2) i2.textContent = "Loaded " + file.name + ": " + ESS_POINTS.length.toLocaleString() + " points from CSV.";
+              updateDataIndicators();
             }
-
             latSel.onchange = rebuildEss;
             lonSel.onchange = rebuildEss;
-
             rebuildEss();
           } else {
             throw new Error("Unsupported file type. Upload .geojson/.json or .csv.");
           }
-
           App.setStatus("Ready");
-          updateBreakpointRatings();
+          updateDataIndicators();
         } catch (err) {
           ESS_POINTS = null;
-          document.getElementById("essInfo").textContent = "Error: " + String(err && err.message ? err.message : err);
+          var info4 = document.getElementById("ftaEssInfo");
+          if (info4) info4.textContent = "Error: " + (err.message || err);
           App.setStatus("Error");
-          updateBreakpointRatings();
+          updateDataIndicators();
         }
       });
     }
 
-    // LBAR upload
-    var lbarFileInput = document.getElementById("lbarFile");
+    // ---- LBAR upload ----
+    var lbarFileInput = document.getElementById("ftaLbarFile");
     if (lbarFileInput) {
       lbarFileInput.addEventListener("change", async function (e) {
         var file = e.target.files && e.target.files[0];
         if (!file) return;
-
         try {
           App.setStatus("Loading LBAR inventory\u2026");
           var name = file.name.toLowerCase();
+          LBAR_SITES = null; LBAR_HEADERS = []; LBAR_ROWS = [];
 
-          LBAR_SITES = null;
-          LBAR_HEADERS = [];
-          LBAR_ROWS = [];
-
-          var latSel = document.getElementById("lbarColLat");
-          var lonSel = document.getElementById("lbarColLon");
-          var uniSel = document.getElementById("lbarColUnits");
-          var ctySel = document.getElementById("lbarColCounty");
+          var latSel = document.getElementById("ftaLbarColLat");
+          var lonSel = document.getElementById("ftaLbarColLon");
+          var uniSel = document.getElementById("ftaLbarColUnits");
+          var ctySel = document.getElementById("ftaLbarColCounty");
 
           if (name.endsWith(".json") || name.endsWith(".geojson")) {
             var text = await file.text();
-            var obj = JSON.parse(text);
+            var obj  = JSON.parse(text);
             LBAR_SITES = buildLbarSitesFromGeoJSON(obj);
-
             App.fillSelect(latSel, [], "N/A (GeoJSON)");
             App.fillSelect(lonSel, [], "N/A (GeoJSON)");
             App.fillSelect(uniSel, [], "N/A (GeoJSON)");
@@ -665,28 +783,22 @@
             App.enableSelect(lonSel, false);
             App.enableSelect(uniSel, false);
             App.enableSelect(ctySel, false);
-
-            document.getElementById("lbarInfo").textContent =
-              "Loaded " + file.name + ": " + LBAR_SITES.length.toLocaleString() + " sites (expects properties.units and optional properties.county).";
-
+            var info = document.getElementById("ftaLbarInfo");
+            if (info) info.textContent = "Loaded " + file.name + ": " + LBAR_SITES.length.toLocaleString() + " sites.";
             refreshLbarLayerVisibility();
-            updateBreakpointRatings();
           } else if (name.endsWith(".csv")) {
             var csvText = await file.text();
-            var parsed = App.parseCSV(csvText);
+            var parsed  = App.parseCSV(csvText);
             LBAR_HEADERS = parsed.headers;
-            LBAR_ROWS = parsed.rows;
-
-            App.fillSelect(latSel, LBAR_HEADERS, "Select latitude column\u2026");
-            App.fillSelect(lonSel, LBAR_HEADERS, "Select longitude column\u2026");
-            App.fillSelect(uniSel, LBAR_HEADERS, "Select units column\u2026");
-            App.fillSelect(ctySel, LBAR_HEADERS, "(Optional) Select county FIPS column\u2026");
-
+            LBAR_ROWS    = parsed.rows;
+            App.fillSelect(latSel, LBAR_HEADERS, "Select latitude\u2026");
+            App.fillSelect(lonSel, LBAR_HEADERS, "Select longitude\u2026");
+            App.fillSelect(uniSel, LBAR_HEADERS, "Select units\u2026");
+            App.fillSelect(ctySel, LBAR_HEADERS, "(Optional) County FIPS\u2026");
             App.enableSelect(latSel, true);
             App.enableSelect(lonSel, true);
             App.enableSelect(uniSel, true);
             App.enableSelect(ctySel, true);
-
             latSel.value = App.guessHeader(LBAR_HEADERS, ["lat", "latitude", "y", "LAT", "Latitude"]);
             lonSel.value = App.guessHeader(LBAR_HEADERS, ["lon", "lng", "longitude", "x", "LON", "Longitude"]);
             uniSel.value = App.guessHeader(LBAR_HEADERS, ["units", "lbar_units", "LBAR_UNITS", "UNITS", "Total Low-Income Units"]);
@@ -695,70 +807,144 @@
             function rebuildLbar() {
               if (!latSel.value || !lonSel.value || !uniSel.value) {
                 LBAR_SITES = null;
-                document.getElementById("lbarInfo").textContent =
-                  "Select required columns (lat/lon/units) to enable LBAR computations.";
+                var i = document.getElementById("ftaLbarInfo");
+                if (i) i.textContent = "Select required columns (lat/lon/units).";
                 refreshLbarLayerVisibility();
-                updateBreakpointRatings();
+                updateDataIndicators();
                 return;
               }
-              var countyCol = ctySel.value || null;
-              LBAR_SITES = buildLbarSitesFromCsvRows(LBAR_ROWS, latSel.value, lonSel.value, uniSel.value, countyCol);
-
+              LBAR_SITES = buildLbarSitesFromCsvRows(LBAR_ROWS, latSel.value, lonSel.value, uniSel.value, ctySel.value || null);
               var hasCounty = LBAR_SITES.some(function (s) { return s.county5 && s.county5.length === 5; });
-              document.getElementById("lbarInfo").textContent =
-                "Loaded " + file.name + ": " + LBAR_SITES.length.toLocaleString() + " sites. County FIPS present: " + (hasCounty ? "Yes" : "No") + ".";
-
+              var i2 = document.getElementById("ftaLbarInfo");
+              if (i2) i2.textContent = "Loaded " + file.name + ": " + LBAR_SITES.length.toLocaleString() + " sites. County: " + (hasCounty ? "Yes" : "No");
               refreshLbarLayerVisibility();
-              updateBreakpointRatings();
+              updateDataIndicators();
             }
-
             latSel.onchange = rebuildLbar;
             lonSel.onchange = rebuildLbar;
             uniSel.onchange = rebuildLbar;
             ctySel.onchange = rebuildLbar;
-
             rebuildLbar();
           } else {
             throw new Error("Unsupported file type. Upload .geojson/.json or .csv.");
           }
-
           App.setStatus("Ready");
+          updateDataIndicators();
         } catch (err) {
           LBAR_SITES = null;
-          document.getElementById("lbarInfo").textContent = "Error: " + String(err && err.message ? err.message : err);
+          var info5 = document.getElementById("ftaLbarInfo");
+          if (info5) info5.textContent = "Error: " + (err.message || err);
           App.setStatus("Error");
           refreshLbarLayerVisibility();
-          updateBreakpointRatings();
+          updateDataIndicators();
         }
       });
     }
-
-    // Initialize ratings
-    updateBreakpointRatings();
   }
 
-  // ---- Register with App as an analysis module (currently disabled) ----
+  // ---- Popup lifecycle ----
+
+  function onOpen(core) {
+    switchTab(_activeTab);
+    updateDataIndicators();
+    // Show last ratings if available
+    if (_lastRatings) {
+      restoreRatingsDisplay(_lastRatings);
+    }
+  }
+
+  function restoreRatingsDisplay(r) {
+    if (!isPopupVisible()) return;
+    var setVal = function (id, txt) { var e = document.getElementById(id); if (e) e.textContent = txt; };
+
+    setPill("bpPopPill",  r.popDensity.label, r.popDensity.pill);
+    setVal("bpPopValue",  r.popDensity.formatted);
+
+    setPill("bpEmpPill",  r.employment.label, r.employment.pill);
+    setVal("bpEmpValue",  r.employment.formatted);
+
+    setPill("bpLbarPill", r.lbar.label, r.lbar.pill);
+    setVal("bpLbarValue", r.lbar.formatted);
+    if (r.lbar.note) setVal("bpLbarNote", r.lbar.note);
+
+    setPill("bpCrePill",  r.cre.label, r.cre.pill);
+    setVal("bpCreValue",  r.cre.formatted);
+    if (r.cre.note) setVal("bpCreNote", r.cre.note);
+
+    setPill("bpEssPill",  r.ess.label, r.ess.pill);
+    setVal("bpEssValue",  r.ess.formatted);
+    if (r.ess.note) setVal("bpEssNote", r.ess.note);
+
+    var exportBtn = document.getElementById("ftaExportCSV");
+    if (exportBtn) exportBtn.disabled = false;
+
+    var statusEl = document.getElementById("ftaStatus");
+    var textEl   = document.getElementById("ftaStatusText");
+    if (statusEl && textEl) {
+      statusEl.style.display = "";
+      statusEl.className     = "rf-status rf-status-done";
+      textEl.textContent     = "Ratings computed successfully.";
+    }
+  }
+
+  function onClose(core) {
+    // State persists in closure
+  }
+
+  async function update(core) {
+    refreshLbarLayerVisibility();
+    if (isPopupVisible()) {
+      updateDataIndicators();
+    }
+  }
+
+  // ---- Session persistence ----
+
+  function saveFtaState(mode) {
+    var data = {
+      activeTab:  _activeTab,
+      hasCre:     !!CRE_MAP,
+      creSize:    CRE_MAP ? CRE_MAP.size : 0,
+      hasEss:     !!(ESS_POINTS && ESS_POINTS.length),
+      essCount:   ESS_POINTS ? ESS_POINTS.length : 0,
+      hasLbar:    !!(LBAR_SITES && LBAR_SITES.length),
+      lbarCount:  LBAR_SITES ? LBAR_SITES.length : 0
+    };
+    if (_lastRatings) {
+      data.lastRatings = JSON.parse(JSON.stringify(_lastRatings));
+    }
+    return data;
+  }
+
+  function restoreFtaState(data) {
+    if (!data) return;
+    if (data.activeTab) _activeTab = data.activeTab;
+    if (data.lastRatings) _lastRatings = data.lastRatings;
+    // Note: uploaded file data (CRE_MAP, ESS_POINTS, LBAR_SITES) is NOT persisted
+    // because it's too large. The user must re-upload files after a session restore.
+  }
+
+  // ---- Register as analysis module ----
 
   App.registerModule({
-    id: "fta-small-starts",
-    name: "FTA Small Starts (Land Use)",
-    enabled: false, // Button shown but grayed out; popup UI not yet built
+    id:         "fta-small-starts",
+    name:       "FTA Small Starts (Land Use)",
+    enabled:    true,
+    popupWidth: 960,
+    popupHTML:  "projects/fta-small-starts-popup.html",
 
-    // Legacy fields kept for future migration to popup-based UI
-    panelHTML: "projects/fta-small-starts.html",
-    panels: [
-      { id: "fta-cre",  title: "Community Risk (CRE)", htmlFile: "projects/fta-cre.html",  collapsed: true, order: 25 },
-      { id: "fta-ess",  title: "Essential Services",    htmlFile: "projects/fta-ess.html",  collapsed: true, order: 26 },
-      { id: "fta-lbar", title: "LBAR Housing",          htmlFile: "projects/fta-lbar.html", collapsed: true, order: 27 }
-    ],
-
-    init: function (_core) {
-      init();
-    },
-
-    update: async function (_core) {
-      await updateBreakpointRatings();
-      refreshLbarLayerVisibility();
-    }
+    init:    function (core) { init(core); },
+    onOpen:  function (core) { onOpen(core); },
+    onClose: function (core) { onClose(core); },
+    update:  async function (core) { await update(core); }
   });
+
+  // Register with session cache
+  if (App.cache && App.cache.registerModule) {
+    App.cache.registerModule("fta", {
+      collect: saveFtaState,
+      apply:   restoreFtaState
+    });
+  }
+
 })();
