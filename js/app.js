@@ -406,7 +406,7 @@
         var info = await App.getStateFromMapCenter();
         document.getElementById("lodesState").textContent = info.abbr.toUpperCase() + " (FIPS " + info.stateFips + ")";
 
-        var lodesYear = "2024";
+        var lodesYear = "2023";
         var url = "https://lehd.ces.census.gov/data/lodes/LODES8/" + info.abbr + "/wac/" + info.abbr + "_wac_S000_JT00_" + lodesYear + ".csv.gz";
         var filename = info.abbr + "_wac_S000_JT00_" + lodesYear + ".csv.gz";
 
