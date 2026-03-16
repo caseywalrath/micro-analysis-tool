@@ -41,7 +41,7 @@ Browser-based geospatial analysis tool. Pure front-end (no build step, no backen
 ```
 index.html                  App shell: toolbar, sidebar, map, feature panel, module popup container, script tags
 css/
-  style.css                 Core layout, toolbar, feature panel, module popup, floating widgets, basemap switcher, BAS styles (.bas- prefix), TPI styles, RF styles (.rf- prefix), FTA styles (.fta- prefix), pill rating colors
+  style.css                 Core layout, toolbar, feature panel, module popup, floating widgets, basemap switcher, BAS styles (.bas- prefix), TPI styles, RF styles (.rf- prefix), FTA styles (.fta- prefix), TVI styles (.tvi- prefix), pill rating colors
   sidebar-v2.css            Sidebar panel system styles (scoped under #sidebar), variable checkbox list, section labels
 js/
   app.js                    Startup, module registry, sidebar panel HTML (Data Inputs), event wiring. Note: CHECKBOX_GROUPS, DENOM_MAP, and runSummary() have moved to buffer-summary.js.
@@ -66,6 +66,8 @@ js/
     transit-propensity.js   TPI module: popup-based 2-column UI (Settings | Results), weights modal overlay, feature checklist (normalization pool), analysis corridor dropdown, scrollable geography list with expandable factor breakdowns, choropleth rendering, hover tooltips, floating legend (auto-shown on run), GeoJSON/CSV export, stale detection
     ridership-scoring.js    Ridership scoring engine: corridor CDI computation, per-route CDI extraction, system-wide demand orchestration, CSV route matching, segment analysis, service type presets, elasticity formulas, scenario builder, ratio/OLS calibration (window.RidershipModel namespace)
     ridership-forecasting.js  Ridership Forecasting module: 4-tab popup (Calibrate | Demand | Elasticity | Scenarios), 3-step calibration workflow, corridor dropdown, choropleth + segment map, scenario comparison table, GeoJSON/CSV/JSON export; shared-pool normalization mode for cross-system calibration
+    title-vi-engine.js      Title VI engine: policy profiles, major-change rules, geometric divergence detection (turf.nearestPointOnLine), service change area computation (turf.difference), alteration metrics orchestration, demographic fetching, finding evaluation, scenario comparison (window.TitleVI namespace)
+    title-vi.js             Title VI Service Equity module: 3-tab popup (Policies & Inputs | Analysis | Scenarios), route alteration pairing UI (before/after feature dropdowns), auto-computed route miles and % altered, service loss/gain map overlay, system baseline vs impacted area demographic comparison, CSV/GeoJSON/JSON export, session persistence
 projects/
   buffer-summary-popup.html   Buffer-Area Summary popup body: settings (geography, year, apportion) + results table
   fta-small-starts-popup.html  FTA popup body: 2-tab layout (Ratings | Data Inputs); Ratings tab has 2-column layout (settings + 5 rating cards); Data Inputs tab has CRE/ESS/LBAR file uploads with column mapping selects
@@ -76,6 +78,7 @@ projects/
   tpi-legend.html           TPI legend: 5-class Blues color swatches (reused by floating widget)
   ridership-forecasting-popup.html  RF popup body: 4-tab layout (Calibrate first), 3-step calibration workflow UI (system analysis → CSV upload → match/calibrate); "Adjust Weights" button above "Analyze System" opens an in-popup modal overlay with 9 factor weight sliders (Confirm / Cancel / Reset to Defaults / Copy From TPI); expandable per-route factor breakdowns with quintile bars; headway normalization note (`rfCalibHeadwayNote`); shared-pool refit note (`rfCalibSharedPoolNote`); LODES warning icons (⚠) next to ACS Year in Calibrate and Demand tabs (shows tooltip when LODES not loaded); corridor dropdown in Demand tab, CDI info button (ⓘ toggle), segment breakdown, "Shared pool normalization" checkbox (`rfSharedPoolMode`) with info tooltip (`rfSharedPoolTooltip`) in Demand tab feature section, elasticity sliders — frequency elasticity (`rfFreqElastSlider`/`rfFreqElastValue`, 0.1–1.0, default 0.50) and service span elasticity (`rfSpanElastSlider`/`rfSpanElastValue`, 0.1–1.0, default 0.70, typical range 0.5–0.9) — in Elasticity tab left column; service type premium sliders (`rfServicePremLow`/`rfServicePremLowVal` and `rfServicePremHigh`/`rfServicePremHighVal`, 0–150% range) in Elasticity tab right column (replaces static Frequency/Speed/Mode breakdown), baseline uncertainty slider (`rfBaseUncertSlider`/`rfBaseUncertValue`, 0–60% range, default 25%) in Elasticity tab with "Baseline Projection" result card (`rfBaselineBand`) showing pre-service uncertainty band, 4-column scenario grid (A|B|C|D), comparison table
   ridership-legend.html     RF demand legend: 5-class Blues swatches for CDI score (High → Low)
+  title-vi-popup.html       Title VI popup body: 3-tab layout (Policies & Inputs | Analysis | Scenarios); Policies tab has 2-column layout (policy settings left, route alteration cards + impact method right); Analysis tab has baseline computation + equity findings; Scenarios tab has scenario manager + comparison table
 docs/
   ridership-forecasting-plan.md  Strategic evaluation and implementation plan for the ridership forecasting tool
 Ridership_Forecast_Readme.md    User-facing documentation for the Ridership Forecasting module (plain-language, transit professional audience)
@@ -88,9 +91,9 @@ Ridership_Forecast_Readme.md    User-facing documentation for the Ridership Fore
 - **Module-local state stays private.** Variables like `CRE_MAP`, `ESS_POINTS`, `LBAR_SITES` (FTA) and `_lastResult`, `_stale`, `_running` (TPI, RF) are declared inside the module IIFE closure, not on `App`. Scoring engines use separate window namespaces: `window.TPI` (TPI scoring), `window.RidershipModel` (ridership scoring).
 - **Panel-based sidebar.** Sidebar content is registered via `App.sidebar.addPanel()` and rendered on map load. Panel HTML is defined as strings in `app.js`, not hardcoded in `index.html`. Call `render()` once after all panels are registered (avoids destroying event listeners).
 - **Analysis popups.** Analysis modules open in popup windows (not the sidebar). The popup system (`App.popup`) handles HTML loading, init/open/close lifecycle, and Escape key. Floating widgets (like the TPI and RF legends) persist on the map independently of the popup.
-- **Tabbed popup layout.** Multi-step analysis modules (e.g., Ridership Forecasting, FTA Small Starts) use a tab bar (`<div class="rf-tabs">` / `<div class="fta-tabs">` with `[data-tab]` buttons) and tab content panels toggled via a `switchTab(id)` function in the module JS. State is saved to closure variables on tab switch; the form is not reset.
+- **Tabbed popup layout.** Multi-step analysis modules (e.g., Ridership Forecasting, FTA Small Starts, Title VI) use a tab bar (`<div class="rf-tabs">` / `<div class="fta-tabs">` / `<div class="tvi-tabs">` with `[data-tab]` buttons) and tab content panels toggled via a `switchTab(id)` function in the module JS. State is saved to closure variables on tab switch; the form is not reset.
 - **Inline info buttons.** Contextual help uses a small `<button class="rf-info-btn">ⓘ</button>` element adjacent to the label, wired in `init()` to toggle a sibling explanation `<div>` via `style.display`. No tooltip libraries needed.
-- **CSS namespacing.** TPI styles use `.tpi-` prefix. Ridership Forecasting styles use `.rf-` prefix. FTA Small Starts styles use `.fta-` prefix. Rating pill colors use `.pill.high` through `.pill.low`. All live in `css/style.css`.
+- **CSS namespacing.** TPI styles use `.tpi-` prefix. Ridership Forecasting styles use `.rf-` prefix. FTA Small Starts styles use `.fta-` prefix. Title VI styles use `.tvi-` prefix. Rating pill colors use `.pill.high` through `.pill.low`. All live in `css/style.css`.
 - **External libraries via CDN:** MapLibre GL JS, Turf.js, pako (gzip), PapaParse (CSV).
 
 ## Script Load Order
@@ -119,9 +122,11 @@ app.js              (wires everything; registers sidebar panels; defines App.reg
   transit-propensity.js (needs TPI, App.registerModule, App.popup, App.map, App.renderCensusOverlay)
   ridership-scoring.js  (needs window.TPI, App namespace, turf; defines window.RidershipModel)
   ridership-forecasting.js (needs RidershipModel, TPI, App.registerModule, App.popup, App.map, App.renderCensusOverlay)
+  title-vi-engine.js    (needs App namespace, turf; defines window.TitleVI)
+  title-vi.js           (needs TitleVI, App.registerModule, App.popup, App.map, App.cache)
 ```
 
-**Active modules:** Buffer-Area Summary is enabled (popup-based, settings + results table). TPI is enabled (popup-based, 2-column). FTA Small Starts is enabled (popup-based, 2-tab). Ridership Forecasting is enabled (popup-based, 4-tab).
+**Active modules:** Buffer-Area Summary is enabled (popup-based, settings + results table). TPI is enabled (popup-based, 2-column). FTA Small Starts is enabled (popup-based, 2-tab). Ridership Forecasting is enabled (popup-based, 4-tab). Title VI Service Equity is enabled (popup-based, 3-tab).
 
 ## App Namespace (Public API)
 
@@ -270,6 +275,50 @@ Registers module `"ridership-forecasting"` as a popup-based analysis. Opens in a
 
 **Internal helpers** (ridership-forecasting.js, not on RidershipModel): `combineFeatureFilters(a, b)` — unions two feature filters (null = all features; either null → result is null); `filterRouteCDIs(allRouteCDIs, filter)` — filters a routeCDIs array to entries matching a feature filter; `refitCalibrationFromCDI(calibPerRouteCDI)` — re-runs the calibration fit from `_matchResult` data using updated CDI values from the shared pool, returns a new calibration object with `sharedPoolMode: true`, or null if insufficient data; `runSharedPoolAnalysis(geoLevel, year, textEl)` — orchestrates the shared-pool path: combines filters, builds union, calls `computeSystemDemand` once, partitions results, auto-refits calibration; `updateLodesWarnings()` — shows/hides LODES warning icons (⚠) based on `App.lodesData` state (called from `onOpen()` and `update()`).
 
+### title-vi-engine.js (window.TitleVI namespace, not on App)
+Pure calculation engine for the Title VI Service Equity module. No DOM access. Depends on `turf` (CDN) and `window.App` (for feature resolution).
+
+`TitleVI.defaultPolicy()` — returns a fresh policy profile object with major-change rules (route miles %, revenue hours %, span %, route elimination, fare %), equity thresholds (disparate impact and disproportionate burden in percentage points), geography level, ACS year, and buffer distance.
+
+`TitleVI.createScenario(name)` — returns a new scenario object with `alterations: []` array and `impactMethod: "service_loss_area"`.
+
+`TitleVI.createAlteration(name)` — returns a new alteration object: `{ name, changeType ("alteration"|"elimination"|"new_route"), before (feature ref or null), after (feature ref or null), computed (filled by computeAlterationMetrics), manual: { revenueHours, spanHours, fare } }`. Feature refs are `{ featureType: "route"|"line", featureIndex, featureName }`.
+
+`TitleVI.computeDivergence(beforeFeature, afterFeature, divergenceThresholdMiles, sampleIntervalMiles)` — samples points every ~0.05 mi along the "before" route and measures distance to the nearest point on the "after" route via `turf.nearestPointOnLine()`. Points farther than the threshold (default 0.1 mi / 528 ft) are flagged as divergent. Returns `{ alteredPct, alteredMiles, totalMiles, divergentSegments: [{ startMile, endMile, maxDivergenceFt }] }`.
+
+`TitleVI.computeServiceChangeArea(beforeFeature, afterFeature, bufferMiles)` — buffers both routes at `bufferMiles`, then uses `turf.difference()` to compute service loss area (before minus after) and service gain area (after minus before). Returns `{ serviceLossArea, serviceGainArea, beforeBuffer, afterBuffer }`.
+
+`TitleVI.computeAlterationMetrics(alteration, bufferMiles, divergenceThresholdMiles)` — orchestrates all metric computation for a single alteration. Resolves feature references, computes route miles, divergence (% altered), service change areas, and manual metric % changes. Handles all three change types: `alteration` (both before and after), `elimination` (before only, 100% altered, entire buffer is loss), `new_route` (after only, entire buffer is gain). Returns computed metrics object stored on `alteration.computed`.
+
+`TitleVI.computeRouteMetrics(route)` — legacy CSV-based route metrics (kept for backward compat).
+
+`TitleVI.evaluateMajorChange(policy, scenario)` — evaluates all enabled major-change rules against each alteration's computed metrics. Returns `{ triggered, ruleResults: [...], altMetrics: [...] }`.
+
+`TitleVI.buildImpactedArea(scenario)` — constructs the impacted area geometry based on `scenario.impactMethod`. Methods: `service_loss_area` (default — union of service loss polygons from all alterations), `service_change_area` (union of both loss and gain areas), `full_route_buffer` (all App route/line buffers), `user_polygon` (drawn polygons). Falls back to before-route buffers if no service change areas are computed.
+
+`TitleVI.fetchDemographics(core, unionGeom, geoLevel, year)` — fetches ACS race/ethnicity (B03002) and poverty (B17001) data for census geographies intersecting the union polygon. Includes tract-level fallback for poverty at block-group level. Returns `{ totalPop, minorityPop, minorityShare, lowIncomePop, lowIncomeShare, geoCount, geos }`.
+
+`TitleVI.evaluateFindings(impactedDemographics, baseline, policy)` — compares impacted area demographics against the system baseline. Returns findings for both minority (Disparate Impact) and low-income (Disproportionate Burden) with `diffPpt`, `exceedsThreshold`, and `finding` string.
+
+`TitleVI.compareScenarios(scenarioResults)` — builds a comparison array from multiple analyzed scenarios for the comparison table.
+
+### title-vi.js (analysis module, no public API)
+Registers module `"title-vi"` as a popup-based analysis. Opens in a 3-tab popup (960px wide). All state is private to the IIFE closure. DOM writes guarded with `isPopupVisible()`. All DOM element IDs use `tvi` prefix. CSS classes use `.tvi-` prefix.
+
+**Tab 1 – Policies & Inputs**: 2-column layout. Left column: policy name, major service change rules (checkboxes + threshold inputs), equity thresholds (DI and DB in ppt), geography level and ACS year. Right column: route alteration card system ("+&nbsp;Add Alteration" button, cards with name input, change-type dropdown, before/after feature dropdowns, auto-computed metrics display, manual inputs for revenue hours/span/fare), and impacted area method radio group (service loss area, all affected area, full route buffer, drawn polygons).
+
+**Tab 2 – Analysis**: 2-column layout. Left: system baseline section (feature checklist for baseline union, "Compute Baseline" button, baseline results box showing minority/low-income shares), equity analysis section ("Run Equity Analysis" button, stale warning banner, status text). Right: results display (Major Service Change verdict pill + per-rule breakdown, Minority/Disparate Impact card with impacted vs baseline shares and threshold comparison, Low-Income/Disproportionate Burden card, summary stats, export buttons for CSV and GeoJSON).
+
+**Tab 3 – Scenarios**: Scenario manager (dropdown, Duplicate/Rename/Delete buttons), comparison table (all analyzed scenarios side-by-side), export buttons (Comparison CSV, Session JSON), session import file picker.
+
+**Map overlay**: Red semi-transparent fill for service loss / impacted area (`tvi-impacted-*` layers), green semi-transparent fill for service gain area (`tvi-gain-*` layers). Both cleared on popup close or new analysis.
+
+**Alteration data model**: Each scenario has an `alterations[]` array. Each alteration has `{ name, changeType, before, after, computed, manual }`. `before`/`after` are feature references `{ featureType, featureIndex, featureName }` pointing to drawn routes/lines on the map. `computed` is filled by `TitleVI.computeAlterationMetrics()` and contains `{ beforeMiles, afterMiles, routeMilesPct, alteredPct, alteredMiles, serviceLossArea, serviceGainArea, divergentSegments, revenueHoursPct, spanHoursPct, farePct }`.
+
+**Internal functions**: `addAlteration()`, `removeAlteration(idx)`, `onAlterationChanged(idx)`, `renderAlterationCards()`, `buildAlterationCard(idx, alt)`, `displayComputedMetrics(card, alt)`, `buildFeatureSelect(selectedRef)`, `parseFeatureRef(selectEl)`, `readManualInputs(card)`, `runBaseline(core)`, `runAnalysis(core)`, `runInstantReevaluation()`, `displayResults(result)`, `displayFinding(prefix, finding)`, `renderImpactedArea(geometry)`, `renderServiceGainOverlay()`, `clearOverlay()`, `switchScenario(idx)`, `duplicateScenario()`, `renameScenario()`, `deleteScenario()`, `exportFindingsCSV()`, `exportImpactedGeoJSON()`, `exportSessionJSON()`, `exportComparisonCSV()`, `importSessionJSON(file)`.
+
+**Module-local state**: `_policy` (current policy profile), `_scenarios` (array of scenario objects), `_activeScenarioIdx`, `_baseline` (system-wide demographics), `_results` (scenarioId → analysis result), `_cachedDemographics` (for instant threshold re-evaluation), `_cachedImpactedGeom`, `_baselineFeatureFilter`, `_stale`, `_running`, `_initialized`, `_activeTab`. Session persistence via `App.cache.registerModule("title-vi", ...)` at schema **v2** (v1 backward-compat migration adds empty `alterations[]` and maps `selected_routes` impact method to `full_route_buffer`).
+
 ## Analysis Module System
 
 Analysis modules are optional domain-specific analyses that plug into the core. Each module registers itself at load time and appears as a button in the "Analysis" sidebar panel. Multiple modules can be registered simultaneously. Clicking a module button opens its popup window.
@@ -378,10 +427,11 @@ The sidebar is an empty `<div id="sidebar">` populated at runtime by `App.sideba
 |  [Transit Propensity Index] |  Button: opens TPI popup (2-column layout)
 |  [FTA Small Starts]         |  Button: opens FTA popup (2-tab layout)
 |  [Ridership Forecasting]    |  Button: opens RF popup (4-tab layout)
+|  [Title VI Service Equity]  |  Button: opens TVI popup (3-tab layout)
 +-----------------------------+
 ```
 
-Clicking an analysis module button opens a popup window over the map. The Buffer-Area Summary popup contains geography/year settings and a results table. The TPI popup has a 2-column layout (Settings | Results) with an Adjust Weights modal overlay. The FTA Small Starts popup has a 2-tab layout (Ratings | Data Inputs). The Ridership Forecasting popup has a 4-tab layout (Calibrate | Demand | Elasticity | Scenarios). Each active choropleth shows a floating legend widget at bottom-left of the map.
+Clicking an analysis module button opens a popup window over the map. The Buffer-Area Summary popup contains geography/year settings and a results table. The TPI popup has a 2-column layout (Settings | Results) with an Adjust Weights modal overlay. The FTA Small Starts popup has a 2-tab layout (Ratings | Data Inputs). The Ridership Forecasting popup has a 4-tab layout (Calibrate | Demand | Elasticity | Scenarios). The Title VI Service Equity popup has a 3-tab layout (Policies & Inputs | Analysis | Scenarios). Each active choropleth shows a floating legend widget at bottom-left of the map.
 
 ### Feature Panel (right)
 
