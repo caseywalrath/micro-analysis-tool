@@ -44,7 +44,7 @@
       source: "hl-buffer",
       paint: {
         "line-color": ["coalesce", ["get", "hl_color"], "#2b6cb0"],
-        "line-width": 4,
+        "line-width": 3,
         "line-opacity": 0.9
       }
     });
@@ -57,7 +57,7 @@
       filter: ["==", ["geometry-type"], "Polygon"],
       paint: {
         "fill-color": ["coalesce", ["get", "hl_color"], "#38a169"],
-        "fill-opacity": 0.35
+        "fill-opacity": 0.25
       }
     });
 
@@ -69,7 +69,7 @@
       filter: ["==", ["geometry-type"], "Polygon"],
       paint: {
         "line-color": ["coalesce", ["get", "hl_color"], "#38a169"],
-        "line-width": 5,
+        "line-width": 4,
         "line-opacity": 1.0
       }
     });
@@ -82,7 +82,7 @@
       filter: ["==", ["geometry-type"], "LineString"],
       paint: {
         "line-color": ["coalesce", ["get", "hl_color"], "#e53e3e"],
-        "line-width": 6,
+        "line-width": 4.5,
         "line-opacity": 1.0
       }
     });
@@ -94,10 +94,10 @@
       source: "hl-feature",
       filter: ["==", ["geometry-type"], "Point"],
       paint: {
-        "circle-radius": 10,
+        "circle-radius": 8,
         "circle-color": ["coalesce", ["get", "hl_color"], "#2b6cb0"],
         "circle-opacity": 0.9,
-        "circle-stroke-width": 3,
+        "circle-stroke-width": 2,
         "circle-stroke-color": "#ffffff"
       }
     });
