@@ -214,20 +214,31 @@
   function selectFeature(type, index) {
     _selected = { type: type, index: index };
     _hovered  = null;
+    App._selected = _selected; // mirror for editing.js station-drag gate
     updateHighlightSources();
     applyPanelHighlight();
+    // Show vertex handles for non-station features (editing.js guard prevents double-init)
+    if (type !== "station" && typeof App.activateVertexEdit === "function") {
+      App.activateVertexEdit(type, index);
+    }
   }
 
   function clearSelection() {
     if (!_selected && !_hovered) return;
     _selected = null;
     _hovered  = null;
+    App._selected = null;
     updateHighlightSources();
     applyPanelHighlight();
+    // Hide vertex handles (editing.js guard is a no-op if already null)
+    if (typeof App.deactivateVertexEdit === "function") {
+      App.deactivateVertexEdit();
+    }
   }
 
   // ---- Expose ----
 
+  App._selected           = null; // kept in sync with _selected for external reads
   App.initHighlightLayers = initHighlightLayers;
   App.setHoveredFeature   = setHoveredFeature;
   App.clearHover          = clearHover;

@@ -1968,3 +1968,34 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Libe
   background: #fff !important;
   border-color: #ccc !important;
 }
+
+/* Vertex right-click context menu */
+#vertex-ctx-menu {
+  position: fixed;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  padding: 4px 0;
+  z-index: 10000;
+  min-width: 160px;
+  display: none;
+}
+#vertex-ctx-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 14px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  color: #c53030;
+}
+#vertex-ctx-menu button:hover:not(:disabled) {
+  background: #fff5f5;
+}
+#vertex-ctx-menu button:disabled {
+  color: #aaa;
+  cursor: default;
+}

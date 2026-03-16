@@ -491,6 +491,49 @@
     App.setStatus("Route updated");
   }
 
+  /* ---- Insert a new waypoint into an existing route ---- */
+
+  async function insertRouteWaypoint(routeIdx, insertIdx, lng, lat) {
+    if (routeIdx < 0 || routeIdx >= routes.length) return;
+    var route = routes[routeIdx];
+    route.properties.waypoints.splice(insertIdx, 0, [lng, lat]);
+
+    if (route.properties.waypoints.length >= 2) {
+      App.setStatus("Re-routing\u2026");
+      var coords = await fetchRoute(route.properties.waypoints);
+      route.geometry.coordinates = coords || route.properties.waypoints.slice();
+    } else {
+      route.geometry.coordinates = route.properties.waypoints.slice();
+    }
+
+    rebuildRouteBuffers(routeBufferRadiusMiles);
+    renderRouteLayers();
+    if (typeof App.showEditVertices === "function") App.showEditVertices("route", routeIdx);
+    if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+    if (typeof App.cache !== "undefined") App.cache.save();
+    App.setStatus("Route updated");
+  }
+
+  /* ---- Re-route an existing route with its current waypoints ---- */
+
+  async function rerouteFeature(routeIdx) {
+    if (routeIdx < 0 || routeIdx >= routes.length) return;
+    var route = routes[routeIdx];
+    var waypoints = route.properties.waypoints;
+
+    if (waypoints.length >= 2) {
+      App.setStatus("Re-routing\u2026");
+      var coords = await fetchRoute(waypoints);
+      route.geometry.coordinates = coords || waypoints.slice();
+    } else {
+      route.geometry.coordinates = waypoints.slice();
+    }
+
+    rebuildRouteBuffers(routeBufferRadiusMiles);
+    renderRouteLayers();
+    App.setStatus("Route updated");
+  }
+
   /* ---- Expose on App namespace ---- */
 
   App.routes = routes;
@@ -505,4 +548,6 @@
   App.cancelRouteDrawing = cancelRouteDrawing;
   App.renderRouteLayers = renderRouteLayers;
   App.updateRouteWaypoint = updateRouteWaypoint;
+  App.insertRouteWaypoint = insertRouteWaypoint;
+  App.rerouteFeature = rerouteFeature;
 })();

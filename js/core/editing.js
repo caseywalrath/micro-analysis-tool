@@ -2,10 +2,11 @@
 // Feature editing: station click-drag, line/polygon/route vertex editing.
 // Depends on: App.map, App.stations, App.lines, App.polygons, App.routes,
 //             App.moveStation, App.updateLineVertex, App.updatePolygonVertex,
-//             App.updateRouteWaypoint,
+//             App.updateRouteWaypoint, App.insertRouteWaypoint, App.rerouteFeature,
 //             App.renderStationLayers, App.renderLineLayers, App.renderPolygonLayers,
 //             App.renderRouteLayers, App.refreshFeaturePanel.
-// Exports: App._editing, App.exitEditMode, App._initEditing
+// Exports: App._editing, App.exitEditMode, App._initEditing,
+//          App.activateVertexEdit, App.deactivateVertexEdit, App.showEditVertices
 
 (function () {
   var App = window.App = window.App || {};
@@ -22,6 +23,9 @@
   var EDIT_COLOR = "#f6ad55"; // orange highlight
   var EDIT_SRC = "edit-vertices";
   var EDIT_LAYER = "edit-vertices-layer";
+
+  // Context menu element (singleton)
+  var _ctxMenu = null;
 
   // ---- Edit vertex layer management ----
 
@@ -163,22 +167,180 @@
 
   // ---- Edit mode transitions ----
 
-  function enterVertexEditMode(featureType, featureIndex) {
-    editState = { type: "vertex-edit", featureType: featureType, featureIndex: featureIndex };
+  // activateVertexEdit: sets editState + shows handles WITHOUT calling selectFeature.
+  // Called internally and exposed on App for selection.js to call.
+  App.activateVertexEdit = function (type, index) {
+    if (editState && editState.type === "vertex-edit" &&
+        editState.featureType === type && editState.featureIndex === index) return; // already active
+    editState = { type: "vertex-edit", featureType: type, featureIndex: index };
     App._editing = editState;
-    showEditVertices(featureType, featureIndex);
+    showEditVertices(type, index);
     App.map.getCanvas().style.cursor = "pointer";
-    if (typeof App.selectFeature === "function") App.selectFeature(featureType, featureIndex);
-  }
+    // Does NOT call selectFeature — caller is responsible
+  };
 
-  function exitEditMode() {
+  // deactivateVertexEdit: clears editState + hides handles WITHOUT calling clearSelection.
+  App.deactivateVertexEdit = function () {
+    if (!editState) return;
     editState = null;
     App._editing = null;
     hideEditVertices();
-    if (!App.drawMode) {
-      App.map.getCanvas().style.cursor = "grab";
-    }
+    if (!App.drawMode) App.map.getCanvas().style.cursor = "grab";
+    // Does NOT call clearSelection — caller is responsible
+  };
+
+  function enterVertexEditMode(featureType, featureIndex) {
+    App.activateVertexEdit(featureType, featureIndex);
+    if (typeof App.selectFeature === "function") App.selectFeature(featureType, featureIndex);
+    // selectFeature calls activateVertexEdit again, but the guard makes it a no-op
+  }
+
+  function exitEditMode() {
+    App.deactivateVertexEdit();
     if (typeof App.clearSelection === "function") App.clearSelection();
+    // clearSelection calls deactivateVertexEdit again, but the guard makes it a no-op
+  }
+
+  // ---- Insert vertex ----
+
+  function insertVertex(featureType, featureIndex, lngLat) {
+    var lng = lngLat.lng, lat = lngLat.lat;
+    var clickPt = turf.point([lng, lat]);
+
+    if (featureType === "line") {
+      var line = App.lines[featureIndex];
+      if (!line) return;
+      var nearest = turf.nearestPointOnLine(line, clickPt);
+      var idx = nearest.properties.index + 1;
+      line.geometry.coordinates.splice(idx, 0, [lng, lat]);
+      var r = parseFloat(document.getElementById("lineBufferRadius").value) || 0.5;
+      App.rebuildLineBuffers(r);
+      App.renderLineLayers();
+      showEditVertices("line", featureIndex);
+      App.cache.save();
+
+    } else if (featureType === "route") {
+      var route = App.routes[featureIndex];
+      if (!route) return;
+      var wps = route.properties.waypoints;
+      var wpLine = turf.lineString(wps.length >= 2 ? wps : wps.concat(wps));
+      var nearest2 = turf.nearestPointOnLine(wpLine, clickPt);
+      var idx2 = nearest2.properties.index + 1;
+      // insertRouteWaypoint handles async OSRM re-route, re-render, and cache save
+      if (typeof App.insertRouteWaypoint === "function") {
+        App.insertRouteWaypoint(featureIndex, idx2, lng, lat);
+      }
+
+    } else if (featureType === "polygon") {
+      var poly = App.polygons[featureIndex];
+      if (!poly) return;
+      var ring = poly.geometry.coordinates[0];
+      // Build a closed line from the ring (including closing vertex) for nearest-point
+      var ringLine = turf.lineString(ring.slice());
+      var nearest3 = turf.nearestPointOnLine(ringLine, clickPt);
+      var idx3 = nearest3.properties.index + 1;
+      // idx3 can equal ring.length-1 (inserting before closing vertex — that's correct)
+      ring.splice(idx3, 0, [lng, lat]);
+      App.renderPolygonLayers();
+      showEditVertices("polygon", featureIndex);
+      App.cache.save();
+    }
+  }
+
+  // ---- Context menu for vertex deletion ----
+
+  function canDeleteVertex(featureType, featureIndex, vertexIdx) {
+    if (featureType === "line") {
+      var line = App.lines[featureIndex];
+      return line && line.geometry.coordinates.length > 2;
+    } else if (featureType === "route") {
+      var route = App.routes[featureIndex];
+      return route && route.properties.waypoints.length > 2;
+    } else if (featureType === "polygon") {
+      var poly = App.polygons[featureIndex];
+      return poly && poly.geometry.coordinates[0].length > 4; // > 3 unique vertices
+    }
+    return false;
+  }
+
+  function deleteVertex(featureType, featureIndex, vertexIdx) {
+    if (featureType === "line") {
+      var line = App.lines[featureIndex];
+      if (!line || line.geometry.coordinates.length <= 2) {
+        App.setStatus("Cannot delete: line needs at least 2 points");
+        return;
+      }
+      line.geometry.coordinates.splice(vertexIdx, 1);
+      var r = parseFloat(document.getElementById("lineBufferRadius").value) || 0.5;
+      App.rebuildLineBuffers(r);
+      App.renderLineLayers();
+      showEditVertices("line", featureIndex);
+      App.cache.save();
+
+    } else if (featureType === "route") {
+      var route = App.routes[featureIndex];
+      if (!route || route.properties.waypoints.length <= 2) {
+        App.setStatus("Cannot delete: route needs at least 2 waypoints");
+        return;
+      }
+      route.properties.waypoints.splice(vertexIdx, 1);
+      // Re-route with updated waypoints
+      if (typeof App.rerouteFeature === "function") {
+        var _fi = featureIndex;
+        App.rerouteFeature(_fi).then(function () {
+          showEditVertices("route", _fi);
+          if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+          App.cache.save();
+        });
+      }
+
+    } else if (featureType === "polygon") {
+      var poly = App.polygons[featureIndex];
+      if (!poly) return;
+      var ring = poly.geometry.coordinates[0];
+      if (ring.length <= 4) {
+        App.setStatus("Cannot delete: polygon needs at least 3 vertices");
+        return;
+      }
+      ring.splice(vertexIdx, 1);
+      // Re-sync closing vertex (ring[last] must equal ring[0])
+      ring[ring.length - 1] = ring[0].slice();
+      App.renderPolygonLayers();
+      showEditVertices("polygon", featureIndex);
+      App.cache.save();
+    }
+  }
+
+  function hideVertexCtxMenu() {
+    if (_ctxMenu) _ctxMenu.style.display = "none";
+  }
+
+  function showVertexCtxMenu(x, y, featureType, featureIndex, vertexIdx) {
+    if (!_ctxMenu) {
+      _ctxMenu = document.createElement("div");
+      _ctxMenu.id = "vertex-ctx-menu";
+      document.body.appendChild(_ctxMenu);
+    }
+
+    var canDel = canDeleteVertex(featureType, featureIndex, vertexIdx);
+    _ctxMenu.innerHTML = "<button id=\"vertex-ctx-delete\"" +
+      (canDel ? "" : " disabled") + ">" +
+      (canDel ? "Delete node" : "Delete node (minimum reached)") +
+      "</button>";
+
+    _ctxMenu.style.display = "block";
+    _ctxMenu.style.left = x + "px";
+    _ctxMenu.style.top  = y + "px";
+
+    document.getElementById("vertex-ctx-delete").addEventListener("click", function () {
+      hideVertexCtxMenu();
+      if (canDel) deleteVertex(featureType, featureIndex, vertexIdx);
+    });
+
+    // Close menu on any next click outside
+    setTimeout(function () {
+      document.addEventListener("click", hideVertexCtxMenu, { capture: true, once: true });
+    }, 0);
   }
 
   // ---- Safe queryRenderedFeatures helper ----
@@ -211,13 +373,36 @@
           map.getCanvas().style.cursor = "move";
           return;
         }
+        // Check if cursor is over the currently-edited feature → show insert cursor
+        var editFeatLayers = ["lines-layer", "routes-layer", "polygons-fill", "polygons-outlines"];
+        var editFeatHits = safeQuery(e.point, editFeatLayers);
+        if (editFeatHits.length > 0) {
+          var ef = editFeatHits[0];
+          var efLid = ef.layer.id;
+          var efIdx = -1;
+          if (efLid === "lines-layer" && editState.featureType === "line") efIdx = findLineIndex(ef);
+          else if (efLid === "routes-layer" && editState.featureType === "route") efIdx = findRouteIndex(ef);
+          else if ((efLid === "polygons-fill" || efLid === "polygons-outlines") && editState.featureType === "polygon") efIdx = findPolygonIndex(ef);
+          if (efIdx === editState.featureIndex) {
+            // Polygon: crosshair only on outline (edge), not fill interior
+            if (editState.featureType === "polygon" && efLid === "polygons-fill") {
+              map.getCanvas().style.cursor = "default";
+            } else {
+              map.getCanvas().style.cursor = "crosshair"; // indicates click-to-insert
+            }
+            return;
+          }
+        }
+        map.getCanvas().style.cursor = "default";
+        return;
       }
 
-      // Check stations
+      // Check stations — show "move" only if already selected, otherwise "pointer"
       var stationHits = safeQuery(e.point, ["stations-layer"]);
       if (stationHits.length > 0) {
-        map.getCanvas().style.cursor = "move";
         var sIdx = findStationIndex(stationHits[0]);
+        var isSelStation = App._selected && App._selected.type === "station" && App._selected.index === sIdx;
+        map.getCanvas().style.cursor = isSelStation ? "move" : "pointer";
         if (sIdx >= 0 && typeof App.setHoveredFeature === "function") App.setHoveredFeature("station", sIdx);
         return;
       }
@@ -263,13 +448,7 @@
 
       // No feature under cursor — clear hover
       if (typeof App.clearHover === "function") App.clearHover();
-
-      // Default: grab (unless in edit mode, show pointer for context)
-      if (editState && editState.type === "vertex-edit") {
-        map.getCanvas().style.cursor = "default";
-      } else {
-        map.getCanvas().style.cursor = "grab";
-      }
+      map.getCanvas().style.cursor = "grab";
     });
 
     // ---- Mousedown: start station drag or vertex drag ----
@@ -295,11 +474,12 @@
         }
       }
 
-      // Check for station drag
+      // Check for station drag — only allowed when station is already selected
       var stationHits = safeQuery(e.point, ["stations-layer"]);
       if (stationHits.length > 0) {
         var stationIdx = findStationIndex(stationHits[0]);
-        if (stationIdx >= 0) {
+        if (stationIdx >= 0 &&
+            App._selected && App._selected.type === "station" && App._selected.index === stationIdx) {
           e.preventDefault();
           editState = { type: "station-drag", index: stationIdx };
           App._editing = editState;
@@ -425,7 +605,7 @@
         editState = null;
         App._editing = null;
         map.dragPan.enable();
-        map.getCanvas().style.cursor = "grab";
+        map.getCanvas().style.cursor = "move"; // still hovering over the (now-moved) station
         if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
         if (typeof App.cache !== "undefined") App.cache.save();
         return;
@@ -463,40 +643,65 @@
       }
     });
 
-    // ---- Click: enter/exit vertex edit mode for lines/polygons ----
+    // ---- Click: enter/exit vertex edit mode, or insert vertex ----
     map.on("click", function (e) {
       if (App.drawMode) return;
 
-      // If in vertex-edit mode, check if click is on empty area (exit)
+      // If in vertex-edit mode
       if (editState && editState.type === "vertex-edit") {
-        // Check if click is on an edit handle (handled by mousedown, not here)
+        // Handle click on edit handles is done by mousedown; skip here
         var editHits = safeQuery(e.point, [EDIT_LAYER]);
         if (editHits.length > 0) return;
 
-        // Check if click is on the same or another editable feature
-        var featureHits = safeQuery(e.point, ["lines-layer", "routes-layer", "polygons-fill"]);
+        // Check if click is on a line/route/polygon (same or different feature)
+        var featureHits = safeQuery(e.point, ["lines-layer", "routes-layer", "polygons-fill", "polygons-outlines"]);
         if (featureHits.length > 0) {
           var hit = featureHits[0];
           var layerId = hit.layer.id;
+
           if (layerId === "lines-layer") {
             var lineIdx = findLineIndex(hit);
             if (lineIdx >= 0) {
-              exitEditMode();
-              enterVertexEditMode("line", lineIdx);
+              if (lineIdx === editState.featureIndex && editState.featureType === "line") {
+                insertVertex("line", lineIdx, e.lngLat);
+              } else {
+                exitEditMode();
+                enterVertexEditMode("line", lineIdx);
+              }
               return;
             }
           } else if (layerId === "routes-layer") {
             var routeIdx = findRouteIndex(hit);
             if (routeIdx >= 0) {
-              exitEditMode();
-              enterVertexEditMode("route", routeIdx);
+              if (routeIdx === editState.featureIndex && editState.featureType === "route") {
+                insertVertex("route", routeIdx, e.lngLat);
+              } else {
+                exitEditMode();
+                enterVertexEditMode("route", routeIdx);
+              }
+              return;
+            }
+          } else if (layerId === "polygons-outlines") {
+            // Click on polygon outline → insert vertex
+            var polyIdxOut = findPolygonIndex(hit);
+            if (polyIdxOut >= 0) {
+              if (polyIdxOut === editState.featureIndex && editState.featureType === "polygon") {
+                insertVertex("polygon", polyIdxOut, e.lngLat);
+              } else {
+                exitEditMode();
+                enterVertexEditMode("polygon", polyIdxOut);
+              }
               return;
             }
           } else if (layerId === "polygons-fill") {
-            var polyIdx = findPolygonIndex(hit);
-            if (polyIdx >= 0) {
-              exitEditMode();
-              enterVertexEditMode("polygon", polyIdx);
+            var polyIdxFill = findPolygonIndex(hit);
+            if (polyIdxFill >= 0) {
+              if (polyIdxFill !== editState.featureIndex || editState.featureType !== "polygon") {
+                // Different polygon → switch
+                exitEditMode();
+                enterVertexEditMode("polygon", polyIdxFill);
+              }
+              // Same polygon interior → no-op (already in edit mode)
               return;
             }
           }
@@ -507,8 +712,7 @@
         return;
       }
 
-      // Not in edit mode: check for click on lines, routes, or polygons to enter edit mode
-      // (Stations are drag-only for editing, but clicking them locks the selection)
+      // Not in edit mode: station click → select; line/route/polygon click → enter vertex edit mode
       var stationHits = safeQuery(e.point, ["stations-layer"]);
       if (stationHits.length > 0) {
         var sIdx = findStationIndex(stationHits[0]);
@@ -545,20 +749,30 @@
       var layerId2 = hit2.layer.id;
       if (layerId2 === "lines-layer") {
         var lineIdx2 = findLineIndex(hit2);
-        if (lineIdx2 >= 0) {
-          enterVertexEditMode("line", lineIdx2);
-        }
+        if (lineIdx2 >= 0) enterVertexEditMode("line", lineIdx2);
       } else if (layerId2 === "routes-layer") {
         var routeIdx2 = findRouteIndex(hit2);
-        if (routeIdx2 >= 0) {
-          enterVertexEditMode("route", routeIdx2);
-        }
+        if (routeIdx2 >= 0) enterVertexEditMode("route", routeIdx2);
       } else if (layerId2 === "polygons-fill") {
         var polyIdx2 = findPolygonIndex(hit2);
-        if (polyIdx2 >= 0) {
-          enterVertexEditMode("polygon", polyIdx2);
-        }
+        if (polyIdx2 >= 0) enterVertexEditMode("polygon", polyIdx2);
       }
+    });
+
+    // ---- Right-click: context menu for vertex deletion ----
+    map.on("contextmenu", function (e) {
+      if (!editState || editState.type !== "vertex-edit") return;
+      var editHits = safeQuery(e.point, [EDIT_LAYER]);
+      if (editHits.length === 0) return;
+      e.preventDefault();
+      var vIdx = editHits[0].properties.vertexIdx;
+      showVertexCtxMenu(
+        e.originalEvent.clientX,
+        e.originalEvent.clientY,
+        editState.featureType,
+        editState.featureIndex,
+        vIdx
+      );
     });
   }
 
@@ -567,4 +781,5 @@
   App._editing = null;
   App.exitEditMode = exitEditMode;
   App._initEditing = init;
+  App.showEditVertices = showEditVertices; // exposed for routes.js async callbacks
 })();
