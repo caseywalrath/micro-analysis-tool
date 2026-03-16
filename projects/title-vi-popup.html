@@ -43,6 +43,12 @@
           <label for="tviRuleElimination">Route elimination</label>
         </div>
         <div class="tvi-rule-row">
+          <input type="checkbox" id="tviRuleEliminatedMiles">
+          <label for="tviRuleEliminatedMiles">Eliminated / altered miles &ge;</label>
+          <input id="tviThreshEliminatedMiles" type="number" min="1" max="100" value="25" class="tvi-threshold-input">
+          <span class="tiny">%</span>
+        </div>
+        <div class="tvi-rule-row">
           <input type="checkbox" id="tviRuleFare">
           <label for="tviRuleFare">Fare change &ge;</label>
           <input id="tviThreshFare" type="number" min="1" max="100" value="10" class="tvi-threshold-input">

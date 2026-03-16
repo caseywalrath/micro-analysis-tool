@@ -64,8 +64,10 @@
     _policy.majorChange.revenueHoursPct.threshold = parseFloat(document.getElementById("tviThreshRevHours").value) || 25;
     _policy.majorChange.spanHoursPct.enabled     = !!document.getElementById("tviRuleSpan").checked;
     _policy.majorChange.spanHoursPct.threshold   = parseFloat(document.getElementById("tviThreshSpan").value) || 25;
-    _policy.majorChange.routeElimination.enabled = !!document.getElementById("tviRuleElimination").checked;
-    _policy.majorChange.fareChangePct.enabled    = !!document.getElementById("tviRuleFare").checked;
+    _policy.majorChange.routeElimination.enabled    = !!document.getElementById("tviRuleElimination").checked;
+    _policy.majorChange.eliminatedMilesPct.enabled  = !!document.getElementById("tviRuleEliminatedMiles").checked;
+    _policy.majorChange.eliminatedMilesPct.threshold = parseFloat(document.getElementById("tviThreshEliminatedMiles").value) || 25;
+    _policy.majorChange.fareChangePct.enabled       = !!document.getElementById("tviRuleFare").checked;
     _policy.majorChange.fareChangePct.threshold  = parseFloat(document.getElementById("tviThreshFare").value) || 10;
 
     _policy.disparateImpactThresholdPpt       = parseFloat(document.getElementById("tviDiThreshold").value) || 15;
@@ -84,8 +86,10 @@
     document.getElementById("tviThreshRevHours").value      = _policy.majorChange.revenueHoursPct.threshold;
     document.getElementById("tviRuleSpan").checked          = _policy.majorChange.spanHoursPct.enabled;
     document.getElementById("tviThreshSpan").value          = _policy.majorChange.spanHoursPct.threshold;
-    document.getElementById("tviRuleElimination").checked   = _policy.majorChange.routeElimination.enabled;
-    document.getElementById("tviRuleFare").checked          = _policy.majorChange.fareChangePct.enabled;
+    document.getElementById("tviRuleElimination").checked      = _policy.majorChange.routeElimination.enabled;
+    document.getElementById("tviRuleEliminatedMiles").checked  = _policy.majorChange.eliminatedMilesPct.enabled;
+    document.getElementById("tviThreshEliminatedMiles").value  = _policy.majorChange.eliminatedMilesPct.threshold;
+    document.getElementById("tviRuleFare").checked             = _policy.majorChange.fareChangePct.enabled;
     document.getElementById("tviThreshFare").value          = _policy.majorChange.fareChangePct.threshold;
 
     document.getElementById("tviDiThreshold").value = _policy.disparateImpactThresholdPpt;
@@ -381,8 +385,11 @@
       milesCfg.enabled && Number.isFinite(c.routeMilesPct) && Math.abs(c.routeMilesPct) >= milesCfg.threshold);
 
     var elimCfg = mc.routeElimination || {};
-    setMscFlag(card, "tvi-cm-flag-elim",
-      elimCfg.enabled && alt.changeType === "elimination");
+    var elimMilesCfg = mc.eliminatedMilesPct || {};
+    var elimFlagTriggered =
+      (elimCfg.enabled && alt.changeType === "elimination") ||
+      (elimMilesCfg.enabled && Number.isFinite(c.alteredPct) && Math.abs(c.alteredPct) >= elimMilesCfg.threshold);
+    setMscFlag(card, "tvi-cm-flag-elim", elimFlagTriggered);
 
     var revhrsCfg = mc.revenueHoursPct || {};
     setMscFlag(card, "tvi-cm-flag-revhrs",
@@ -488,7 +495,7 @@
         '<div><span class="tvi-metric-label">Before miles:</span> <span class="tvi-metric-value tvi-cm-before-mi">\u2014</span></div>' +
         '<div><span class="tvi-metric-label">After miles:</span> <span class="tvi-metric-value tvi-cm-after-mi">\u2014</span></div>' +
         '<div><span class="tvi-metric-label">Miles change:</span> <span class="tvi-metric-value tvi-cm-miles-pct">\u2014</span><span class="tvi-msc-flag tvi-cm-flag-miles"></span></div>' +
-        '<div><span class="tvi-metric-label">Altered:</span> <span class="tvi-metric-value tvi-cm-altered">\u2014</span><span class="tvi-msc-flag tvi-cm-flag-elim"></span></div>' +
+        '<div><span class="tvi-metric-label">Eliminated:</span> <span class="tvi-metric-value tvi-cm-altered">\u2014</span><span class="tvi-msc-flag tvi-cm-flag-elim"></span></div>' +
         '<div><span class="tvi-metric-label"><span class="tvi-loss-swatch"></span>Service loss:</span> <span class="tvi-metric-value tvi-cm-loss">\u2014</span></div>' +
         '<div><span class="tvi-metric-label"><span class="tvi-gain-swatch"></span>Service gain:</span> <span class="tvi-metric-value tvi-cm-gain">\u2014</span></div>' +
         '<div><span class="tvi-metric-label">Rev hours change:</span> <span class="tvi-metric-value tvi-cm-revhrs-pct">\u2014</span><span class="tvi-msc-flag tvi-cm-flag-revhrs"></span></div>' +
@@ -1091,11 +1098,12 @@
     var scenario = getActiveScenario();
     if (!scenario) return;
     var mc = _policy.majorChange || {};
-    var milesCfg   = mc.routeMilesPct    || {};
-    var revhrsCfg  = mc.revenueHoursPct  || {};
-    var spanCfg    = mc.spanHoursPct     || {};
-    var elimCfg    = mc.routeElimination || {};
-    var fareCfg    = mc.fareChangePct    || {};
+    var milesCfg      = mc.routeMilesPct     || {};
+    var revhrsCfg     = mc.revenueHoursPct   || {};
+    var spanCfg       = mc.spanHoursPct      || {};
+    var elimCfg       = mc.routeElimination  || {};
+    var elimMilesCfg  = mc.eliminatedMilesPct || {};
+    var fareCfg       = mc.fareChangePct     || {};
 
     function mscVal(enabled, value, threshold) {
       if (!enabled) return "";
@@ -1114,6 +1122,7 @@
       "rev_hours_before", "rev_hours_after", "rev_hours_change_pct", "rev_hours_msc",
       "span_before", "span_after", "span_change_pct", "span_msc",
       "eliminated", "elimination_msc",
+      "eliminated_miles_pct", "eliminated_miles_msc",
       "fare_before", "fare_after", "fare_change_pct", "fare_msc",
       "overall_msc"
     ].join(","));
@@ -1133,6 +1142,7 @@
         mscVal(revhrsCfg.enabled, c.revenueHoursPct, revhrsCfg.threshold) === "Y" ||
         mscVal(spanCfg.enabled, c.spanHoursPct, spanCfg.threshold) === "Y" ||
         mscBool(elimCfg.enabled, isElim) === "Y" ||
+        mscVal(elimMilesCfg.enabled, c.alteredPct, elimMilesCfg.threshold) === "Y" ||
         mscVal(fareCfg.enabled, c.farePct, fareCfg.threshold) === "Y"
       ) ? "Y" : "N";
 
@@ -1149,6 +1159,8 @@
         mscVal(spanCfg.enabled, c.spanHoursPct, spanCfg.threshold),
         isElim ? "Y" : "N",
         mscBool(elimCfg.enabled, isElim),
+        numOrEmpty(c.alteredPct),
+        mscVal(elimMilesCfg.enabled, c.alteredPct, elimMilesCfg.threshold),
         numOrEmpty(fa.before), numOrEmpty(fa.after),
         numOrEmpty(c.farePct),
         mscVal(fareCfg.enabled, c.farePct, fareCfg.threshold),

@@ -21,8 +21,9 @@
         routeMilesPct:   { enabled: true,  threshold: 25 },
         revenueHoursPct: { enabled: true,  threshold: 25 },
         spanHoursPct:    { enabled: false, threshold: 25 },
-        routeElimination:{ enabled: true },
-        fareChangePct:   { enabled: false, threshold: 10 }
+        routeElimination:  { enabled: true },
+        eliminatedMilesPct:{ enabled: false, threshold: 25 },
+        fareChangePct:     { enabled: false, threshold: 10 }
       },
       disparateImpactThresholdPpt: 15,
       disproportionateBurdenThresholdPpt: 15,
@@ -343,8 +344,9 @@
     routeMilesPct:   { label: "Route miles changed",    metric: "routeMilesPct",   absCompare: true },
     revenueHoursPct: { label: "Revenue hours changed",  metric: "revenueHoursPct", absCompare: true },
     spanHoursPct:    { label: "Span of service changed", metric: "spanHoursPct",   absCompare: true },
-    routeElimination:{ label: "Route eliminated",        metric: "isElimination",  isBoolean: true },
-    fareChangePct:   { label: "Fare changed",            metric: "farePct",        absCompare: true }
+    routeElimination:  { label: "Route eliminated",              metric: "isElimination", isBoolean: true },
+    eliminatedMilesPct:{ label: "Eliminated / altered miles", metric: "alteredPct",    absCompare: true },
+    fareChangePct:     { label: "Fare changed",                metric: "farePct",       absCompare: true }
   };
 
   TitleVI.evaluateMajorChange = function (policy, scenario) {
