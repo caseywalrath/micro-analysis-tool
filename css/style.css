@@ -198,6 +198,7 @@ button { cursor: pointer; }
   transition: opacity 0.15s;
   flex-shrink: 0;
   line-height: 1;
+  margin-left: auto;
 }
 .fp-item:hover .fp-delete { opacity: 1; }
 .fp-delete:hover { color: #e53e3e; }
@@ -208,7 +209,7 @@ button { cursor: pointer; }
   font-size: 13px;
   font-family: inherit;
   width: 100%;
-  max-width: calc(100% - 155px);
+  max-width: calc(100% - 80px);
   box-sizing: border-box;
   border-radius: 4px;
 }
