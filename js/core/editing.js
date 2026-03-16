@@ -454,6 +454,7 @@
     // ---- Mousedown: start station drag or vertex drag ----
     map.on("mousedown", function (e) {
       if (App.drawMode) return;
+      if (e.originalEvent && e.originalEvent.button === 2) return; // right-click handled by contextmenu
 
       // Check for vertex handle drag first
       if (editState && editState.type === "vertex-edit") {
