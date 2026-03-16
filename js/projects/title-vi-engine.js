@@ -259,7 +259,7 @@
       }
 
       if (beforeFeature && afterFeature) {
-        var divThresh = divergenceThresholdMiles || (bufferMiles ? bufferMiles / 2 : 0.25);
+        var divThresh = divergenceThresholdMiles || 0.1;
         var divergence = TitleVI.computeDivergence(beforeFeature, afterFeature, divThresh);
         if (divergence) {
           computed.alteredPct = divergence.alteredPct;
