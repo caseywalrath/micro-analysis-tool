@@ -176,6 +176,15 @@ button { cursor: pointer; }
   display: flex;
   align-items: center;
   padding: 1px 0;
+  border-radius: 4px;
+  transition: background 0.1s;
+}
+.fp-item.fp-hovered {
+  background: #ebf5ff;
+}
+.fp-item.fp-selected {
+  background: #dbeafe;
+  outline: 1px solid #93c5fd;
 }
 .fp-delete {
   width: auto;

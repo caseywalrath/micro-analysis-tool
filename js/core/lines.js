@@ -23,7 +23,7 @@
     if (radiusMiles > 0) {
       for (var i = 0; i < lines.length; i++) {
         var buf = turf.buffer(lines[i], radiusMiles, { units: "miles", steps: 64 });
-        lineBuffers.push(buf);
+        lineBuffers.push({ type: buf.type, geometry: buf.geometry, properties: { lineIdx: lines[i].properties.lineIdx } });
       }
     }
     renderLineLayers();

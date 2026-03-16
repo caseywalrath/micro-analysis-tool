@@ -58,7 +58,7 @@
     if (radiusMiles > 0) {
       for (var i = 0; i < routes.length; i++) {
         var buf = turf.buffer(routes[i], radiusMiles, { units: "miles", steps: 64 });
-        routeBuffers.push(buf);
+        routeBuffers.push({ type: buf.type, geometry: buf.geometry, properties: { routeIdx: routes[i].properties.routeIdx } });
       }
     }
     renderRouteLayers();

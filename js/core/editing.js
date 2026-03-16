@@ -138,6 +138,29 @@
     return -1;
   }
 
+  // ---- Index lookup by property value (for buffer hits) ----
+
+  function findStationIndexByProp(stationIdx) {
+    for (var i = 0; i < App.stations.length; i++) {
+      if (App.stations[i].properties.stationIdx == stationIdx) return i;
+    }
+    return -1;
+  }
+
+  function findLineIndexByProp(lineIdx) {
+    for (var i = 0; i < App.lines.length; i++) {
+      if (App.lines[i].properties.lineIdx == lineIdx) return i;
+    }
+    return -1;
+  }
+
+  function findRouteIndexByProp(routeIdx) {
+    for (var i = 0; i < App.routes.length; i++) {
+      if (App.routes[i].properties.routeIdx == routeIdx) return i;
+    }
+    return -1;
+  }
+
   // ---- Edit mode transitions ----
 
   function enterVertexEditMode(featureType, featureIndex) {
@@ -145,6 +168,7 @@
     App._editing = editState;
     showEditVertices(featureType, featureIndex);
     App.map.getCanvas().style.cursor = "pointer";
+    if (typeof App.selectFeature === "function") App.selectFeature(featureType, featureIndex);
   }
 
   function exitEditMode() {
@@ -154,6 +178,7 @@
     if (!App.drawMode) {
       App.map.getCanvas().style.cursor = "grab";
     }
+    if (typeof App.clearSelection === "function") App.clearSelection();
   }
 
   // ---- Safe queryRenderedFeatures helper ----
@@ -192,6 +217,8 @@
       var stationHits = safeQuery(e.point, ["stations-layer"]);
       if (stationHits.length > 0) {
         map.getCanvas().style.cursor = "move";
+        var sIdx = findStationIndex(stationHits[0]);
+        if (sIdx >= 0 && typeof App.setHoveredFeature === "function") App.setHoveredFeature("station", sIdx);
         return;
       }
 
@@ -199,8 +226,43 @@
       var featureHits = safeQuery(e.point, ["lines-layer", "routes-layer", "polygons-fill"]);
       if (featureHits.length > 0) {
         map.getCanvas().style.cursor = "pointer";
+        var hit = featureHits[0];
+        var lid = hit.layer.id;
+        if (lid === "lines-layer") {
+          var lIdx = findLineIndex(hit);
+          if (lIdx >= 0 && typeof App.setHoveredFeature === "function") App.setHoveredFeature("line", lIdx);
+        } else if (lid === "routes-layer") {
+          var rIdx = findRouteIndex(hit);
+          if (rIdx >= 0 && typeof App.setHoveredFeature === "function") App.setHoveredFeature("route", rIdx);
+        } else if (lid === "polygons-fill") {
+          var pIdx = findPolygonIndex(hit);
+          if (pIdx >= 0 && typeof App.setHoveredFeature === "function") App.setHoveredFeature("polygon", pIdx);
+        }
         return;
       }
+
+      // Check buffer areas (station / line / route buffers)
+      var bufferHits = safeQuery(e.point, ["buffers-fill", "line-buffers-fill", "route-buffers-fill"]);
+      if (bufferHits.length > 0) {
+        map.getCanvas().style.cursor = "pointer";
+        var bHit = bufferHits[0];
+        var bLid = bHit.layer.id;
+        var bProps = bHit.properties || {};
+        if (bLid === "buffers-fill" && bProps.stationIdx != null) {
+          var bsIdx = findStationIndexByProp(bProps.stationIdx);
+          if (bsIdx >= 0 && typeof App.setHoveredFeature === "function") App.setHoveredFeature("station", bsIdx);
+        } else if (bLid === "line-buffers-fill" && bProps.lineIdx != null) {
+          var blIdx = findLineIndexByProp(bProps.lineIdx);
+          if (blIdx >= 0 && typeof App.setHoveredFeature === "function") App.setHoveredFeature("line", blIdx);
+        } else if (bLid === "route-buffers-fill" && bProps.routeIdx != null) {
+          var brIdx = findRouteIndexByProp(bProps.routeIdx);
+          if (brIdx >= 0 && typeof App.setHoveredFeature === "function") App.setHoveredFeature("route", brIdx);
+        }
+        return;
+      }
+
+      // No feature under cursor — clear hover
+      if (typeof App.clearHover === "function") App.clearHover();
 
       // Default: grab (unless in edit mode, show pointer for context)
       if (editState && editState.type === "vertex-edit") {
@@ -446,12 +508,38 @@
       }
 
       // Not in edit mode: check for click on lines, routes, or polygons to enter edit mode
-      // (Skip if click was on a station — stations are drag-only)
+      // (Stations are drag-only for editing, but clicking them locks the selection)
       var stationHits = safeQuery(e.point, ["stations-layer"]);
-      if (stationHits.length > 0) return;
+      if (stationHits.length > 0) {
+        var sIdx = findStationIndex(stationHits[0]);
+        if (sIdx >= 0 && typeof App.selectFeature === "function") App.selectFeature("station", sIdx);
+        return;
+      }
 
       var linePolyHits = safeQuery(e.point, ["lines-layer", "routes-layer", "polygons-fill"]);
-      if (linePolyHits.length === 0) return;
+      if (linePolyHits.length === 0) {
+        // Check buffer areas — clicking a buffer locks the associated feature
+        var bufHits = safeQuery(e.point, ["buffers-fill", "line-buffers-fill", "route-buffers-fill"]);
+        if (bufHits.length > 0) {
+          var bh = bufHits[0];
+          var bhLid = bh.layer.id;
+          var bhProps = bh.properties || {};
+          if (bhLid === "buffers-fill" && bhProps.stationIdx != null) {
+            var bsi = findStationIndexByProp(bhProps.stationIdx);
+            if (bsi >= 0 && typeof App.selectFeature === "function") App.selectFeature("station", bsi);
+          } else if (bhLid === "line-buffers-fill" && bhProps.lineIdx != null) {
+            var bli = findLineIndexByProp(bhProps.lineIdx);
+            if (bli >= 0 && typeof App.selectFeature === "function") App.selectFeature("line", bli);
+          } else if (bhLid === "route-buffers-fill" && bhProps.routeIdx != null) {
+            var bri = findRouteIndexByProp(bhProps.routeIdx);
+            if (bri >= 0 && typeof App.selectFeature === "function") App.selectFeature("route", bri);
+          }
+          return;
+        }
+        // Click on truly empty area — clear selection
+        if (typeof App.clearSelection === "function") App.clearSelection();
+        return;
+      }
 
       var hit2 = linePolyHits[0];
       var layerId2 = hit2.layer.id;

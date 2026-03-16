@@ -186,6 +186,7 @@
 
   App.onFeatureDelete = function () {
     if (typeof App.exitEditMode === "function") App.exitEditMode();
+    if (typeof App.clearSelection === "function") App.clearSelection();
     notifyProject();
     if (typeof App.cache !== "undefined") App.cache.save();
   };
@@ -201,6 +202,9 @@
 
     // Initialize feature editing (station drag, vertex editing)
     if (typeof App._initEditing === "function") App._initEditing();
+
+    // Initialize hover/selection highlight layers
+    if (typeof App.initHighlightLayers === "function") App.initHighlightLayers();
 
     // ---- Register sidebar panels, render, then wire events ----
     App.sidebar.addPanel({
@@ -264,6 +268,9 @@
         if (typeof App.setLinePreview === "function") App.setLinePreview(null);
         if (typeof App.setRoutePreview === "function") App.setRoutePreview(null);
         if (typeof App.setPolygonPreview === "function") App.setPolygonPreview(null);
+
+        // Clear feature selection when entering a draw mode
+        if (App.drawMode && typeof App.clearSelection === "function") App.clearSelection();
 
         // Update cursor for draw mode
         if (App.drawMode) {
