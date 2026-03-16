@@ -263,7 +263,7 @@
   function addAlteration() {
     var scenario = getActiveScenario();
     if (!scenario) return;
-    var alt = TV.createAlteration("Alteration " + (scenario.alterations.length + 1));
+    var alt = TV.createAlteration("Adjustment " + (scenario.alterations.length + 1));
     scenario.alterations.push(alt);
     renderAlterationCards();
     markStale();
@@ -397,20 +397,20 @@
     nameInput.type = "text";
     nameInput.className = "tvi-alt-name";
     nameInput.value = alt.name || "";
-    nameInput.placeholder = "Alteration name";
+    nameInput.placeholder = "Adjustment name";
 
     var typeSelect = document.createElement("select");
     typeSelect.className = "tvi-alt-type";
     typeSelect.innerHTML =
-      '<option value="alteration">Alteration</option>' +
+      '<option value="adjustment">Adjustment</option>' +
       '<option value="elimination">Elimination</option>' +
       '<option value="new_route">New Route</option>';
-    typeSelect.value = alt.changeType || "alteration";
+    typeSelect.value = alt.changeType || "adjustment";
 
     var delBtn = document.createElement("button");
     delBtn.className = "tvi-alt-delete";
     delBtn.textContent = "\u00D7";
-    delBtn.title = "Remove alteration";
+    delBtn.title = "Remove adjustment";
 
     header.appendChild(nameInput);
     header.appendChild(typeSelect);
@@ -446,7 +446,6 @@
     computedSection.className = "tvi-computed-section";
     computedSection.style.display = alt.computed ? "block" : "none";
     computedSection.innerHTML =
-      '<div class="tiny" style="font-weight:600;margin-bottom:4px;">Auto-computed</div>' +
       '<div class="tvi-computed-grid">' +
         '<div><span class="tvi-metric-label">Before miles:</span> <span class="tvi-metric-value tvi-cm-before-mi">\u2014</span></div>' +
         '<div><span class="tvi-metric-label">After miles:</span> <span class="tvi-metric-value tvi-cm-after-mi">\u2014</span></div>' +
@@ -464,7 +463,7 @@
     var manualSection = document.createElement("div");
     manualSection.className = "tvi-manual-section";
     manualSection.innerHTML =
-      '<div class="tiny" style="font-weight:600;margin-bottom:4px;">Manual inputs (optional)</div>' +
+      '<div class="tiny" style="font-weight:600;margin-bottom:4px;">Service Characteristics</div>' +
       buildManualRow("Rev hours:", "tvi-man-revhrs", alt.manual && alt.manual.revenueHours) +
       buildManualRow("Span (hrs):", "tvi-man-span", alt.manual && alt.manual.spanHours) +
       buildManualRow("Fare:", "tvi-man-fare", alt.manual && alt.manual.fare);

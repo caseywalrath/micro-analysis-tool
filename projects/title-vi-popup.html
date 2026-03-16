@@ -83,21 +83,21 @@
         </select>
       </div>
 
-      <!-- Right: Route Alterations & Impact Method -->
+      <!-- Right: Service Adjustments & Impact Method -->
       <div class="rf-results-col">
 
-        <div class="rf-section-title">Route Alterations</div>
+        <div class="rf-section-title">Service Adjustments</div>
         <div class="tiny" style="color:var(--muted);margin-bottom:8px;">
           Draw the existing and proposed route alignments on the map, then pair them here. The module auto-computes route miles, % altered, and service coverage changes.
         </div>
 
-        <button id="tviAddAlteration" type="button" class="rf-btn-sm" style="margin-bottom:10px;">+ Add Alteration</button>
+        <button id="tviAddAlteration" type="button" class="rf-btn-sm" style="margin-bottom:10px;">+ Service Adjustment</button>
 
         <!-- Alteration cards container -->
         <div id="tviAlterationsContainer"></div>
 
         <div id="tviAlterationsEmpty" class="tiny" style="color:var(--muted);padding:10px 0;">
-          No alterations defined. Click "+ Add Alteration" to pair existing and proposed routes.
+          No adjustments defined. Click "+ Service Adjustment" to pair existing and proposed routes.
         </div>
 
         <div style="border-top:1px solid var(--border);margin:14px 0;"></div>
@@ -125,7 +125,7 @@
 
         <div class="rf-section-title">System Baseline</div>
         <div class="tiny" style="color:var(--muted);margin-bottom:8px;">
-          Compute minority and low-income shares across the entire system (all drawn features' buffer union) as the comparison benchmark.
+          Calculate minority and low-income shares across the entire system (all drawn features' buffer union) as the comparison benchmark.
         </div>
 
         <div class="tiny" style="margin-bottom:4px;">
@@ -135,7 +135,7 @@
         <div id="tviBaselineFeatureList" class="tvi-feature-list"></div>
 
         <button id="tviComputeBaseline" type="button" class="rf-action-primary" style="margin-top:12px;">
-          Compute Baseline
+          Calculate Baseline
         </button>
 
         <div id="tviBaselineBox" class="tvi-baseline-box" style="display:none;margin-top:12px;">
@@ -148,7 +148,7 @@
 
         <div class="rf-section-title">Equity Analysis</div>
         <div class="tiny" style="color:var(--muted);margin-bottom:8px;">
-          Evaluate Major Service Change rules and compute demographic impacts for the active scenario's impacted area.
+          Evaluate Major Service Change rules and calculate demographic impacts for the active scenario's impacted area.
         </div>
 
         <button id="tviRunAnalysis" type="button" class="rf-action-primary" style="margin-top:8px;">
