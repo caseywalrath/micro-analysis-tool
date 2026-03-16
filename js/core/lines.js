@@ -23,7 +23,7 @@
     if (radiusMiles > 0) {
       for (var i = 0; i < lines.length; i++) {
         var buf = turf.buffer(lines[i], radiusMiles, { units: "miles", steps: 64 });
-        lineBuffers.push({ type: buf.type, geometry: buf.geometry, properties: { lineIdx: lines[i].properties.lineIdx } });
+        lineBuffers.push({ type: buf.type, geometry: buf.geometry, properties: { lineIdx: lines[i].properties.lineIdx, color: lines[i].properties.color } });
       }
     }
     renderLineLayers();
@@ -81,7 +81,7 @@
       line.geometry.coordinates.forEach(function (c, i) {
         features.push({
           type: "Feature",
-          properties: { lineIdx: line.properties.lineIdx, waypointIdx: i + 1 },
+          properties: { lineIdx: line.properties.lineIdx, waypointIdx: i + 1, color: line.properties.color },
           geometry: { type: "Point", coordinates: c }
         });
       });
@@ -117,13 +117,13 @@
         id: "line-buffers-fill",
         type: "fill",
         source: "line-buffers",
-        paint: { "fill-color": "#2b6cb0", "fill-opacity": 0.2 }
+        paint: { "fill-color": ["coalesce", ["get", "color"], "#e53e3e"], "fill-opacity": 0.08 }
       });
       map.addLayer({
         id: "line-buffers-line",
         type: "line",
         source: "line-buffers",
-        paint: { "line-color": "#2b6cb0", "line-width": 2, "line-opacity": 0.6 }
+        paint: { "line-color": ["coalesce", ["get", "color"], "#e53e3e"], "line-width": 2, "line-opacity": 0.4 }
       });
     } else {
       map.getSource("line-buffers").setData(lineBuffersGeoJSON());
@@ -136,7 +136,7 @@
         id: "lines-layer",
         type: "line",
         source: "lines",
-        paint: { "line-color": "#e53e3e", "line-width": 3, "line-opacity": 0.8 }
+        paint: { "line-color": ["coalesce", ["get", "color"], "#e53e3e"], "line-width": 3, "line-opacity": 0.8 }
       });
     } else {
       map.getSource("lines").setData(linesGeoJSON());
@@ -151,7 +151,7 @@
         source: "lines-vertices",
         paint: {
           "circle-radius": 3,
-          "circle-color": "#e53e3e",
+          "circle-color": ["coalesce", ["get", "color"], "#e53e3e"],
           "circle-stroke-width": 1,
           "circle-stroke-color": "#ffffff"
         }
@@ -242,9 +242,12 @@
 
     var idx = lines.length + 1;
     var nWaypoints = currentCoords.length;
+    var colorIdx = lines.length + (App.routes ? App.routes.length : 0);
+    var color = (App.sectionColors && App.sectionColors.line) ||
+                App.FEATURE_COLORS[colorIdx % App.FEATURE_COLORS.length];
     lines.push({
       type: "Feature",
-      properties: { name: "Line " + idx, lineIdx: idx, waypoints: nWaypoints },
+      properties: { name: "Line " + idx, lineIdx: idx, waypoints: nWaypoints, color: color },
       geometry: { type: "LineString", coordinates: currentCoords.slice() }
     });
 

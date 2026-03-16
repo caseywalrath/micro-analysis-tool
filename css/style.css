@@ -127,6 +127,8 @@ button { cursor: pointer; }
 
 .fp-section { margin-bottom: 6px; }
 .fp-section-header {
+  display: flex;
+  align-items: center;
   font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
@@ -1885,3 +1887,80 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Libe
 .tvi-manual-row .tvi-arrow { color: var(--muted); margin: 0 2px; }
 .tvi-loss-swatch { display: inline-block; width: 10px; height: 10px; background: rgba(229,62,62,0.4); border: 1px solid #e53e3e; margin-right: 4px; vertical-align: middle; }
 .tvi-gain-swatch { display: inline-block; width: 10px; height: 10px; background: rgba(56,161,105,0.4); border: 1px solid #38a169; margin-right: 4px; vertical-align: middle; }
+
+/* ---- Feature panel color swatches ---- */
+.fp-swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  border: 1px solid rgba(0,0,0,0.28);
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+  display: inline-block;
+}
+.fp-swatch:hover {
+  border-color: rgba(0,0,0,0.55);
+}
+.fp-item-swatch {
+  margin-right: 6px;
+}
+.fp-section-swatch {
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+/* ---- Color picker popover ---- */
+#fp-color-picker {
+  position: fixed;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+  padding: 10px;
+  width: 192px;
+  z-index: 9999;
+}
+.fp-cp-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.fp-cp-cell {
+  width: 22px;
+  height: 22px;
+  border-radius: 3px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+}
+.fp-cp-cell:hover {
+  border-color: #333;
+}
+.fp-cp-hex-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.fp-cp-hex-input {
+  flex: 1;
+  font-size: 12px;
+  padding: 3px 4px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  font-family: monospace;
+  min-width: 0;
+}
+.fp-cp-apply {
+  font-size: 12px;
+  padding: 3px 8px;
+  cursor: pointer;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  background: #f7f7f7;
+  flex-shrink: 0;
+}
+.fp-cp-apply:hover {
+  background: #e8e8e8;
+}

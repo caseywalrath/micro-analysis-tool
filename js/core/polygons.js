@@ -42,7 +42,7 @@
       for (var i = 0; i < ring.length - 1; i++) {
         features.push({
           type: "Feature",
-          properties: { polyIdx: poly.properties.polyIdx, vertexIdx: i + 1 },
+          properties: { polyIdx: poly.properties.polyIdx, vertexIdx: i + 1, color: poly.properties.color },
           geometry: { type: "Point", coordinates: ring[i] }
         });
       }
@@ -104,7 +104,7 @@
         id: "polygons-fill",
         type: "fill",
         source: "polygons",
-        paint: { "fill-color": COLOR, "fill-opacity": 0.15 }
+        paint: { "fill-color": ["coalesce", ["get", "color"], COLOR], "fill-opacity": 0.15 }
       });
     } else {
       map.getSource("polygons").setData(polygonsGeoJSON());
@@ -117,7 +117,7 @@
         id: "polygons-outlines-layer",
         type: "line",
         source: "polygons-outlines",
-        paint: { "line-color": COLOR, "line-width": 3, "line-opacity": 0.8 }
+        paint: { "line-color": ["coalesce", ["get", "color"], COLOR], "line-width": 3, "line-opacity": 0.8 }
       });
     } else {
       map.getSource("polygons-outlines").setData(polygonOutlinesGeoJSON());
@@ -132,7 +132,7 @@
         source: "polygons-vertices",
         paint: {
           "circle-radius": 3,
-          "circle-color": COLOR,
+          "circle-color": ["coalesce", ["get", "color"], COLOR],
           "circle-stroke-width": 1,
           "circle-stroke-color": "#ffffff"
         }
@@ -148,7 +148,7 @@
         id: "polygons-drawing-layer",
         type: "line",
         source: "polygons-drawing",
-        paint: { "line-color": COLOR, "line-width": 2, "line-opacity": 0.6, "line-dasharray": [3, 2] }
+        paint: { "line-color": COLOR, "line-width": 2, "line-opacity": 0.5, "line-dasharray": [3, 2] }
       });
     } else {
       map.getSource("polygons-drawing").setData(currentDrawingGeoJSON());
@@ -227,9 +227,10 @@
     var ring = currentCoords.slice();
     ring.push(ring[0]); // close the ring
 
+    var polyColor = (App.sectionColors && App.sectionColors.polygon) || App.POLYGON_DEFAULT_COLOR || "#b0c4de";
     polygons.push({
       type: "Feature",
-      properties: { name: "Polygon " + idx, polyIdx: idx, vertices: nVertices },
+      properties: { name: "Polygon " + idx, polyIdx: idx, vertices: nVertices, color: polyColor },
       geometry: { type: "Polygon", coordinates: [ring] }
     });
 

@@ -20,6 +20,7 @@
 
   function renderStationLayers() {
     var map = App.map;
+    var stationColor = (App.sectionColors && App.sectionColors.station) || "#2b6cb0";
     var ptsSrc = "stations";
     var ptsLayer = "stations-layer";
     var bufSrc = "buffers";
@@ -32,16 +33,18 @@
         id: bufFillLayer,
         type: "fill",
         source: bufSrc,
-        paint: { "fill-color": "#2b6cb0", "fill-opacity": 0.2 }
+        paint: { "fill-color": stationColor, "fill-opacity": 0.08 }
       });
       map.addLayer({
         id: bufLineLayer,
         type: "line",
         source: bufSrc,
-        paint: { "line-color": "#2b6cb0", "line-width": 2, "line-opacity": 0.6 }
+        paint: { "line-color": stationColor, "line-width": 2, "line-opacity": 0.4 }
       });
     } else {
       map.getSource(bufSrc).setData(buffersGeoJSON());
+      map.setPaintProperty(bufFillLayer, "fill-color", stationColor);
+      map.setPaintProperty(bufLineLayer, "line-color", stationColor);
     }
 
     if (!map.getSource(ptsSrc)) {
@@ -53,12 +56,13 @@
         paint: {
           "circle-radius": 6,
           "circle-stroke-width": 2,
-          "circle-color": "#2b6cb0",
+          "circle-color": stationColor,
           "circle-stroke-color": "#ffffff"
         }
       });
     } else {
       map.getSource(ptsSrc).setData(pointsGeoJSON());
+      map.setPaintProperty(ptsLayer, "circle-color", stationColor);
     }
 
     updateCoordsPanel();

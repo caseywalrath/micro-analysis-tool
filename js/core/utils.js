@@ -10,6 +10,19 @@
   // --- Census API key (removes ~500 req/day rate limit) ---
   App.CENSUS_API_KEY = "84dd46873ff2d6d2d41d42c6e9cebfa41214fd14";
 
+  // Sequential color palette for new lines + routes (shared sequence, 18 distinct colors)
+  App.FEATURE_COLORS = [
+    "#e53e3e","#319795","#d69e2e","#805ad5","#3182ce","#38a169",
+    "#dd6b20","#d53f8c","#00b5d8","#b7791f","#276749","#c53030",
+    "#553c9a","#2c7a7b","#744210","#22543d","#2b6cb0","#97266d"
+  ];
+
+  // Default color for new polygons (powder blue)
+  App.POLYGON_DEFAULT_COLOR = "#b0c4de";
+
+  // Per-section color overrides (null = use sequential or built-in default)
+  App.sectionColors = { station: null, line: null, route: null, polygon: null };
+
   // --- Status ---
 
   function setStatus(s) { var el = document.getElementById("status"); if (el) el.textContent = s; }

@@ -58,7 +58,7 @@
     if (radiusMiles > 0) {
       for (var i = 0; i < routes.length; i++) {
         var buf = turf.buffer(routes[i], radiusMiles, { units: "miles", steps: 64 });
-        routeBuffers.push({ type: buf.type, geometry: buf.geometry, properties: { routeIdx: routes[i].properties.routeIdx } });
+        routeBuffers.push({ type: buf.type, geometry: buf.geometry, properties: { routeIdx: routes[i].properties.routeIdx, color: routes[i].properties.color } });
       }
     }
     renderRouteLayers();
@@ -139,7 +139,7 @@
       (route.properties.waypoints || []).forEach(function (wp, i) {
         features.push({
           type: "Feature",
-          properties: { routeIdx: route.properties.routeIdx, waypointIdx: i + 1 },
+          properties: { routeIdx: route.properties.routeIdx, waypointIdx: i + 1, color: route.properties.color },
           geometry: { type: "Point", coordinates: wp }
         });
       });
@@ -159,13 +159,13 @@
         id: "route-buffers-fill",
         type: "fill",
         source: "route-buffers",
-        paint: { "fill-color": "#319795", "fill-opacity": 0.2 }
+        paint: { "fill-color": ["coalesce", ["get", "color"], "#319795"], "fill-opacity": 0.08 }
       });
       map.addLayer({
         id: "route-buffers-line",
         type: "line",
         source: "route-buffers",
-        paint: { "line-color": "#319795", "line-width": 2, "line-opacity": 0.6 }
+        paint: { "line-color": ["coalesce", ["get", "color"], "#319795"], "line-width": 2, "line-opacity": 0.4 }
       });
     } else {
       map.getSource("route-buffers").setData(routeBuffersGeoJSON());
@@ -178,7 +178,7 @@
         id: "routes-layer",
         type: "line",
         source: "routes",
-        paint: { "line-color": ROUTE_COLOR, "line-width": 3, "line-opacity": 0.8 }
+        paint: { "line-color": ["coalesce", ["get", "color"], ROUTE_COLOR], "line-width": 3, "line-opacity": 0.8 }
       });
     } else {
       map.getSource("routes").setData(routesGeoJSON());
@@ -193,7 +193,7 @@
         source: "routes-waypoints-saved",
         paint: {
           "circle-radius": 3,
-          "circle-color": ROUTE_COLOR,
+          "circle-color": ["coalesce", ["get", "color"], ROUTE_COLOR],
           "circle-stroke-width": 1,
           "circle-stroke-color": "#ffffff"
         }
@@ -389,12 +389,16 @@
     }
 
     var idx = routes.length + 1;
+    var colorIdx = (App.lines ? App.lines.length : 0) + routes.length;
+    var color = (App.sectionColors && App.sectionColors.route) ||
+                App.FEATURE_COLORS[colorIdx % App.FEATURE_COLORS.length];
     routes.push({
       type: "Feature",
       properties: {
         name: "Route " + idx,
         routeIdx: idx,
-        waypoints: currentWaypoints.slice()
+        waypoints: currentWaypoints.slice(),
+        color: color
       },
       geometry: { type: "LineString", coordinates: coords }
     });
