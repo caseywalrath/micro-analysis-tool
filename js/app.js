@@ -187,6 +187,7 @@
   App.onFeatureDelete = function () {
     if (typeof App.exitEditMode === "function") App.exitEditMode();
     if (typeof App.clearSelection === "function") App.clearSelection();
+    if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
     notifyProject();
     if (typeof App.cache !== "undefined") App.cache.save();
   };
@@ -394,10 +395,12 @@
     // Clear stations
     document.getElementById("clear").addEventListener("click", function () {
       if (!confirm("Clear all features? This cannot be undone.")) return;
+      if (typeof App.exitEditMode === "function") App.exitEditMode();
       App.clearStations();
       App.clearLines();
       App.clearRoutes();
       App.clearPolygons();
+      if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
       if (typeof App.clearCensusOverlay === "function") App.clearCensusOverlay();
       document.getElementById("nGeos").textContent = "0";
       document.getElementById("summaryStatus").style.display = "none";

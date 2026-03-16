@@ -233,10 +233,12 @@
     }
 
     // 2. Clear all features
+    if (typeof App.exitEditMode === "function") App.exitEditMode();
     App.clearStations();
     App.clearLines();
     App.clearRoutes();
     App.clearPolygons();
+    if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
 
     // 3. Reset buffer radii to defaults
     var bufRadEl = document.getElementById("bufferRadius");
