@@ -655,7 +655,7 @@
         if (editHits.length > 0) return;
 
         // Check if click is on a line/route/polygon (same or different feature)
-        var featureHits = safeQuery(e.point, ["lines-layer", "routes-layer", "polygons-fill", "polygons-outlines"]);
+        var featureHits = safeQuery(e.point, ["lines-layer", "routes-layer", "polygons-fill", "polygons-outlines-layer"]);
         if (featureHits.length > 0) {
           var hit = featureHits[0];
           var layerId = hit.layer.id;
@@ -682,7 +682,7 @@
               }
               return;
             }
-          } else if (layerId === "polygons-outlines") {
+          } else if (layerId === "polygons-outlines-layer") {
             // Click on polygon outline → insert vertex
             var polyIdxOut = findPolygonIndex(hit);
             if (polyIdxOut >= 0) {
