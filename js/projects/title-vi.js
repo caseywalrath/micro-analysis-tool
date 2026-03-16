@@ -311,7 +311,7 @@
 
     // Compute metrics if sufficient features selected
     var canCompute = false;
-    if (alt.changeType === "alteration" && alt.before && alt.after) canCompute = true;
+    if (alt.changeType === "adjustment" && alt.before && alt.after) canCompute = true;
     if (alt.changeType === "elimination" && alt.before) canCompute = true;
     if (alt.changeType === "new_route" && alt.after) canCompute = true;
 

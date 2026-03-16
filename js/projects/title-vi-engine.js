@@ -52,7 +52,7 @@
   TitleVI.createAlteration = function (name) {
     return {
       name: name || "",
-      changeType: "alteration",
+      changeType: "adjustment",
       before: null,   // { featureType, featureIndex, featureName }
       after: null,
       computed: null,  // filled by computeAlterationMetrics
@@ -220,7 +220,7 @@
     var beforeFeature = resolveFeature(alteration.before);
     var afterFeature  = resolveFeature(alteration.after);
 
-    var changeType = alteration.changeType || "alteration";
+    var changeType = alteration.changeType || "adjustment";
 
     if (changeType === "elimination") {
       // No after — entire route is removed
