@@ -116,9 +116,9 @@
       return;
     }
 
-    var type  = active.type;
-    var index = active.index;
-    var color = TYPE_COLOR[type] || "#2b6cb0";
+    var type    = active.type;
+    var index   = active.index;
+    var color   = null; // resolved after feature lookup below
     var feature = null;
     var buffer  = null;
 
@@ -135,6 +135,11 @@
       feature = App.polygons && App.polygons[index];
       buffer  = null;
     }
+
+    // Derive highlight color: per-feature color > section color > type default
+    color = (feature && feature.properties && feature.properties.color) ||
+            (App.sectionColors && App.sectionColors[type]) ||
+            TYPE_COLOR[type] || "#2b6cb0";
 
     // Feature source — copy geometry, inject hl_color into properties
     if (feature) {
