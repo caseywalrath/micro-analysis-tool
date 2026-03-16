@@ -255,6 +255,7 @@
     previewCoord = null;
     rebuildLineBuffers(lineBufferRadiusMiles);
     App.setStatus("Line " + idx + " saved (" + nWaypoints + " waypoints)");
+    if (typeof App.exitDrawMode === "function") App.exitDrawMode();
   }
 
   function cancelLineDrawing() {

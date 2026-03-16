@@ -285,6 +285,15 @@
       });
     });
 
+    // Exit draw mode (called by save functions after completing a line/route/polygon)
+    App.exitDrawMode = function () {
+      App.drawMode = null;
+      document.querySelectorAll(".tool-btn").forEach(function (b) {
+        b.classList.remove("active");
+      });
+      App.map.getCanvas().style.cursor = "grab";
+    };
+
     // Variable checkbox list: select all / clear all
     document.getElementById("varSelectAll").addEventListener("click", function () {
       var boxes = document.querySelectorAll('#varSelect input[type="checkbox"]');
@@ -301,10 +310,24 @@
       if (typeof App.cache !== "undefined") App.cache.save();
     });
 
-    // Escape key: close analysis popup
+    // Keyboard shortcuts
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape" && App.popup.isOpen()) {
         App.popup.close();
+      }
+      if (e.key === "Delete" || e.key === "Backspace") {
+        var tag = e.target.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || e.target.isContentEditable) return;
+        var ed = App._editing;
+        if (ed && ed.type === "vertex-edit") {
+          var ft = ed.featureType, fi = ed.featureIndex;
+          App.exitEditMode();
+          if (ft === "line")         App.removeLine(fi);
+          else if (ft === "route")   App.removeRoute(fi);
+          else if (ft === "polygon") App.removePolygon(fi);
+          if (typeof App.onFeatureDelete === "function") App.onFeatureDelete();
+          e.preventDefault();
+        }
       }
     });
 

@@ -238,6 +238,7 @@
     previewCoord = null;
     renderPolygonLayers();
     App.setStatus("Polygon " + idx + " saved (" + nVertices + " vertices)");
+    if (typeof App.exitDrawMode === "function") App.exitDrawMode();
   }
 
   function cancelPolygonDrawing() {

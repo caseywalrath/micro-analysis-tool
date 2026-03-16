@@ -409,6 +409,7 @@
     clearPreviewState();
     rebuildRouteBuffers(routeBufferRadiusMiles);
     App.setStatus("Route " + idx + " saved (" + nWp + " waypoints)");
+    if (typeof App.exitDrawMode === "function") App.exitDrawMode();
   }
 
   /* ---- Cancel / remove / clear / undo ---- */
