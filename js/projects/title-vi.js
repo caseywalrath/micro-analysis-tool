@@ -58,9 +58,6 @@
   // ---- Policy read/write from DOM ----
 
   function readPolicyFromDOM() {
-    var nameEl = document.getElementById("tviPolicyName");
-    if (nameEl) _policy.name = nameEl.value;
-
     _policy.majorChange.routeMilesPct.enabled   = !!document.getElementById("tviRuleRouteMiles").checked;
     _policy.majorChange.routeMilesPct.threshold  = parseFloat(document.getElementById("tviThreshRouteMiles").value) || 25;
     _policy.majorChange.revenueHoursPct.enabled  = !!document.getElementById("tviRuleRevHours").checked;
@@ -81,9 +78,6 @@
   }
 
   function writePolicyToDOM() {
-    var nameEl = document.getElementById("tviPolicyName");
-    if (nameEl) nameEl.value = _policy.name;
-
     document.getElementById("tviRuleRouteMiles").checked   = _policy.majorChange.routeMilesPct.enabled;
     document.getElementById("tviThreshRouteMiles").value    = _policy.majorChange.routeMilesPct.threshold;
     document.getElementById("tviRuleRevHours").checked      = _policy.majorChange.revenueHoursPct.enabled;
@@ -280,6 +274,7 @@
   }
 
   function onAlterationChanged(idx) {
+    readPolicyFromDOM();
     var scenario = getActiveScenario();
     if (!scenario || !scenario.alterations[idx]) return;
     var alt = scenario.alterations[idx];
@@ -342,21 +337,64 @@
     };
   }
 
+  function setMscFlag(card, spanClass, triggered) {
+    var el = card.querySelector("." + spanClass);
+    if (!el) return;
+    if (triggered) {
+      el.textContent = "\u26A0";
+      el.title = "Qualifies as a Major Service Change";
+    } else {
+      el.textContent = "";
+      el.title = "";
+    }
+  }
+
   function displayComputedMetrics(card, alt) {
     var section = card.querySelector(".tvi-computed-section");
     if (!section) return;
     section.style.display = "block";
     var c = alt.computed || {};
+    var mc = _policy.majorChange || {};
+
     section.querySelector(".tvi-cm-before-mi").textContent = fmt(c.beforeMiles) + " mi";
     section.querySelector(".tvi-cm-after-mi").textContent = fmt(c.afterMiles) + " mi";
     section.querySelector(".tvi-cm-miles-pct").textContent = c.routeMilesPct !== null ? (c.routeMilesPct >= 0 ? "+" : "") + fmt(c.routeMilesPct) + "%" : "\u2014";
     var alteredStr = c.alteredPct !== null ? fmt(c.alteredPct) + "% (" + fmt(c.alteredMiles) + " mi)" : "\u2014";
     section.querySelector(".tvi-cm-altered").textContent = alteredStr;
+
+    var revhrsEl = section.querySelector(".tvi-cm-revhrs-pct");
+    if (revhrsEl) revhrsEl.textContent = c.revenueHoursPct !== null && Number.isFinite(c.revenueHoursPct) ? (c.revenueHoursPct >= 0 ? "+" : "") + fmt(c.revenueHoursPct) + "%" : "\u2014";
+    var spanEl = section.querySelector(".tvi-cm-span-pct");
+    if (spanEl) spanEl.textContent = c.spanHoursPct !== null && Number.isFinite(c.spanHoursPct) ? (c.spanHoursPct >= 0 ? "+" : "") + fmt(c.spanHoursPct) + "%" : "\u2014";
+    var fareEl = section.querySelector(".tvi-cm-fare-pct");
+    if (fareEl) fareEl.textContent = c.farePct !== null && Number.isFinite(c.farePct) ? (c.farePct >= 0 ? "+" : "") + fmt(c.farePct) + "%" : "\u2014";
+
     // Show loss/gain indicators
     var lossEl = section.querySelector(".tvi-cm-loss");
     var gainEl = section.querySelector(".tvi-cm-gain");
     if (lossEl) lossEl.textContent = c.serviceLossArea ? "Yes" : "None";
     if (gainEl) gainEl.textContent = c.serviceGainArea ? "Yes" : "None";
+
+    // MSC flags
+    var milesCfg = mc.routeMilesPct || {};
+    setMscFlag(card, "tvi-cm-flag-miles",
+      milesCfg.enabled && Number.isFinite(c.routeMilesPct) && Math.abs(c.routeMilesPct) >= milesCfg.threshold);
+
+    var elimCfg = mc.routeElimination || {};
+    setMscFlag(card, "tvi-cm-flag-elim",
+      elimCfg.enabled && alt.changeType === "elimination");
+
+    var revhrsCfg = mc.revenueHoursPct || {};
+    setMscFlag(card, "tvi-cm-flag-revhrs",
+      revhrsCfg.enabled && Number.isFinite(c.revenueHoursPct) && Math.abs(c.revenueHoursPct) >= revhrsCfg.threshold);
+
+    var spanCfg = mc.spanHoursPct || {};
+    setMscFlag(card, "tvi-cm-flag-span",
+      spanCfg.enabled && Number.isFinite(c.spanHoursPct) && Math.abs(c.spanHoursPct) >= spanCfg.threshold);
+
+    var fareCfg = mc.fareChangePct || {};
+    setMscFlag(card, "tvi-cm-flag-fare",
+      fareCfg.enabled && Number.isFinite(c.farePct) && Math.abs(c.farePct) >= fareCfg.threshold);
   }
 
   function clearComputedMetrics(card) {
@@ -449,10 +487,13 @@
       '<div class="tvi-computed-grid">' +
         '<div><span class="tvi-metric-label">Before miles:</span> <span class="tvi-metric-value tvi-cm-before-mi">\u2014</span></div>' +
         '<div><span class="tvi-metric-label">After miles:</span> <span class="tvi-metric-value tvi-cm-after-mi">\u2014</span></div>' +
-        '<div><span class="tvi-metric-label">Miles change:</span> <span class="tvi-metric-value tvi-cm-miles-pct">\u2014</span></div>' +
-        '<div><span class="tvi-metric-label">Altered:</span> <span class="tvi-metric-value tvi-cm-altered">\u2014</span></div>' +
+        '<div><span class="tvi-metric-label">Miles change:</span> <span class="tvi-metric-value tvi-cm-miles-pct">\u2014</span><span class="tvi-msc-flag tvi-cm-flag-miles"></span></div>' +
+        '<div><span class="tvi-metric-label">Altered:</span> <span class="tvi-metric-value tvi-cm-altered">\u2014</span><span class="tvi-msc-flag tvi-cm-flag-elim"></span></div>' +
         '<div><span class="tvi-metric-label"><span class="tvi-loss-swatch"></span>Service loss:</span> <span class="tvi-metric-value tvi-cm-loss">\u2014</span></div>' +
         '<div><span class="tvi-metric-label"><span class="tvi-gain-swatch"></span>Service gain:</span> <span class="tvi-metric-value tvi-cm-gain">\u2014</span></div>' +
+        '<div><span class="tvi-metric-label">Rev hours change:</span> <span class="tvi-metric-value tvi-cm-revhrs-pct">\u2014</span><span class="tvi-msc-flag tvi-cm-flag-revhrs"></span></div>' +
+        '<div><span class="tvi-metric-label">Span change:</span> <span class="tvi-metric-value tvi-cm-span-pct">\u2014</span><span class="tvi-msc-flag tvi-cm-flag-span"></span></div>' +
+        '<div><span class="tvi-metric-label">Fare change:</span> <span class="tvi-metric-value tvi-cm-fare-pct">\u2014</span><span class="tvi-msc-flag tvi-cm-flag-fare"></span></div>' +
       '</div>';
     card.appendChild(computedSection);
 
@@ -1045,6 +1086,80 @@
     return new Date().toISOString().slice(0, 10);
   }
 
+  function exportMSCResultsCSV() {
+    readPolicyFromDOM();
+    var scenario = getActiveScenario();
+    if (!scenario) return;
+    var mc = _policy.majorChange || {};
+    var milesCfg   = mc.routeMilesPct    || {};
+    var revhrsCfg  = mc.revenueHoursPct  || {};
+    var spanCfg    = mc.spanHoursPct     || {};
+    var elimCfg    = mc.routeElimination || {};
+    var fareCfg    = mc.fareChangePct    || {};
+
+    function mscVal(enabled, value, threshold) {
+      if (!enabled) return "";
+      if (!Number.isFinite(value)) return "";
+      return Math.abs(value) >= threshold ? "Y" : "N";
+    }
+    function mscBool(enabled, triggered) {
+      if (!enabled) return "";
+      return triggered ? "Y" : "N";
+    }
+
+    var lines = [];
+    lines.push([
+      "adjustment_name", "change_type",
+      "route_miles_change_pct", "route_miles_msc",
+      "rev_hours_before", "rev_hours_after", "rev_hours_change_pct", "rev_hours_msc",
+      "span_before", "span_after", "span_change_pct", "span_msc",
+      "eliminated", "elimination_msc",
+      "fare_before", "fare_after", "fare_change_pct", "fare_msc",
+      "overall_msc"
+    ].join(","));
+
+    var alts = scenario.alterations || [];
+    for (var i = 0; i < alts.length; i++) {
+      var alt = alts[i];
+      var c = alt.computed || {};
+      var man = alt.manual || {};
+      var rh = man.revenueHours || {};
+      var sh = man.spanHours || {};
+      var fa = man.fare || {};
+      var isElim = alt.changeType === "elimination";
+
+      var overallMsc = (
+        mscVal(milesCfg.enabled, c.routeMilesPct, milesCfg.threshold) === "Y" ||
+        mscVal(revhrsCfg.enabled, c.revenueHoursPct, revhrsCfg.threshold) === "Y" ||
+        mscVal(spanCfg.enabled, c.spanHoursPct, spanCfg.threshold) === "Y" ||
+        mscBool(elimCfg.enabled, isElim) === "Y" ||
+        mscVal(fareCfg.enabled, c.farePct, fareCfg.threshold) === "Y"
+      ) ? "Y" : "N";
+
+      var row = [
+        csvEscape(alt.name || ""),
+        csvEscape(alt.changeType || ""),
+        numOrEmpty(c.routeMilesPct),
+        mscVal(milesCfg.enabled, c.routeMilesPct, milesCfg.threshold),
+        numOrEmpty(rh.before), numOrEmpty(rh.after),
+        numOrEmpty(c.revenueHoursPct),
+        mscVal(revhrsCfg.enabled, c.revenueHoursPct, revhrsCfg.threshold),
+        numOrEmpty(sh.before), numOrEmpty(sh.after),
+        numOrEmpty(c.spanHoursPct),
+        mscVal(spanCfg.enabled, c.spanHoursPct, spanCfg.threshold),
+        isElim ? "Y" : "N",
+        mscBool(elimCfg.enabled, isElim),
+        numOrEmpty(fa.before), numOrEmpty(fa.after),
+        numOrEmpty(c.farePct),
+        mscVal(fareCfg.enabled, c.farePct, fareCfg.threshold),
+        overallMsc
+      ];
+      lines.push(row.join(","));
+    }
+
+    downloadFile(lines.join("\n"), "title-vi-msc-results-" + dateStamp() + ".csv", "text/csv");
+  }
+
   function exportFindingsCSV() {
     var lines = [];
     lines.push("scenario_name,alteration_name,change_type,major_change_triggered," +
@@ -1278,6 +1393,10 @@
     // Add alteration button
     var addAltBtn = document.getElementById("tviAddAlteration");
     if (addAltBtn) addAltBtn.addEventListener("click", addAlteration);
+
+    // MSC export button
+    var mscExpBtn = document.getElementById("tviExportMSCBtn");
+    if (mscExpBtn) mscExpBtn.addEventListener("click", exportMSCResultsCSV);
 
     // Impact method radios (mark stale on change)
     var radios = document.querySelectorAll('input[name="tviImpactMethod"]');

@@ -1887,6 +1887,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Libe
 .tvi-manual-row .tvi-arrow { color: var(--muted); margin: 0 2px; }
 .tvi-loss-swatch { display: inline-block; width: 10px; height: 10px; background: rgba(229,62,62,0.4); border: 1px solid #e53e3e; margin-right: 4px; vertical-align: middle; }
 .tvi-gain-swatch { display: inline-block; width: 10px; height: 10px; background: rgba(56,161,105,0.4); border: 1px solid #38a169; margin-right: 4px; vertical-align: middle; }
+.tvi-msc-flag { color: #c05621; font-size: 13px; margin-left: 4px; cursor: default; }
 
 /* ---- Feature panel color swatches ---- */
 .fp-swatch {
