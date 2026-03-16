@@ -17,14 +17,11 @@
   var _activeScenarioIdx = 0;
   var _baseline          = null;
   var _results           = {};  // scenarioId -> analysis result
-  var _csvHeaders        = [];
-  var _csvRows           = [];
   var _stale             = false;
   var _running           = false;
   var _initialized       = false;
   var _activeTab         = "policies";
   var _baselineFeatureFilter = null;
-  var _impactFeatureFilter   = null;
 
   // Cached demographics per scenario (for instant threshold re-evaluation)
   var _cachedDemographics = {};  // scenarioId -> demographics object
@@ -203,138 +200,302 @@
     for (var i = 0; i < radios.length; i++) {
       if (radios[i].checked) return radios[i].value;
     }
-    return "full_route_buffer";
+    return "service_loss_area";
   }
 
-  function updateImpactMethodUI() {
-    var method = getSelectedImpactMethod();
-    var featureSection = document.getElementById("tviImpactFeatureSection");
-    if (featureSection) {
-      featureSection.style.display = method === "selected_routes" ? "block" : "none";
+  // ---- Route alteration pairing ----
+
+  function fmt(v) {
+    return Number.isFinite(v) ? v.toFixed(1) : "\u2014";
+  }
+
+  function getActiveScenario() {
+    return _scenarios[_activeScenarioIdx] || null;
+  }
+
+  function buildFeatureOptions() {
+    // Build a list of all drawable features (routes + lines) for dropdown
+    var options = [];
+    var routes = App.routes || [];
+    var lines = App.lines || [];
+    for (var ri = 0; ri < routes.length; ri++) {
+      var rname = (routes[ri].properties && routes[ri].properties.name) || ("Route " + (ri + 1));
+      options.push({ featureType: "route", featureIndex: ri, label: rname });
     }
-  }
-
-  // ---- CSV import ----
-
-  function populateColumnSelect(selectId, headers, guess) {
-    var sel = document.getElementById(selectId);
-    if (!sel) return;
-    sel.innerHTML = '<option value="">(none)</option>';
-    for (var i = 0; i < headers.length; i++) {
-      var opt = document.createElement("option");
-      opt.value = headers[i];
-      opt.textContent = headers[i];
-      sel.appendChild(opt);
+    for (var li = 0; li < lines.length; li++) {
+      var lname = (lines[li].properties && lines[li].properties.name) || ("Line " + (li + 1));
+      options.push({ featureType: "line", featureIndex: li, label: lname });
     }
-    sel.disabled = false;
-    if (guess) sel.value = guess;
+    return options;
   }
 
-  function handleCsvUpload(file) {
-    if (!file) return;
-    var reader = new FileReader();
-    reader.onload = function (e) {
-      var text = e.target.result;
-      var parsed = App.parseCSV(text);
-      if (!parsed || parsed.length < 2) {
-        document.getElementById("tviCsvInfo").textContent = "Error: CSV must have at least a header row and one data row.";
-        return;
+  function buildFeatureSelect(selectedRef) {
+    var sel = document.createElement("select");
+    sel.className = "rf-select";
+    sel.style.fontSize = "11px";
+    sel.innerHTML = '<option value="">(select feature)</option>';
+    var opts = buildFeatureOptions();
+    for (var i = 0; i < opts.length; i++) {
+      var o = opts[i];
+      var optEl = document.createElement("option");
+      optEl.value = o.featureType + ":" + o.featureIndex;
+      optEl.textContent = o.label;
+      if (selectedRef && selectedRef.featureType === o.featureType && selectedRef.featureIndex === o.featureIndex) {
+        optEl.selected = true;
       }
-      _csvHeaders = parsed[0];
-      _csvRows = parsed.slice(1);
-
-      var mappingEl = document.getElementById("tviCsvMapping");
-      if (mappingEl) mappingEl.style.display = "block";
-
-      var gh = App.guessHeader.bind(null, _csvHeaders);
-
-      populateColumnSelect("tviColRouteName",    _csvHeaders, gh(["route_name","routename","route","name","route_id","routeid"]));
-      populateColumnSelect("tviColChangeType",   _csvHeaders, gh(["change_type","changetype","type","action"]));
-      populateColumnSelect("tviColBeforeMiles",  _csvHeaders, gh(["before_route_miles","before_miles","existing_miles","before_mi"]));
-      populateColumnSelect("tviColAfterMiles",   _csvHeaders, gh(["after_route_miles","after_miles","proposed_miles","after_mi"]));
-      populateColumnSelect("tviColBeforeRevHrs", _csvHeaders, gh(["before_revenue_hours","before_rev_hours","existing_rev_hours","before_revhrs"]));
-      populateColumnSelect("tviColAfterRevHrs",  _csvHeaders, gh(["after_revenue_hours","after_rev_hours","proposed_rev_hours","after_revhrs"]));
-      populateColumnSelect("tviColBeforeSpan",   _csvHeaders, gh(["before_span_hours","before_span","existing_span"]));
-      populateColumnSelect("tviColAfterSpan",    _csvHeaders, gh(["after_span_hours","after_span","proposed_span"]));
-      populateColumnSelect("tviColBeforeFare",   _csvHeaders, gh(["before_fare","existing_fare","current_fare"]));
-      populateColumnSelect("tviColAfterFare",    _csvHeaders, gh(["after_fare","proposed_fare","new_fare"]));
-
-      document.getElementById("tviCsvInfo").textContent = "Loaded " + _csvRows.length + " rows. Map columns and click Import Routes.";
-    };
-    reader.readAsText(file);
+      sel.appendChild(optEl);
+    }
+    return sel;
   }
 
-  function parseRoutesFromCSV() {
-    if (_csvRows.length === 0) return;
+  function parseFeatureRef(selectEl) {
+    var val = selectEl.value;
+    if (!val) return null;
+    var parts = val.split(":");
+    var featureType = parts[0];
+    var featureIndex = parseInt(parts[1], 10);
+    var arr = featureType === "route" ? (App.routes || []) : (App.lines || []);
+    var feat = arr[featureIndex];
+    var featureName = (feat && feat.properties && feat.properties.name) || (featureType + " " + (featureIndex + 1));
+    return { featureType: featureType, featureIndex: featureIndex, featureName: featureName };
+  }
 
-    function colVal(row, selectId) {
-      var sel = document.getElementById(selectId);
-      if (!sel || !sel.value) return null;
-      var idx = _csvHeaders.indexOf(sel.value);
-      return idx >= 0 ? row[idx] : null;
-    }
-
-    var scenario = _scenarios[_activeScenarioIdx];
-    scenario.affectedRoutes = [];
-
-    for (var i = 0; i < _csvRows.length; i++) {
-      var row = _csvRows[i];
-      var routeName  = colVal(row, "tviColRouteName") || ("Route " + (i + 1));
-      var changeType = (colVal(row, "tviColChangeType") || "reduction").toLowerCase().trim();
-      var route = {
-        routeId: String(i + 1),
-        routeName: routeName,
-        changeType: changeType,
-        before: {
-          routeMiles:   App.toNumberSafe(colVal(row, "tviColBeforeMiles")),
-          revenueHours: App.toNumberSafe(colVal(row, "tviColBeforeRevHrs")),
-          spanHours:    App.toNumberSafe(colVal(row, "tviColBeforeSpan")),
-          fare:         App.toNumberSafe(colVal(row, "tviColBeforeFare"))
-        },
-        after: {
-          routeMiles:   App.toNumberSafe(colVal(row, "tviColAfterMiles")),
-          revenueHours: App.toNumberSafe(colVal(row, "tviColAfterRevHrs")),
-          spanHours:    App.toNumberSafe(colVal(row, "tviColAfterSpan")),
-          fare:         App.toNumberSafe(colVal(row, "tviColAfterFare"))
-        }
-      };
-      scenario.affectedRoutes.push(route);
-    }
-
-    renderRouteTable(scenario.affectedRoutes);
-    document.getElementById("tviCsvInfo").textContent = "Imported " + scenario.affectedRoutes.length + " routes into " + scenario.name + ".";
+  function addAlteration() {
+    var scenario = getActiveScenario();
+    if (!scenario) return;
+    var alt = TV.createAlteration("Alteration " + (scenario.alterations.length + 1));
+    scenario.alterations.push(alt);
+    renderAlterationCards();
     markStale();
     saveState();
   }
 
-  function renderRouteTable(routes) {
-    var tbody = document.getElementById("tviRouteTbody");
-    var wrap = document.getElementById("tviRouteTableWrap");
-    if (!tbody || !wrap) return;
-    tbody.innerHTML = "";
-    if (routes.length === 0) {
-      wrap.style.display = "none";
+  function removeAlteration(idx) {
+    var scenario = getActiveScenario();
+    if (!scenario) return;
+    scenario.alterations.splice(idx, 1);
+    renderAlterationCards();
+    markStale();
+    saveState();
+  }
+
+  function onAlterationChanged(idx) {
+    var scenario = getActiveScenario();
+    if (!scenario || !scenario.alterations[idx]) return;
+    var alt = scenario.alterations[idx];
+    var card = document.querySelector('[data-alteration-idx="' + idx + '"]');
+    if (!card) return;
+
+    // Read change type
+    var typeSelect = card.querySelector(".tvi-alt-type");
+    if (typeSelect) alt.changeType = typeSelect.value;
+
+    // Read feature refs
+    var beforeSelect = card.querySelector(".tvi-alt-before");
+    var afterSelect = card.querySelector(".tvi-alt-after");
+    if (beforeSelect) alt.before = parseFeatureRef(beforeSelect);
+    if (afterSelect) alt.after = parseFeatureRef(afterSelect);
+
+    // Read name
+    var nameInput = card.querySelector(".tvi-alt-name");
+    if (nameInput) alt.name = nameInput.value;
+
+    // Read manual inputs
+    alt.manual = readManualInputs(card);
+
+    // Show/hide before/after rows based on change type
+    var beforeRow = card.querySelector(".tvi-before-row");
+    var afterRow = card.querySelector(".tvi-after-row");
+    if (beforeRow) beforeRow.style.display = alt.changeType === "new_route" ? "none" : "flex";
+    if (afterRow) afterRow.style.display = alt.changeType === "elimination" ? "none" : "flex";
+
+    // Compute metrics if sufficient features selected
+    var canCompute = false;
+    if (alt.changeType === "alteration" && alt.before && alt.after) canCompute = true;
+    if (alt.changeType === "elimination" && alt.before) canCompute = true;
+    if (alt.changeType === "new_route" && alt.after) canCompute = true;
+
+    if (canCompute) {
+      var bufferMiles = _policy.bufferDistanceMiles || 0.5;
+      alt.computed = TV.computeAlterationMetrics(alt, bufferMiles);
+      displayComputedMetrics(card, alt);
+    } else {
+      alt.computed = null;
+      clearComputedMetrics(card);
+    }
+
+    markStale();
+    saveState();
+  }
+
+  function readManualInputs(card) {
+    function numVal(selector) {
+      var el = card.querySelector(selector);
+      if (!el) return null;
+      var v = parseFloat(el.value);
+      return Number.isFinite(v) ? v : null;
+    }
+    return {
+      revenueHours: { before: numVal(".tvi-man-revhrs-before"), after: numVal(".tvi-man-revhrs-after") },
+      spanHours:    { before: numVal(".tvi-man-span-before"),    after: numVal(".tvi-man-span-after") },
+      fare:         { before: numVal(".tvi-man-fare-before"),    after: numVal(".tvi-man-fare-after") }
+    };
+  }
+
+  function displayComputedMetrics(card, alt) {
+    var section = card.querySelector(".tvi-computed-section");
+    if (!section) return;
+    section.style.display = "block";
+    var c = alt.computed || {};
+    section.querySelector(".tvi-cm-before-mi").textContent = fmt(c.beforeMiles) + " mi";
+    section.querySelector(".tvi-cm-after-mi").textContent = fmt(c.afterMiles) + " mi";
+    section.querySelector(".tvi-cm-miles-pct").textContent = c.routeMilesPct !== null ? (c.routeMilesPct >= 0 ? "+" : "") + fmt(c.routeMilesPct) + "%" : "\u2014";
+    var alteredStr = c.alteredPct !== null ? fmt(c.alteredPct) + "% (" + fmt(c.alteredMiles) + " mi)" : "\u2014";
+    section.querySelector(".tvi-cm-altered").textContent = alteredStr;
+    // Show loss/gain indicators
+    var lossEl = section.querySelector(".tvi-cm-loss");
+    var gainEl = section.querySelector(".tvi-cm-gain");
+    if (lossEl) lossEl.textContent = c.serviceLossArea ? "Yes" : "None";
+    if (gainEl) gainEl.textContent = c.serviceGainArea ? "Yes" : "None";
+  }
+
+  function clearComputedMetrics(card) {
+    var section = card.querySelector(".tvi-computed-section");
+    if (section) section.style.display = "none";
+  }
+
+  function renderAlterationCards() {
+    var container = document.getElementById("tviAlterationsContainer");
+    var emptyEl = document.getElementById("tviAlterationsEmpty");
+    if (!container) return;
+    container.innerHTML = "";
+
+    var scenario = getActiveScenario();
+    if (!scenario || scenario.alterations.length === 0) {
+      if (emptyEl) emptyEl.style.display = "block";
       return;
     }
-    wrap.style.display = "block";
-    for (var i = 0; i < routes.length; i++) {
-      var r = routes[i];
-      var b = r.before || {};
-      var a = r.after || {};
-      var tr = document.createElement("tr");
-      tr.innerHTML =
-        "<td>" + (r.routeName || "") + "</td>" +
-        "<td>" + (r.changeType || "") + "</td>" +
-        "<td>" + fmt(b.routeMiles) + " / " + fmt(a.routeMiles) + "</td>" +
-        "<td>" + fmt(b.revenueHours) + " / " + fmt(a.revenueHours) + "</td>" +
-        "<td>" + fmt(b.spanHours) + " / " + fmt(a.spanHours) + "</td>" +
-        "<td>" + fmt(b.fare) + " / " + fmt(a.fare) + "</td>";
-      tbody.appendChild(tr);
+    if (emptyEl) emptyEl.style.display = "none";
+
+    for (var i = 0; i < scenario.alterations.length; i++) {
+      var alt = scenario.alterations[i];
+      var card = buildAlterationCard(i, alt);
+      container.appendChild(card);
     }
   }
 
-  function fmt(v) {
-    return Number.isFinite(v) ? v.toFixed(1) : "\u2014";
+  function buildAlterationCard(idx, alt) {
+    var card = document.createElement("div");
+    card.className = "tvi-alteration-card";
+    card.setAttribute("data-alteration-idx", String(idx));
+
+    // Header: name input + type dropdown + delete button
+    var header = document.createElement("div");
+    header.className = "tvi-alteration-header";
+
+    var nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.className = "tvi-alt-name";
+    nameInput.value = alt.name || "";
+    nameInput.placeholder = "Alteration name";
+
+    var typeSelect = document.createElement("select");
+    typeSelect.className = "tvi-alt-type";
+    typeSelect.innerHTML =
+      '<option value="alteration">Alteration</option>' +
+      '<option value="elimination">Elimination</option>' +
+      '<option value="new_route">New Route</option>';
+    typeSelect.value = alt.changeType || "alteration";
+
+    var delBtn = document.createElement("button");
+    delBtn.className = "tvi-alt-delete";
+    delBtn.textContent = "\u00D7";
+    delBtn.title = "Remove alteration";
+
+    header.appendChild(nameInput);
+    header.appendChild(typeSelect);
+    header.appendChild(delBtn);
+    card.appendChild(header);
+
+    // Before feature row
+    var beforeRow = document.createElement("div");
+    beforeRow.className = "tvi-alt-feature-row tvi-before-row";
+    var beforeLabel = document.createElement("label");
+    beforeLabel.textContent = "Before:";
+    var beforeSel = buildFeatureSelect(alt.before);
+    beforeSel.className += " tvi-alt-before";
+    beforeRow.appendChild(beforeLabel);
+    beforeRow.appendChild(beforeSel);
+    if (alt.changeType === "new_route") beforeRow.style.display = "none";
+    card.appendChild(beforeRow);
+
+    // After feature row
+    var afterRow = document.createElement("div");
+    afterRow.className = "tvi-alt-feature-row tvi-after-row";
+    var afterLabel = document.createElement("label");
+    afterLabel.textContent = "After:";
+    var afterSel = buildFeatureSelect(alt.after);
+    afterSel.className += " tvi-alt-after";
+    afterRow.appendChild(afterLabel);
+    afterRow.appendChild(afterSel);
+    if (alt.changeType === "elimination") afterRow.style.display = "none";
+    card.appendChild(afterRow);
+
+    // Computed metrics section (hidden until computed)
+    var computedSection = document.createElement("div");
+    computedSection.className = "tvi-computed-section";
+    computedSection.style.display = alt.computed ? "block" : "none";
+    computedSection.innerHTML =
+      '<div class="tiny" style="font-weight:600;margin-bottom:4px;">Auto-computed</div>' +
+      '<div class="tvi-computed-grid">' +
+        '<div><span class="tvi-metric-label">Before miles:</span> <span class="tvi-metric-value tvi-cm-before-mi">\u2014</span></div>' +
+        '<div><span class="tvi-metric-label">After miles:</span> <span class="tvi-metric-value tvi-cm-after-mi">\u2014</span></div>' +
+        '<div><span class="tvi-metric-label">Miles change:</span> <span class="tvi-metric-value tvi-cm-miles-pct">\u2014</span></div>' +
+        '<div><span class="tvi-metric-label">Altered:</span> <span class="tvi-metric-value tvi-cm-altered">\u2014</span></div>' +
+        '<div><span class="tvi-metric-label"><span class="tvi-loss-swatch"></span>Service loss:</span> <span class="tvi-metric-value tvi-cm-loss">\u2014</span></div>' +
+        '<div><span class="tvi-metric-label"><span class="tvi-gain-swatch"></span>Service gain:</span> <span class="tvi-metric-value tvi-cm-gain">\u2014</span></div>' +
+      '</div>';
+    card.appendChild(computedSection);
+
+    // If already computed, fill in values
+    if (alt.computed) displayComputedMetrics(card, alt);
+
+    // Manual inputs section
+    var manualSection = document.createElement("div");
+    manualSection.className = "tvi-manual-section";
+    manualSection.innerHTML =
+      '<div class="tiny" style="font-weight:600;margin-bottom:4px;">Manual inputs (optional)</div>' +
+      buildManualRow("Rev hours:", "tvi-man-revhrs", alt.manual && alt.manual.revenueHours) +
+      buildManualRow("Span (hrs):", "tvi-man-span", alt.manual && alt.manual.spanHours) +
+      buildManualRow("Fare:", "tvi-man-fare", alt.manual && alt.manual.fare);
+    card.appendChild(manualSection);
+
+    // Wire events
+    var capturedIdx = idx;
+    nameInput.addEventListener("change", function () { onAlterationChanged(capturedIdx); });
+    typeSelect.addEventListener("change", function () { onAlterationChanged(capturedIdx); });
+    beforeSel.addEventListener("change", function () { onAlterationChanged(capturedIdx); });
+    afterSel.addEventListener("change", function () { onAlterationChanged(capturedIdx); });
+    delBtn.addEventListener("click", function () { removeAlteration(capturedIdx); });
+
+    // Manual input change events
+    var manInputs = manualSection.querySelectorAll('input[type="number"]');
+    for (var m = 0; m < manInputs.length; m++) {
+      manInputs[m].addEventListener("change", function () { onAlterationChanged(capturedIdx); });
+    }
+
+    return card;
+  }
+
+  function buildManualRow(labelText, classPrefix, values) {
+    var b = (values && Number.isFinite(values.before)) ? values.before : "";
+    var a = (values && Number.isFinite(values.after)) ? values.after : "";
+    return '<div class="tvi-manual-row">' +
+      '<label>' + labelText + '</label>' +
+      '<input type="number" step="any" class="' + classPrefix + '-before" value="' + b + '" placeholder="\u2014">' +
+      '<span class="tvi-arrow">\u2192</span>' +
+      '<input type="number" step="any" class="' + classPrefix + '-after" value="' + a + '" placeholder="\u2014">' +
+      '</div>';
   }
 
   // ---- Stale detection ----
@@ -467,9 +628,11 @@
 
       // Update scenario's impact method from DOM
       scenario.impactMethod = getSelectedImpactMethod();
-      if (scenario.impactMethod === "selected_routes") {
-        _impactFeatureFilter = readFeatureFilter("tviImpactFeatureList");
-        scenario.selectedFeatures = _impactFeatureFilter || { routeIndices: [], lineIndices: [], polygonIndices: [] };
+
+      // Compute alteration metrics (ensure all are up-to-date)
+      var bufferMiles = _policy.bufferDistanceMiles || 0.5;
+      for (var ai = 0; ai < scenario.alterations.length; ai++) {
+        scenario.alterations[ai].computed = TV.computeAlterationMetrics(scenario.alterations[ai], bufferMiles);
       }
 
       // 1. Major Change evaluation
@@ -577,7 +740,7 @@
         mcRulesEl.appendChild(div);
       }
       if (rr.length === 0) {
-        mcRulesEl.innerHTML = '<div class="tiny" style="color:var(--muted);">No route data imported. Import routes in Policies & Inputs tab.</div>';
+        mcRulesEl.innerHTML = '<div class="tiny" style="color:var(--muted);">No route alterations defined. Add alterations in Policies & Inputs tab.</div>';
       }
     }
 
@@ -650,6 +813,50 @@
       source: "tvi-impacted",
       paint: { "line-color": "#e53e3e", "line-width": 2, "line-opacity": 0.6 }
     });
+
+    // Also render service gain areas (green) from alterations
+    renderServiceGainOverlay();
+  }
+
+  function renderServiceGainOverlay() {
+    var map = App.map;
+    if (!map) return;
+    // Clean up previous gain layer
+    if (map.getLayer("tvi-gain-fill")) map.removeLayer("tvi-gain-fill");
+    if (map.getLayer("tvi-gain-outline")) map.removeLayer("tvi-gain-outline");
+    if (map.getSource("tvi-gain")) map.removeSource("tvi-gain");
+
+    var scenario = getActiveScenario();
+    if (!scenario) return;
+    var gainAreas = [];
+    for (var i = 0; i < scenario.alterations.length; i++) {
+      var c = scenario.alterations[i].computed;
+      if (c && c.serviceGainArea) gainAreas.push(c.serviceGainArea);
+    }
+    if (gainAreas.length === 0) return;
+
+    var gainUnion = gainAreas[0];
+    for (var g = 1; g < gainAreas.length; g++) {
+      try { gainUnion = turf.union(gainUnion, gainAreas[g]); } catch (e) { /* skip */ }
+    }
+
+    var gainGeojson = gainUnion.type === "Feature"
+      ? { type: "FeatureCollection", features: [gainUnion] }
+      : { type: "FeatureCollection", features: [{ type: "Feature", properties: {}, geometry: gainUnion }] };
+
+    map.addSource("tvi-gain", { type: "geojson", data: gainGeojson });
+    map.addLayer({
+      id: "tvi-gain-fill",
+      type: "fill",
+      source: "tvi-gain",
+      paint: { "fill-color": "#38a169", "fill-opacity": 0.15 }
+    });
+    map.addLayer({
+      id: "tvi-gain-outline",
+      type: "line",
+      source: "tvi-gain",
+      paint: { "line-color": "#38a169", "line-width": 2, "line-opacity": 0.6 }
+    });
   }
 
   function clearOverlay() {
@@ -658,6 +865,9 @@
     if (map.getLayer("tvi-impacted-fill")) map.removeLayer("tvi-impacted-fill");
     if (map.getLayer("tvi-impacted-outline")) map.removeLayer("tvi-impacted-outline");
     if (map.getSource("tvi-impacted")) map.removeSource("tvi-impacted");
+    if (map.getLayer("tvi-gain-fill")) map.removeLayer("tvi-gain-fill");
+    if (map.getLayer("tvi-gain-outline")) map.removeLayer("tvi-gain-outline");
+    if (map.getSource("tvi-gain")) map.removeSource("tvi-gain");
   }
 
   // ---- Scenario management ----
@@ -680,15 +890,14 @@
     var scenario = _scenarios[idx];
     if (!scenario) return;
 
-    // Render route table for this scenario
-    renderRouteTable(scenario.affectedRoutes || []);
+    // Render alteration cards for this scenario
+    renderAlterationCards();
 
-    // Set impact method
+    // Set impact method radio
     var radios = document.querySelectorAll('input[name="tviImpactMethod"]');
     for (var i = 0; i < radios.length; i++) {
-      radios[i].checked = radios[i].value === (scenario.impactMethod || "full_route_buffer");
+      radios[i].checked = radios[i].value === (scenario.impactMethod || "service_loss_area");
     }
-    updateImpactMethodUI();
 
     // Display results if available
     var result = _results[scenario.id];
@@ -707,9 +916,12 @@
     var source = _scenarios[_activeScenarioIdx];
     var newScenario = TV.createScenario(source.name + " (copy)");
     newScenario.type = source.type;
-    newScenario.affectedRoutes = JSON.parse(JSON.stringify(source.affectedRoutes || []));
+    // Deep-copy alterations, stripping computed geometry (will be recomputed)
+    newScenario.alterations = JSON.parse(JSON.stringify(source.alterations || []));
+    for (var a = 0; a < newScenario.alterations.length; a++) {
+      newScenario.alterations[a].computed = null;
+    }
     newScenario.impactMethod = source.impactMethod;
-    newScenario.selectedFeatures = JSON.parse(JSON.stringify(source.selectedFeatures || {}));
     newScenario.notes = source.notes;
     _scenarios.push(newScenario);
     _activeScenarioIdx = _scenarios.length - 1;
@@ -836,8 +1048,8 @@
 
   function exportFindingsCSV() {
     var lines = [];
-    lines.push("scenario_name,route_name,change_type,major_change_triggered," +
-      "before_miles,after_miles,pct_change_miles," +
+    lines.push("scenario_name,alteration_name,change_type,major_change_triggered," +
+      "before_miles,after_miles,pct_change_miles,altered_pct,altered_miles," +
       "before_rev_hours,after_rev_hours,pct_change_rev_hours," +
       "impacted_total_pop,impacted_minority_share,impacted_lowincome_share," +
       "baseline_minority_share,baseline_lowincome_share," +
@@ -849,23 +1061,25 @@
       var result = _results[sc.id];
       if (!result) continue;
 
-      var routes = sc.affectedRoutes || [{ routeName: "(system)", changeType: "" }];
-      for (var r = 0; r < routes.length; r++) {
-        var rt = routes[r];
-        var b = rt.before || {};
-        var a = rt.after || {};
-        var metrics = TV.computeRouteMetrics(rt);
+      var alts = sc.alterations || [{ name: "(system)", changeType: "" }];
+      for (var r = 0; r < alts.length; r++) {
+        var alt = alts[r];
+        var c = alt.computed || {};
+        var man = alt.manual || {};
         var f = result.findings || {};
         var fm = f.minority || {};
         var fl = f.lowIncome || {};
         var d = result.demographics || {};
         var row = [
           csvEscape(sc.name),
-          csvEscape(rt.routeName || ""),
-          csvEscape(rt.changeType || ""),
+          csvEscape(alt.name || ""),
+          csvEscape(alt.changeType || ""),
           result.majorChangeResult.triggered ? "Yes" : "No",
-          numOrEmpty(b.routeMiles), numOrEmpty(a.routeMiles), numOrEmpty(metrics.routeMilesPct),
-          numOrEmpty(b.revenueHours), numOrEmpty(a.revenueHours), numOrEmpty(metrics.revenueHoursPct),
+          numOrEmpty(c.beforeMiles), numOrEmpty(c.afterMiles), numOrEmpty(c.routeMilesPct),
+          numOrEmpty(c.alteredPct), numOrEmpty(c.alteredMiles),
+          numOrEmpty(man.revenueHours && man.revenueHours.before),
+          numOrEmpty(man.revenueHours && man.revenueHours.after),
+          numOrEmpty(c.revenueHoursPct),
           d.totalPop || "", pctOrEmpty(d.minorityShare), pctOrEmpty(d.lowIncomeShare),
           pctOrEmpty(_baseline ? _baseline.minorityShare : null),
           pctOrEmpty(_baseline ? _baseline.lowIncomeShare : null),
@@ -986,10 +1200,25 @@
 
   function collectState(mode) {
     readPolicyFromDOM();
+
+    // Deep-copy scenarios, stripping computed geometry in light mode
+    var scenariosCopy = JSON.parse(JSON.stringify(_scenarios));
+    if (mode === "light") {
+      for (var si = 0; si < scenariosCopy.length; si++) {
+        var alts = scenariosCopy[si].alterations || [];
+        for (var ai = 0; ai < alts.length; ai++) {
+          if (alts[ai].computed) {
+            delete alts[ai].computed.serviceLossArea;
+            delete alts[ai].computed.serviceGainArea;
+          }
+        }
+      }
+    }
+
     var state = {
-      version: 1,
+      version: 2,
       policy: JSON.parse(JSON.stringify(_policy)),
-      scenarios: JSON.parse(JSON.stringify(_scenarios)),
+      scenarios: scenariosCopy,
       activeScenarioIdx: _activeScenarioIdx,
       baseline: _baseline ? JSON.parse(JSON.stringify(_baseline)) : null,
       stale: _stale,
@@ -1011,9 +1240,16 @@
   }
 
   function applyState(data) {
-    if (!data || data.version !== 1) return;
+    if (!data || (data.version !== 1 && data.version !== 2)) return;
     if (data.policy) _policy = data.policy;
-    if (data.scenarios) _scenarios = data.scenarios;
+    if (data.scenarios) {
+      _scenarios = data.scenarios;
+      // v1 migration: convert affectedRoutes → alterations
+      for (var i = 0; i < _scenarios.length; i++) {
+        if (!_scenarios[i].alterations) _scenarios[i].alterations = [];
+        if (_scenarios[i].impactMethod === "selected_routes") _scenarios[i].impactMethod = "full_route_buffer";
+      }
+    }
     if (typeof data.activeScenarioIdx === "number") _activeScenarioIdx = data.activeScenarioIdx;
     if (data.baseline) _baseline = data.baseline;
     if (data.results) _results = data.results;
@@ -1040,21 +1276,15 @@
       });
     }
 
-    // CSV upload
-    var csvFile = document.getElementById("tviCsvFile");
-    if (csvFile) csvFile.addEventListener("change", function () { handleCsvUpload(this.files[0]); });
+    // Add alteration button
+    var addAltBtn = document.getElementById("tviAddAlteration");
+    if (addAltBtn) addAltBtn.addEventListener("click", addAlteration);
 
-    var parseBtn = document.getElementById("tviParseCSV");
-    if (parseBtn) parseBtn.addEventListener("click", parseRoutesFromCSV);
-
-    // Impact method radios
+    // Impact method radios (mark stale on change)
     var radios = document.querySelectorAll('input[name="tviImpactMethod"]');
     for (var r = 0; r < radios.length; r++) {
-      radios[r].addEventListener("change", updateImpactMethodUI);
+      radios[r].addEventListener("change", function () { markStale(); });
     }
-
-    // Feature select links
-    wireFeatureSelectLinks("tviImpactSelectAll", "tviImpactSelectNone", "tviImpactFeatureList");
     wireFeatureSelectLinks("tviBaselineSelectAll", "tviBaselineSelectNone", "tviBaselineFeatureList");
 
     // Baseline button
@@ -1114,20 +1344,18 @@
 
     // Populate feature checklists
     populateFeatureList("tviBaselineFeatureList", _baselineFeatureFilter);
-    populateFeatureList("tviImpactFeatureList", _impactFeatureFilter, true);
 
     // Restore scenario display
     var scenario = _scenarios[_activeScenarioIdx];
-    renderRouteTable(scenario ? (scenario.affectedRoutes || []) : []);
+    renderAlterationCards();
 
     // Set impact method radio
     if (scenario) {
       var radios = document.querySelectorAll('input[name="tviImpactMethod"]');
       for (var i = 0; i < radios.length; i++) {
-        radios[i].checked = radios[i].value === (scenario.impactMethod || "full_route_buffer");
+        radios[i].checked = radios[i].value === (scenario.impactMethod || "service_loss_area");
       }
     }
-    updateImpactMethodUI();
 
     // Restore results display
     if (scenario && _results[scenario.id]) {
@@ -1159,9 +1387,9 @@
 
     if (!isPopupVisible()) return;
 
-    // Refresh feature checklists
+    // Refresh feature checklists and alteration cards (feature list may have changed)
     populateFeatureList("tviBaselineFeatureList", _baselineFeatureFilter);
-    populateFeatureList("tviImpactFeatureList", _impactFeatureFilter, true);
+    renderAlterationCards();
   }
 
   // ---- Register with App.cache ----

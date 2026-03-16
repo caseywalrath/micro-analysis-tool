@@ -43,15 +43,273 @@
       id: "scenario-" + (_nextScenarioId++),
       name: name || "Scenario " + (_nextScenarioId - 1),
       type: "service_change",
-      affectedRoutes: [],
-      impactMethod: "full_route_buffer",
-      selectedFeatures: { routeIndices: [], lineIndices: [], polygonIndices: [] },
+      alterations: [],
+      impactMethod: "service_loss_area",
       notes: ""
     };
   };
 
+  TitleVI.createAlteration = function (name) {
+    return {
+      name: name || "",
+      changeType: "alteration",
+      before: null,   // { featureType, featureIndex, featureName }
+      after: null,
+      computed: null,  // filled by computeAlterationMetrics
+      manual: {
+        revenueHours: { before: null, after: null },
+        spanHours:    { before: null, after: null },
+        fare:         { before: null, after: null }
+      }
+    };
+  };
+
   // =========================================================================
-  // Route metrics computation (pure)
+  // Geometric divergence detection (pure)
+  // =========================================================================
+
+  /**
+   * Detects where two route geometries diverge.
+   * Samples points along the "before" route and measures distance to the
+   * nearest point on the "after" route. Segments where the distance exceeds
+   * the threshold are flagged as divergent.
+   *
+   * @param {Feature<LineString>} beforeFeature
+   * @param {Feature<LineString>} afterFeature
+   * @param {number} [divergenceThresholdMiles=0.25] Distance beyond which a
+   *   sample point is considered divergent (default: half the 0.5mi buffer).
+   * @param {number} [sampleIntervalMiles=0.05] Sample spacing (~80m).
+   * @returns {{ alteredPct, alteredMiles, totalMiles, divergentSegments[] }}
+   */
+  TitleVI.computeDivergence = function (beforeFeature, afterFeature, divergenceThresholdMiles, sampleIntervalMiles) {
+    if (!beforeFeature || !afterFeature) return null;
+
+    var interval = sampleIntervalMiles || 0.05;
+    var threshold = divergenceThresholdMiles || 0.25;
+    var totalMiles = turf.length(beforeFeature, { units: "miles" });
+    if (totalMiles <= 0) return { alteredPct: 0, alteredMiles: 0, totalMiles: 0, divergentSegments: [] };
+
+    var numSamples = Math.max(1, Math.floor(totalMiles / interval));
+    var divergent = [];  // array of booleans
+    var distances = [];  // distance in miles from after-route
+
+    for (var i = 0; i <= numSamples; i++) {
+      var dist = Math.min(i * interval, totalMiles);
+      var pt = turf.along(beforeFeature, dist, { units: "miles" });
+      try {
+        var nearest = turf.nearestPointOnLine(afterFeature, pt, { units: "miles" });
+        var d = nearest.properties.dist || 0;
+        distances.push(d);
+        divergent.push(d > threshold);
+      } catch (e) {
+        distances.push(0);
+        divergent.push(false);
+      }
+    }
+
+    // Walk through divergent samples to identify contiguous segments
+    var segments = [];
+    var inSegment = false;
+    var segStart = 0;
+    var segMaxDist = 0;
+
+    for (var j = 0; j <= numSamples; j++) {
+      var mile = Math.min(j * interval, totalMiles);
+      if (divergent[j]) {
+        if (!inSegment) {
+          inSegment = true;
+          segStart = mile;
+          segMaxDist = distances[j];
+        } else {
+          segMaxDist = Math.max(segMaxDist, distances[j]);
+        }
+      } else {
+        if (inSegment) {
+          var segEnd = Math.min((j - 1) * interval, totalMiles);
+          segments.push({
+            startMile: Math.round(segStart * 100) / 100,
+            endMile: Math.round(segEnd * 100) / 100,
+            maxDivergenceFt: Math.round(segMaxDist * 5280)
+          });
+          inSegment = false;
+        }
+      }
+    }
+    // Close open segment
+    if (inSegment) {
+      segments.push({
+        startMile: Math.round(segStart * 100) / 100,
+        endMile: Math.round(totalMiles * 100) / 100,
+        maxDivergenceFt: Math.round(segMaxDist * 5280)
+      });
+    }
+
+    var alteredMiles = 0;
+    for (var s = 0; s < segments.length; s++) {
+      alteredMiles += segments[s].endMile - segments[s].startMile;
+    }
+    var alteredPct = totalMiles > 0 ? (alteredMiles / totalMiles) * 100 : 0;
+
+    return {
+      alteredPct: Math.round(alteredPct * 10) / 10,
+      alteredMiles: Math.round(alteredMiles * 100) / 100,
+      totalMiles: Math.round(totalMiles * 100) / 100,
+      divergentSegments: segments
+    };
+  };
+
+  // =========================================================================
+  // Service change area computation (pure)
+  // =========================================================================
+
+  /**
+   * Computes the geographic areas that lose and gain transit coverage when
+   * a route is realigned.
+   *
+   * @param {Feature<LineString>} beforeFeature
+   * @param {Feature<LineString>} afterFeature
+   * @param {number} bufferMiles  Buffer distance (e.g. 0.5)
+   * @returns {{ serviceLossArea, serviceGainArea, beforeBuffer, afterBuffer }}
+   */
+  TitleVI.computeServiceChangeArea = function (beforeFeature, afterFeature, bufferMiles) {
+    var result = { serviceLossArea: null, serviceGainArea: null, beforeBuffer: null, afterBuffer: null };
+    if (!bufferMiles || bufferMiles <= 0) return result;
+
+    if (beforeFeature) {
+      result.beforeBuffer = turf.buffer(beforeFeature, bufferMiles, { units: "miles", steps: 64 });
+    }
+    if (afterFeature) {
+      result.afterBuffer = turf.buffer(afterFeature, bufferMiles, { units: "miles", steps: 64 });
+    }
+
+    if (result.beforeBuffer && result.afterBuffer) {
+      try { result.serviceLossArea = turf.difference(result.beforeBuffer, result.afterBuffer); } catch (e) { /* skip */ }
+      try { result.serviceGainArea = turf.difference(result.afterBuffer, result.beforeBuffer); } catch (e) { /* skip */ }
+    }
+
+    return result;
+  };
+
+  // =========================================================================
+  // Alteration metrics (orchestrator, pure)
+  // =========================================================================
+
+  /**
+   * Resolves feature references and computes all geometric metrics for a
+   * single route alteration.
+   *
+   * @param {object} alteration  Route alteration object (see data model)
+   * @param {number} bufferMiles Buffer distance for service change area
+   * @param {number} [divergenceThresholdMiles] Override for divergence detection
+   * @returns {object} The computed metrics object
+   */
+  TitleVI.computeAlterationMetrics = function (alteration, bufferMiles, divergenceThresholdMiles) {
+    var App = window.App;
+    var computed = {
+      beforeMiles: null,
+      afterMiles: null,
+      routeMilesPct: null,
+      alteredPct: null,
+      alteredMiles: null,
+      serviceLossArea: null,
+      serviceGainArea: null,
+      divergentSegments: []
+    };
+
+    // Resolve feature references
+    var beforeFeature = resolveFeature(alteration.before);
+    var afterFeature  = resolveFeature(alteration.after);
+
+    var changeType = alteration.changeType || "alteration";
+
+    if (changeType === "elimination") {
+      // No after — entire route is removed
+      if (beforeFeature) {
+        computed.beforeMiles = round2(turf.length(beforeFeature, { units: "miles" }));
+        computed.afterMiles = 0;
+        computed.routeMilesPct = -100;
+        computed.alteredPct = 100;
+        computed.alteredMiles = computed.beforeMiles;
+        if (bufferMiles > 0) {
+          computed.serviceLossArea = turf.buffer(beforeFeature, bufferMiles, { units: "miles", steps: 64 });
+        }
+      }
+    } else if (changeType === "new_route") {
+      // No before — brand new route
+      if (afterFeature) {
+        computed.beforeMiles = 0;
+        computed.afterMiles = round2(turf.length(afterFeature, { units: "miles" }));
+        computed.routeMilesPct = null; // undefined — no base to compare
+        computed.alteredPct = null;
+        if (bufferMiles > 0) {
+          computed.serviceGainArea = turf.buffer(afterFeature, bufferMiles, { units: "miles", steps: 64 });
+        }
+      }
+    } else {
+      // Standard alteration — both before and after
+      if (beforeFeature) {
+        computed.beforeMiles = round2(turf.length(beforeFeature, { units: "miles" }));
+      }
+      if (afterFeature) {
+        computed.afterMiles = round2(turf.length(afterFeature, { units: "miles" }));
+      }
+
+      if (Number.isFinite(computed.beforeMiles) && Number.isFinite(computed.afterMiles) && computed.beforeMiles > 0) {
+        computed.routeMilesPct = round1(((computed.afterMiles - computed.beforeMiles) / computed.beforeMiles) * 100);
+      }
+
+      if (beforeFeature && afterFeature) {
+        var divThresh = divergenceThresholdMiles || (bufferMiles ? bufferMiles / 2 : 0.25);
+        var divergence = TitleVI.computeDivergence(beforeFeature, afterFeature, divThresh);
+        if (divergence) {
+          computed.alteredPct = divergence.alteredPct;
+          computed.alteredMiles = divergence.alteredMiles;
+          computed.divergentSegments = divergence.divergentSegments;
+        }
+      }
+
+      if (beforeFeature && afterFeature && bufferMiles > 0) {
+        var areas = TitleVI.computeServiceChangeArea(beforeFeature, afterFeature, bufferMiles);
+        computed.serviceLossArea = areas.serviceLossArea;
+        computed.serviceGainArea = areas.serviceGainArea;
+      }
+    }
+
+    // Compute % changes for manual metrics
+    var manual = alteration.manual || {};
+    computed.revenueHoursPct = pctChangeNullable(
+      manual.revenueHours && manual.revenueHours.before,
+      manual.revenueHours && manual.revenueHours.after
+    );
+    computed.spanHoursPct = pctChangeNullable(
+      manual.spanHours && manual.spanHours.before,
+      manual.spanHours && manual.spanHours.after
+    );
+    computed.farePct = pctChangeNullable(
+      manual.fare && manual.fare.before,
+      manual.fare && manual.fare.after
+    );
+
+    return computed;
+  };
+
+  function resolveFeature(ref) {
+    if (!ref) return null;
+    var App = window.App;
+    var arr = ref.featureType === "route" ? (App.routes || []) : (App.lines || []);
+    return arr[ref.featureIndex] || null;
+  }
+
+  function pctChangeNullable(before, after) {
+    if (!Number.isFinite(before) || before === 0 || !Number.isFinite(after)) return null;
+    return round1(((after - before) / before) * 100);
+  }
+
+  function round1(v) { return Math.round(v * 10) / 10; }
+  function round2(v) { return Math.round(v * 100) / 100; }
+
+  // =========================================================================
+  // Route metrics computation (pure) — legacy CSV-based (kept for comparison)
   // =========================================================================
 
   TitleVI.computeRouteMetrics = function (route) {
@@ -91,12 +349,24 @@
 
   TitleVI.evaluateMajorChange = function (policy, scenario) {
     var rules = policy.majorChange || {};
-    var routes = scenario.affectedRoutes || [];
+    var alterations = scenario.alterations || [];
     var ruleResults = [];
     var triggered = false;
 
-    // Compute per-route metrics
-    var routeMetrics = routes.map(TitleVI.computeRouteMetrics);
+    // Build per-alteration metric objects from computed + manual data
+    var altMetrics = alterations.map(function (alt) {
+      var c = alt.computed || {};
+      return {
+        routeName: alt.name || "(unnamed)",
+        changeType: alt.changeType,
+        routeMilesPct:   c.routeMilesPct,
+        revenueHoursPct: c.revenueHoursPct,
+        spanHoursPct:    c.spanHoursPct,
+        farePct:         c.farePct,
+        isElimination:   alt.changeType === "elimination",
+        isNewRoute:      alt.changeType === "new_route"
+      };
+    });
 
     Object.keys(RULE_DEFS).forEach(function (ruleId) {
       var ruleCfg = rules[ruleId];
@@ -104,8 +374,8 @@
 
       var def = RULE_DEFS[ruleId];
 
-      for (var i = 0; i < routeMetrics.length; i++) {
-        var rm = routeMetrics[i];
+      for (var i = 0; i < altMetrics.length; i++) {
+        var rm = altMetrics[i];
         var value = rm[def.metric];
 
         var ruleTriggered = false;
@@ -121,7 +391,6 @@
         ruleResults.push({
           ruleId: ruleId,
           label: def.label,
-          routeId: rm.routeId,
           routeName: rm.routeName,
           metricValue: def.isBoolean ? (value ? "Yes" : "No") : value,
           threshold: ruleCfg.threshold || null,
@@ -133,7 +402,7 @@
     return {
       triggered: triggered,
       ruleResults: ruleResults,
-      routeMetrics: routeMetrics
+      altMetrics: altMetrics
     };
   };
 
@@ -142,11 +411,44 @@
   // =========================================================================
 
   TitleVI.buildImpactedArea = function (scenario) {
-    var method = scenario.impactMethod || "full_route_buffer";
-    var sel = scenario.selectedFeatures || {};
+    var method = scenario.impactMethod || "service_loss_area";
+    var alterations = scenario.alterations || [];
     var geometry = null;
 
-    if (method === "full_route_buffer") {
+    if (method === "service_loss_area" || method === "service_change_area") {
+      // Union loss areas (and optionally gain areas) from all alterations
+      var areas = [];
+      for (var a = 0; a < alterations.length; a++) {
+        var c = alterations[a].computed;
+        if (!c) continue;
+        if (c.serviceLossArea) areas.push(c.serviceLossArea);
+        if (method === "service_change_area" && c.serviceGainArea) areas.push(c.serviceGainArea);
+      }
+      if (areas.length > 0) {
+        geometry = areas[0];
+        for (var ai = 1; ai < areas.length; ai++) {
+          try { geometry = turf.union(geometry, areas[ai]); } catch (e) { /* skip */ }
+        }
+      }
+      // Fallback: if no service change areas computed, fall back to before-route buffers
+      if (!geometry) {
+        var fallbackBufs = [];
+        for (var fb = 0; fb < alterations.length; fb++) {
+          var ref = alterations[fb].before;
+          if (!ref) continue;
+          var feat = resolveFeature(ref);
+          if (feat) {
+            try { fallbackBufs.push(turf.buffer(feat, 0.5, { units: "miles", steps: 64 })); } catch (e) { /* skip */ }
+          }
+        }
+        if (fallbackBufs.length > 0) {
+          geometry = fallbackBufs[0];
+          for (var fi = 1; fi < fallbackBufs.length; fi++) {
+            try { geometry = turf.union(geometry, fallbackBufs[fi]); } catch (e) { /* skip */ }
+          }
+        }
+      }
+    } else if (method === "full_route_buffer") {
       // Union all route and line buffers
       var allBuffers = [];
       var routeBuffers = App.routeBuffers || [];
@@ -162,32 +464,11 @@
     } else if (method === "user_polygon") {
       // Union drawn polygons
       var polygons = App.polygons || [];
-      var indices = (sel.polygonIndices && sel.polygonIndices.length > 0)
-        ? sel.polygonIndices : polygons.map(function (_, i) { return i; });
-      var selected = indices.map(function (i) { return polygons[i]; }).filter(Boolean);
+      var selected = polygons.filter(Boolean);
       if (selected.length > 0) {
         geometry = selected[0];
         for (var p = 1; p < selected.length; p++) {
           try { geometry = turf.union(geometry, selected[p]); } catch (e) { /* skip */ }
-        }
-      }
-    } else if (method === "selected_routes") {
-      // Union buffers of specific routes/lines
-      var allBufs = [];
-      var rIndices = sel.routeIndices || [];
-      var lIndices = sel.lineIndices || [];
-      var rBufs = App.routeBuffers || [];
-      var lBufs = App.lineBuffers || [];
-      for (var ri = 0; ri < rIndices.length; ri++) {
-        if (rBufs[rIndices[ri]]) allBufs.push(rBufs[rIndices[ri]]);
-      }
-      for (var li = 0; li < lIndices.length; li++) {
-        if (lBufs[lIndices[li]]) allBufs.push(lBufs[lIndices[li]]);
-      }
-      if (allBufs.length > 0) {
-        geometry = allBufs[0];
-        for (var u = 1; u < allBufs.length; u++) {
-          try { geometry = turf.union(geometry, allBufs[u]); } catch (e) { /* skip */ }
         }
       }
     }
@@ -327,7 +608,7 @@
         scenarioName: sr.scenarioName,
         majorChangeTriggered: mc.triggered || false,
         triggeredRuleCount: (mc.ruleResults || []).filter(function (r) { return r.triggered; }).length,
-        routesAffected: (sr.scenario && sr.scenario.affectedRoutes) ? sr.scenario.affectedRoutes.length : 0,
+        routesAffected: (sr.scenario && sr.scenario.alterations) ? sr.scenario.alterations.length : 0,
         totalPop: dem.totalPop || 0,
         minorityShare: dem.minorityShare || 0,
         lowIncomeShare: dem.lowIncomeShare || 0,

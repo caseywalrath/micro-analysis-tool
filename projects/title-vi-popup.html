@@ -83,97 +83,31 @@
         </select>
       </div>
 
-      <!-- Right: Route Data & Impact Method -->
+      <!-- Right: Route Alterations & Impact Method -->
       <div class="rf-results-col">
 
-        <div class="rf-section-title">Route Metrics CSV</div>
+        <div class="rf-section-title">Route Alterations</div>
         <div class="tiny" style="color:var(--muted);margin-bottom:8px;">
-          Upload a CSV with before/after service metrics for affected routes. Required columns: route name, change type, and at least one pair of before/after metrics.
-        </div>
-        <label class="tiny">Upload CSV
-          <input id="tviCsvFile" type="file" accept=".csv" style="font-size:12px;margin-top:2px;">
-        </label>
-
-        <!-- Column mapping (shown after CSV loaded) -->
-        <div id="tviCsvMapping" style="display:none;margin-top:10px;">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-            <label class="tiny">Route Name
-              <select id="tviColRouteName" class="rf-select"></select>
-            </label>
-            <label class="tiny">Change Type
-              <select id="tviColChangeType" class="rf-select"></select>
-            </label>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px;">
-            <label class="tiny">Before Route Miles
-              <select id="tviColBeforeMiles" class="rf-select"></select>
-            </label>
-            <label class="tiny">After Route Miles
-              <select id="tviColAfterMiles" class="rf-select"></select>
-            </label>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px;">
-            <label class="tiny">Before Revenue Hours
-              <select id="tviColBeforeRevHrs" class="rf-select"></select>
-            </label>
-            <label class="tiny">After Revenue Hours
-              <select id="tviColAfterRevHrs" class="rf-select"></select>
-            </label>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px;">
-            <label class="tiny">Before Span (hrs)
-              <select id="tviColBeforeSpan" class="rf-select"></select>
-            </label>
-            <label class="tiny">After Span (hrs)
-              <select id="tviColAfterSpan" class="rf-select"></select>
-            </label>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px;">
-            <label class="tiny">Before Fare
-              <select id="tviColBeforeFare" class="rf-select"></select>
-            </label>
-            <label class="tiny">After Fare
-              <select id="tviColAfterFare" class="rf-select"></select>
-            </label>
-          </div>
-          <button id="tviParseCSV" type="button" class="rf-btn-sm" style="margin-top:10px;">Import Routes</button>
+          Draw the existing and proposed route alignments on the map, then pair them here. The module auto-computes route miles, % altered, and service coverage changes.
         </div>
 
-        <div id="tviCsvInfo" class="tiny" style="margin-top:6px;color:var(--muted);">No file loaded.</div>
+        <button id="tviAddAlteration" type="button" class="rf-btn-sm" style="margin-bottom:10px;">+ Add Alteration</button>
 
-        <!-- Parsed route table -->
-        <div id="tviRouteTableWrap" style="display:none;margin-top:12px;max-height:180px;overflow-y:auto;">
-          <table class="tvi-route-table">
-            <thead>
-              <tr>
-                <th>Route</th>
-                <th>Type</th>
-                <th>Miles (B/A)</th>
-                <th>Rev Hrs (B/A)</th>
-                <th>Span (B/A)</th>
-                <th>Fare (B/A)</th>
-              </tr>
-            </thead>
-            <tbody id="tviRouteTbody"></tbody>
-          </table>
+        <!-- Alteration cards container -->
+        <div id="tviAlterationsContainer"></div>
+
+        <div id="tviAlterationsEmpty" class="tiny" style="color:var(--muted);padding:10px 0;">
+          No alterations defined. Click "+ Add Alteration" to pair existing and proposed routes.
         </div>
 
         <div style="border-top:1px solid var(--border);margin:14px 0;"></div>
 
         <div class="rf-section-title">Impacted Area Method</div>
         <div class="tvi-radio-group">
-          <label><input type="radio" name="tviImpactMethod" value="full_route_buffer" checked> Use all route/line buffers</label>
-          <label><input type="radio" name="tviImpactMethod" value="user_polygon"> Use drawn polygon(s)</label>
-          <label><input type="radio" name="tviImpactMethod" value="selected_routes"> Select specific features</label>
-        </div>
-
-        <!-- Feature checklist (shown when "selected_routes" chosen) -->
-        <div id="tviImpactFeatureSection" style="display:none;margin-top:8px;">
-          <div class="tiny" style="margin-bottom:4px;">
-            <a href="#" id="tviImpactSelectAll">Select all</a> &middot;
-            <a href="#" id="tviImpactSelectNone">Clear</a>
-          </div>
-          <div id="tviImpactFeatureList" class="tvi-feature-list"></div>
+          <label><input type="radio" name="tviImpactMethod" value="service_loss_area" checked> Area losing coverage (buffer difference)</label>
+          <label><input type="radio" name="tviImpactMethod" value="service_change_area"> All affected area (loss + gain)</label>
+          <label><input type="radio" name="tviImpactMethod" value="full_route_buffer"> Full existing route buffer</label>
+          <label><input type="radio" name="tviImpactMethod" value="user_polygon"> Drawn polygon(s)</label>
         </div>
 
       </div>
