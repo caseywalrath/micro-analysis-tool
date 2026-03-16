@@ -179,13 +179,20 @@
     if (featureType !== "station") {
       swatch = document.createElement("button");
       swatch.className = "fp-swatch fp-item-swatch";
-      swatch.style.background = feature.properties.color || getTypeDefaultColor(featureType);
+      var _sectionColor = App.sectionColors && App.sectionColors[featureType];
+      var _featureColor = feature.properties.color || getTypeDefaultColor(featureType);
+      if (_sectionColor && _featureColor === _sectionColor) {
+        swatch.classList.add("fp-swatch-neutral");
+      } else {
+        swatch.style.background = _featureColor;
+      }
       swatch.title = "Change color";
       (function (sw, ft, fi) {
         sw.addEventListener("click", function (e) {
           e.stopPropagation();
           App.openColorPicker(sw, feature.properties.color, function (newColor) {
             feature.properties.color = newColor;
+            sw.classList.remove("fp-swatch-neutral");
             sw.style.background = newColor;
             App.updateFeatureColor(ft, fi, newColor);
           });
@@ -236,14 +243,13 @@
   var _sectionSwatchesBuilt = false;
 
   function getSectionSwatchColor(type) {
-    if (App.sectionColors && App.sectionColors[type]) return App.sectionColors[type];
-    var defaults = { station: "#2b6cb0", line: "#e53e3e", route: "#319795", polygon: "#b0c4de" };
-    return defaults[type] || "#999999";
+    return (App.sectionColors && App.sectionColors[type]) || null;
   }
 
   function applySectionColor(type, newColor, swatchEl) {
     if (!App.sectionColors) App.sectionColors = {};
     App.sectionColors[type] = newColor;
+    swatchEl.classList.remove("fp-swatch-neutral");
     swatchEl.style.background = newColor;
 
     if (type === "station") {
@@ -275,8 +281,8 @@
         } else if (type === "polygon") {
           App.renderPolygonLayers();
         }
-        refreshFeaturePanel(); // update per-item swatch colors
       }
+      refreshFeaturePanel(); // always update per-item swatch appearance
     }
 
     if (App.cache && typeof App.cache.save === "function") App.cache.save();
@@ -304,13 +310,18 @@
       var type = match.type;
       var sw = document.createElement("button");
       sw.className = "fp-swatch fp-section-swatch";
-      sw.style.background = getSectionSwatchColor(type);
+      var initColor = getSectionSwatchColor(type);
+      if (initColor) {
+        sw.style.background = initColor;
+      } else {
+        sw.classList.add("fp-swatch-neutral");
+      }
       sw.title = "Set color for all " + match.text.toLowerCase();
 
       (function (swEl, t) {
         swEl.addEventListener("click", function (e) {
           e.stopPropagation();
-          App.openColorPicker(swEl, getSectionSwatchColor(t), function (newColor) {
+          App.openColorPicker(swEl, getSectionSwatchColor(t) || "", function (newColor) {
             applySectionColor(t, newColor, swEl);
           });
         });

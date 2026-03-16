@@ -1964,3 +1964,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Libe
 .fp-cp-apply:hover {
   background: #e8e8e8;
 }
+.fp-swatch-neutral {
+  background: #fff !important;
+  border-color: #ccc !important;
+}
