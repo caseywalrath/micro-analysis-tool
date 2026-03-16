@@ -191,6 +191,7 @@
   // ---- Public API ----
 
   function setHoveredFeature(type, index) {
+    if (_selected) return; // locked selection takes full priority
     if (_hovered && _hovered.type === type && _hovered.index === index) return; // no change
     _hovered = { type: type, index: index };
     updateHighlightSources();
@@ -198,6 +199,7 @@
   }
 
   function clearHover() {
+    if (_selected) return; // locked selection takes full priority
     if (!_hovered) return;
     _hovered = null;
     updateHighlightSources();
