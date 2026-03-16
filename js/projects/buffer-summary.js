@@ -263,7 +263,25 @@
       App.setStatus("Querying TIGERweb\u2026");
       progressEl.textContent = "Fetching census geometries\u2026";
       geos = await App.fetchTigerwebGeos(geoLevel, unionFeat);
-      App.renderCensusOverlay(geos);
+
+      // When apportioning by area, clip each geo to the union so the map
+      // display matches the math (same pattern as TPI's computeAreaFractions).
+      if (apportionByArea) {
+        var clippedForDisplay = [];
+        geos.forEach(function (f) {
+          try {
+            var inter = turf.intersect(f, unionFeat);
+            if (inter) clippedForDisplay.push({
+              type: "Feature",
+              properties: f.properties,
+              geometry: inter.geometry
+            });
+          } catch (_) {}
+        });
+        App.renderCensusOverlay(clippedForDisplay.length ? clippedForDisplay : geos);
+      } else {
+        App.renderCensusOverlay(geos);
+      }
 
       if (geos.length === 0) {
         for (var gi = 0; gi < acsVarsUniq.length; gi++) {
