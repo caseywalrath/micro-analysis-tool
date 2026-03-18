@@ -36,6 +36,10 @@
       bufferRadius: parseFloat(document.getElementById("bufferRadius").value) || 0.5,
       lineBufferRadius: parseFloat(document.getElementById("lineBufferRadius").value) || 0.5,
       routeBufferRadius: parseFloat(document.getElementById("routeBufferRadius").value) || 0.5,
+      stationLineWidth:  parseFloat(document.getElementById("stationLineWidth").value)  || 1,
+      lineLineWidth:     parseFloat(document.getElementById("lineLineWidth").value)     || 1,
+      routeLineWidth:    parseFloat(document.getElementById("routeLineWidth").value)    || 1,
+      polygonLineWidth:  parseFloat(document.getElementById("polygonLineWidth").value)  || 1,
       lodesFileNames: App.lodesFileNames || [],
       projFileName: App.projFileName || "",
       projYear: App.projYear || null
@@ -106,6 +110,30 @@
     var routeBufRadEl = document.getElementById("routeBufferRadius");
     if (routeBufRadEl && state.routeBufferRadius != null) {
       routeBufRadEl.value = state.routeBufferRadius;
+    }
+
+    // 3b. Restore line width DOM inputs and apply paint properties
+    var stWEl = document.getElementById("stationLineWidth");
+    if (stWEl && state.stationLineWidth != null) {
+      stWEl.value = state.stationLineWidth;
+      var sw = state.stationLineWidth;
+      App.map.setPaintProperty("stations-layer", "circle-radius", 6 * sw);
+      App.map.setPaintProperty("stations-layer", "circle-stroke-width", 2 * sw);
+    }
+    var liWEl = document.getElementById("lineLineWidth");
+    if (liWEl && state.lineLineWidth != null) {
+      liWEl.value = state.lineLineWidth;
+      App.map.setPaintProperty("lines-layer", "line-width", 3 * state.lineLineWidth);
+    }
+    var rtWEl = document.getElementById("routeLineWidth");
+    if (rtWEl && state.routeLineWidth != null) {
+      rtWEl.value = state.routeLineWidth;
+      App.map.setPaintProperty("routes-layer", "line-width", 3 * state.routeLineWidth);
+    }
+    var polyWEl = document.getElementById("polygonLineWidth");
+    if (polyWEl && state.polygonLineWidth != null) {
+      polyWEl.value = state.polygonLineWidth;
+      App.map.setPaintProperty("polygons-outlines-layer", "line-width", 3 * state.polygonLineWidth);
     }
 
     // 4. Rebuild derived buffers and re-render map layers

@@ -359,6 +359,32 @@
       if (typeof App.cache !== "undefined") App.cache.save();
     });
 
+    // Line width inputs (visual only — no notifyProject)
+    document.getElementById("stationLineWidth").addEventListener("input", function () {
+      var w = Math.min(5, Math.max(1, parseFloat(this.value) || 1));
+      App.map.setPaintProperty("stations-layer", "circle-radius", 6 * w);
+      App.map.setPaintProperty("stations-layer", "circle-stroke-width", 2 * w);
+      if (typeof App.cache !== "undefined") App.cache.save();
+    });
+
+    document.getElementById("lineLineWidth").addEventListener("input", function () {
+      var w = Math.min(5, Math.max(1, parseFloat(this.value) || 1));
+      App.map.setPaintProperty("lines-layer", "line-width", 3 * w);
+      if (typeof App.cache !== "undefined") App.cache.save();
+    });
+
+    document.getElementById("routeLineWidth").addEventListener("input", function () {
+      var w = Math.min(5, Math.max(1, parseFloat(this.value) || 1));
+      App.map.setPaintProperty("routes-layer", "line-width", 3 * w);
+      if (typeof App.cache !== "undefined") App.cache.save();
+    });
+
+    document.getElementById("polygonLineWidth").addEventListener("input", function () {
+      var w = Math.min(5, Math.max(1, parseFloat(this.value) || 1));
+      App.map.setPaintProperty("polygons-outlines-layer", "line-width", 3 * w);
+      if (typeof App.cache !== "undefined") App.cache.save();
+    });
+
     // Map click: dispatch based on draw mode
     App.map.on("click", function (e) {
       if (App.drawMode === "station") {
