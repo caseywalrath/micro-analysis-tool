@@ -40,6 +40,7 @@
       lineLineWidth:     parseFloat(document.getElementById("lineLineWidth").value)     || 1,
       routeLineWidth:    parseFloat(document.getElementById("routeLineWidth").value)    || 1,
       polygonLineWidth:  parseFloat(document.getElementById("polygonLineWidth").value)  || 1,
+      offsetOverlap: !!document.getElementById("offsetOverlap").checked,
       lodesFileNames: App.lodesFileNames || [],
       projFileName: App.projFileName || "",
       projYear: App.projYear || null
@@ -134,6 +135,12 @@
     if (polyWEl && state.polygonLineWidth != null) {
       polyWEl.value = state.polygonLineWidth;
       App.map.setPaintProperty("polygons-outlines-layer", "line-width", 3 * state.polygonLineWidth);
+    }
+
+    // 3c. Restore offset toggle (actual offset computed after render via auto-recompute hook)
+    var offsetEl = document.getElementById("offsetOverlap");
+    if (offsetEl && state.offsetOverlap) {
+      offsetEl.checked = true;
     }
 
     // 4. Rebuild derived buffers and re-render map layers

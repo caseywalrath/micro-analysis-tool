@@ -184,6 +184,104 @@
 
   // ---- Feature delete hook (called by features.js) ----
 
+  // ---- Overlap offset computation ----
+
+  var _computingOffsets = false;
+  var OVERLAP_PROXIMITY_MI = 0.015; // ~80ft — same-street detection
+  var OFFSET_PX = 3;
+
+  App.computeOverlapOffsets = function () {
+    if (_computingOffsets) return;
+    _computingOffsets = true;
+    try {
+      var features = [];
+      (App.lines || []).forEach(function (f, i) { features.push({ src: "line", idx: i, feature: f }); });
+      (App.routes || []).forEach(function (f, i) { features.push({ src: "route", idx: i, feature: f }); });
+
+      // Clear all offsets first
+      for (var k = 0; k < features.length; k++) {
+        if (features[k].feature.properties) features[k].feature.properties._offset = 0;
+      }
+
+      if (features.length < 2) { _pushOffsetSources(); _computingOffsets = false; return; }
+
+      // Build tiny proximity buffers
+      var miniBufs = [];
+      for (var i = 0; i < features.length; i++) {
+        try {
+          miniBufs.push(turf.buffer(features[i].feature, OVERLAP_PROXIMITY_MI, { units: "miles", steps: 4 }));
+        } catch (e) { miniBufs.push(null); }
+      }
+
+      // Pairwise overlap detection
+      var adj = [];
+      for (var i = 0; i < features.length; i++) adj.push([]);
+      for (var i = 0; i < features.length; i++) {
+        if (!miniBufs[i]) continue;
+        for (var j = i + 1; j < features.length; j++) {
+          if (!miniBufs[j]) continue;
+          try {
+            if (turf.booleanIntersects(miniBufs[i], miniBufs[j])) {
+              adj[i].push(j);
+              adj[j].push(i);
+            }
+          } catch (e) { /* skip */ }
+        }
+      }
+
+      // BFS connected components → assign spread offsets
+      var visited = [];
+      for (var i = 0; i < features.length; i++) visited.push(false);
+
+      for (var i = 0; i < features.length; i++) {
+        if (visited[i] || adj[i].length === 0) continue;
+        var group = [];
+        var queue = [i];
+        visited[i] = true;
+        while (queue.length > 0) {
+          var cur = queue.shift();
+          group.push(cur);
+          for (var ni = 0; ni < adj[cur].length; ni++) {
+            var nb = adj[cur][ni];
+            if (!visited[nb]) { visited[nb] = true; queue.push(nb); }
+          }
+        }
+        var n = group.length;
+        for (var gi = 0; gi < n; gi++) {
+          var offset = (gi - (n - 1) / 2) * OFFSET_PX;
+          features[group[gi]].feature.properties._offset = offset;
+        }
+      }
+
+      _pushOffsetSources();
+    } finally {
+      _computingOffsets = false;
+    }
+  };
+
+  App.clearOverlapOffsets = function () {
+    if (_computingOffsets) return;
+    _computingOffsets = true;
+    try {
+      (App.lines || []).forEach(function (f) { if (f.properties) f.properties._offset = 0; });
+      (App.routes || []).forEach(function (f) { if (f.properties) f.properties._offset = 0; });
+      _pushOffsetSources();
+    } finally {
+      _computingOffsets = false;
+    }
+  };
+
+  function _pushOffsetSources() {
+    var map = App.map;
+    if (!map) return;
+    var ls = map.getSource("lines");
+    if (ls) ls.setData({ type: "FeatureCollection", features: App.lines || [] });
+    var rs = map.getSource("routes");
+    if (rs) rs.setData({ type: "FeatureCollection", features: App.routes || [] });
+  }
+
+  // ---- Feature deletion hook ----
+
   App.onFeatureDelete = function () {
     if (typeof App.exitEditMode === "function") App.exitEditMode();
     if (typeof App.clearSelection === "function") App.clearSelection();
@@ -382,6 +480,16 @@
     document.getElementById("polygonLineWidth").addEventListener("input", function () {
       var w = Math.min(5, Math.max(1, parseFloat(this.value) || 1));
       App.map.setPaintProperty("polygons-outlines-layer", "line-width", 3 * w);
+      if (typeof App.cache !== "undefined") App.cache.save();
+    });
+
+    // Offset overlapping lines/routes toggle
+    document.getElementById("offsetOverlap").addEventListener("change", function () {
+      if (this.checked) {
+        App.computeOverlapOffsets();
+      } else {
+        App.clearOverlapOffsets();
+      }
       if (typeof App.cache !== "undefined") App.cache.save();
     });
 

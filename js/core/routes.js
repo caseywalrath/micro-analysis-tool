@@ -178,7 +178,7 @@
         id: "routes-layer",
         type: "line",
         source: "routes",
-        paint: { "line-color": ["coalesce", ["get", "color"], ROUTE_COLOR], "line-width": 3, "line-opacity": 0.8 }
+        paint: { "line-color": ["coalesce", ["get", "color"], ROUTE_COLOR], "line-width": 3, "line-opacity": 0.8, "line-offset": ["coalesce", ["get", "_offset"], 0] }
       });
     } else {
       map.getSource("routes").setData(routesGeoJSON());
@@ -239,6 +239,12 @@
     }
 
     if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+
+    // Auto-recompute overlap offsets if toggle is on
+    var oCb = document.getElementById("offsetOverlap");
+    if (oCb && oCb.checked && typeof App.computeOverlapOffsets === "function") {
+      App.computeOverlapOffsets();
+    }
   }
 
   /* ---- Preview state cleanup ---- */
