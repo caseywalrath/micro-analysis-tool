@@ -8,11 +8,10 @@
 (function () {
   var App = window.App = window.App || {};
 
-  var TRASH_SVG =
-    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
-    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-    '<polyline points="3 6 5 6 21 6"/>' +
-    '<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>' +
+  var CHEVRON_SVG =
+    '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+    'stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
+    '<polyline points="9 18 15 12 9 6"/>' +
     '</svg>';
 
   /* ---- Color picker (singleton popover) ---- */
@@ -190,7 +189,7 @@
 
   /* ---- Feature panel item ---- */
 
-  function buildItem(feature, onDelete, featureType, featureIndex) {
+  function buildItem(feature, featureType, featureIndex) {
     var div = document.createElement("div");
     div.className = "fp-item";
     div.dataset.featureType  = featureType;
@@ -228,22 +227,27 @@
     input.className = "fp-name";
     input.value = feature.properties.name;
 
-    // Save name on blur or Enter key
+    // Save name on blur or Enter key; also sync to attribute panel name input
     input.addEventListener("change", function () {
       feature.properties.name = input.value;
+      var wrapper = div.parentElement;
+      if (wrapper) {
+        var attrName = wrapper.querySelector(".fp-attr-panel .fp-attr-input");
+        if (attrName && attrName.type === "text") attrName.value = input.value;
+      }
       refreshFeaturePanel();
     });
     input.addEventListener("keydown", function (e) {
       if (e.key === "Enter") input.blur();
     });
 
-    var delBtn = document.createElement("button");
-    delBtn.className = "fp-delete";
-    delBtn.title = "Delete";
-    delBtn.innerHTML = TRASH_SVG;
-    delBtn.addEventListener("click", onDelete);
+    // Expand toggle button (replaces the old delete button)
+    var expandBtn = document.createElement("button");
+    expandBtn.className = "fp-expand";
+    expandBtn.title = "Edit attributes";
+    expandBtn.innerHTML = CHEVRON_SVG;
 
-    // Hover and click wiring for bidirectional map highlighting
+    // Hover and click wiring
     div.addEventListener("mouseenter", function () {
       if (typeof App.setHoveredFeature === "function") App.setHoveredFeature(featureType, featureIndex);
     });
@@ -251,13 +255,14 @@
       if (typeof App.clearHover === "function") App.clearHover();
     });
     div.addEventListener("click", function (e) {
-      if (e.target === input || e.target === delBtn || delBtn.contains(e.target)) return;
-      if (swatch && e.target === swatch) return;
+      if (e.target === input || input.contains(e.target)) return;
+      if (swatch && (e.target === swatch || swatch.contains(e.target))) return;
       if (typeof App.selectFeature === "function") App.selectFeature(featureType, featureIndex);
+      if (typeof App.toggleAttrPanel === "function") App.toggleAttrPanel(div);
     });
 
     div.appendChild(input);
-    div.appendChild(delBtn);
+    div.appendChild(expandBtn);
     return div;
   }
 
@@ -365,10 +370,20 @@
       return naturalSort(features[a].properties.name, features[b].properties.name);
     });
     sortedIndices.forEach(function (i) {
-      el.appendChild(buildItem(features[i], function () {
-        removeFn(i);
-        if (typeof App.onFeatureDelete === "function") App.onFeatureDelete();
-      }, featureType, i));
+      var wrapper = document.createElement("div");
+      wrapper.className = "fp-item-wrapper";
+      var onDelete = (function (idx) {
+        return function () {
+          removeFn(idx);
+          if (typeof App.onFeatureDelete === "function") App.onFeatureDelete();
+        };
+      })(i);
+      var itemEl = buildItem(features[i], featureType, i);
+      wrapper.appendChild(itemEl);
+      if (typeof App.buildAttrPanel === "function") {
+        wrapper.appendChild(App.buildAttrPanel(featureType, i, features[i], onDelete));
+      }
+      el.appendChild(wrapper);
     });
   }
 
