@@ -54,7 +54,8 @@ js/
     routes.js               Route drawing (OSRM street-snapped), route buffers (default 0.5 mi), throttled snapped preview, waypoint-only vertex editing
     polygons.js             Polygon drawing (vertex-by-vertex with snap-to-close), rubber-band preview, vertex editing
     editing.js              Feature editing: station click-drag, line/polygon/route vertex editing with orange handles
-    features.js             Right-side feature panel: lists features, editable names, delete buttons
+    features.js             Right-side feature panel: lists features, editable names, per-item color swatches, chevron expand toggle; clicking a row opens a slide-down attribute panel (fp-attr-panel) for that feature. Delete button lives inside the attribute panel with an inline confirmation step. Exports refreshFeaturePanel, openColorPicker, updateFeatureColor.
+    feature-attributes.js   Per-feature attribute panel: ATTR_FIELDS config per type, buildAttrPanel(featureType, featureIndex, feature, onDelete) → panel div, toggleAttrPanel(itemEl). Attributes stored in feature.properties.attributes (lazy-init). Route fields: routeGroup, direction, mode, routeId, frequency, spanStart, spanEnd, daysOfService, avgSpeed. Line fields: lineMode, notes. Polygon fields: notes. Station: name only.
     census.js               TIGERweb geometry queries, ACS data fetch, area-weighted aggregation
     lodes.js                LODES .csv.gz download/upload/parse, block-level employment
     cache.js                Session cache: save/restore/reset via localStorage; JSON import/export
@@ -109,8 +110,9 @@ lines.js    (needs App.map, turf)
 routes.js   (needs App.map, turf, fetch/AbortController)
 polygons.js (needs App.map)
 editing.js  (needs App.map, App.stations, App.lines, App.routes, App.polygons, move/update functions)
-features.js (needs App.stations, App.lines, App.routes, App.polygons, App.removeStation, etc.)
-census.js   (needs App.map, App.bboxStringFromFeature, App.getMeta, turf)
+features.js           (needs App.stations, App.lines, App.routes, App.polygons, App.removeStation, etc.)
+feature-attributes.js (needs App namespace; defines App.buildAttrPanel, App.toggleAttrPanel)
+census.js             (needs App.map, App.bboxStringFromFeature, App.getMeta, turf)
 lodes.js    (needs App.map, App.bboxStringFromFeature, App.bufferUnionPolygon, pako, turf)
 cache.js    (needs App.stations, App.lines, App.routes, App.polygons, render/rebuild functions)
 popup.js    (needs App namespace; defines App.popup)
@@ -162,6 +164,15 @@ Route features store `properties.waypoints` (user click points) separately from 
 
 ### features.js
 `refreshFeaturePanel()`
+
+### feature-attributes.js
+`buildAttrPanel(featureType, featureIndex, feature, onDelete)` — returns a `div.fp-attr-panel` (initially hidden) containing: a top bar with a type label and delete icon (with inline confirm row), a Name input, and type-specific attribute fields. All inputs read/write `feature.properties.attributes[key]` and call `App.cache.save()` on change. Lazy-inits `feature.properties.attributes = {}` if absent.
+
+`toggleAttrPanel(itemEl)` — finds the sibling `fp-attr-panel` inside the same `fp-item-wrapper`, toggles its `display`, rotates the `fp-expand` chevron via the `.open` class, and resets the confirm row when closing.
+
+**Feature attribute storage:** All feature types (routes, lines, stations, polygons) can carry a `properties.attributes` object. This is preserved automatically by session cache serialization (no cache changes needed — `App.routes.slice()` etc. include full `properties`). Lazy-init means old sessions without the field restore cleanly.
+
+**Route grouping (future-ready):** The `routeGroup` field stored on route attributes seeds future pattern grouping. Routes sharing the same `routeGroup` string are intended to be treated as directional patterns of one logical route. No grouping logic is implemented yet — `computePerRouteCDI`, `matchRoutesToCSV`, and the corridor dropdown will need updating when that feature is built. The `direction` field (NB/SB/EB/WB/Inbound/Outbound/Loop) labels each pattern within its group.
 
 ### census.js
 `renderCensusOverlay(geos)`, `fetchAllTigerwebFeatures(layerUrl, params)`, `fetchTigerwebGeos(geoLevel, unionFeat)`, `parseGEOID(geoLevel, geoid)`, `fetchACSValues(geoLevel, year, varCode, geoids)`, `fetchACSCountyValues(year, varCode, counties)`, `aggregateWithinUnion(unionFeat, geos, valueMap, aggMode)`, `computeAcsValueOnly(varCode, year, geoLevel)`
@@ -438,15 +449,23 @@ Clicking an analysis module button opens a popup window over the map. The Buffer
 ```
 +-----------------------------+
 |  Features                   |
-|  STATIONS                   |  Per-station rows with editable
-|    Station 1         [DEL]  |  names and delete buttons.
-|    Station 2         [DEL]  |  Stations can be dragged on the map.
-|  LINES                      |  Per-line rows. Click on map to
-|    Line 1            [DEL]  |  enter vertex editing mode.
-|  ROUTES                     |  Per-route rows. Click on map to
-|    Route 1           [DEL]  |  enter waypoint editing mode.
-|  POLYGONS                   |  Per-polygon rows. Click on map to
-|    Polygon 1         [DEL]  |  enter vertex editing mode.
+|  STATIONS                   |  Per-station rows: editable name +
+|    Station 1          [▸]  |  chevron toggle. Click row to open
+|    Station 2          [▸]  |  attribute panel (name only).
+|  LINES                      |  Stations can be dragged on the map.
+|    Line 1             [▸]  |  Per-line: name, mode, notes.
+|  ROUTES                     |  Per-route: name, route group,
+|    Route 1            [▸]  |  direction, mode, route ID,
+|    ┌──────────── [🗑]──┐   |  frequency, span, days, avg speed.
+|    │ Route Attributes  │   |  Delete lives inside the panel
+|    │ Name: [Route 1  ] │   |  with an inline confirm step.
+|    │ Route Group: [  ] │   |
+|    │ Direction: [Both] │   |
+|    │ Mode: [Bus      ] │   |
+|    │ Frequency: [15]min│   |
+|    └───────────────────┘   |
+|  POLYGONS                   |  Per-polygon: name, notes.
+|    Polygon 1          [▸]  |
 |  BUFFERS                    |
 |    Stations [_0.5_] mi      |  Radius input: default 0.5 mi.
 |    Lines    [_0.5_] mi      |  Separate buffer for line features.
@@ -454,6 +473,8 @@ Clicking an analysis module button opens a popup window over the map. The Buffer
 |  [Import] [Export]          |  Anchored to bottom (flex footer).
 +-----------------------------+
 ```
+
+Each feature row is wrapped in a `div.fp-item-wrapper` containing the `div.fp-item` row and a sibling `div.fp-attr-panel`. Clicking anywhere on the row (except the color swatch or name input) toggles the panel and selects the feature on the map. The chevron rotates 90° when open (`.open` class).
 
 ## Known Issues
 
