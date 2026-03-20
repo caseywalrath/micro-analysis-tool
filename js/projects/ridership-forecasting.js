@@ -1694,6 +1694,17 @@
       }
     }
 
+    // Length normalization note
+    var lenNoteEl = document.getElementById("rfCalibLengthNormNote");
+    if (lenNoteEl) {
+      if (_normalizeByLength) {
+        lenNoteEl.style.display = "";
+        lenNoteEl.textContent = "Length-normalized (ridership scaled by corridor length)";
+      } else {
+        lenNoteEl.style.display = "none";
+      }
+    }
+
     var warnEl = document.getElementById("rfCalibWarning");
     if (warnEl) {
       var warning = calibResult.warning || "";
