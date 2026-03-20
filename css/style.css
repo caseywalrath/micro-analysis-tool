@@ -388,6 +388,26 @@ input.fp-attr-input[type="number"] {
 }
 .fp-pattern { padding-left: 16px; }
 
+/* Feature visibility toggle */
+.fp-visibility-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 2px;
+  color: var(--muted);
+  line-height: 1;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.fp-item:hover .fp-visibility-btn { opacity: 0.7; }
+.fp-visibility-btn:hover { opacity: 1 !important; }
+.fp-visibility-btn.fp-eye-off { opacity: 1; color: #a0aec0; }
+.fp-item.fp-item-hidden { opacity: 0.5; }
+.fp-group-header .fp-visibility-btn { opacity: 0; }
+.fp-group-header:hover .fp-visibility-btn { opacity: 0.7; }
+.fp-group-header .fp-visibility-btn.fp-eye-off { opacity: 1; }
+
 .fp-name {
   border: 1px solid transparent;
   background: transparent;

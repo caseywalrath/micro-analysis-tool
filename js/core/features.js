@@ -14,6 +14,22 @@
     '<polyline points="9 18 15 12 9 6"/>' +
     '</svg>';
 
+  var EYE_SVG =
+    '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>' +
+    '<circle cx="12" cy="12" r="3"/>' +
+    '</svg>';
+
+  var EYE_OFF_SVG =
+    '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94' +
+    'M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19' +
+    'm-6.72-1.07a3 3 0 1 1-4.24-4.24"/>' +
+    '<line x1="1" y1="1" x2="23" y2="23"/>' +
+    '</svg>';
+
   /* ---- Color picker (singleton popover) ---- */
 
   var PICKER_COLORS = [
@@ -187,6 +203,24 @@
     return 0;
   }
 
+  /* ---- Visibility helpers ---- */
+
+  function rerenderForType(ft) {
+    if (ft === "route") {
+      var rr = parseFloat((document.getElementById("routeBufferRadius") || {}).value) || 0.5;
+      if (typeof App.rebuildRouteBuffers === "function") App.rebuildRouteBuffers(rr);
+    } else if (ft === "line") {
+      var lr = parseFloat((document.getElementById("lineBufferRadius") || {}).value) || 0.5;
+      if (typeof App.rebuildLineBuffers === "function") App.rebuildLineBuffers(lr);
+    } else if (ft === "station") {
+      var sr = parseFloat((document.getElementById("bufferRadius") || {}).value) || 0.5;
+      if (typeof App.rebuildBuffers === "function") App.rebuildBuffers(sr);
+    } else if (ft === "polygon") {
+      if (typeof App.renderPolygonLayers === "function") App.renderPolygonLayers();
+      if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+    }
+  }
+
   /* ---- Feature panel item ---- */
 
   function buildItem(feature, featureType, featureIndex) {
@@ -241,6 +275,22 @@
       if (e.key === "Enter") input.blur();
     });
 
+    // Visibility eye toggle
+    var isHidden = !!feature.properties.hidden;
+    if (isHidden) div.classList.add("fp-item-hidden");
+    var eyeBtn = document.createElement("button");
+    eyeBtn.className = "fp-visibility-btn" + (isHidden ? " fp-eye-off" : "");
+    eyeBtn.title = isHidden ? "Show" : "Hide";
+    eyeBtn.innerHTML = isHidden ? EYE_OFF_SVG : EYE_SVG;
+    (function (btn, feat, ft) {
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        feat.properties.hidden = !feat.properties.hidden;
+        if (App.cache && typeof App.cache.save === "function") App.cache.save();
+        rerenderForType(ft);
+      });
+    })(eyeBtn, feature, featureType);
+
     // Expand toggle button (replaces the old delete button)
     var expandBtn = document.createElement("button");
     expandBtn.className = "fp-expand";
@@ -262,6 +312,7 @@
     });
 
     div.appendChild(input);
+    div.appendChild(eyeBtn);
     div.appendChild(expandBtn);
     return div;
   }
@@ -469,6 +520,27 @@
       countSpan.className = "fp-group-count";
       countSpan.textContent = idxs.length + (idxs.length === 1 ? " pattern" : " patterns");
       header.appendChild(countSpan);
+
+      // Group-level visibility eye
+      var allHidden = idxs.every(function (idx) { return !!features[idx].properties.hidden; });
+      var groupEye = document.createElement("button");
+      groupEye.className = "fp-visibility-btn" + (allHidden ? " fp-eye-off" : "");
+      groupEye.innerHTML = allHidden ? EYE_OFF_SVG : EYE_SVG;
+      groupEye.title = allHidden ? "Show all patterns" : "Hide all patterns";
+      (function (btn, indices, feats) {
+        btn.addEventListener("click", function (e) {
+          e.stopPropagation();
+          var hideAll = !indices.every(function (i) { return !!feats[i].properties.hidden; });
+          indices.forEach(function (i) {
+            if (hideAll) { feats[i].properties.hidden = true; }
+            else { delete feats[i].properties.hidden; }
+          });
+          if (App.cache && typeof App.cache.save === "function") App.cache.save();
+          var rr = parseFloat((document.getElementById("routeBufferRadius") || {}).value) || 0.5;
+          if (typeof App.rebuildRouteBuffers === "function") App.rebuildRouteBuffers(rr);
+        });
+      })(groupEye, idxs, features);
+      header.appendChild(groupEye);
 
       groupDiv.appendChild(header);
 

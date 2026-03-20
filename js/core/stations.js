@@ -11,7 +11,7 @@
   var buffers = [];
   var bufferRadiusMiles = 0.5; // user-defined; 0 = no buffers
 
-  function pointsGeoJSON() { return { type: "FeatureCollection", features: points }; }
+  function pointsGeoJSON() { return { type: "FeatureCollection", features: points.filter(function (p) { return !p.properties.hidden; }) }; }
   function buffersGeoJSON() { return { type: "FeatureCollection", features: buffers }; }
 
   function updateCoordsPanel() {
@@ -86,6 +86,7 @@
     buffers.length = 0;
     if (radiusMiles > 0) {
       for (var i = 0; i < points.length; i++) {
+        if (points[i].properties.hidden) continue;
         var coords = points[i].geometry.coordinates;
         var pt = turf.point(coords);
         var circle = turf.circle(pt, radiusMiles, { units: "miles", steps: 64 });

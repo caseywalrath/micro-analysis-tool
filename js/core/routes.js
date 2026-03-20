@@ -57,6 +57,7 @@
     routeBuffers.splice(0);
     if (radiusMiles > 0) {
       for (var i = 0; i < routes.length; i++) {
+        if (routes[i].properties.hidden) continue;
         var buf = turf.buffer(routes[i], radiusMiles, { units: "miles", steps: 64 });
         routeBuffers.push({ type: buf.type, geometry: buf.geometry, properties: { routeIdx: routes[i].properties.routeIdx, color: routes[i].properties.color } });
       }
@@ -78,7 +79,7 @@
   /* ---- GeoJSON helpers ---- */
 
   function routesGeoJSON() {
-    return { type: "FeatureCollection", features: routes };
+    return { type: "FeatureCollection", features: routes.filter(function (r) { return !r.properties.hidden; }) };
   }
 
   // In-progress drawing: resolved route coords + preview segment to cursor.
@@ -136,6 +137,7 @@
   function savedWaypointsGeoJSON() {
     var features = [];
     routes.forEach(function (route) {
+      if (route.properties.hidden) return;
       (route.properties.waypoints || []).forEach(function (wp, i) {
         features.push({
           type: "Feature",

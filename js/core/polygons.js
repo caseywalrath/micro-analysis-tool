@@ -15,13 +15,13 @@
   /* ---- GeoJSON helpers ---- */
 
   function polygonsGeoJSON() {
-    return { type: "FeatureCollection", features: polygons };
+    return { type: "FeatureCollection", features: polygons.filter(function (p) { return !p.properties.hidden; }) };
   }
 
   function polygonOutlinesGeoJSON() {
     return {
       type: "FeatureCollection",
-      features: polygons.map(function (f) {
+      features: polygons.filter(function (p) { return !p.properties.hidden; }).map(function (f) {
         return {
           type: "Feature",
           properties: f.properties,
@@ -37,6 +37,7 @@
   function savedVerticesGeoJSON() {
     var features = [];
     polygons.forEach(function (poly) {
+      if (poly.properties.hidden) return;
       // Skip the closing coordinate (last === first)
       var ring = poly.geometry.coordinates[0];
       for (var i = 0; i < ring.length - 1; i++) {

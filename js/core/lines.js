@@ -22,6 +22,7 @@
     lineBuffers.splice(0);
     if (radiusMiles > 0) {
       for (var i = 0; i < lines.length; i++) {
+        if (lines[i].properties.hidden) continue;
         var buf = turf.buffer(lines[i], radiusMiles, { units: "miles", steps: 64 });
         lineBuffers.push({ type: buf.type, geometry: buf.geometry, properties: { lineIdx: lines[i].properties.lineIdx, color: lines[i].properties.color } });
       }
@@ -43,7 +44,7 @@
   /* ---- GeoJSON helpers ---- */
 
   function linesGeoJSON() {
-    return { type: "FeatureCollection", features: lines };
+    return { type: "FeatureCollection", features: lines.filter(function (l) { return !l.properties.hidden; }) };
   }
 
   function currentLineGeoJSON() {
@@ -78,6 +79,7 @@
   function savedVerticesGeoJSON() {
     var features = [];
     lines.forEach(function (line) {
+      if (line.properties.hidden) return;
       line.geometry.coordinates.forEach(function (c, i) {
         features.push({
           type: "Feature",
