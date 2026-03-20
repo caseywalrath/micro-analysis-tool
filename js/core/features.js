@@ -166,6 +166,28 @@
     return defaults[featureType] || "#999999";
   }
 
+  /* ---- Natural sort helper ---- */
+
+  function naturalSort(a, b) {
+    var re = /(\d+)|(\D+)/g;
+    var ap = String(a || "").match(re) || [];
+    var bp = String(b || "").match(re) || [];
+    for (var i = 0; i < Math.max(ap.length, bp.length); i++) {
+      if (i >= ap.length) return -1;
+      if (i >= bp.length) return 1;
+      var aIsNum = /^\d+$/.test(ap[i]);
+      var bIsNum = /^\d+$/.test(bp[i]);
+      if (aIsNum && bIsNum) {
+        var d = parseInt(ap[i], 10) - parseInt(bp[i], 10);
+        if (d !== 0) return d;
+      } else {
+        var c = ap[i].toLowerCase().localeCompare(bp[i].toLowerCase());
+        if (c !== 0) return c;
+      }
+    }
+    return 0;
+  }
+
   /* ---- Feature panel item ---- */
 
   function buildItem(feature, onDelete, featureType, featureIndex) {
@@ -209,6 +231,7 @@
     // Save name on blur or Enter key
     input.addEventListener("change", function () {
       feature.properties.name = input.value;
+      refreshFeaturePanel();
     });
     input.addEventListener("keydown", function (e) {
       if (e.key === "Enter") input.blur();
@@ -337,8 +360,12 @@
     var el = document.getElementById(containerId);
     if (!el) return;
     el.innerHTML = "";
-    features.forEach(function (f, i) {
-      el.appendChild(buildItem(f, function () {
+    var sortedIndices = features.map(function (_, i) { return i; });
+    sortedIndices.sort(function (a, b) {
+      return naturalSort(features[a].properties.name, features[b].properties.name);
+    });
+    sortedIndices.forEach(function (i) {
+      el.appendChild(buildItem(features[i], function () {
         removeFn(i);
         if (typeof App.onFeatureDelete === "function") App.onFeatureDelete();
       }, featureType, i));
