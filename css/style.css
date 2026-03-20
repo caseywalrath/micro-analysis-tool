@@ -349,6 +349,45 @@ input.fp-attr-input[type="number"] {
   user-select: none;
 }
 
+/* Route grouping */
+.fp-group { margin-bottom: 2px; }
+.fp-group-header {
+  display: flex;
+  align-items: center;
+  padding: 2px 0;
+  gap: 2px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.fp-group-header:hover { background: #f0f4f8; }
+.fp-group-toggle {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 2px 3px;
+  color: var(--muted);
+  line-height: 1;
+  flex-shrink: 0;
+  transition: transform 0.2s;
+}
+.fp-group-toggle.open { transform: rotate(90deg); }
+.fp-group-name {
+  font-size: 12px;
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fp-group-count {
+  font-size: 10px;
+  color: var(--muted);
+  flex-shrink: 0;
+  margin-right: 4px;
+}
+.fp-pattern { padding-left: 16px; }
+
 .fp-name {
   border: 1px solid transparent;
   background: transparent;

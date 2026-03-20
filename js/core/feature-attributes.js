@@ -116,9 +116,55 @@
     return { el: inp, unit: field.unit || null };
   }
 
+  function buildGroupPicker(field, attrs) {
+    var inp = document.createElement("input");
+    inp.type = "text";
+    inp.className = "fp-attr-input";
+    if (field.placeholder) inp.placeholder = field.placeholder;
+    var val = attrs[field.key];
+    inp.value = (val !== undefined && val !== null) ? val : "";
+
+    // Build/refresh a shared datalist with all existing group names
+    var dlId = "fp-rg-datalist";
+    var dl = document.getElementById(dlId);
+    if (!dl) {
+      dl = document.createElement("datalist");
+      dl.id = dlId;
+      document.body.appendChild(dl);
+    }
+    dl.innerHTML = "";
+    var seen = {};
+    (App.routes || []).forEach(function (r) {
+      var g = r.properties.attributes && r.properties.attributes.routeGroup;
+      if (g && !seen[g]) {
+        seen[g] = true;
+        var opt = document.createElement("option");
+        opt.value = g;
+        dl.appendChild(opt);
+      }
+    });
+    inp.setAttribute("list", dlId);
+
+    inp.addEventListener("change", function () {
+      var newVal = inp.value.trim();
+      if (newVal) {
+        attrs[field.key] = newVal;
+      } else {
+        delete attrs[field.key];
+      }
+      saveAttrCache();
+      if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+    });
+    inp.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") inp.blur();
+    });
+    return { el: inp, unit: null };
+  }
+
   function buildFieldInput(field, attrs) {
     if (field.type === "select")      return buildSelect(field, attrs);
     if (field.type === "checkboxes")  return buildCheckboxes(field, attrs);
+    if (field.key === "routeGroup")   return buildGroupPicker(field, attrs);
     return buildTextOrNumber(field, attrs);
   }
 

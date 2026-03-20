@@ -359,6 +359,157 @@
     });
   }
 
+  /* ---- Route grouping list ---- */
+
+  function populateRouteList(containerId, features, removeFn) {
+    var el = document.getElementById(containerId);
+    if (!el) return;
+    el.innerHTML = "";
+    if (!features.length) return;
+
+    // Collect groups and ungrouped indices
+    var groups = {};      // groupName → [routeIndex, ...]
+    var ungrouped = [];   // [routeIndex, ...]
+    for (var i = 0; i < features.length; i++) {
+      var a = features[i].properties.attributes;
+      var g = a && a.routeGroup;
+      if (g) {
+        if (!groups[g]) groups[g] = [];
+        groups[g].push(i);
+      } else {
+        ungrouped.push(i);
+      }
+    }
+
+    var groupNames = Object.keys(groups);
+
+    // No groups → fall back to flat list
+    if (groupNames.length === 0) {
+      populateList(containerId, features, removeFn, "route");
+      return;
+    }
+
+    groupNames.sort(naturalSort);
+
+    groupNames.forEach(function (gn) {
+      groups[gn].sort(function (a, b) {
+        var aa = features[a].properties.attributes || {};
+        var ab = features[b].properties.attributes || {};
+        var da = aa.direction || "";
+        var db = ab.direction || "";
+        if (da !== db) return naturalSort(da, db);
+        return naturalSort(features[a].properties.name, features[b].properties.name);
+      });
+    });
+
+    ungrouped.sort(function (a, b) {
+      return naturalSort(features[a].properties.name, features[b].properties.name);
+    });
+
+    // Helper: build an indented pattern wrapper
+    function buildPatternWrapper(i) {
+      var wrapper = document.createElement("div");
+      wrapper.className = "fp-item-wrapper fp-pattern";
+      var onDelete = (function (idx) {
+        return function () {
+          removeFn(idx);
+          if (typeof App.onFeatureDelete === "function") App.onFeatureDelete();
+        };
+      })(i);
+      wrapper.appendChild(buildItem(features[i], "route", i));
+      if (typeof App.buildAttrPanel === "function") {
+        wrapper.appendChild(App.buildAttrPanel("route", i, features[i], onDelete));
+      }
+      return wrapper;
+    }
+
+    // Render groups
+    groupNames.forEach(function (groupName) {
+      var idxs = groups[groupName];
+      var groupDiv = document.createElement("div");
+      groupDiv.className = "fp-group";
+
+      // Header
+      var header = document.createElement("div");
+      header.className = "fp-group-header";
+
+      var toggle = document.createElement("button");
+      toggle.className = "fp-group-toggle open";
+      toggle.innerHTML = CHEVRON_SVG;
+      header.appendChild(toggle);
+
+      // Color swatch — clicking applies color to all patterns in the group
+      var firstColor = features[idxs[0]].properties.color || getTypeDefaultColor("route");
+      var sw = document.createElement("button");
+      sw.className = "fp-swatch fp-item-swatch";
+      sw.style.background = firstColor;
+      sw.title = "Change color for all patterns";
+      (function (swatch, indices, feats) {
+        swatch.addEventListener("click", function (e) {
+          e.stopPropagation();
+          var curColor = feats[indices[0]].properties.color || getTypeDefaultColor("route");
+          App.openColorPicker(swatch, curColor, function (newColor) {
+            swatch.style.background = newColor;
+            indices.forEach(function (idx) { feats[idx].properties.color = newColor; });
+            var rr = parseFloat((document.getElementById("routeBufferRadius") || {}).value) || 0.5;
+            App.rebuildRouteBuffers(rr);
+            App.renderRouteLayers();
+            if (App.cache && typeof App.cache.save === "function") App.cache.save();
+          });
+        });
+      })(sw, idxs, features);
+      header.appendChild(sw);
+
+      var nameSpan = document.createElement("span");
+      nameSpan.className = "fp-group-name";
+      nameSpan.textContent = groupName;
+      header.appendChild(nameSpan);
+
+      var countSpan = document.createElement("span");
+      countSpan.className = "fp-group-count";
+      countSpan.textContent = idxs.length + (idxs.length === 1 ? " pattern" : " patterns");
+      header.appendChild(countSpan);
+
+      groupDiv.appendChild(header);
+
+      // Body (collapsible)
+      var body = document.createElement("div");
+      body.className = "fp-group-body";
+      idxs.forEach(function (i) { body.appendChild(buildPatternWrapper(i)); });
+      groupDiv.appendChild(body);
+
+      // Toggle expand/collapse
+      function toggleGroup(e) {
+        if (sw && (e.target === sw || sw.contains(e.target))) return;
+        e.stopPropagation();
+        var isOpen = body.style.display !== "none";
+        body.style.display = isOpen ? "none" : "";
+        toggle.classList.toggle("open", !isOpen);
+      }
+      toggle.addEventListener("click", toggleGroup);
+      header.addEventListener("click", toggleGroup);
+
+      el.appendChild(groupDiv);
+    });
+
+    // Render ungrouped routes as flat items
+    ungrouped.forEach(function (i) {
+      var wrapper = document.createElement("div");
+      wrapper.className = "fp-item-wrapper";
+      var onDelete = (function (idx) {
+        return function () {
+          removeFn(idx);
+          if (typeof App.onFeatureDelete === "function") App.onFeatureDelete();
+        };
+      })(i);
+      wrapper.appendChild(buildItem(features[i], "route", i));
+      if (typeof App.buildAttrPanel === "function") {
+        wrapper.appendChild(App.buildAttrPanel("route", i, features[i], onDelete));
+      }
+      el.appendChild(wrapper);
+    });
+  }
+
   /* ---- List population ---- */
 
   function populateList(containerId, features, removeFn, featureType) {
@@ -391,7 +542,7 @@
     buildSectionSwatches(); // no-op after first call
     populateList("fp-stations", App.stations || [], App.removeStation || function () {}, "station");
     populateList("fp-lines",    App.lines    || [], App.removeLine    || function () {}, "line");
-    populateList("fp-routes",   App.routes   || [], App.removeRoute   || function () {}, "route");
+    populateRouteList("fp-routes", App.routes || [], App.removeRoute || function () {});
     populateList("fp-polygons", App.polygons || [], App.removePolygon || function () {}, "polygon");
     if (typeof App.applyPanelHighlight === "function") App.applyPanelHighlight();
   }
