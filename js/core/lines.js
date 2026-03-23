@@ -78,8 +78,10 @@
 
   function savedVerticesGeoJSON() {
     var features = [];
-    lines.forEach(function (line) {
+    var sel = App._selected;
+    lines.forEach(function (line, arrayIndex) {
       if (line.properties.hidden) return;
+      if (!sel || sel.type !== "line" || sel.index !== arrayIndex) return;
       line.geometry.coordinates.forEach(function (c, i) {
         features.push({
           type: "Feature",
@@ -331,4 +333,8 @@
   App.renderLineLayers = renderLineLayers;
   App.setLinePreview = setLinePreview;
   App.updateLineVertex = updateLineVertex;
+  App.refreshSavedVertices = function () {
+    var src = App.map && App.map.getSource("lines-vertices");
+    if (src) src.setData(savedVerticesGeoJSON());
+  };
 })();

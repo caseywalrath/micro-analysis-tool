@@ -136,8 +136,10 @@
   // Saved-route waypoints (small dots on the map).
   function savedWaypointsGeoJSON() {
     var features = [];
-    routes.forEach(function (route) {
+    var sel = App._selected;
+    routes.forEach(function (route, arrayIndex) {
       if (route.properties.hidden) return;
+      if (!sel || sel.type !== "route" || sel.index !== arrayIndex) return;
       (route.properties.waypoints || []).forEach(function (wp, i) {
         features.push({
           type: "Feature",
@@ -559,4 +561,8 @@
   App.updateRouteWaypoint = updateRouteWaypoint;
   App.insertRouteWaypoint = insertRouteWaypoint;
   App.rerouteFeature = rerouteFeature;
+  App.refreshSavedWaypoints = function () {
+    var src = App.map && App.map.getSource("routes-waypoints-saved");
+    if (src) src.setData(savedWaypointsGeoJSON());
+  };
 })();

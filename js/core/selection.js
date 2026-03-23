@@ -221,6 +221,8 @@
     if (type !== "station" && typeof App.activateVertexEdit === "function") {
       App.activateVertexEdit(type, index);
     }
+    if (typeof App.refreshSavedVertices  === "function") App.refreshSavedVertices();
+    if (typeof App.refreshSavedWaypoints === "function") App.refreshSavedWaypoints();
   }
 
   function clearSelection() {
@@ -234,6 +236,8 @@
     if (typeof App.deactivateVertexEdit === "function") {
       App.deactivateVertexEdit();
     }
+    if (typeof App.refreshSavedVertices  === "function") App.refreshSavedVertices();
+    if (typeof App.refreshSavedWaypoints === "function") App.refreshSavedWaypoints();
   }
 
   // ---- Expose ----
