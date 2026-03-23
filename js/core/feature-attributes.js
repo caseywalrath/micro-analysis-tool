@@ -7,9 +7,11 @@
 (function () {
   var App = window.App = window.App || {};
 
-  // 24-hour hours for span dropdowns: "" (placeholder), "0:00" … "23:00"
-  var HOURS_24 = [""];
+  // 24-hour hours for span dropdowns
+  var HOURS_24 = [""];  // "0:00" … "23:00"
   for (var _h = 0; _h < 24; _h++) { HOURS_24.push(_h + ":00"); }
+  var HOURS_24_SPAN_END = [""];  // "1:00" … "24:00" (shifted forward by one hour)
+  for (var _h = 1; _h <= 24; _h++) { HOURS_24_SPAN_END.push(_h + ":00"); }
 
   var TYPE_LABELS = {
     route:   "Route",
@@ -28,7 +30,7 @@
       { key: "routeId",       label: "Route ID",    type: "text",       placeholder: "e.g. 7, Blue" },
       { key: "frequency",     label: "Frequency",   type: "number",     unit: "min" },
       { key: "spanStart",     label: "Span start",  type: "select",     options: HOURS_24 },
-      { key: "spanEnd",       label: "Span end",    type: "select",     options: HOURS_24 },
+      { key: "spanEnd",       label: "Span end",    type: "select",     options: HOURS_24_SPAN_END },
       { key: "daysOfService", label: "Days",        type: "checkboxes", options: ["M-F","Sat","Sun"] },
       { key: "avgSpeed",      label: "Avg speed",   type: "number",     unit: "mph" }
     ],
