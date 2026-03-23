@@ -513,7 +513,8 @@
           App.openColorPicker(swatch, curColor, function (newColor) {
             swatch.style.background = newColor;
             indices.forEach(function (idx) { feats[idx].properties.color = newColor; });
-            var rr = parseFloat((document.getElementById("routeBufferRadius") || {}).value) || 0.5;
+            var rrEl = document.getElementById("routeBufferRadius");
+            var rr = rrEl ? parseFloat(rrEl.value) : 0.5; if (isNaN(rr)) rr = 0.5;
             App.rebuildRouteBuffers(rr);
             App.renderRouteLayers();
             if (App.cache && typeof App.cache.save === "function") App.cache.save();
@@ -547,7 +548,8 @@
             else { delete feats[i].properties.hidden; }
           });
           if (App.cache && typeof App.cache.save === "function") App.cache.save();
-          var rr = parseFloat((document.getElementById("routeBufferRadius") || {}).value) || 0.5;
+          var rrEl = document.getElementById("routeBufferRadius");
+          var rr = rrEl ? parseFloat(rrEl.value) : 0.5; if (isNaN(rr)) rr = 0.5;
           if (typeof App.rebuildRouteBuffers === "function") App.rebuildRouteBuffers(rr);
         });
       })(groupEye, idxs, features);
