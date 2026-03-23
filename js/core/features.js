@@ -12,6 +12,10 @@
   // Persists across refreshFeaturePanel() calls (survives DOM rebuilds).
   var _expandedGroups = {};
 
+  // Tracks which feature-type sections the user has collapsed this session.
+  // Default is expanded; only collapsed sections are stored.
+  var _collapsedSections = {};
+
   var CHEVRON_SVG =
     '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
     'stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
@@ -418,6 +422,34 @@
       })(sw, type);
 
       header.insertBefore(sw, header.firstChild);
+
+      // Add right-side chevron toggle for section collapse
+      var listId = "fp-" + match.text.toLowerCase();
+      var stog = document.createElement("button");
+      stog.className = "fp-section-toggle open";
+      stog.innerHTML = CHEVRON_SVG;
+      stog.title = "Collapse " + match.text;
+      header.appendChild(stog);
+
+      (function (hdr, tog, swBtn, lId, t) {
+        function toggleSection(e) {
+          if (e.target === swBtn || swBtn.contains(e.target)) return;
+          e.stopPropagation();
+          var listEl = document.getElementById(lId);
+          var isOpen = !_collapsedSections[t];
+          if (isOpen) {
+            _collapsedSections[t] = true;
+            if (listEl) listEl.style.display = "none";
+            tog.classList.remove("open");
+          } else {
+            delete _collapsedSections[t];
+            if (listEl) listEl.style.display = "";
+            tog.classList.add("open");
+          }
+        }
+        tog.addEventListener("click", toggleSection);
+        hdr.addEventListener("click", toggleSection);
+      })(header, stog, sw, listId, type);
     });
   }
 
@@ -632,12 +664,24 @@
     });
   }
 
+  var SECTION_LIST_IDS = { station: "fp-stations", line: "fp-lines", route: "fp-routes", polygon: "fp-polygons" };
+
+  function applySectionCollapse() {
+    Object.keys(SECTION_LIST_IDS).forEach(function (type) {
+      if (_collapsedSections[type]) {
+        var el = document.getElementById(SECTION_LIST_IDS[type]);
+        if (el) el.style.display = "none";
+      }
+    });
+  }
+
   function refreshFeaturePanel() {
     buildSectionSwatches(); // no-op after first call
     populateList("fp-stations", App.stations || [], App.removeStation || function () {}, "station");
     populateList("fp-lines",    App.lines    || [], App.removeLine    || function () {}, "line");
     populateRouteList("fp-routes", App.routes || [], App.removeRoute || function () {});
     populateList("fp-polygons", App.polygons || [], App.removePolygon || function () {}, "polygon");
+    applySectionCollapse();
     if (typeof App.applyPanelHighlight === "function") App.applyPanelHighlight();
   }
 

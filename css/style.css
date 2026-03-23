@@ -137,7 +137,20 @@ button { cursor: pointer; }
   padding: 4px 6px;
   border-bottom: 1px solid var(--border);
   margin-bottom: 2px;
+  cursor: pointer;
 }
+.fp-section-toggle {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 2px 3px;
+  color: var(--muted);
+  line-height: 1;
+  flex-shrink: 0;
+  margin-left: auto;
+  transition: transform 0.2s;
+}
+.fp-section-toggle.open { transform: rotate(90deg); }
 
 .fp-list { min-height: 4px; }
 
