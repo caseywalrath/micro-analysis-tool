@@ -195,8 +195,8 @@
     _computingOffsets = true;
     try {
       var features = [];
-      (App.lines || []).forEach(function (f, i) { features.push({ src: "line", idx: i, feature: f }); });
-      (App.routes || []).forEach(function (f, i) { features.push({ src: "route", idx: i, feature: f }); });
+      (App.lines || []).forEach(function (f, i) { if (!f.properties.hidden) features.push({ src: "line", idx: i, feature: f }); });
+      (App.routes || []).forEach(function (f, i) { if (!f.properties.hidden) features.push({ src: "route", idx: i, feature: f }); });
 
       // Clear all offsets first
       for (var k = 0; k < features.length; k++) {
@@ -275,9 +275,9 @@
     var map = App.map;
     if (!map) return;
     var ls = map.getSource("lines");
-    if (ls) ls.setData({ type: "FeatureCollection", features: App.lines || [] });
+    if (ls) ls.setData({ type: "FeatureCollection", features: (App.lines || []).filter(function (f) { return !f.properties.hidden; }) });
     var rs = map.getSource("routes");
-    if (rs) rs.setData({ type: "FeatureCollection", features: App.routes || [] });
+    if (rs) rs.setData({ type: "FeatureCollection", features: (App.routes || []).filter(function (f) { return !f.properties.hidden; }) });
   }
 
   // ---- Feature deletion hook ----
