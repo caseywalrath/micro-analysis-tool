@@ -10,7 +10,7 @@
 
   // Tracks which route groups the user has manually collapsed.
   // Persists across refreshFeaturePanel() calls (survives DOM rebuilds).
-  var _collapsedGroups = {};
+  var _expandedGroups = {};
 
   var CHEVRON_SVG =
     '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
@@ -496,7 +496,7 @@
       header.className = "fp-group-header";
 
       var toggle = document.createElement("button");
-      toggle.className = "fp-group-toggle open";
+      toggle.className = "fp-group-toggle";
       toggle.innerHTML = CHEVRON_SVG;
       header.appendChild(toggle);
 
@@ -563,10 +563,11 @@
       idxs.forEach(function (i) { body.appendChild(buildPatternWrapper(i)); });
       groupDiv.appendChild(body);
 
-      // Restore collapsed state across panel rebuilds
-      if (_collapsedGroups[groupName]) {
-        body.style.display = "none";
-        toggle.classList.remove("open");
+      // Collapsed by default; restore expanded state if user opened it this session
+      body.style.display = "none";
+      if (_expandedGroups[groupName]) {
+        body.style.display = "";
+        toggle.classList.add("open");
       }
 
       // Toggle expand/collapse
@@ -576,8 +577,8 @@
         var isOpen = body.style.display !== "none";
         body.style.display = isOpen ? "none" : "";
         toggle.classList.toggle("open", !isOpen);
-        if (isOpen) { _collapsedGroups[groupName] = true; }
-        else { delete _collapsedGroups[groupName]; }
+        if (isOpen) { delete _expandedGroups[groupName]; }
+        else { _expandedGroups[groupName] = true; }
       }
       toggle.addEventListener("click", toggleGroup);
       header.addEventListener("click", toggleGroup);
