@@ -8,6 +8,10 @@
 (function () {
   var App = window.App = window.App || {};
 
+  // Tracks which route groups the user has manually collapsed.
+  // Persists across refreshFeaturePanel() calls (survives DOM rebuilds).
+  var _collapsedGroups = {};
+
   var CHEVRON_SVG =
     '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
     'stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
@@ -157,12 +161,14 @@
   App.updateFeatureColor = function (featureType, featureIndex, newColor) {
     if (featureType === "line") {
       App.lines[featureIndex].properties.color = newColor;
-      var lr = parseFloat((document.getElementById("lineBufferRadius") || {}).value) || 0.5;
+      var lrEl = document.getElementById("lineBufferRadius");
+      var lr = lrEl ? parseFloat(lrEl.value) : 0.5; if (isNaN(lr)) lr = 0.5;
       App.rebuildLineBuffers(lr);
       App.renderLineLayers();
     } else if (featureType === "route") {
       App.routes[featureIndex].properties.color = newColor;
-      var rr = parseFloat((document.getElementById("routeBufferRadius") || {}).value) || 0.5;
+      var rrEl = document.getElementById("routeBufferRadius");
+      var rr = rrEl ? parseFloat(rrEl.value) : 0.5; if (isNaN(rr)) rr = 0.5;
       App.rebuildRouteBuffers(rr);
       App.renderRouteLayers();
     } else if (featureType === "polygon") {
@@ -353,11 +359,13 @@
       if (doOverride) {
         featArray.forEach(function (f) { f.properties.color = newColor; });
         if (type === "line") {
-          var lr = parseFloat((document.getElementById("lineBufferRadius") || {}).value) || 0.5;
+          var lrEl2 = document.getElementById("lineBufferRadius");
+          var lr = lrEl2 ? parseFloat(lrEl2.value) : 0.5; if (isNaN(lr)) lr = 0.5;
           App.rebuildLineBuffers(lr);
           App.renderLineLayers();
         } else if (type === "route") {
-          var rr = parseFloat((document.getElementById("routeBufferRadius") || {}).value) || 0.5;
+          var rrEl2 = document.getElementById("routeBufferRadius");
+          var rr = rrEl2 ? parseFloat(rrEl2.value) : 0.5; if (isNaN(rr)) rr = 0.5;
           App.rebuildRouteBuffers(rr);
           App.renderRouteLayers();
         } else if (type === "polygon") {
@@ -553,6 +561,12 @@
       idxs.forEach(function (i) { body.appendChild(buildPatternWrapper(i)); });
       groupDiv.appendChild(body);
 
+      // Restore collapsed state across panel rebuilds
+      if (_collapsedGroups[groupName]) {
+        body.style.display = "none";
+        toggle.classList.remove("open");
+      }
+
       // Toggle expand/collapse
       function toggleGroup(e) {
         if (sw && (e.target === sw || sw.contains(e.target))) return;
@@ -560,6 +574,8 @@
         var isOpen = body.style.display !== "none";
         body.style.display = isOpen ? "none" : "";
         toggle.classList.toggle("open", !isOpen);
+        if (isOpen) { _collapsedGroups[groupName] = true; }
+        else { delete _collapsedGroups[groupName]; }
       }
       toggle.addEventListener("click", toggleGroup);
       header.addEventListener("click", toggleGroup);

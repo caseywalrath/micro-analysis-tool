@@ -7,6 +7,10 @@
 (function () {
   var App = window.App = window.App || {};
 
+  // 24-hour hours for span dropdowns: "" (placeholder), "0:00" … "23:00"
+  var HOURS_24 = [""];
+  for (var _h = 0; _h < 24; _h++) { HOURS_24.push(_h + ":00"); }
+
   var TYPE_LABELS = {
     route:   "Route",
     line:    "Line",
@@ -20,16 +24,16 @@
     route: [
       { key: "routeGroup",    label: "Route Group", type: "text",       placeholder: "e.g. Route 7" },
       { key: "direction",     label: "Direction",   type: "select",     options: ["Both","NB","SB","EB","WB","Inbound","Outbound","Loop"] },
-      { key: "mode",          label: "Mode",        type: "select",     options: ["Bus","BRT","Light Rail","Streetcar","Ferry"] },
+      { key: "mode",          label: "Mode",        type: "select",     options: ["Bus","BRT","Light Rail","Streetcar"] },
       { key: "routeId",       label: "Route ID",    type: "text",       placeholder: "e.g. 7, Blue" },
       { key: "frequency",     label: "Frequency",   type: "number",     unit: "min" },
-      { key: "spanStart",     label: "Span start",  type: "text",       placeholder: "e.g. 5:00 AM" },
-      { key: "spanEnd",       label: "Span end",    type: "text",       placeholder: "e.g. 11:00 PM" },
+      { key: "spanStart",     label: "Span start",  type: "select",     options: HOURS_24 },
+      { key: "spanEnd",       label: "Span end",    type: "select",     options: HOURS_24 },
       { key: "daysOfService", label: "Days",        type: "checkboxes", options: ["M-F","Sat","Sun"] },
       { key: "avgSpeed",      label: "Avg speed",   type: "number",     unit: "mph" }
     ],
     line: [
-      { key: "lineMode", label: "Mode",  type: "select", options: ["Walking path","Bike path","Corridor study","Other"] },
+      { key: "lineMode", label: "Mode",  type: "select", options: ["Light Rail","Commuter Rail","Streetcar","Bus","BRT"] },
       { key: "notes",    label: "Notes", type: "text",   placeholder: "" }
     ],
     station: [],
@@ -55,15 +59,16 @@
     var sel = document.createElement("select");
     sel.className = "fp-attr-input";
     var val = attrs[field.key];
+    var noVal = (val === undefined || val === null || val === "");
     field.options.forEach(function (opt) {
       var o = document.createElement("option");
       o.value = opt;
-      o.textContent = opt;
-      if (val === opt) o.selected = true;
+      o.textContent = opt === "" ? "—" : opt;
+      if (opt === "" ? noVal : val === opt) o.selected = true;
       sel.appendChild(o);
     });
     sel.addEventListener("change", function () {
-      attrs[field.key] = sel.value;
+      attrs[field.key] = sel.value === "" ? null : sel.value;
       saveAttrCache();
     });
     return { el: sel, unit: null };
@@ -116,7 +121,7 @@
     return { el: inp, unit: field.unit || null };
   }
 
-  function buildGroupPicker(field, attrs) {
+  function buildGroupPicker(field, attrs, feature) {
     var inp = document.createElement("input");
     inp.type = "text";
     inp.className = "fp-attr-input";
@@ -149,6 +154,20 @@
       var newVal = inp.value.trim();
       if (newVal) {
         attrs[field.key] = newVal;
+        // Inherit color from an existing route in the same group
+        var existingColor = null;
+        (App.routes || []).forEach(function (r) {
+          if (!existingColor && r.properties.color && r.properties !== feature.properties) {
+            var g = r.properties.attributes && r.properties.attributes.routeGroup;
+            if (g === newVal) existingColor = r.properties.color;
+          }
+        });
+        if (existingColor) {
+          feature.properties.color = existingColor;
+          var rrEl = document.getElementById("routeBufferRadius");
+          var rr = rrEl ? parseFloat(rrEl.value) : 0.5; if (isNaN(rr)) rr = 0.5;
+          if (typeof App.rebuildRouteBuffers === "function") App.rebuildRouteBuffers(rr);
+        }
       } else {
         delete attrs[field.key];
       }
@@ -161,10 +180,10 @@
     return { el: inp, unit: null };
   }
 
-  function buildFieldInput(field, attrs) {
+  function buildFieldInput(field, attrs, feature) {
     if (field.type === "select")      return buildSelect(field, attrs);
     if (field.type === "checkboxes")  return buildCheckboxes(field, attrs);
-    if (field.key === "routeGroup")   return buildGroupPicker(field, attrs);
+    if (field.key === "routeGroup")   return buildGroupPicker(field, attrs, feature);
     return buildTextOrNumber(field, attrs);
   }
 
@@ -266,7 +285,7 @@
     // --- Type-specific fields ---
     var fields = ATTR_FIELDS[featureType] || [];
     fields.forEach(function (field) {
-      var result = buildFieldInput(field, attrs);
+      var result = buildFieldInput(field, attrs, feature);
       panel.appendChild(buildRow(field.label, result.el, result.unit));
     });
 
