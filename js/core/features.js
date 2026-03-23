@@ -207,13 +207,16 @@
 
   function rerenderForType(ft) {
     if (ft === "route") {
-      var rr = parseFloat((document.getElementById("routeBufferRadius") || {}).value) || 0.5;
+      var rrEl = document.getElementById("routeBufferRadius");
+      var rr = rrEl ? parseFloat(rrEl.value) : 0.5; if (isNaN(rr)) rr = 0.5;
       if (typeof App.rebuildRouteBuffers === "function") App.rebuildRouteBuffers(rr);
     } else if (ft === "line") {
-      var lr = parseFloat((document.getElementById("lineBufferRadius") || {}).value) || 0.5;
+      var lrEl = document.getElementById("lineBufferRadius");
+      var lr = lrEl ? parseFloat(lrEl.value) : 0.5; if (isNaN(lr)) lr = 0.5;
       if (typeof App.rebuildLineBuffers === "function") App.rebuildLineBuffers(lr);
     } else if (ft === "station") {
-      var sr = parseFloat((document.getElementById("bufferRadius") || {}).value) || 0.5;
+      var srEl = document.getElementById("bufferRadius");
+      var sr = srEl ? parseFloat(srEl.value) : 0.5; if (isNaN(sr)) sr = 0.5;
       if (typeof App.rebuildBuffers === "function") App.rebuildBuffers(sr);
     } else if (ft === "polygon") {
       if (typeof App.renderPolygonLayers === "function") App.renderPolygonLayers();
