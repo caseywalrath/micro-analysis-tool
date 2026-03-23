@@ -17,7 +17,8 @@
     route:   "Route",
     line:    "Line",
     station: "Station",
-    polygon: "Polygon"
+    polygon: "Polygon",
+    label:   "Label"
   };
 
   // Field definitions per feature type.
@@ -41,6 +42,13 @@
     station: [],
     polygon: [
       { key: "notes", label: "Notes", type: "text", placeholder: "" }
+    ],
+    label: [
+      { key: "labelGroup", label: "Label Group", type: "text",   placeholder: "e.g. Route Numbers" },
+      { key: "text",       label: "Text",        type: "text",   placeholder: "Map text" },
+      { key: "fontSize",   label: "Size",        type: "select", options: ["Small","Medium","Large","XL"] },
+      { key: "bgColor",    label: "Background",  type: "color" },
+      { key: "textColor",  label: "Text Color",  type: "color" }
     ]
   };
 
@@ -182,10 +190,95 @@
     return { el: inp, unit: null };
   }
 
+  function buildColorPicker(field, attrs, feature) {
+    var btn = document.createElement("button");
+    btn.className = "fp-attr-color-swatch";
+    btn.style.background = attrs[field.key] || (field.key === "textColor" ? "#ffffff" : "#1a202c");
+    btn.title = field.label;
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      if (typeof App.openColorPicker === "function") {
+        App.openColorPicker(btn, attrs[field.key] || btn.style.background, function (newColor) {
+          attrs[field.key] = newColor;
+          btn.style.background = newColor;
+          // Sync bgColor → feature.properties for swatch display
+          if (field.key === "bgColor") { feature.properties.bgColor = newColor; feature.properties.color = newColor; }
+          if (field.key === "textColor") feature.properties.textColor = newColor;
+          saveAttrCache();
+          // Fire change event so panel-level listener can update marker appearance
+          btn.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+      }
+    });
+    return { el: btn, unit: null };
+  }
+
+  function buildLabelGroupPicker(field, attrs, feature) {
+    var inp = document.createElement("input");
+    inp.type = "text";
+    inp.className = "fp-attr-input";
+    if (field.placeholder) inp.placeholder = field.placeholder;
+    var val = attrs[field.key];
+    inp.value = (val !== undefined && val !== null) ? val : "";
+
+    var dlId = "fp-lg-datalist";
+    var dl = document.getElementById(dlId);
+    if (!dl) {
+      dl = document.createElement("datalist");
+      dl.id = dlId;
+      document.body.appendChild(dl);
+    }
+    dl.innerHTML = "";
+    var seen = {};
+    (App.labels || []).forEach(function (l) {
+      var g = l.properties.attributes && l.properties.attributes.labelGroup;
+      if (g && !seen[g]) {
+        seen[g] = true;
+        var opt = document.createElement("option");
+        opt.value = g;
+        dl.appendChild(opt);
+      }
+    });
+    inp.setAttribute("list", dlId);
+
+    inp.addEventListener("change", function () {
+      var newVal = inp.value.trim();
+      if (newVal) {
+        attrs[field.key] = newVal;
+        // Inherit color from an existing label in the same group
+        var existingColor = null;
+        (App.labels || []).forEach(function (l) {
+          if (!existingColor && l.properties.color && l.properties !== feature.properties) {
+            var g = l.properties.attributes && l.properties.attributes.labelGroup;
+            if (g === newVal) existingColor = l.properties.color;
+          }
+        });
+        if (existingColor) {
+          feature.properties.color = existingColor;
+          feature.properties.bgColor = existingColor;
+          if (typeof App.updateLabelAppearance === "function") {
+            var idx = (App.labels || []).indexOf(feature);
+            if (idx >= 0) App.updateLabelAppearance(idx);
+          }
+        }
+      } else {
+        delete attrs[field.key];
+      }
+      saveAttrCache();
+      if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+    });
+    inp.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") inp.blur();
+    });
+    return { el: inp, unit: null };
+  }
+
   function buildFieldInput(field, attrs, feature) {
     if (field.type === "select")      return buildSelect(field, attrs);
     if (field.type === "checkboxes")  return buildCheckboxes(field, attrs);
+    if (field.type === "color")       return buildColorPicker(field, attrs, feature);
     if (field.key === "routeGroup")   return buildGroupPicker(field, attrs, feature);
+    if (field.key === "labelGroup")   return buildLabelGroupPicker(field, attrs, feature);
     return buildTextOrNumber(field, attrs);
   }
 
@@ -290,6 +383,20 @@
       var result = buildFieldInput(field, attrs, feature);
       panel.appendChild(buildRow(field.label, result.el, result.unit));
     });
+
+    // --- Label-specific: sync attribute changes to marker appearance ---
+    if (featureType === "label") {
+      panel.addEventListener("change", function () {
+        // Sync stored properties from attributes
+        if (attrs.text !== undefined)      feature.properties.text = attrs.text;
+        if (attrs.fontSize !== undefined)  feature.properties.fontSize = attrs.fontSize;
+        if (attrs.bgColor !== undefined)   { feature.properties.bgColor = attrs.bgColor; feature.properties.color = attrs.bgColor; }
+        if (attrs.textColor !== undefined) feature.properties.textColor = attrs.textColor;
+        if (typeof App.updateLabelAppearance === "function") {
+          App.updateLabelAppearance(featureIndex);
+        }
+      });
+    }
 
     return panel;
   };

@@ -33,6 +33,7 @@
       lines: App.lines.slice(),
       routes: App.routes.slice(),
       polygons: App.polygons.slice(),
+      labels: App.labels ? App.labels.slice() : [],
       bufferRadius: parseFloat(document.getElementById("bufferRadius").value) || 0.5,
       lineBufferRadius: parseFloat(document.getElementById("lineBufferRadius").value) || 0.5,
       routeBufferRadius: parseFloat(document.getElementById("routeBufferRadius").value) || 0.5,
@@ -84,6 +85,7 @@
     App.lines.length = 0;
     App.routes.length = 0;
     App.polygons.length = 0;
+    if (App.labels) App.labels.length = 0;
 
     // 2. Push features
     if (Array.isArray(state.stations)) {
@@ -97,6 +99,9 @@
     }
     if (Array.isArray(state.polygons)) {
       for (var k = 0; k < state.polygons.length; k++) App.polygons.push(state.polygons[k]);
+    }
+    if (App.labels && Array.isArray(state.labels)) {
+      for (var li = 0; li < state.labels.length; li++) App.labels.push(state.labels[li]);
     }
 
     // 3. Set buffer radius DOM inputs before rebuilding
@@ -151,6 +156,7 @@
     App.rebuildLineBuffers(lineRadius);
     App.rebuildRouteBuffers(routeRadius);
     App.renderPolygonLayers();
+    if (typeof App.renderLabelMarkers === "function") App.renderLabelMarkers();
 
     // 5. Restore checkbox selections
     if (Array.isArray(state.checkedVars)) {
@@ -250,7 +256,8 @@
       applyState(state);
 
       return (App.stations.length > 0 || App.lines.length > 0 ||
-              App.routes.length > 0 || App.polygons.length > 0);
+              App.routes.length > 0 || App.polygons.length > 0 ||
+              (App.labels && App.labels.length > 0));
     } catch (e) {
       console.warn("Cache restore failed:", e);
       return false;
@@ -397,7 +404,7 @@
 
         if (typeof App.notifyProject === "function") App.notifyProject();
 
-        var nFeatures = App.stations.length + App.lines.length + App.routes.length + App.polygons.length;
+        var nFeatures = App.stations.length + App.lines.length + App.routes.length + App.polygons.length + (App.labels ? App.labels.length : 0);
         App.setStatus("Imported " + nFeatures + " feature" + (nFeatures !== 1 ? "s" : ""));
       } catch (parseErr) {
         App.setStatus("Import failed");

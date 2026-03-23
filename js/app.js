@@ -9,7 +9,7 @@
 
   // ---- Draw mode ----
 
-  App.drawMode = null; // null | "station" | "line" | "route" | "polygon"
+  App.drawMode = null; // null | "station" | "line" | "route" | "polygon" | "label"
 
   // ---- Data Inputs panel ----
 
@@ -298,6 +298,7 @@
     App.renderLineLayers();
     App.renderRouteLayers();
     App.renderPolygonLayers();
+    if (typeof App.renderLabelMarkers === "function") App.renderLabelMarkers();
 
     // Initialize feature editing (station drag, vertex editing)
     if (typeof App._initEditing === "function") App._initEditing();
@@ -512,6 +513,10 @@
         App.handlePolygonClick(e.lngLat);
         notifyProject();
         if (typeof App.cache !== "undefined") App.cache.save();
+      } else if (App.drawMode === "label") {
+        App.addLabel(e.lngLat.lng, e.lngLat.lat);
+        notifyProject();
+        if (typeof App.cache !== "undefined") App.cache.save();
       }
     });
 
@@ -534,6 +539,7 @@
       App.clearLines();
       App.clearRoutes();
       App.clearPolygons();
+      if (typeof App.clearLabels === "function") App.clearLabels();
       if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
       if (typeof App.clearCensusOverlay === "function") App.clearCensusOverlay();
       document.getElementById("nGeos").textContent = "0";
@@ -556,6 +562,11 @@
         if (typeof App.cache !== "undefined") App.cache.save();
       } else if (App.drawMode === "polygon") {
         App.undoLastPolygon();
+        notifyProject();
+        if (typeof App.cache !== "undefined") App.cache.save();
+      } else if (App.drawMode === "label" && App.labels && App.labels.length > 0) {
+        App.undoLastLabel();
+        App.setStatus("Updated");
         notifyProject();
         if (typeof App.cache !== "undefined") App.cache.save();
       } else if (App.stations.length > 0) {

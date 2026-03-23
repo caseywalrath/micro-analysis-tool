@@ -22,6 +22,13 @@
     '<polyline points="9 18 15 12 9 6"/>' +
     '</svg>';
 
+  var COPY_SVG =
+    '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+    'stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
+    '<rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>' +
+    '<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>' +
+    '</svg>';
+
   var EYE_SVG =
     '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
     'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
@@ -178,6 +185,13 @@
     } else if (featureType === "polygon") {
       App.polygons[featureIndex].properties.color = newColor;
       App.renderPolygonLayers();
+    } else if (featureType === "label") {
+      App.labels[featureIndex].properties.color = newColor;
+      App.labels[featureIndex].properties.bgColor = newColor;
+      if (App.labels[featureIndex].properties.attributes) {
+        App.labels[featureIndex].properties.attributes.bgColor = newColor;
+      }
+      if (typeof App.updateLabelAppearance === "function") App.updateLabelAppearance(featureIndex);
     }
     if (App.cache && typeof App.cache.save === "function") App.cache.save();
   };
@@ -187,7 +201,7 @@
   function getTypeDefaultColor(featureType) {
     var sc = App.sectionColors && App.sectionColors[featureType];
     if (sc) return sc;
-    var defaults = { station: "#2b6cb0", line: "#e53e3e", route: "#319795", polygon: "#b0c4de" };
+    var defaults = { station: "#2b6cb0", line: "#e53e3e", route: "#319795", polygon: "#b0c4de", label: "#1a202c" };
     return defaults[featureType] || "#999999";
   }
 
@@ -231,6 +245,8 @@
     } else if (ft === "polygon") {
       if (typeof App.renderPolygonLayers === "function") App.renderPolygonLayers();
       if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+    } else if (ft === "label") {
+      if (typeof App.renderLabelMarkers === "function") App.renderLabelMarkers();
     }
   }
 
@@ -324,8 +340,24 @@
       if (typeof App.toggleAttrPanel === "function") App.toggleAttrPanel(div);
     });
 
+    // Duplicate button (labels only)
+    var dupBtn = null;
+    if (featureType === "label") {
+      dupBtn = document.createElement("button");
+      dupBtn.className = "fp-dup-btn";
+      dupBtn.title = "Duplicate label";
+      dupBtn.innerHTML = COPY_SVG;
+      (function (fi) {
+        dupBtn.addEventListener("click", function (e) {
+          e.stopPropagation();
+          if (typeof App.duplicateLabel === "function") App.duplicateLabel(fi);
+        });
+      })(featureIndex);
+    }
+
     div.appendChild(input);
     div.appendChild(eyeBtn);
+    if (dupBtn) div.appendChild(dupBtn);
     div.appendChild(expandBtn);
     return div;
   }
@@ -351,7 +383,7 @@
       return;
     }
 
-    var featArrayMap = { line: App.lines, route: App.routes, polygon: App.polygons };
+    var featArrayMap = { line: App.lines, route: App.routes, polygon: App.polygons, label: App.labels };
     var featArray = featArrayMap[type] || [];
 
     if (featArray.length > 0) {
@@ -374,6 +406,9 @@
           App.renderRouteLayers();
         } else if (type === "polygon") {
           App.renderPolygonLayers();
+        } else if (type === "label") {
+          featArray.forEach(function (f) { f.properties.bgColor = newColor; });
+          if (typeof App.renderLabelMarkers === "function") App.renderLabelMarkers();
         }
       }
       refreshFeaturePanel(); // always update per-item swatch appearance
@@ -390,7 +425,8 @@
       { text: "Stations", type: "station" },
       { text: "Lines",    type: "line"    },
       { text: "Routes",   type: "route"   },
-      { text: "Polygons", type: "polygon" }
+      { text: "Polygons", type: "polygon" },
+      { text: "Labels",   type: "label"   }
     ];
 
     document.querySelectorAll(".fp-section-header").forEach(function (header) {
@@ -664,7 +700,180 @@
     });
   }
 
-  var SECTION_LIST_IDS = { station: "fp-stations", line: "fp-lines", route: "fp-routes", polygon: "fp-polygons" };
+  /* ---- Label grouping list ---- */
+
+  function populateLabelList(containerId, features, removeFn) {
+    var el = document.getElementById(containerId);
+    if (!el) return;
+    el.innerHTML = "";
+    if (!features.length) return;
+
+    // Collect groups and ungrouped indices
+    var groups = {};
+    var ungrouped = [];
+    for (var i = 0; i < features.length; i++) {
+      var a = features[i].properties.attributes;
+      var g = a && a.labelGroup;
+      if (g) {
+        if (!groups[g]) groups[g] = [];
+        groups[g].push(i);
+      } else {
+        ungrouped.push(i);
+      }
+    }
+
+    var groupNames = Object.keys(groups);
+
+    // No groups → fall back to flat list
+    if (groupNames.length === 0) {
+      populateList(containerId, features, removeFn, "label");
+      return;
+    }
+
+    groupNames.sort(naturalSort);
+
+    groupNames.forEach(function (gn) {
+      groups[gn].sort(function (a, b) {
+        return naturalSort(features[a].properties.name, features[b].properties.name);
+      });
+    });
+
+    ungrouped.sort(function (a, b) {
+      return naturalSort(features[a].properties.name, features[b].properties.name);
+    });
+
+    function buildLabelWrapper(i) {
+      var wrapper = document.createElement("div");
+      wrapper.className = "fp-item-wrapper fp-pattern";
+      var onDelete = (function (idx) {
+        return function () {
+          removeFn(idx);
+          if (typeof App.onFeatureDelete === "function") App.onFeatureDelete();
+        };
+      })(i);
+      wrapper.appendChild(buildItem(features[i], "label", i));
+      if (typeof App.buildAttrPanel === "function") {
+        wrapper.appendChild(App.buildAttrPanel("label", i, features[i], onDelete));
+      }
+      return wrapper;
+    }
+
+    // Render groups
+    groupNames.forEach(function (groupName) {
+      var idxs = groups[groupName];
+      var groupDiv = document.createElement("div");
+      groupDiv.className = "fp-group";
+
+      var header = document.createElement("div");
+      header.className = "fp-group-header";
+
+      var toggle = document.createElement("button");
+      toggle.className = "fp-group-toggle";
+      toggle.innerHTML = CHEVRON_SVG;
+      header.appendChild(toggle);
+
+      // Color swatch — applies color to all labels in the group
+      var firstColor = features[idxs[0]].properties.color || getTypeDefaultColor("label");
+      var sw = document.createElement("button");
+      sw.className = "fp-swatch fp-item-swatch";
+      sw.style.background = firstColor;
+      sw.title = "Change color for all labels in group";
+      (function (swatch, indices, feats) {
+        swatch.addEventListener("click", function (e) {
+          e.stopPropagation();
+          var curColor = feats[indices[0]].properties.color || getTypeDefaultColor("label");
+          App.openColorPicker(swatch, curColor, function (newColor) {
+            swatch.style.background = newColor;
+            indices.forEach(function (idx) {
+              feats[idx].properties.color = newColor;
+              feats[idx].properties.bgColor = newColor;
+            });
+            if (typeof App.renderLabelMarkers === "function") App.renderLabelMarkers();
+            if (App.cache && typeof App.cache.save === "function") App.cache.save();
+          });
+        });
+      })(sw, idxs, features);
+      header.appendChild(sw);
+
+      var nameSpan = document.createElement("span");
+      nameSpan.className = "fp-group-name";
+      nameSpan.textContent = groupName;
+      header.appendChild(nameSpan);
+
+      var countSpan = document.createElement("span");
+      countSpan.className = "fp-group-count";
+      countSpan.textContent = idxs.length + (idxs.length === 1 ? " label" : " labels");
+      header.appendChild(countSpan);
+
+      // Group-level visibility eye
+      var allHidden = idxs.every(function (idx) { return !!features[idx].properties.hidden; });
+      var groupEye = document.createElement("button");
+      groupEye.className = "fp-visibility-btn" + (allHidden ? " fp-eye-off" : "");
+      groupEye.innerHTML = allHidden ? EYE_OFF_SVG : EYE_SVG;
+      groupEye.title = allHidden ? "Show all labels" : "Hide all labels";
+      (function (btn, indices, feats) {
+        btn.addEventListener("click", function (e) {
+          e.stopPropagation();
+          var hideAll = !indices.every(function (i) { return !!feats[i].properties.hidden; });
+          indices.forEach(function (i) {
+            if (hideAll) { feats[i].properties.hidden = true; }
+            else { delete feats[i].properties.hidden; }
+          });
+          if (App.cache && typeof App.cache.save === "function") App.cache.save();
+          if (typeof App.renderLabelMarkers === "function") App.renderLabelMarkers();
+        });
+      })(groupEye, idxs, features);
+      header.appendChild(groupEye);
+
+      groupDiv.appendChild(header);
+
+      // Body (collapsible)
+      var body = document.createElement("div");
+      body.className = "fp-group-body";
+      idxs.forEach(function (i) { body.appendChild(buildLabelWrapper(i)); });
+      groupDiv.appendChild(body);
+
+      // Collapsed by default; restore expanded state if user opened it this session
+      body.style.display = "none";
+      if (_expandedGroups[groupName]) {
+        body.style.display = "";
+        toggle.classList.add("open");
+      }
+
+      function toggleGroup(e) {
+        if (sw && (e.target === sw || sw.contains(e.target))) return;
+        e.stopPropagation();
+        var isOpen = body.style.display !== "none";
+        body.style.display = isOpen ? "none" : "";
+        toggle.classList.toggle("open", !isOpen);
+        if (isOpen) { delete _expandedGroups[groupName]; }
+        else { _expandedGroups[groupName] = true; }
+      }
+      toggle.addEventListener("click", toggleGroup);
+      header.addEventListener("click", toggleGroup);
+
+      el.appendChild(groupDiv);
+    });
+
+    // Render ungrouped labels as flat items
+    ungrouped.forEach(function (i) {
+      var wrapper = document.createElement("div");
+      wrapper.className = "fp-item-wrapper";
+      var onDelete = (function (idx) {
+        return function () {
+          removeFn(idx);
+          if (typeof App.onFeatureDelete === "function") App.onFeatureDelete();
+        };
+      })(i);
+      wrapper.appendChild(buildItem(features[i], "label", i));
+      if (typeof App.buildAttrPanel === "function") {
+        wrapper.appendChild(App.buildAttrPanel("label", i, features[i], onDelete));
+      }
+      el.appendChild(wrapper);
+    });
+  }
+
+  var SECTION_LIST_IDS = { station: "fp-stations", line: "fp-lines", route: "fp-routes", polygon: "fp-polygons", label: "fp-labels" };
 
   function applySectionCollapse() {
     Object.keys(SECTION_LIST_IDS).forEach(function (type) {
@@ -681,6 +890,7 @@
     populateList("fp-lines",    App.lines    || [], App.removeLine    || function () {}, "line");
     populateRouteList("fp-routes", App.routes || [], App.removeRoute || function () {});
     populateList("fp-polygons", App.polygons || [], App.removePolygon || function () {}, "polygon");
+    populateLabelList("fp-labels", App.labels || [], App.removeLabel || function () {});
     applySectionCollapse();
     if (typeof App.applyPanelHighlight === "function") App.applyPanelHighlight();
   }

@@ -21,6 +21,9 @@
     <!-- App styles -->
     <link rel="stylesheet" href="css/style.css" />
     <link rel="stylesheet" href="css/sidebar-v2.css" />
+
+    <!-- Open Sans for map labels -->
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet" />
   </head>
 
   <body>
@@ -31,6 +34,7 @@
           <button class="tool-btn" data-mode="line">Line</button>
           <button class="tool-btn" data-mode="route">Route</button>
           <button class="tool-btn" data-mode="polygon">Polygon</button>
+          <button class="tool-btn" data-mode="label">Label</button>
         </div>
         <div id="draw-actions">
           <button id="undo">Delete Last</button>
@@ -75,6 +79,11 @@
           <div class="fp-section">
             <div class="fp-section-header">Polygons</div>
             <div id="fp-polygons" class="fp-list"></div>
+          </div>
+
+          <div class="fp-section">
+            <div class="fp-section-header">Labels</div>
+            <div id="fp-labels" class="fp-list"></div>
           </div>
 
           <div class="fp-section">
@@ -142,6 +151,7 @@
     <script src="js/core/lines.js"></script>
     <script src="js/core/routes.js"></script>
     <script src="js/core/polygons.js"></script>
+    <script src="js/core/labels.js"></script>
     <script src="js/core/editing.js"></script>
     <script src="js/core/selection.js"></script>
     <script src="js/core/features.js"></script>
