@@ -143,14 +143,16 @@ button { cursor: pointer; }
   background: transparent;
   border: none;
   cursor: pointer;
-  padding: 2px 3px;
+  padding: 0 4px;
   color: var(--muted);
+  font-size: 14px;
   line-height: 1;
   flex-shrink: 0;
   margin-left: auto;
-  transition: transform 0.2s;
+  transition: transform 0.15s;
+  transform: rotate(-90deg);
 }
-.fp-section-toggle.open { transform: rotate(90deg); }
+.fp-section-toggle.open { transform: rotate(0deg); }
 
 .fp-list { min-height: 4px; }
 
@@ -266,22 +268,24 @@ button { cursor: pointer; }
 .fp-expand {
   width: auto;
   margin: 0;
-  padding: 3px 5px;
+  padding: 0 4px;
   background: transparent;
   border: none;
   cursor: pointer;
   color: var(--muted);
+  font-size: 14px;
   opacity: 0.35;
-  transition: opacity 0.15s, color 0.15s, transform 0.2s;
+  transition: opacity 0.15s, color 0.15s, transform 0.15s;
   flex-shrink: 0;
   line-height: 1;
   margin-left: auto;
+  transform: rotate(-90deg);
 }
 .fp-item:hover .fp-expand { opacity: 0.8; }
 .fp-expand.open {
   opacity: 1;
   color: #2b6cb0;
-  transform: rotate(90deg);
+  transform: rotate(0deg);
 }
 
 /* Attribute panel */
@@ -418,13 +422,15 @@ input.fp-attr-input[type="number"] {
   background: transparent;
   border: none;
   cursor: pointer;
-  padding: 2px 3px;
+  padding: 0 4px;
   color: var(--muted);
+  font-size: 14px;
   line-height: 1;
   flex-shrink: 0;
-  transition: transform 0.2s;
+  transition: transform 0.15s;
+  transform: rotate(-90deg);
 }
-.fp-group-toggle.open { transform: rotate(90deg); }
+.fp-group-toggle.open { transform: rotate(0deg); }
 .fp-group-name {
   font-size: 12px;
   font-weight: 600;
