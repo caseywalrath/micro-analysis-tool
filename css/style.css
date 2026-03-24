@@ -512,23 +512,14 @@ input.fp-attr-input[type="number"] {
 .fp-group-header .fp-visibility-btn.fp-eye-off { opacity: 1; }
 
 .fp-name {
-  border: 1px solid transparent;
-  background: transparent;
   padding: 3px 6px;
   font-size: var(--text-base);
-  font-family: inherit;
-  width: 100%;
+  display: inline-block;
   max-width: calc(100% - 80px);
-  box-sizing: border-box;
-  border-radius: 4px;
-}
-.fp-name:hover {
-  border-color: var(--border);
-}
-.fp-name:focus {
-  border-color: #2b6cb0;
-  outline: none;
-  background: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
 }
 
 .fp-actions {

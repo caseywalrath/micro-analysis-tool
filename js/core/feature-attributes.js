@@ -368,7 +368,7 @@
       var wrapper = panel.parentElement;
       if (wrapper) {
         var rowName = wrapper.querySelector(".fp-name");
-        if (rowName) rowName.value = nameInput.value;
+        if (rowName) rowName.textContent = nameInput.value;
       }
       saveAttrCache();
     });

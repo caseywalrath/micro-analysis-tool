@@ -281,24 +281,9 @@
       div.appendChild(swatch);
     }
 
-    var input = document.createElement("input");
-    input.type = "text";
+    var input = document.createElement("span");
     input.className = "fp-name";
-    input.value = feature.properties.name;
-
-    // Save name on blur or Enter key; also sync to attribute panel name input
-    input.addEventListener("change", function () {
-      feature.properties.name = input.value;
-      var wrapper = div.parentElement;
-      if (wrapper) {
-        var attrName = wrapper.querySelector(".fp-attr-panel .fp-attr-input");
-        if (attrName && attrName.type === "text") attrName.value = input.value;
-      }
-      refreshFeaturePanel();
-    });
-    input.addEventListener("keydown", function (e) {
-      if (e.key === "Enter") input.blur();
-    });
+    input.textContent = feature.properties.name || "";
 
     // Visibility eye toggle
     var isHidden = !!feature.properties.hidden;
