@@ -511,6 +511,36 @@ input.fp-attr-input[type="number"] {
 .fp-group-header:hover .fp-visibility-btn { opacity: 0.7; }
 .fp-group-header .fp-visibility-btn.fp-eye-off { opacity: 1; }
 
+/* Row-level delete button */
+.fp-del-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 2px;
+  color: var(--muted);
+  line-height: var(--leading-none);
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+}
+.fp-item:hover .fp-del-btn { opacity: 0.7; }
+.fp-del-btn:hover { opacity: 1 !important; color: #e53e3e; }
+
+/* Row-level delete confirmation strip */
+.fp-delete-confirm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: var(--text-sm);
+  background: #fff1f0;
+  border-top: 1px solid #fed7d7;
+}
+.fp-delete-confirm > span {
+  color: #c53030;
+  flex: 1;
+}
+
 .fp-name {
   padding: 3px 6px;
   font-size: var(--text-base);

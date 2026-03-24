@@ -41,6 +41,13 @@
     '<line x1="1" y1="1" x2="23" y2="23"/>' +
     '</svg>';
 
+  var TRASH_SVG =
+    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<polyline points="3 6 5 6 21 6"/>' +
+    '<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>' +
+    '</svg>';
+
   /* ---- Color picker (singleton popover) ---- */
 
   var PICKER_COLORS = [
@@ -248,7 +255,7 @@
 
   /* ---- Feature panel item ---- */
 
-  function buildItem(feature, featureType, featureIndex) {
+  function buildItem(feature, featureType, featureIndex, onDelete) {
     var div = document.createElement("div");
     div.className = "fp-item";
     div.dataset.featureType  = featureType;
@@ -336,11 +343,58 @@
       })(featureIndex);
     }
 
+    var trashBtn = document.createElement("button");
+    trashBtn.className = "fp-del-btn";
+    trashBtn.title = "Delete feature";
+    trashBtn.innerHTML = TRASH_SVG;
+    trashBtn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      var wrapper = div.closest ? div.closest(".fp-item-wrapper") : div.parentElement;
+      if (!wrapper) return;
+      var confirmDiv = wrapper.querySelector(".fp-delete-confirm");
+      if (confirmDiv) {
+        confirmDiv.style.display = "";
+        trashBtn.style.display = "none";
+      }
+    });
+
     div.appendChild(input);
     div.appendChild(eyeBtn);
     if (dupBtn) div.appendChild(dupBtn);
+    div.appendChild(trashBtn);
     div.appendChild(expandBtn);
     return div;
+  }
+
+  function buildDeleteConfirm(onDelete) {
+    var container = document.createElement("div");
+    container.className = "fp-delete-confirm";
+    container.style.display = "none";
+    var text = document.createElement("span");
+    text.textContent = "Delete this feature?";
+    var yesBtn = document.createElement("button");
+    yesBtn.className = "fp-attr-confirm-yes";
+    yesBtn.textContent = "Delete";
+    yesBtn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      if (typeof onDelete === "function") onDelete();
+    });
+    var noBtn = document.createElement("button");
+    noBtn.className = "fp-attr-confirm-no";
+    noBtn.textContent = "Cancel";
+    noBtn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      container.style.display = "none";
+      var wrapper = container.closest ? container.closest(".fp-item-wrapper") : container.parentElement;
+      if (wrapper) {
+        var trashBtn = wrapper.querySelector(".fp-del-btn");
+        if (trashBtn) trashBtn.style.display = "";
+      }
+    });
+    container.appendChild(text);
+    container.appendChild(yesBtn);
+    container.appendChild(noBtn);
+    return container;
   }
 
   /* ---- Section-level color swatches ---- */
@@ -527,7 +581,8 @@
           if (typeof App.onFeatureDelete === "function") App.onFeatureDelete();
         };
       })(i);
-      wrapper.appendChild(buildItem(features[i], "route", i));
+      wrapper.appendChild(buildItem(features[i], "route", i, onDelete));
+      wrapper.appendChild(buildDeleteConfirm(onDelete));
       if (typeof App.buildAttrPanel === "function") {
         wrapper.appendChild(App.buildAttrPanel("route", i, features[i], onDelete));
       }
@@ -645,7 +700,8 @@
           if (typeof App.onFeatureDelete === "function") App.onFeatureDelete();
         };
       })(i);
-      wrapper.appendChild(buildItem(features[i], "route", i));
+      wrapper.appendChild(buildItem(features[i], "route", i, onDelete));
+      wrapper.appendChild(buildDeleteConfirm(onDelete));
       if (typeof App.buildAttrPanel === "function") {
         wrapper.appendChild(App.buildAttrPanel("route", i, features[i], onDelete));
       }
@@ -672,8 +728,9 @@
           if (typeof App.onFeatureDelete === "function") App.onFeatureDelete();
         };
       })(i);
-      var itemEl = buildItem(features[i], featureType, i);
+      var itemEl = buildItem(features[i], featureType, i, onDelete);
       wrapper.appendChild(itemEl);
+      wrapper.appendChild(buildDeleteConfirm(onDelete));
       if (typeof App.buildAttrPanel === "function") {
         wrapper.appendChild(App.buildAttrPanel(featureType, i, features[i], onDelete));
       }
@@ -732,7 +789,8 @@
           if (typeof App.onFeatureDelete === "function") App.onFeatureDelete();
         };
       })(i);
-      wrapper.appendChild(buildItem(features[i], "label", i));
+      wrapper.appendChild(buildItem(features[i], "label", i, onDelete));
+      wrapper.appendChild(buildDeleteConfirm(onDelete));
       if (typeof App.buildAttrPanel === "function") {
         wrapper.appendChild(App.buildAttrPanel("label", i, features[i], onDelete));
       }

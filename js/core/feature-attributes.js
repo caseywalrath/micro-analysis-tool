@@ -310,52 +310,14 @@
     panel.className = "fp-attr-panel";
     panel.style.display = "none";
 
-    // --- Top bar: label + delete icon ---
+    // --- Top bar: label ---
     var topbar = document.createElement("div");
     topbar.className = "fp-attr-topbar";
     var title = document.createElement("span");
     title.className = "fp-attr-title";
     title.textContent = (TYPE_LABELS[featureType] || featureType) + " Attributes";
     topbar.appendChild(title);
-
-    var delBtn = document.createElement("button");
-    delBtn.className = "fp-attr-delete";
-    delBtn.title = "Delete feature";
-    delBtn.innerHTML = TRASH_SVG;
-    topbar.appendChild(delBtn);
     panel.appendChild(topbar);
-
-    // --- Inline delete confirmation ---
-    var confirmRow = document.createElement("div");
-    confirmRow.className = "fp-attr-confirm";
-    confirmRow.style.display = "none";
-    var confirmText = document.createElement("span");
-    confirmText.textContent = "Delete this feature?";
-    var yesBtn = document.createElement("button");
-    yesBtn.className = "fp-attr-confirm-yes";
-    yesBtn.textContent = "Delete";
-    var noBtn = document.createElement("button");
-    noBtn.className = "fp-attr-confirm-no";
-    noBtn.textContent = "Cancel";
-    confirmRow.appendChild(confirmText);
-    confirmRow.appendChild(yesBtn);
-    confirmRow.appendChild(noBtn);
-    panel.appendChild(confirmRow);
-
-    delBtn.addEventListener("click", function (e) {
-      e.stopPropagation();
-      confirmRow.style.display = "";
-      delBtn.style.display = "none";
-    });
-    yesBtn.addEventListener("click", function (e) {
-      e.stopPropagation();
-      if (typeof onDelete === "function") onDelete();
-    });
-    noBtn.addEventListener("click", function (e) {
-      e.stopPropagation();
-      confirmRow.style.display = "none";
-      delBtn.style.display = "";
-    });
 
     // --- Name row (always present) ---
     var nameInput = document.createElement("input");
@@ -416,12 +378,12 @@
     panel.style.display = isOpen ? "none" : "";
     if (btn) btn.classList.toggle("open", !isOpen);
 
-    // Reset confirm state when closing
+    // Reset row-level delete confirm when closing
     if (isOpen) {
-      var confirmRow = panel.querySelector(".fp-attr-confirm");
-      var delBtn = panel.querySelector(".fp-attr-delete");
-      if (confirmRow) confirmRow.style.display = "none";
-      if (delBtn) delBtn.style.display = "";
+      var confirmDiv = wrapper.querySelector(".fp-delete-confirm");
+      var trashBtn = wrapper.querySelector(".fp-del-btn");
+      if (confirmDiv) confirmDiv.style.display = "none";
+      if (trashBtn) trashBtn.style.display = "";
     }
   };
 
