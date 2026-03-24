@@ -24,22 +24,22 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
+  padding: 8px 14px;
   cursor: pointer;
   user-select: none;
-  background: var(--panel);
+  background: transparent;
   transition: background 0.12s;
 }
 #sidebar .sb2-panel-header:hover {
-  background: #eef1f5;
+  background: #f0f2f5;
 }
 
 #sidebar .sb2-panel-title {
-  font-size: var(--text-base);
+  font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
   text-transform: uppercase;
-  letter-spacing: var(--tracking-sm);
-  color: #1a1a1a;
+  letter-spacing: var(--tracking-md);
+  color: var(--muted);
 }
 
 #sidebar .sb2-panel-toggle {
@@ -68,9 +68,13 @@
 /* ---- Typography ---- */
 #sidebar h3 {
   margin: 0 0 8px;
-  font-size: var(--text-lg);
+  font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
-  color: #1a1a1a;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-md);
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
 }
 
 #sidebar .sb2-muted {
@@ -213,14 +217,14 @@
   padding: 0 4px;
 }
 #sidebar .sb2-section-label {
-  font-size: var(--text-sm);
-  font-weight: var(--weight-bold);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
   color: #333;
   text-transform: uppercase;
   letter-spacing: var(--tracking-md);
   margin: 12px 0 6px;
   padding: 6px 0 4px;
-  border-top: 2px solid var(--border);
+  border-top: 1px solid var(--border);
 }
 #sidebar .sb2-section-label:first-child {
   border-top: none;
