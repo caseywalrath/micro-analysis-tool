@@ -35,10 +35,10 @@
 }
 
 #sidebar .sb2-panel-title {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: var(--tracking-sm);
   color: #1a1a1a;
 }
 
@@ -49,9 +49,9 @@
   background: transparent;
   border: none;
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--text-md);
   color: var(--muted);
-  line-height: 1;
+  line-height: var(--leading-none);
   transition: transform 0.15s;
 }
 #sidebar .sb2-panel.sb2-collapsed .sb2-panel-toggle {
@@ -68,20 +68,20 @@
 /* ---- Typography ---- */
 #sidebar h3 {
   margin: 0 0 8px;
-  font-size: 15px;
-  font-weight: 600;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
   color: #1a1a1a;
 }
 
 #sidebar .sb2-muted {
   color: var(--muted);
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
   margin: 0 0 8px;
 }
 
 #sidebar .sb2-tiny {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--muted);
 }
 
@@ -89,7 +89,7 @@
 #sidebar label {
   display: block;
   margin: 8px 0;
-  font-size: 13px;
+  font-size: var(--text-base);
   color: #333;
 }
 
@@ -102,7 +102,7 @@
   margin-top: 4px;
   box-sizing: border-box;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--text-base);
   border: 1px solid var(--border);
   border-radius: 6px;
   background: #fff;
@@ -121,7 +121,7 @@
   margin-top: 6px;
   box-sizing: border-box;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--text-base);
   cursor: pointer;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -171,7 +171,7 @@
 }
 
 #sidebar .sb2-kv {
-  font-size: 13px;
+  font-size: var(--text-base);
   margin-bottom: 2px;
 }
 #sidebar .sb2-kv b {
@@ -185,8 +185,8 @@
   border-radius: 8px;
   padding: 8px 10px;
   margin-top: 8px;
-  font-size: 12px;
-  line-height: 1.35;
+  font-size: var(--text-sm);
+  line-height: var(--leading-tight);
 }
 
 /* ---- Empty state ---- */
@@ -194,7 +194,7 @@
   padding: 32px 14px;
   text-align: center;
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--text-base);
 }
 
 /* ---- Variable checkbox list ---- */
@@ -208,16 +208,16 @@
   background: #fff;
 }
 #sidebar .var-checklist legend {
-  font-size: 13px;
+  font-size: var(--text-base);
   color: #333;
   padding: 0 4px;
 }
 #sidebar .sb2-section-label {
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
   color: #333;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--tracking-md);
   margin: 12px 0 6px;
   padding: 6px 0 4px;
   border-top: 2px solid var(--border);
@@ -227,11 +227,11 @@
   margin-top: 0;
 }
 #sidebar .var-group-label {
-  font-size: 11px;
-  font-weight: 600;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
   color: var(--muted);
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: var(--tracking-sm);
   margin: 8px 0 4px;
   padding-top: 4px;
   border-top: 1px solid var(--border);
@@ -245,8 +245,8 @@
   align-items: flex-start;
   gap: 6px;
   margin: 3px 0;
-  font-size: 12px;
-  line-height: 1.35;
+  font-size: var(--text-sm);
+  line-height: var(--leading-tight);
   cursor: pointer;
 }
 #sidebar .var-check input[type="checkbox"] {
@@ -263,7 +263,7 @@
   width: auto;
   padding: 3px 8px;
   margin-top: 0;
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: #2b6cb0;
   background: transparent;
   border: none;
