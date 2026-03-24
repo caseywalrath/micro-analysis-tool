@@ -450,6 +450,33 @@ input.fp-attr-input[type="number"] {
   user-select: none;
 }
 
+/* Station route picker */
+.fp-route-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.fp-route-picker-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  font-size: var(--text-sm);
+  color: #333;
+  user-select: none;
+}
+.fp-route-picker-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+}
+.fp-attr-row:has(.fp-route-picker) {
+  align-items: flex-start;
+  padding-top: 2px;
+}
+
 /* Route grouping */
 .fp-group { margin-bottom: 2px; }
 .fp-group-header {

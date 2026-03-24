@@ -39,7 +39,10 @@
       { key: "lineMode", label: "Mode",  type: "select", options: ["Light Rail","Commuter Rail","Streetcar","Bus","BRT"] },
       { key: "notes",    label: "Notes", type: "text",   placeholder: "" }
     ],
-    station: [],
+    station: [
+      { key: "stopId",           label: "Stop ID", type: "text", placeholder: "e.g. 1042" },
+      { key: "associatedRoutes", label: "Routes"                                           }
+    ],
     polygon: [
       { key: "notes", label: "Notes", type: "text", placeholder: "" }
     ],
@@ -109,6 +112,60 @@
       wrapper.appendChild(lbl);
     });
     return { el: wrapper, unit: null };
+  }
+
+  function buildRoutePicker(attrs) {
+    var container = document.createElement("div");
+    container.className = "fp-route-picker";
+
+    var routes = App.routes || [];
+    var lines  = App.lines  || [];
+
+    if (!routes.length && !lines.length) {
+      var msg = document.createElement("span");
+      msg.className = "fp-attr-unit";
+      msg.textContent = "No routes or lines drawn";
+      container.appendChild(msg);
+      return { el: container, unit: null };
+    }
+
+    var current = attrs.associatedRoutes || [];
+
+    function makeCheck(featureType, feature, idProp) {
+      var fid  = feature.properties[idProp];
+      var name = feature.properties.name;
+      var lbl  = document.createElement("label");
+      lbl.className = "fp-route-picker-label";
+      var cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = current.some(function (r) {
+        return r.featureType === featureType && r.featureId === fid;
+      });
+      cb.addEventListener("change", function () {
+        var cur = attrs.associatedRoutes || [];
+        if (cb.checked) {
+          cur = cur.concat([{ featureType: featureType, featureId: fid, name: name }]);
+        } else {
+          cur = cur.filter(function (r) {
+            return !(r.featureType === featureType && r.featureId === fid);
+          });
+        }
+        attrs.associatedRoutes = cur;
+        saveAttrCache();
+      });
+      var dot = document.createElement("span");
+      dot.className = "fp-route-picker-dot";
+      dot.style.background = feature.properties.color || "#aaa";
+      lbl.appendChild(cb);
+      lbl.appendChild(dot);
+      lbl.appendChild(document.createTextNode("\u00a0" + name));
+      container.appendChild(lbl);
+    }
+
+    routes.forEach(function (r) { makeCheck("route", r, "routeIdx"); });
+    lines.forEach(function  (l) { makeCheck("line",  l, "lineIdx");  });
+
+    return { el: container, unit: null };
   }
 
   function buildTextOrNumber(field, attrs) {
@@ -274,6 +331,7 @@
   }
 
   function buildFieldInput(field, attrs, feature) {
+    if (field.key === "associatedRoutes") return buildRoutePicker(attrs);
     if (field.type === "select")      return buildSelect(field, attrs);
     if (field.type === "checkboxes")  return buildCheckboxes(field, attrs);
     if (field.type === "color")       return buildColorPicker(field, attrs, feature);
