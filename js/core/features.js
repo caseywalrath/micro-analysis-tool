@@ -324,8 +324,14 @@
     div.addEventListener("click", function (e) {
       if (e.target === input || input.contains(e.target)) return;
       if (swatch && (e.target === swatch || swatch.contains(e.target))) return;
-      if (typeof App.selectFeature === "function") App.selectFeature(featureType, featureIndex);
-      if (typeof App.toggleAttrPanel === "function") App.toggleAttrPanel(div);
+      if (e.ctrlKey || e.metaKey) {
+        // Multi-select: toggle this item, don't toggle the attr panel
+        if (typeof App.toggleMultiSelect === "function") App.toggleMultiSelect(featureType, featureIndex);
+      } else {
+        // Single-select: clear others, select this one, toggle attr panel
+        if (typeof App.selectFeature === "function") App.selectFeature(featureType, featureIndex);
+        if (typeof App.toggleAttrPanel === "function") App.toggleAttrPanel(div);
+      }
     });
 
     // Duplicate button (labels only)

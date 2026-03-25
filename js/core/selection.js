@@ -3,20 +3,25 @@
 // right-side feature panel and map features / buffer areas.
 //
 // State model:
-//   _hovered  — { type, index } | null  — transient, set by mousemove / panel mouseenter
-//   _selected — { type, index } | null  — locked, set by click; cleared by click-elsewhere or draw mode
+//   _hovered       — { type, index } | null  — transient, set by mousemove / panel mouseenter
+//   _multiSelected — [{ type, index }, ...]  — locked set, toggled by Ctrl/Cmd+click
 //
-// Map shows: _hovered || _selected (hover takes visual priority)
-// Panel shows: both states via .fp-hovered and .fp-selected CSS classes
+// Single-select is a special case: _multiSelected with exactly 1 item.
+// App._selected is derived for backward compat (editing.js station-drag gate):
+//   _multiSelected.length === 1 ? _multiSelected[0] : null
+//
+// Map shows: all _multiSelected items + _hovered (if any)
+// Panel shows: .fp-selected on every multi-selected item, .fp-hovered on hovered item
 //
 // Exports: App.initHighlightLayers, App.setHoveredFeature, App.clearHover,
-//          App.selectFeature, App.clearSelection, App.applyPanelHighlight
+//          App.selectFeature, App.toggleMultiSelect, App.clearSelection,
+//          App.applyPanelHighlight, App.isFeatureSelected, App.getSelectedFeatures
 
 (function () {
   var App = window.App = window.App || {};
 
-  var _hovered = null;   // { type: "station"|"line"|"route"|"polygon", index: N }
-  var _selected = null;
+  var _hovered = null;        // { type: "station"|"line"|"route"|"polygon"|"label", index: N }
+  var _multiSelected = [];    // Array of { type, index }
 
   var EMPTY_FC = { type: "FeatureCollection", features: [] };
 
@@ -26,6 +31,31 @@
     route:   "#319795",
     polygon: "#38a169"
   };
+
+  // ---- Helpers ----
+
+  function isSelected(type, index) {
+    for (var i = 0; i < _multiSelected.length; i++) {
+      if (_multiSelected[i].type === type && _multiSelected[i].index === index) return true;
+    }
+    return false;
+  }
+
+  function syncSelectedCompat() {
+    App._selected = _multiSelected.length === 1 ? _multiSelected[0] : null;
+  }
+
+  function syncVertexEditing() {
+    if (_multiSelected.length === 1 && _multiSelected[0].type !== "station") {
+      if (typeof App.activateVertexEdit === "function")
+        App.activateVertexEdit(_multiSelected[0].type, _multiSelected[0].index);
+    } else {
+      if (typeof App.deactivateVertexEdit === "function")
+        App.deactivateVertexEdit();
+    }
+    if (typeof App.refreshSavedVertices  === "function") App.refreshSavedVertices();
+    if (typeof App.refreshSavedWaypoints === "function") App.refreshSavedWaypoints();
+  }
 
   // ---- Highlight sources / layers setup ----
 
@@ -109,69 +139,56 @@
     var map = App.map;
     if (!map || !map.getSource("hl-feature")) return;
 
-    var active = _hovered || _selected;
-    if (!active) {
+    // Collect active items: all multi-selected + hovered (if not already selected)
+    var items = _multiSelected.slice();
+    if (_hovered && !isSelected(_hovered.type, _hovered.index)) {
+      items.push(_hovered);
+    }
+
+    if (!items.length) {
       map.getSource("hl-feature").setData(EMPTY_FC);
       map.getSource("hl-buffer").setData(EMPTY_FC);
       return;
     }
 
-    var type    = active.type;
-    var index   = active.index;
-    var color   = null; // resolved after feature lookup below
-    var feature = null;
-    var buffer  = null;
+    var featureGeos = [];
+    var bufferGeos  = [];
 
-    if (type === "station") {
-      feature = App.stations && App.stations[index];
-      buffer  = App.buffers  && App.buffers[index];
-    } else if (type === "line") {
-      feature = App.lines       && App.lines[index];
-      buffer  = App.lineBuffers && App.lineBuffers[index];
-    } else if (type === "route") {
-      feature = App.routes       && App.routes[index];
-      buffer  = App.routeBuffers && App.routeBuffers[index];
-    } else if (type === "polygon") {
-      feature = App.polygons && App.polygons[index];
-      buffer  = null;
-    }
+    items.forEach(function (active) {
+      var feature = null, buffer = null;
+      if (active.type === "station") {
+        feature = App.stations && App.stations[active.index];
+        buffer  = App.buffers  && App.buffers[active.index];
+      } else if (active.type === "line") {
+        feature = App.lines       && App.lines[active.index];
+        buffer  = App.lineBuffers && App.lineBuffers[active.index];
+      } else if (active.type === "route") {
+        feature = App.routes       && App.routes[active.index];
+        buffer  = App.routeBuffers && App.routeBuffers[active.index];
+      } else if (active.type === "polygon") {
+        feature = App.polygons && App.polygons[active.index];
+      }
 
-    // Derive highlight color: per-feature color > section color > type default
-    color = (feature && feature.properties && feature.properties.color) ||
-            (App.sectionColors && App.sectionColors[type]) ||
-            TYPE_COLOR[type] || "#2b6cb0";
+      if (feature) {
+        var color = (feature.properties && feature.properties.color) ||
+                    (App.sectionColors && App.sectionColors[active.type]) ||
+                    TYPE_COLOR[active.type] || "#2b6cb0";
+        var props = {};
+        var fp = feature.properties;
+        if (fp) { for (var k in fp) { if (Object.prototype.hasOwnProperty.call(fp, k)) props[k] = fp[k]; } }
+        props.hl_color = color;
+        featureGeos.push({ type: "Feature", geometry: feature.geometry, properties: props });
+      }
+      if (buffer) {
+        var bColor = (feature && feature.properties && feature.properties.color) ||
+                     (App.sectionColors && App.sectionColors[active.type]) ||
+                     TYPE_COLOR[active.type] || "#2b6cb0";
+        bufferGeos.push({ type: "Feature", geometry: buffer.geometry, properties: { hl_color: bColor } });
+      }
+    });
 
-    // Feature source — copy geometry, inject hl_color into properties
-    if (feature) {
-      var props = {};
-      var fp = feature.properties;
-      if (fp) { for (var k in fp) { if (Object.prototype.hasOwnProperty.call(fp, k)) props[k] = fp[k]; } }
-      props.hl_color = color;
-      map.getSource("hl-feature").setData({
-        type: "FeatureCollection",
-        features: [{
-          type: "Feature",
-          geometry: feature.geometry,
-          properties: props
-        }]
-      });
-    } else {
-      map.getSource("hl-feature").setData(EMPTY_FC);
-    }
-
-    // Buffer source
-    if (buffer) {
-      map.getSource("hl-buffer").setData({
-        type: "FeatureCollection",
-        features: [{
-          type: "Feature",
-          geometry: buffer.geometry,
-          properties: { hl_color: color }
-        }]
-      });
-    } else {
-      map.getSource("hl-buffer").setData(EMPTY_FC);
-    }
+    map.getSource("hl-feature").setData({ type: "FeatureCollection", features: featureGeos });
+    map.getSource("hl-buffer").setData({ type: "FeatureCollection", features: bufferGeos });
   }
 
   // ---- Internal: apply CSS classes to panel items ----
@@ -185,7 +202,7 @@
       var elType  = el.dataset.featureType;
       var elIndex = parseInt(el.dataset.featureIndex, 10);
 
-      if (_selected && elType === _selected.type && elIndex === _selected.index) {
+      if (isSelected(elType, elIndex)) {
         el.classList.add("fp-selected");
       } else if (_hovered && elType === _hovered.type && elIndex === _hovered.index) {
         el.classList.add("fp-hovered");
@@ -196,7 +213,7 @@
   // ---- Public API ----
 
   function setHoveredFeature(type, index) {
-    if (_selected) return; // locked selection takes full priority
+    if (_multiSelected.length) return; // locked selection takes full priority
     if (_hovered && _hovered.type === type && _hovered.index === index) return; // no change
     _hovered = { type: type, index: index };
     updateHighlightSources();
@@ -204,7 +221,7 @@
   }
 
   function clearHover() {
-    if (_selected) return; // locked selection takes full priority
+    if (_multiSelected.length) return; // locked selection takes full priority
     if (!_hovered) return;
     _hovered = null;
     updateHighlightSources();
@@ -212,41 +229,51 @@
   }
 
   function selectFeature(type, index) {
-    _selected = { type: type, index: index };
-    _hovered  = null;
-    App._selected = _selected; // mirror for editing.js station-drag gate
+    _multiSelected = [{ type: type, index: index }];
+    _hovered = null;
+    syncSelectedCompat();
     updateHighlightSources();
     applyPanelHighlight();
-    // Show vertex handles for non-station features (editing.js guard prevents double-init)
-    if (type !== "station" && typeof App.activateVertexEdit === "function") {
-      App.activateVertexEdit(type, index);
+    syncVertexEditing();
+  }
+
+  function toggleMultiSelect(type, index) {
+    if (isSelected(type, index)) {
+      _multiSelected = _multiSelected.filter(function (s) {
+        return !(s.type === type && s.index === index);
+      });
+    } else {
+      _multiSelected.push({ type: type, index: index });
     }
-    if (typeof App.refreshSavedVertices  === "function") App.refreshSavedVertices();
-    if (typeof App.refreshSavedWaypoints === "function") App.refreshSavedWaypoints();
+    _hovered = null;
+    syncSelectedCompat();
+    updateHighlightSources();
+    applyPanelHighlight();
+    syncVertexEditing();
   }
 
   function clearSelection() {
-    if (!_selected && !_hovered) return;
-    _selected = null;
-    _hovered  = null;
-    App._selected = null;
+    if (!_multiSelected.length && !_hovered) return;
+    _multiSelected = [];
+    _hovered = null;
+    syncSelectedCompat();
     updateHighlightSources();
     applyPanelHighlight();
-    // Hide vertex handles (editing.js guard is a no-op if already null)
-    if (typeof App.deactivateVertexEdit === "function") {
-      App.deactivateVertexEdit();
-    }
+    if (typeof App.deactivateVertexEdit === "function") App.deactivateVertexEdit();
     if (typeof App.refreshSavedVertices  === "function") App.refreshSavedVertices();
     if (typeof App.refreshSavedWaypoints === "function") App.refreshSavedWaypoints();
   }
 
   // ---- Expose ----
 
-  App._selected           = null; // kept in sync with _selected for external reads
+  App._selected           = null; // kept in sync via syncSelectedCompat()
   App.initHighlightLayers = initHighlightLayers;
   App.setHoveredFeature   = setHoveredFeature;
   App.clearHover          = clearHover;
   App.selectFeature       = selectFeature;
+  App.toggleMultiSelect   = toggleMultiSelect;
   App.clearSelection      = clearSelection;
   App.applyPanelHighlight = applyPanelHighlight;
+  App.isFeatureSelected   = isSelected;
+  App.getSelectedFeatures = function () { return _multiSelected.slice(); };
 })();
