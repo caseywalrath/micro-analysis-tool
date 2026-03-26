@@ -54,8 +54,8 @@ js/
     routes.js               Route drawing (OSRM street-snapped), route buffers (default 0.5 mi), throttled snapped preview, waypoint-only vertex editing
     polygons.js             Polygon drawing (vertex-by-vertex with snap-to-close), rubber-band preview, vertex editing
     editing.js              Feature editing: station click-drag, line/polygon/route vertex editing with orange handles
-    features.js             Right-side feature panel: lists features, editable names, per-item color swatches, chevron expand toggle; clicking a row opens a slide-down attribute panel (fp-attr-panel) for that feature. Delete button lives inside the attribute panel with an inline confirmation step. Exports refreshFeaturePanel, openColorPicker, updateFeatureColor.
-    feature-attributes.js   Per-feature attribute panel: ATTR_FIELDS config per type, buildAttrPanel(featureType, featureIndex, feature, onDelete) → panel div, toggleAttrPanel(itemEl). Attributes stored in feature.properties.attributes (lazy-init). Route fields: routeGroup, direction, mode, routeId, frequency, spanStart, spanEnd, daysOfService, avgSpeed. Line fields: lineMode, notes. Polygon fields: notes. Station: name only.
+    features.js             Right-side feature panel: lists features, editable names, per-item color swatches, gear icon (⚙) per row to open the floating attributes popup, right-click context menu with Attributes option. Row click selects/highlights feature on map only. Delete (trash icon) stays in the row with an inline confirm strip. Exports refreshFeaturePanel, openColorPicker, updateFeatureColor.
+    feature-attributes.js   Floating draggable attribute popup (singleton, #fp-attr-popup): ATTR_FIELDS config per type, openAttrPopup(featureType, featureIndex, feature), closeAttrPopup(), isAttrPopupOpen(), getAttrPopupFeature(). Popup is 320px wide, position: fixed, draggable by header, clamped within viewport, closes on Escape or X button. Auto-updates when a different feature is selected while open. Attributes stored in feature.properties.attributes (lazy-init). Route fields: routeGroup, direction, mode, routeId, frequency, spanStart, spanEnd, daysOfService, avgSpeed. Line fields: lineMode, notes. Polygon fields: notes. Station: name only.
     census.js               TIGERweb geometry queries, ACS data fetch, area-weighted aggregation
     lodes.js                LODES .csv.gz download/upload/parse, block-level employment
     cache.js                Session cache: save/restore/reset via localStorage; JSON import/export
@@ -113,7 +113,7 @@ routes.js   (needs App.map, turf, fetch/AbortController)
 polygons.js (needs App.map)
 editing.js  (needs App.map, App.stations, App.lines, App.routes, App.polygons, move/update functions)
 features.js           (needs App.stations, App.lines, App.routes, App.polygons, App.removeStation, etc.)
-feature-attributes.js (needs App namespace; defines App.buildAttrPanel, App.toggleAttrPanel)
+feature-attributes.js (needs App namespace; defines App.openAttrPopup, App.closeAttrPopup, App.isAttrPopupOpen, App.getAttrPopupFeature)
 census.js             (needs App.map, App.bboxStringFromFeature, App.getMeta, turf)
 lodes.js    (needs App.map, App.bboxStringFromFeature, App.bufferUnionPolygon, pako, turf)
 cache.js    (needs App.stations, App.lines, App.routes, App.polygons, render/rebuild functions)
@@ -168,11 +168,19 @@ Route features store `properties.waypoints` (user click points) separately from 
 `refreshFeaturePanel()`
 
 ### feature-attributes.js
-`buildAttrPanel(featureType, featureIndex, feature, onDelete)` — returns a `div.fp-attr-panel` (initially hidden) containing: a top bar with a type label and delete icon (with inline confirm row), a Name input, and type-specific attribute fields. All inputs read/write `feature.properties.attributes[key]` and call `App.cache.save()` on change. Lazy-inits `feature.properties.attributes = {}` if absent.
+`openAttrPopup(featureType, featureIndex, feature)` — opens the floating attributes popup for the given feature. If the same feature is already shown, closes it (toggle). If a different feature was shown, replaces content in place (preserves dragged position). On first open, positions the popup at left: 320px, top: 60px (just right of sidebar, below toolbar).
 
-`toggleAttrPanel(itemEl)` — finds the sibling `fp-attr-panel` inside the same `fp-item-wrapper`, toggles its `display`, rotates the `fp-expand` chevron via the `.open` class, and resets the confirm row when closing.
+`closeAttrPopup()` — hides the popup and clears current feature tracking.
 
-**Feature attribute storage:** All feature types (routes, lines, stations, polygons) can carry a `properties.attributes` object. This is preserved automatically by session cache serialization (no cache changes needed — `App.routes.slice()` etc. include full `properties`). Lazy-init means old sessions without the field restore cleanly.
+`isAttrPopupOpen()` — returns boolean.
+
+`getAttrPopupFeature()` — returns `{ featureType, featureIndex }` or null.
+
+**Popup DOM:** `#fp-attr-popup` (position: fixed, z-index: 9000, width: 320px). Header (`.fp-attr-popup-header`) is draggable; drag state uses `initLeft/initTop` + mouse delta, clamped to keep ≥40px visible on all edges. Window resize re-clamps. Escape key closes. X button (`.fp-attr-popup-close`) closes. Body (`.fp-attr-popup-body`) contains Name row + type-specific field rows using existing `.fp-attr-row` / `.fp-attr-label` / `.fp-attr-input` classes.
+
+**Auto-update on selection:** `selection.js selectFeature()` calls `openAttrPopup` if the popup is already open, so clicking a different feature row or map feature automatically switches the popup content.
+
+**Feature attribute storage:** All feature types (routes, lines, stations, polygons) can carry a `properties.attributes` object. Preserved automatically by session cache serialization. Lazy-init means old sessions without the field restore cleanly.
 
 **Route grouping (future-ready):** The `routeGroup` field stored on route attributes seeds future pattern grouping. Routes sharing the same `routeGroup` string are intended to be treated as directional patterns of one logical route. No grouping logic is implemented yet — `computePerRouteCDI`, `matchRoutesToCSV`, and the corridor dropdown will need updating when that feature is built. The `direction` field (NB/SB/EB/WB/Inbound/Outbound/Loop) labels each pattern within its group.
 
@@ -452,20 +460,14 @@ Clicking an analysis module button opens a popup window over the map. The Buffer
 +-----------------------------+
 |  Features                   |
 |  STATIONS                   |  Per-station rows: editable name +
-|    Station 1          [▸]  |  chevron toggle. Click row to open
-|    Station 2          [▸]  |  attribute panel (name only).
+|    Station 1        [⚙][🗑]|  gear (⚙) opens floating attr popup.
+|    Station 2        [⚙][🗑]|  Row click selects on map only.
 |  LINES                      |  Stations can be dragged on the map.
-|    Line 1             [▸]  |  Per-line: name, mode, notes.
+|    Line 1           [⚙][🗑]|  Per-line: name, mode, notes.
 |  ROUTES                     |  Per-route: name, route group,
-|    Route 1            [▸]  |  direction, mode, route ID,
-|    ┌──────────── [🗑]──┐   |  frequency, span, days, avg speed.
-|    │ Route Attributes  │   |  Delete lives inside the panel
-|    │ Name: [Route 1  ] │   |  with an inline confirm step.
-|    │ Route Group: [  ] │   |
-|    │ Direction: [Both] │   |
-|    │ Mode: [Bus      ] │   |
-|    │ Frequency: [15]min│   |
-|    └───────────────────┘   |
+|    Route 1          [⚙][🗑]|  direction, mode, route ID,
+|                             |  frequency, span, days, avg speed.
+|                             |  🗑 = trash + inline confirm strip.
 |  POLYGONS                   |  Per-polygon: name, notes.
 |    Polygon 1          [▸]  |
 |  BUFFERS                    |
@@ -476,7 +478,7 @@ Clicking an analysis module button opens a popup window over the map. The Buffer
 +-----------------------------+
 ```
 
-Each feature row is wrapped in a `div.fp-item-wrapper` containing the `div.fp-item` row and a sibling `div.fp-attr-panel`. Clicking anywhere on the row (except the color swatch or name input) toggles the panel and selects the feature on the map. The chevron rotates 90° when open (`.open` class).
+Each feature row is wrapped in a `div.fp-item-wrapper` containing the `div.fp-item` row and a sibling `div.fp-delete-confirm` strip (hidden by default, shown on trash click). Clicking a row selects the feature on the map (highlights it). The gear icon (`.fp-gear-btn`) opens the floating attributes popup (`#fp-attr-popup`); right-clicking the row also offers "Attributes" in the context menu. No inline attribute panel exists in the DOM.
 
 ## Known Issues
 
