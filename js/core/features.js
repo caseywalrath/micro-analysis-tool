@@ -561,6 +561,7 @@
 
     // Color swatch — applies color to all features in the group
     var firstColor = features[idxs[0]].properties.color || getTypeDefaultColor(featureType);
+    header.style.borderLeftColor = firstColor;
     var sw = document.createElement("button");
     sw.className = "fp-swatch fp-item-swatch";
     sw.style.background = firstColor;
@@ -571,6 +572,7 @@
         var curColor = feats[indices[0]].properties.color || getTypeDefaultColor(featureType);
         App.openColorPicker(swatch, curColor, function (newColor) {
           swatch.style.background = newColor;
+          header.style.borderLeftColor = newColor;
           if (onColorApply) {
             onColorApply(indices, newColor, feats);
           } else {
