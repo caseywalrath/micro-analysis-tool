@@ -250,6 +250,7 @@
       return;
     }
 
+    if (App.undo && !App.undo.isRestoring()) App.undo.push();
     var idx = lines.length + 1;
     var nWaypoints = currentCoords.length;
     var colorIdx = lines.length + (App.routes ? App.routes.length : 0);
@@ -277,6 +278,7 @@
 
   function removeLine(index) {
     if (index < 0 || index >= lines.length) return;
+    if (App.undo && !App.undo.isRestoring()) App.undo.push();
     lines.splice(index, 1);
     rebuildLineBuffers(lineBufferRadiusMiles);
   }
@@ -315,6 +317,7 @@
     if (lineIndex < 0 || lineIndex >= lines.length) return;
     var coords = lines[lineIndex].geometry.coordinates;
     if (vertexIndex < 0 || vertexIndex >= coords.length) return;
+    if (App.undo && !App.undo.isRestoring()) App.undo.push();
     coords[vertexIndex] = [lng, lat];
     rebuildLineBuffers(lineBufferRadiusMiles);
   }
@@ -333,6 +336,7 @@
   App.renderLineLayers = renderLineLayers;
   App.setLinePreview = setLinePreview;
   App.updateLineVertex = updateLineVertex;
+  App._lineDrawingInProgress = function () { return currentCoords.length > 0; };
   App.refreshSavedVertices = function () {
     var src = App.map && App.map.getSource("lines-vertices");
     if (src) src.setData(savedVerticesGeoJSON());

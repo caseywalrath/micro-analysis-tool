@@ -223,6 +223,7 @@
       return;
     }
 
+    if (App.undo && !App.undo.isRestoring()) App.undo.push();
     var idx = polygons.length + 1;
     var nVertices = currentCoords.length;
     var ring = currentCoords.slice();
@@ -251,6 +252,7 @@
 
   function removePolygon(index) {
     if (index < 0 || index >= polygons.length) return;
+    if (App.undo && !App.undo.isRestoring()) App.undo.push();
     polygons.splice(index, 1);
     renderPolygonLayers();
   }
@@ -287,6 +289,7 @@
     if (polyIndex < 0 || polyIndex >= polygons.length) return;
     var ring = polygons[polyIndex].geometry.coordinates[0];
     if (vertexIndex < 0 || vertexIndex >= ring.length - 1) return;
+    if (App.undo && !App.undo.isRestoring()) App.undo.push();
     ring[vertexIndex] = [lng, lat];
     // If editing vertex 0, also update the closing vertex
     if (vertexIndex === 0) {
@@ -316,4 +319,5 @@
   App.renderPolygonLayers = renderPolygonLayers;
   App.setPolygonPreview = setPolygonPreview;
   App.updatePolygonVertex = updatePolygonVertex;
+  App._polygonDrawingInProgress = function () { return currentCoords.length > 0; };
 })();

@@ -428,6 +428,8 @@
     reset: reset,
     exportToFile: exportToFile,
     importFromFile: importFromFile,
+    collectState: collectState,
+    applyState: applyState,
     STORAGE_KEY: STORAGE_KEY,
     // registerModule(id, { collect(mode), apply(data) })
     // Analysis modules call this at load time to opt into session persistence.

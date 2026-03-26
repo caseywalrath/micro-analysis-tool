@@ -415,8 +415,22 @@
       if (e.key === "Escape" && App.popup.isOpen()) {
         App.popup.close();
       }
+      var tag = e.target.tagName;
+      // Ctrl+Z / Cmd+Z = Undo
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === "z" || e.key === "Z")) {
+        if (tag === "INPUT" || tag === "TEXTAREA" || e.target.isContentEditable) return;
+        document.getElementById("undo-btn").click();
+        e.preventDefault();
+        return;
+      }
+      // Ctrl+Shift+Z / Cmd+Shift+Z = Redo
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "z" || e.key === "Z")) {
+        if (tag === "INPUT" || tag === "TEXTAREA" || e.target.isContentEditable) return;
+        document.getElementById("redo-btn").click();
+        e.preventDefault();
+        return;
+      }
       if (e.key === "Delete" || e.key === "Backspace") {
-        var tag = e.target.tagName;
         if (tag === "INPUT" || tag === "TEXTAREA" || e.target.isContentEditable) return;
         var ed = App._editing;
         if (ed && ed.type === "vertex-edit") {
@@ -531,9 +545,10 @@
       }
     });
 
-    // Clear stations
+    // Clear all features
     document.getElementById("clear").addEventListener("click", function () {
-      if (!confirm("Clear all features? This cannot be undone.")) return;
+      if (!confirm("Clear all features?")) return;
+      if (App.undo && !App.undo.isRestoring()) App.undo.push();
       if (typeof App.exitEditMode === "function") App.exitEditMode();
       App.clearStations();
       App.clearLines();
@@ -550,31 +565,28 @@
       if (typeof App.cache !== "undefined") App.cache.save();
     });
 
-    // Undo last station/waypoint/feature
-    document.getElementById("undo").addEventListener("click", function () {
-      if (App.drawMode === "line") {
+    // Undo — remove last waypoint if drawing, otherwise pop undo stack
+    document.getElementById("undo-btn").addEventListener("click", function () {
+      if (App.drawMode === "line" && App._lineDrawingInProgress && App._lineDrawingInProgress()) {
         App.undoLastLine();
-        notifyProject();
-        if (typeof App.cache !== "undefined") App.cache.save();
-      } else if (App.drawMode === "route") {
-        App.undoLastRoute();
-        notifyProject();
-        if (typeof App.cache !== "undefined") App.cache.save();
-      } else if (App.drawMode === "polygon") {
-        App.undoLastPolygon();
-        notifyProject();
-        if (typeof App.cache !== "undefined") App.cache.save();
-      } else if (App.drawMode === "label" && App.labels && App.labels.length > 0) {
-        App.undoLastLabel();
-        App.setStatus("Updated");
-        notifyProject();
-        if (typeof App.cache !== "undefined") App.cache.save();
-      } else if (App.stations.length > 0) {
-        App.undoLastStation();
-        App.setStatus("Updated");
-        notifyProject();
-        if (typeof App.cache !== "undefined") App.cache.save();
+        return;
       }
+      if (App.drawMode === "route" && App._routeDrawingInProgress && App._routeDrawingInProgress()) {
+        App.undoLastRoute();
+        return;
+      }
+      if (App.drawMode === "polygon" && App._polygonDrawingInProgress && App._polygonDrawingInProgress()) {
+        App.undoLastPolygon();
+        return;
+      }
+      App.undo.undo();
+      notifyProject();
+    });
+
+    // Redo
+    document.getElementById("redo-btn").addEventListener("click", function () {
+      App.undo.redo();
+      notifyProject();
     });
 
     // LODES download

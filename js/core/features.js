@@ -197,6 +197,7 @@
   /* ---- Feature color update (called by per-feature swatches) ---- */
 
   App.updateFeatureColor = function (featureType, featureIndex, newColor) {
+    if (App.undo && !App.undo.isRestoring()) App.undo.push();
     if (featureType === "station") {
       if (App.stations[featureIndex]) App.stations[featureIndex].properties.color = newColor;
       if (typeof App.renderStationLayers === "function") App.renderStationLayers();

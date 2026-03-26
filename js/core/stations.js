@@ -70,6 +70,7 @@
   }
 
   function addStationPoint(lon, lat) {
+    if (App.undo && !App.undo.isRestoring()) App.undo.push();
     var idx = points.length + 1;
     points.push({
       type: "Feature",
@@ -112,12 +113,14 @@
 
   function moveStation(index, lng, lat) {
     if (index < 0 || index >= points.length) return;
+    if (App.undo && !App.undo.isRestoring()) App.undo.push();
     points[index].geometry.coordinates = [lng, lat];
     rebuildBuffers(bufferRadiusMiles);
   }
 
   function removeStation(index) {
     if (index < 0 || index >= points.length) return;
+    if (App.undo && !App.undo.isRestoring()) App.undo.push();
     points.splice(index, 1);
     rebuildBuffers(bufferRadiusMiles);
   }

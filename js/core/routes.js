@@ -398,6 +398,7 @@
       coords = fetched || currentWaypoints.slice();
     }
 
+    if (App.undo && !App.undo.isRestoring()) App.undo.push();
     var idx = routes.length + 1;
     var colorIdx = (App.lines ? App.lines.length : 0) + routes.length;
     var color = (App.sectionColors && App.sectionColors.route) ||
@@ -434,6 +435,7 @@
 
   function removeRoute(index) {
     if (index < 0 || index >= routes.length) return;
+    if (App.undo && !App.undo.isRestoring()) App.undo.push();
     routes.splice(index, 1);
     rebuildRouteBuffers(routeBufferRadiusMiles);
   }
@@ -487,6 +489,7 @@
     var route = routes[routeIdx];
     var waypoints = route.properties.waypoints;
     if (wpIdx < 0 || wpIdx >= waypoints.length) return;
+    if (App.undo && !App.undo.isRestoring()) App.undo.push();
 
     waypoints[wpIdx] = [lng, lat];
 
@@ -559,6 +562,7 @@
   App.cancelRouteDrawing = cancelRouteDrawing;
   App.renderRouteLayers = renderRouteLayers;
   App.updateRouteWaypoint = updateRouteWaypoint;
+  App._routeDrawingInProgress = function () { return currentWaypoints.length > 0; };
   App.insertRouteWaypoint = insertRouteWaypoint;
   App.rerouteFeature = rerouteFeature;
   App.refreshSavedWaypoints = function () {

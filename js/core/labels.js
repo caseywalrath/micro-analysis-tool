@@ -37,6 +37,7 @@
       .addTo(App.map);
 
     marker.on("dragend", function () {
+      if (App.undo && !App.undo.isRestoring()) App.undo.push();
       var lngLat = marker.getLngLat();
       feature.geometry.coordinates = [lngLat.lng, lngLat.lat];
       if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
@@ -49,6 +50,7 @@
   /* ---- Public API ---- */
 
   function addLabel(lon, lat) {
+    if (App.undo && !App.undo.isRestoring()) App.undo.push();
     _labelCounter++;
     var feature = {
       type: "Feature",
@@ -78,6 +80,7 @@
 
   function removeLabel(index) {
     if (index < 0 || index >= labels.length) return;
+    if (App.undo && !App.undo.isRestoring()) App.undo.push();
     if (_markers[index]) _markers[index].remove();
     labels.splice(index, 1);
     _markers.splice(index, 1);
