@@ -47,6 +47,7 @@
       map.setPaintProperty(bufLineLayer, "line-color", stationColor);
     }
 
+    var stationColorExpr = ["case", ["all", ["has", "color"], ["!=", ["get", "color"], ""]], ["get", "color"], stationColor];
     if (!map.getSource(ptsSrc)) {
       map.addSource(ptsSrc, { type: "geojson", data: pointsGeoJSON() });
       map.addLayer({
@@ -56,13 +57,13 @@
         paint: {
           "circle-radius": 6,
           "circle-stroke-width": 2,
-          "circle-color": stationColor,
+          "circle-color": stationColorExpr,
           "circle-stroke-color": "#ffffff"
         }
       });
     } else {
       map.getSource(ptsSrc).setData(pointsGeoJSON());
-      map.setPaintProperty(ptsLayer, "circle-color", stationColor);
+      map.setPaintProperty(ptsLayer, "circle-color", stationColorExpr);
     }
 
     updateCoordsPanel();
@@ -72,7 +73,7 @@
     var idx = points.length + 1;
     points.push({
       type: "Feature",
-      properties: { name: "Station " + idx, stationIdx: idx },
+      properties: { name: "Station " + idx, stationIdx: idx, color: "" },
       geometry: { type: "Point", coordinates: [lon, lat] }
     });
     rebuildBuffers(bufferRadiusMiles);

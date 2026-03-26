@@ -36,15 +36,18 @@
       { key: "avgSpeed",      label: "Avg speed",   type: "number",     unit: "mph" }
     ],
     line: [
-      { key: "lineMode", label: "Mode",  type: "select", options: ["Light Rail","Commuter Rail","Streetcar","Bus","BRT"] },
-      { key: "notes",    label: "Notes", type: "text",   placeholder: "" }
+      { key: "lineGroup", label: "Line Group", type: "text", placeholder: "e.g. Express" },
+      { key: "lineMode",  label: "Mode",  type: "select", options: ["Light Rail","Commuter Rail","Streetcar","Bus","BRT"] },
+      { key: "notes",     label: "Notes", type: "text",   placeholder: "" }
     ],
     station: [
-      { key: "stopId",           label: "Stop ID", type: "text", placeholder: "e.g. 1042" },
-      { key: "associatedRoutes", label: "Routes"                                           }
+      { key: "stationGroup",     label: "Station Group", type: "text", placeholder: "e.g. North Corridor" },
+      { key: "stopId",           label: "Stop ID",       type: "text", placeholder: "e.g. 1042" },
+      { key: "associatedRoutes", label: "Routes"                                                 }
     ],
     polygon: [
-      { key: "notes", label: "Notes", type: "text", placeholder: "" }
+      { key: "polygonGroup", label: "Polygon Group", type: "text", placeholder: "e.g. Study Area" },
+      { key: "notes",        label: "Notes",         type: "text", placeholder: "" }
     ],
     label: [
       { key: "labelGroup", label: "Label Group", type: "text",   placeholder: "e.g. Route Numbers" },
@@ -247,6 +250,51 @@
     return { el: inp, unit: null };
   }
 
+  function buildGenericGroupPicker(field, attrs, featureType) {
+    var inp = document.createElement("input");
+    inp.type = "text";
+    inp.className = "fp-attr-input";
+    if (field.placeholder) inp.placeholder = field.placeholder;
+    var val = attrs[field.key];
+    inp.value = (val !== undefined && val !== null) ? val : "";
+
+    var TYPE_TO_ARRAY = { station: "stations", line: "lines", polygon: "polygons" };
+    var dlId = "fp-" + featureType + "-group-datalist";
+    var dl = document.getElementById(dlId);
+    if (!dl) {
+      dl = document.createElement("datalist");
+      dl.id = dlId;
+      document.body.appendChild(dl);
+    }
+    dl.innerHTML = "";
+    var seen = {};
+    (App[TYPE_TO_ARRAY[featureType]] || []).forEach(function (f) {
+      var g = f.properties.attributes && f.properties.attributes[field.key];
+      if (g && !seen[g]) {
+        seen[g] = true;
+        var opt = document.createElement("option");
+        opt.value = g;
+        dl.appendChild(opt);
+      }
+    });
+    inp.setAttribute("list", dlId);
+
+    inp.addEventListener("change", function () {
+      var newVal = inp.value.trim();
+      if (newVal) {
+        attrs[field.key] = newVal;
+      } else {
+        delete attrs[field.key];
+      }
+      saveAttrCache();
+      if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+    });
+    inp.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") inp.blur();
+    });
+    return { el: inp, unit: null };
+  }
+
   function buildColorPicker(field, attrs, feature) {
     var btn = document.createElement("button");
     btn.className = "fp-attr-color-swatch";
@@ -330,13 +378,15 @@
     return { el: inp, unit: null };
   }
 
-  function buildFieldInput(field, attrs, feature) {
+  function buildFieldInput(field, attrs, feature, featureType) {
     if (field.key === "associatedRoutes") return buildRoutePicker(attrs);
     if (field.type === "select")      return buildSelect(field, attrs);
     if (field.type === "checkboxes")  return buildCheckboxes(field, attrs);
     if (field.type === "color")       return buildColorPicker(field, attrs, feature);
     if (field.key === "routeGroup")   return buildGroupPicker(field, attrs, feature);
     if (field.key === "labelGroup")   return buildLabelGroupPicker(field, attrs, feature);
+    if (field.key === "stationGroup" || field.key === "lineGroup" || field.key === "polygonGroup")
+      return buildGenericGroupPicker(field, attrs, featureType);
     return buildTextOrNumber(field, attrs);
   }
 
@@ -400,7 +450,7 @@
     // --- Type-specific fields ---
     var fields = ATTR_FIELDS[featureType] || [];
     fields.forEach(function (field) {
-      var result = buildFieldInput(field, attrs, feature);
+      var result = buildFieldInput(field, attrs, feature, featureType);
       panel.appendChild(buildRow(field.label, result.el, result.unit));
     });
 

@@ -173,7 +173,10 @@
   /* ---- Feature color update (called by per-feature swatches) ---- */
 
   App.updateFeatureColor = function (featureType, featureIndex, newColor) {
-    if (featureType === "line") {
+    if (featureType === "station") {
+      if (App.stations[featureIndex]) App.stations[featureIndex].properties.color = newColor;
+      if (typeof App.renderStationLayers === "function") App.renderStationLayers();
+    } else if (featureType === "line") {
       App.lines[featureIndex].properties.color = newColor;
       var lrEl = document.getElementById("lineBufferRadius");
       var lr = lrEl ? parseFloat(lrEl.value) : 0.5; if (isNaN(lr)) lr = 0.5;
@@ -261,36 +264,11 @@
     div.dataset.featureType  = featureType;
     div.dataset.featureIndex = featureIndex;
 
-    // Per-feature color swatch (not for stations)
-    var swatch = null;
-    if (featureType !== "station") {
-      swatch = document.createElement("button");
-      swatch.className = "fp-swatch fp-item-swatch";
-      var _sectionColor = App.sectionColors && App.sectionColors[featureType];
-      var _featureColor = feature.properties.color || getTypeDefaultColor(featureType);
-      if (_sectionColor && _featureColor === _sectionColor) {
-        swatch.classList.add("fp-swatch-neutral");
-      } else {
-        swatch.style.background = _featureColor;
-      }
-      swatch.title = "Change color";
-      (function (sw, ft, fi) {
-        sw.addEventListener("click", function (e) {
-          e.stopPropagation();
-          App.openColorPicker(sw, feature.properties.color, function (newColor) {
-            feature.properties.color = newColor;
-            sw.classList.remove("fp-swatch-neutral");
-            sw.style.background = newColor;
-            App.updateFeatureColor(ft, fi, newColor);
-          });
-        });
-      })(swatch, featureType, featureIndex);
-      div.appendChild(swatch);
-    }
-
-    var input = document.createElement("span");
-    input.className = "fp-name";
-    input.textContent = feature.properties.name || "";
+    // Expand toggle button — far left
+    var expandBtn = document.createElement("button");
+    expandBtn.className = "fp-expand";
+    expandBtn.title = "Edit attributes";
+    expandBtn.innerHTML = CHEVRON_SVG;
 
     // Visibility eye toggle
     var isHidden = !!feature.properties.hidden;
@@ -308,31 +286,32 @@
       });
     })(eyeBtn, feature, featureType);
 
-    // Expand toggle button (replaces the old delete button)
-    var expandBtn = document.createElement("button");
-    expandBtn.className = "fp-expand";
-    expandBtn.title = "Edit attributes";
-    expandBtn.innerHTML = CHEVRON_SVG;
+    // Per-feature color swatch (all types including station)
+    var swatch = document.createElement("button");
+    swatch.className = "fp-swatch fp-item-swatch";
+    var _sectionColor = App.sectionColors && App.sectionColors[featureType];
+    var _featureColor = feature.properties.color || getTypeDefaultColor(featureType);
+    if (_sectionColor && _featureColor === _sectionColor) {
+      swatch.classList.add("fp-swatch-neutral");
+    } else {
+      swatch.style.background = _featureColor;
+    }
+    swatch.title = "Change color";
+    (function (sw, ft, fi) {
+      sw.addEventListener("click", function (e) {
+        e.stopPropagation();
+        App.openColorPicker(sw, feature.properties.color, function (newColor) {
+          feature.properties.color = newColor;
+          sw.classList.remove("fp-swatch-neutral");
+          sw.style.background = newColor;
+          App.updateFeatureColor(ft, fi, newColor);
+        });
+      });
+    })(swatch, featureType, featureIndex);
 
-    // Hover and click wiring
-    div.addEventListener("mouseenter", function () {
-      if (typeof App.setHoveredFeature === "function") App.setHoveredFeature(featureType, featureIndex);
-    });
-    div.addEventListener("mouseleave", function () {
-      if (typeof App.clearHover === "function") App.clearHover();
-    });
-    div.addEventListener("click", function (e) {
-      if (e.target === input || input.contains(e.target)) return;
-      if (swatch && (e.target === swatch || swatch.contains(e.target))) return;
-      if (e.ctrlKey || e.metaKey) {
-        // Multi-select: toggle this item, don't toggle the attr panel
-        if (typeof App.toggleMultiSelect === "function") App.toggleMultiSelect(featureType, featureIndex);
-      } else {
-        // Single-select: clear others, select this one, toggle attr panel
-        if (typeof App.selectFeature === "function") App.selectFeature(featureType, featureIndex);
-        if (typeof App.toggleAttrPanel === "function") App.toggleAttrPanel(div);
-      }
-    });
+    var input = document.createElement("span");
+    input.className = "fp-name";
+    input.textContent = feature.properties.name || "";
 
     // Duplicate button (labels only)
     var dupBtn = null;
@@ -364,11 +343,30 @@
       }
     });
 
-    div.appendChild(input);
+    // Hover and click wiring
+    div.addEventListener("mouseenter", function () {
+      if (typeof App.setHoveredFeature === "function") App.setHoveredFeature(featureType, featureIndex);
+    });
+    div.addEventListener("mouseleave", function () {
+      if (typeof App.clearHover === "function") App.clearHover();
+    });
+    div.addEventListener("click", function (e) {
+      if (e.target === swatch || swatch.contains(e.target)) return;
+      if (e.ctrlKey || e.metaKey) {
+        if (typeof App.toggleMultiSelect === "function") App.toggleMultiSelect(featureType, featureIndex);
+      } else {
+        if (typeof App.selectFeature === "function") App.selectFeature(featureType, featureIndex);
+        if (typeof App.toggleAttrPanel === "function") App.toggleAttrPanel(div);
+      }
+    });
+
+    // DOM order: expandBtn [eye] [swatch] [name] [dup?] [trash]
+    div.appendChild(expandBtn);
     div.appendChild(eyeBtn);
+    div.appendChild(swatch);
+    div.appendChild(input);
     if (dupBtn) div.appendChild(dupBtn);
     div.appendChild(trashBtn);
-    div.appendChild(expandBtn);
     return div;
   }
 
@@ -530,20 +528,125 @@
     });
   }
 
-  /* ---- Route grouping list ---- */
+  /* ---- Shared group header builder ---- */
 
-  function populateRouteList(containerId, features, removeFn) {
+  function buildGroupHeader(groupName, featureType, idxs, features, rerenderFn, removeFn, onColorApply) {
+    var header = document.createElement("div");
+    header.className = "fp-group-header";
+
+    var toggle = document.createElement("button");
+    toggle.className = "fp-group-toggle";
+    toggle.innerHTML = CHEVRON_SVG;
+    header.appendChild(toggle);
+
+    // Group-level visibility eye
+    var allHidden = idxs.every(function (idx) { return !!features[idx].properties.hidden; });
+    var groupEye = document.createElement("button");
+    groupEye.className = "fp-visibility-btn" + (allHidden ? " fp-eye-off" : "");
+    groupEye.innerHTML = allHidden ? EYE_OFF_SVG : EYE_SVG;
+    groupEye.title = allHidden ? "Show all" : "Hide all";
+    (function (btn, indices, feats) {
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        var hideAll = !indices.every(function (i) { return !!feats[i].properties.hidden; });
+        indices.forEach(function (i) {
+          if (hideAll) { feats[i].properties.hidden = true; }
+          else { delete feats[i].properties.hidden; }
+        });
+        if (App.cache && typeof App.cache.save === "function") App.cache.save();
+        if (rerenderFn) rerenderFn();
+      });
+    })(groupEye, idxs, features);
+    header.appendChild(groupEye);
+
+    // Color swatch — applies color to all features in the group
+    var firstColor = features[idxs[0]].properties.color || getTypeDefaultColor(featureType);
+    var sw = document.createElement("button");
+    sw.className = "fp-swatch fp-item-swatch";
+    sw.style.background = firstColor;
+    sw.title = "Change color for all in group";
+    (function (swatch, indices, feats) {
+      swatch.addEventListener("click", function (e) {
+        e.stopPropagation();
+        var curColor = feats[indices[0]].properties.color || getTypeDefaultColor(featureType);
+        App.openColorPicker(swatch, curColor, function (newColor) {
+          swatch.style.background = newColor;
+          if (onColorApply) {
+            onColorApply(indices, newColor, feats);
+          } else {
+            indices.forEach(function (idx) { feats[idx].properties.color = newColor; });
+          }
+          if (rerenderFn) rerenderFn();
+          if (App.cache && typeof App.cache.save === "function") App.cache.save();
+        });
+      });
+    })(sw, idxs, features);
+    header.appendChild(sw);
+
+    var nameSpan = document.createElement("span");
+    nameSpan.className = "fp-group-name";
+    nameSpan.textContent = groupName;
+    header.appendChild(nameSpan);
+
+    // Group delete button (margin-left: auto handled by CSS)
+    if (removeFn) {
+      var groupTrashBtn = document.createElement("button");
+      groupTrashBtn.className = "fp-del-btn";
+      groupTrashBtn.title = "Delete all features in group";
+      groupTrashBtn.innerHTML = TRASH_SVG;
+      (function (btn, indices) {
+        btn.addEventListener("click", function (e) {
+          e.stopPropagation();
+          var groupDiv = header.parentElement;
+          if (!groupDiv) return;
+          var existing = groupDiv.querySelector(".fp-group-delete-confirm");
+          if (existing) { existing.style.display = ""; return; }
+          var confirmDiv = document.createElement("div");
+          confirmDiv.className = "fp-delete-confirm fp-group-delete-confirm";
+          var text = document.createElement("span");
+          text.textContent = "Delete all " + indices.length + " feature(s) in group?";
+          var yesBtn = document.createElement("button");
+          yesBtn.className = "fp-attr-confirm-yes";
+          yesBtn.textContent = "Delete";
+          yesBtn.addEventListener("click", function (e2) {
+            e2.stopPropagation();
+            var sorted = indices.slice().sort(function (a, b) { return b - a; });
+            sorted.forEach(function (idx) { removeFn(idx); });
+            if (typeof App.onFeatureDelete === "function") App.onFeatureDelete();
+          });
+          var noBtn = document.createElement("button");
+          noBtn.className = "fp-attr-confirm-no";
+          noBtn.textContent = "Cancel";
+          noBtn.addEventListener("click", function (e2) {
+            e2.stopPropagation();
+            confirmDiv.style.display = "none";
+          });
+          confirmDiv.appendChild(text);
+          confirmDiv.appendChild(yesBtn);
+          confirmDiv.appendChild(noBtn);
+          var body = groupDiv.querySelector(".fp-group-body");
+          groupDiv.insertBefore(confirmDiv, body || null);
+        });
+      })(groupTrashBtn, idxs);
+      header.appendChild(groupTrashBtn);
+    }
+
+    return header;
+  }
+
+  /* ---- Generic grouped list builder ---- */
+
+  function populateGroupedList(containerId, features, featureType, removeFn, groupKey, rerenderFn, groupItemSortFn, onColorApply) {
     var el = document.getElementById(containerId);
     if (!el) return;
     el.innerHTML = "";
     if (!features.length) return;
 
-    // Collect groups and ungrouped indices
-    var groups = {};      // groupName → [routeIndex, ...]
-    var ungrouped = [];   // [routeIndex, ...]
+    var groups = {};
+    var ungrouped = [];
     for (var i = 0; i < features.length; i++) {
       var a = features[i].properties.attributes;
-      var g = a && a.routeGroup;
+      var g = a && a[groupKey];
       if (g) {
         if (!groups[g]) groups[g] = [];
         groups[g].push(i);
@@ -556,29 +659,21 @@
 
     // No groups → fall back to flat list
     if (groupNames.length === 0) {
-      populateList(containerId, features, removeFn, "route");
+      populateList(containerId, features, removeFn, featureType);
       return;
     }
 
     groupNames.sort(naturalSort);
 
-    groupNames.forEach(function (gn) {
-      groups[gn].sort(function (a, b) {
-        var aa = features[a].properties.attributes || {};
-        var ab = features[b].properties.attributes || {};
-        var da = aa.direction || "";
-        var db = ab.direction || "";
-        if (da !== db) return naturalSort(da, db);
-        return naturalSort(features[a].properties.name, features[b].properties.name);
-      });
-    });
-
-    ungrouped.sort(function (a, b) {
+    var defaultSort = function (a, b) {
       return naturalSort(features[a].properties.name, features[b].properties.name);
-    });
+    };
+    var itemSort = groupItemSortFn || defaultSort;
 
-    // Helper: build an indented pattern wrapper
-    function buildPatternWrapper(i) {
+    groupNames.forEach(function (gn) { groups[gn].sort(itemSort); });
+    ungrouped.sort(defaultSort);
+
+    function buildItemWrapper(i) {
       var wrapper = document.createElement("div");
       wrapper.className = "fp-item-wrapper fp-pattern";
       var onDelete = (function (idx) {
@@ -587,132 +682,93 @@
           if (typeof App.onFeatureDelete === "function") App.onFeatureDelete();
         };
       })(i);
-      wrapper.appendChild(buildItem(features[i], "route", i, onDelete));
+      wrapper.appendChild(buildItem(features[i], featureType, i, onDelete));
       wrapper.appendChild(buildDeleteConfirm(onDelete));
       if (typeof App.buildAttrPanel === "function") {
-        wrapper.appendChild(App.buildAttrPanel("route", i, features[i], onDelete));
+        wrapper.appendChild(App.buildAttrPanel(featureType, i, features[i], onDelete));
       }
       return wrapper;
     }
 
-    // Render groups
     groupNames.forEach(function (groupName) {
       var idxs = groups[groupName];
       var groupDiv = document.createElement("div");
       groupDiv.className = "fp-group";
 
-      // Header
-      var header = document.createElement("div");
-      header.className = "fp-group-header";
-
-      var toggle = document.createElement("button");
-      toggle.className = "fp-group-toggle";
-      toggle.innerHTML = CHEVRON_SVG;
-      header.appendChild(toggle);
-
-      // Color swatch — clicking applies color to all patterns in the group
-      var firstColor = features[idxs[0]].properties.color || getTypeDefaultColor("route");
-      var sw = document.createElement("button");
-      sw.className = "fp-swatch fp-item-swatch";
-      sw.style.background = firstColor;
-      sw.title = "Change color for all patterns";
-      (function (swatch, indices, feats) {
-        swatch.addEventListener("click", function (e) {
-          e.stopPropagation();
-          var curColor = feats[indices[0]].properties.color || getTypeDefaultColor("route");
-          App.openColorPicker(swatch, curColor, function (newColor) {
-            swatch.style.background = newColor;
-            indices.forEach(function (idx) { feats[idx].properties.color = newColor; });
-            var rrEl = document.getElementById("routeBufferRadius");
-            var rr = rrEl ? parseFloat(rrEl.value) : 0.5; if (isNaN(rr)) rr = 0.5;
-            App.rebuildRouteBuffers(rr);
-            App.renderRouteLayers();
-            if (App.cache && typeof App.cache.save === "function") App.cache.save();
-          });
-        });
-      })(sw, idxs, features);
-      header.appendChild(sw);
-
-      var nameSpan = document.createElement("span");
-      nameSpan.className = "fp-group-name";
-      nameSpan.textContent = groupName;
-      header.appendChild(nameSpan);
-
-      var countSpan = document.createElement("span");
-      countSpan.className = "fp-group-count";
-      countSpan.textContent = idxs.length + (idxs.length === 1 ? " pattern" : " patterns");
-      header.appendChild(countSpan);
-
-      // Group-level visibility eye
-      var allHidden = idxs.every(function (idx) { return !!features[idx].properties.hidden; });
-      var groupEye = document.createElement("button");
-      groupEye.className = "fp-visibility-btn" + (allHidden ? " fp-eye-off" : "");
-      groupEye.innerHTML = allHidden ? EYE_OFF_SVG : EYE_SVG;
-      groupEye.title = allHidden ? "Show all patterns" : "Hide all patterns";
-      (function (btn, indices, feats) {
-        btn.addEventListener("click", function (e) {
-          e.stopPropagation();
-          var hideAll = !indices.every(function (i) { return !!feats[i].properties.hidden; });
-          indices.forEach(function (i) {
-            if (hideAll) { feats[i].properties.hidden = true; }
-            else { delete feats[i].properties.hidden; }
-          });
-          if (App.cache && typeof App.cache.save === "function") App.cache.save();
-          var rrEl = document.getElementById("routeBufferRadius");
-          var rr = rrEl ? parseFloat(rrEl.value) : 0.5; if (isNaN(rr)) rr = 0.5;
-          if (typeof App.rebuildRouteBuffers === "function") App.rebuildRouteBuffers(rr);
-        });
-      })(groupEye, idxs, features);
-      header.appendChild(groupEye);
-
+      var header = buildGroupHeader(groupName, featureType, idxs, features, rerenderFn, removeFn, onColorApply);
       groupDiv.appendChild(header);
 
-      // Body (collapsible)
       var body = document.createElement("div");
       body.className = "fp-group-body";
-      idxs.forEach(function (i) { body.appendChild(buildPatternWrapper(i)); });
+      idxs.forEach(function (i) { body.appendChild(buildItemWrapper(i)); });
       groupDiv.appendChild(body);
 
-      // Collapsed by default; restore expanded state if user opened it this session
       body.style.display = "none";
-      if (_expandedGroups[groupName]) {
+      var expandKey = featureType + ":" + groupName;
+      var toggle = header.querySelector(".fp-group-toggle");
+      if (_expandedGroups[expandKey]) {
         body.style.display = "";
-        toggle.classList.add("open");
+        if (toggle) toggle.classList.add("open");
       }
 
-      // Toggle expand/collapse
+      var sw = header.querySelector(".fp-item-swatch");
+      var headerEye = header.querySelector(".fp-visibility-btn");
+      var headerTrash = header.querySelector(".fp-del-btn");
       function toggleGroup(e) {
         if (sw && (e.target === sw || sw.contains(e.target))) return;
+        if (headerEye && (e.target === headerEye || headerEye.contains(e.target))) return;
+        if (headerTrash && (e.target === headerTrash || headerTrash.contains(e.target))) return;
         e.stopPropagation();
         var isOpen = body.style.display !== "none";
         body.style.display = isOpen ? "none" : "";
-        toggle.classList.toggle("open", !isOpen);
-        if (isOpen) { delete _expandedGroups[groupName]; }
-        else { _expandedGroups[groupName] = true; }
+        if (toggle) toggle.classList.toggle("open", !isOpen);
+        if (isOpen) { delete _expandedGroups[expandKey]; }
+        else { _expandedGroups[expandKey] = true; }
       }
-      toggle.addEventListener("click", toggleGroup);
+      if (toggle) toggle.addEventListener("click", toggleGroup);
       header.addEventListener("click", toggleGroup);
 
       el.appendChild(groupDiv);
     });
 
-    // Render ungrouped routes as flat items
+    // Render ungrouped items with same fp-pattern indent
     ungrouped.forEach(function (i) {
       var wrapper = document.createElement("div");
-      wrapper.className = "fp-item-wrapper";
+      wrapper.className = "fp-item-wrapper fp-pattern";
       var onDelete = (function (idx) {
         return function () {
           removeFn(idx);
           if (typeof App.onFeatureDelete === "function") App.onFeatureDelete();
         };
       })(i);
-      wrapper.appendChild(buildItem(features[i], "route", i, onDelete));
+      wrapper.appendChild(buildItem(features[i], featureType, i, onDelete));
       wrapper.appendChild(buildDeleteConfirm(onDelete));
       if (typeof App.buildAttrPanel === "function") {
-        wrapper.appendChild(App.buildAttrPanel("route", i, features[i], onDelete));
+        wrapper.appendChild(App.buildAttrPanel(featureType, i, features[i], onDelete));
       }
       el.appendChild(wrapper);
     });
+  }
+
+  /* ---- Route grouping list ---- */
+
+  function populateRouteList(containerId, features, removeFn) {
+    populateGroupedList(containerId, features, "route", removeFn, "routeGroup",
+      function () {
+        var rrEl = document.getElementById("routeBufferRadius");
+        var rr = rrEl ? parseFloat(rrEl.value) : 0.5; if (isNaN(rr)) rr = 0.5;
+        if (typeof App.rebuildRouteBuffers === "function") App.rebuildRouteBuffers(rr);
+        if (typeof App.renderRouteLayers === "function") App.renderRouteLayers();
+      },
+      function (a, b) {
+        var aa = features[a].properties.attributes || {};
+        var ab = features[b].properties.attributes || {};
+        var da = aa.direction || "";
+        var db = ab.direction || "";
+        if (da !== db) return naturalSort(da, db);
+        return naturalSort(features[a].properties.name, features[b].properties.name);
+      }
+    );
   }
 
   /* ---- List population ---- */
@@ -747,175 +803,18 @@
   /* ---- Label grouping list ---- */
 
   function populateLabelList(containerId, features, removeFn) {
-    var el = document.getElementById(containerId);
-    if (!el) return;
-    el.innerHTML = "";
-    if (!features.length) return;
-
-    // Collect groups and ungrouped indices
-    var groups = {};
-    var ungrouped = [];
-    for (var i = 0; i < features.length; i++) {
-      var a = features[i].properties.attributes;
-      var g = a && a.labelGroup;
-      if (g) {
-        if (!groups[g]) groups[g] = [];
-        groups[g].push(i);
-      } else {
-        ungrouped.push(i);
-      }
-    }
-
-    var groupNames = Object.keys(groups);
-
-    // No groups → fall back to flat list
-    if (groupNames.length === 0) {
-      populateList(containerId, features, removeFn, "label");
-      return;
-    }
-
-    groupNames.sort(naturalSort);
-
-    groupNames.forEach(function (gn) {
-      groups[gn].sort(function (a, b) {
-        return naturalSort(features[a].properties.name, features[b].properties.name);
-      });
-    });
-
-    ungrouped.sort(function (a, b) {
-      return naturalSort(features[a].properties.name, features[b].properties.name);
-    });
-
-    function buildLabelWrapper(i) {
-      var wrapper = document.createElement("div");
-      wrapper.className = "fp-item-wrapper fp-pattern";
-      var onDelete = (function (idx) {
-        return function () {
-          removeFn(idx);
-          if (typeof App.onFeatureDelete === "function") App.onFeatureDelete();
-        };
-      })(i);
-      wrapper.appendChild(buildItem(features[i], "label", i, onDelete));
-      wrapper.appendChild(buildDeleteConfirm(onDelete));
-      if (typeof App.buildAttrPanel === "function") {
-        wrapper.appendChild(App.buildAttrPanel("label", i, features[i], onDelete));
-      }
-      return wrapper;
-    }
-
-    // Render groups
-    groupNames.forEach(function (groupName) {
-      var idxs = groups[groupName];
-      var groupDiv = document.createElement("div");
-      groupDiv.className = "fp-group";
-
-      var header = document.createElement("div");
-      header.className = "fp-group-header";
-
-      var toggle = document.createElement("button");
-      toggle.className = "fp-group-toggle";
-      toggle.innerHTML = CHEVRON_SVG;
-      header.appendChild(toggle);
-
-      // Color swatch — applies color to all labels in the group
-      var firstColor = features[idxs[0]].properties.color || getTypeDefaultColor("label");
-      var sw = document.createElement("button");
-      sw.className = "fp-swatch fp-item-swatch";
-      sw.style.background = firstColor;
-      sw.title = "Change color for all labels in group";
-      (function (swatch, indices, feats) {
-        swatch.addEventListener("click", function (e) {
-          e.stopPropagation();
-          var curColor = feats[indices[0]].properties.color || getTypeDefaultColor("label");
-          App.openColorPicker(swatch, curColor, function (newColor) {
-            swatch.style.background = newColor;
-            indices.forEach(function (idx) {
-              feats[idx].properties.color = newColor;
-              feats[idx].properties.bgColor = newColor;
-            });
-            if (typeof App.renderLabelMarkers === "function") App.renderLabelMarkers();
-            if (App.cache && typeof App.cache.save === "function") App.cache.save();
-          });
+    populateGroupedList(containerId, features, "label", removeFn, "labelGroup",
+      function () {
+        if (typeof App.renderLabelMarkers === "function") App.renderLabelMarkers();
+      },
+      null,
+      function (indices, newColor, feats) {
+        indices.forEach(function (idx) {
+          feats[idx].properties.color = newColor;
+          feats[idx].properties.bgColor = newColor;
         });
-      })(sw, idxs, features);
-      header.appendChild(sw);
-
-      var nameSpan = document.createElement("span");
-      nameSpan.className = "fp-group-name";
-      nameSpan.textContent = groupName;
-      header.appendChild(nameSpan);
-
-      var countSpan = document.createElement("span");
-      countSpan.className = "fp-group-count";
-      countSpan.textContent = idxs.length + (idxs.length === 1 ? " label" : " labels");
-      header.appendChild(countSpan);
-
-      // Group-level visibility eye
-      var allHidden = idxs.every(function (idx) { return !!features[idx].properties.hidden; });
-      var groupEye = document.createElement("button");
-      groupEye.className = "fp-visibility-btn" + (allHidden ? " fp-eye-off" : "");
-      groupEye.innerHTML = allHidden ? EYE_OFF_SVG : EYE_SVG;
-      groupEye.title = allHidden ? "Show all labels" : "Hide all labels";
-      (function (btn, indices, feats) {
-        btn.addEventListener("click", function (e) {
-          e.stopPropagation();
-          var hideAll = !indices.every(function (i) { return !!feats[i].properties.hidden; });
-          indices.forEach(function (i) {
-            if (hideAll) { feats[i].properties.hidden = true; }
-            else { delete feats[i].properties.hidden; }
-          });
-          if (App.cache && typeof App.cache.save === "function") App.cache.save();
-          if (typeof App.renderLabelMarkers === "function") App.renderLabelMarkers();
-        });
-      })(groupEye, idxs, features);
-      header.appendChild(groupEye);
-
-      groupDiv.appendChild(header);
-
-      // Body (collapsible)
-      var body = document.createElement("div");
-      body.className = "fp-group-body";
-      idxs.forEach(function (i) { body.appendChild(buildLabelWrapper(i)); });
-      groupDiv.appendChild(body);
-
-      // Collapsed by default; restore expanded state if user opened it this session
-      body.style.display = "none";
-      if (_expandedGroups[groupName]) {
-        body.style.display = "";
-        toggle.classList.add("open");
       }
-
-      function toggleGroup(e) {
-        if (sw && (e.target === sw || sw.contains(e.target))) return;
-        e.stopPropagation();
-        var isOpen = body.style.display !== "none";
-        body.style.display = isOpen ? "none" : "";
-        toggle.classList.toggle("open", !isOpen);
-        if (isOpen) { delete _expandedGroups[groupName]; }
-        else { _expandedGroups[groupName] = true; }
-      }
-      toggle.addEventListener("click", toggleGroup);
-      header.addEventListener("click", toggleGroup);
-
-      el.appendChild(groupDiv);
-    });
-
-    // Render ungrouped labels as flat items
-    ungrouped.forEach(function (i) {
-      var wrapper = document.createElement("div");
-      wrapper.className = "fp-item-wrapper";
-      var onDelete = (function (idx) {
-        return function () {
-          removeFn(idx);
-          if (typeof App.onFeatureDelete === "function") App.onFeatureDelete();
-        };
-      })(i);
-      wrapper.appendChild(buildItem(features[i], "label", i));
-      if (typeof App.buildAttrPanel === "function") {
-        wrapper.appendChild(App.buildAttrPanel("label", i, features[i], onDelete));
-      }
-      el.appendChild(wrapper);
-    });
+    );
   }
 
   var SECTION_LIST_IDS = { station: "fp-stations", line: "fp-lines", route: "fp-routes", polygon: "fp-polygons", label: "fp-labels" };
@@ -931,10 +830,21 @@
 
   function refreshFeaturePanel() {
     buildSectionSwatches(); // no-op after first call
-    populateList("fp-stations", App.stations || [], App.removeStation || function () {}, "station");
-    populateList("fp-lines",    App.lines    || [], App.removeLine    || function () {}, "line");
+    populateGroupedList("fp-stations", App.stations || [], "station",
+      App.removeStation || function () {}, "stationGroup",
+      function () { if (typeof App.renderStationLayers === "function") App.renderStationLayers(); });
+    populateGroupedList("fp-lines", App.lines || [], "line",
+      App.removeLine || function () {}, "lineGroup",
+      function () {
+        var lrEl = document.getElementById("lineBufferRadius");
+        var lr = lrEl ? parseFloat(lrEl.value) : 0.5; if (isNaN(lr)) lr = 0.5;
+        if (typeof App.rebuildLineBuffers === "function") App.rebuildLineBuffers(lr);
+        if (typeof App.renderLineLayers === "function") App.renderLineLayers();
+      });
     populateRouteList("fp-routes", App.routes || [], App.removeRoute || function () {});
-    populateList("fp-polygons", App.polygons || [], App.removePolygon || function () {}, "polygon");
+    populateGroupedList("fp-polygons", App.polygons || [], "polygon",
+      App.removePolygon || function () {}, "polygonGroup",
+      function () { if (typeof App.renderPolygonLayers === "function") App.renderPolygonLayers(); });
     populateLabelList("fp-labels", App.labels || [], App.removeLabel || function () {});
     applySectionCollapse();
     if (typeof App.applyPanelHighlight === "function") App.applyPanelHighlight();
