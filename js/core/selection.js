@@ -228,6 +228,15 @@
     applyPanelHighlight();
   }
 
+  function getFeatureFromApp(type, index) {
+    if (type === "station") return App.stations && App.stations[index];
+    if (type === "line")    return App.lines    && App.lines[index];
+    if (type === "route")   return App.routes   && App.routes[index];
+    if (type === "polygon") return App.polygons && App.polygons[index];
+    if (type === "label")   return App.labels   && App.labels[index];
+    return null;
+  }
+
   function selectFeature(type, index) {
     _multiSelected = [{ type: type, index: index }];
     _hovered = null;
@@ -235,6 +244,13 @@
     updateHighlightSources();
     applyPanelHighlight();
     syncVertexEditing();
+    // Auto-update attributes popup if already open (switching features)
+    if (typeof App.isAttrPopupOpen === "function" && App.isAttrPopupOpen()) {
+      var feat = getFeatureFromApp(type, index);
+      if (feat && typeof App.openAttrPopup === "function") {
+        App.openAttrPopup(type, index, feat);
+      }
+    }
   }
 
   function toggleMultiSelect(type, index) {

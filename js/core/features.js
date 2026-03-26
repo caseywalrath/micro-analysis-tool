@@ -28,6 +28,20 @@
 
   var CHEVRON_SVG = '&#9662;';
 
+  var GEAR_SVG =
+    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<circle cx="12" cy="12" r="3"/>' +
+    '<path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06' +
+    'a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4' +
+    'a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15' +
+    'a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82' +
+    'l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3' +
+    'a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83' +
+    'l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09' +
+    'a1.65 1.65 0 0 0-1.51 1z"/>' +
+    '</svg>';
+
   var COPY_SVG =
     '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
     'stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
@@ -376,12 +390,6 @@
     div.dataset.featureType  = featureType;
     div.dataset.featureIndex = featureIndex;
 
-    // Expand toggle button — far left
-    var expandBtn = document.createElement("button");
-    expandBtn.className = "fp-expand";
-    expandBtn.title = "Edit attributes";
-    expandBtn.innerHTML = CHEVRON_SVG;
-
     // Visibility eye toggle
     var isHidden = !!feature.properties.hidden;
     if (isHidden) div.classList.add("fp-item-hidden");
@@ -440,6 +448,18 @@
       })(featureIndex);
     }
 
+    // Gear/attributes button
+    var gearBtn = document.createElement("button");
+    gearBtn.className = "fp-gear-btn";
+    gearBtn.title = "Edit attributes";
+    gearBtn.innerHTML = GEAR_SVG;
+    (function (ft, fi, feat) {
+      gearBtn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        if (typeof App.openAttrPopup === "function") App.openAttrPopup(ft, fi, feat);
+      });
+    })(featureType, featureIndex, feature);
+
     var trashBtn = document.createElement("button");
     trashBtn.className = "fp-del-btn";
     trashBtn.title = "Delete feature";
@@ -468,7 +488,6 @@
         if (typeof App.toggleMultiSelect === "function") App.toggleMultiSelect(featureType, featureIndex);
       } else {
         if (typeof App.selectFeature === "function") App.selectFeature(featureType, featureIndex);
-        if (typeof App.toggleAttrPanel === "function") App.toggleAttrPanel(div);
       }
     });
 
@@ -482,6 +501,14 @@
       var selected = typeof App.getSelectedFeatures === "function" ? App.getSelectedFeatures() : [];
       if (!selected.length) return;
       var options = [];
+      // Single-select: offer Attributes
+      if (selected.length === 1 && selected[0].type === featureType && selected[0].index === featureIndex) {
+        (function (ft, fi, feat) {
+          options.push({ label: "Attributes", action: function () {
+            if (typeof App.openAttrPopup === "function") App.openAttrPopup(ft, fi, feat);
+          }});
+        })(featureType, featureIndex, feature);
+      }
       var allSameType = selected.every(function (s) { return s.type === selected[0].type; });
       if (selected.length >= 2 && allSameType) {
         var tLabel = TYPE_LABELS_LOCAL[selected[0].type] || selected[0].type;
@@ -498,12 +525,12 @@
       if (options.length) showContextMenu(e.clientX, e.clientY, options);
     });
 
-    // DOM order: expandBtn [eye] [swatch] [name] [dup?] [trash]
-    div.appendChild(expandBtn);
+    // DOM order: [eye] [swatch] [name] [dup?] [gear] [trash]
     div.appendChild(eyeBtn);
     div.appendChild(swatch);
     div.appendChild(input);
     if (dupBtn) div.appendChild(dupBtn);
+    div.appendChild(gearBtn);
     div.appendChild(trashBtn);
     return div;
   }
@@ -854,17 +881,19 @@
     function buildItemWrapper(i) {
       var wrapper = document.createElement("div");
       wrapper.className = "fp-item-wrapper fp-pattern";
-      var onDelete = (function (idx) {
+      var onDelete = (function (idx, ft) {
         return function () {
+          // Close attributes popup if it's showing this feature
+          if (typeof App.isAttrPopupOpen === "function" && App.isAttrPopupOpen()) {
+            var pf = typeof App.getAttrPopupFeature === "function" ? App.getAttrPopupFeature() : null;
+            if (pf && pf.featureType === ft && pf.featureIndex === idx) App.closeAttrPopup();
+          }
           removeFn(idx);
           if (typeof App.onFeatureDelete === "function") App.onFeatureDelete();
         };
-      })(i);
+      })(i, featureType);
       wrapper.appendChild(buildItem(features[i], featureType, i, onDelete));
       wrapper.appendChild(buildDeleteConfirm(onDelete));
-      if (typeof App.buildAttrPanel === "function") {
-        wrapper.appendChild(App.buildAttrPanel(featureType, i, features[i], onDelete));
-      }
       return wrapper;
     }
 
@@ -913,17 +942,18 @@
     ungrouped.forEach(function (i) {
       var wrapper = document.createElement("div");
       wrapper.className = "fp-item-wrapper fp-pattern";
-      var onDelete = (function (idx) {
+      var onDelete = (function (idx, ft) {
         return function () {
+          if (typeof App.isAttrPopupOpen === "function" && App.isAttrPopupOpen()) {
+            var pf = typeof App.getAttrPopupFeature === "function" ? App.getAttrPopupFeature() : null;
+            if (pf && pf.featureType === ft && pf.featureIndex === idx) App.closeAttrPopup();
+          }
           removeFn(idx);
           if (typeof App.onFeatureDelete === "function") App.onFeatureDelete();
         };
-      })(i);
+      })(i, featureType);
       wrapper.appendChild(buildItem(features[i], featureType, i, onDelete));
       wrapper.appendChild(buildDeleteConfirm(onDelete));
-      if (typeof App.buildAttrPanel === "function") {
-        wrapper.appendChild(App.buildAttrPanel(featureType, i, features[i], onDelete));
-      }
       el.appendChild(wrapper);
     });
   }
@@ -962,18 +992,19 @@
     sortedIndices.forEach(function (i) {
       var wrapper = document.createElement("div");
       wrapper.className = "fp-item-wrapper";
-      var onDelete = (function (idx) {
+      var onDelete = (function (idx, ft) {
         return function () {
+          if (typeof App.isAttrPopupOpen === "function" && App.isAttrPopupOpen()) {
+            var pf = typeof App.getAttrPopupFeature === "function" ? App.getAttrPopupFeature() : null;
+            if (pf && pf.featureType === ft && pf.featureIndex === idx) App.closeAttrPopup();
+          }
           removeFn(idx);
           if (typeof App.onFeatureDelete === "function") App.onFeatureDelete();
         };
-      })(i);
+      })(i, featureType);
       var itemEl = buildItem(features[i], featureType, i, onDelete);
       wrapper.appendChild(itemEl);
       wrapper.appendChild(buildDeleteConfirm(onDelete));
-      if (typeof App.buildAttrPanel === "function") {
-        wrapper.appendChild(App.buildAttrPanel(featureType, i, features[i], onDelete));
-      }
       el.appendChild(wrapper);
     });
   }

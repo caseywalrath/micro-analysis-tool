@@ -1,8 +1,11 @@
 // js/core/feature-attributes.js
-// Per-feature attribute panel: slide-down form that opens below each feature
-// panel row. Supports different field sets per feature type.
-// Exports: App.buildAttrPanel(featureType, featureIndex, feature, onDelete)
-//          App.toggleAttrPanel(itemEl)
+// Per-feature attribute popup: floating draggable dialog (singleton).
+// Only one popup open at a time; opening a different feature replaces content.
+// Exports:
+//   App.openAttrPopup(featureType, featureIndex, feature)
+//   App.closeAttrPopup()
+//   App.isAttrPopupOpen()
+//   App.getAttrPopupFeature()  → { featureType, featureIndex } | null
 
 (function () {
   var App = window.App = window.App || {};
@@ -57,13 +60,6 @@
       { key: "textColor",  label: "Text Color",  type: "color" }
     ]
   };
-
-  var TRASH_SVG =
-    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
-    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-    '<polyline points="3 6 5 6 21 6"/>' +
-    '<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>' +
-    '</svg>';
 
   function saveAttrCache() {
     if (App.cache && typeof App.cache.save === "function") App.cache.save();
@@ -310,7 +306,7 @@
           if (field.key === "bgColor") { feature.properties.bgColor = newColor; feature.properties.color = newColor; }
           if (field.key === "textColor") feature.properties.textColor = newColor;
           saveAttrCache();
-          // Fire change event so panel-level listener can update marker appearance
+          // Fire change event so body-level listener can update marker appearance
           btn.dispatchEvent(new Event("change", { bubbles: true }));
         });
       }
@@ -407,61 +403,160 @@
     return row;
   }
 
-  /* ---- Public: build the attribute panel div ---- */
+  /* ---- Floating popup singleton ---- */
 
-  App.buildAttrPanel = function (featureType, featureIndex, feature, onDelete) {
-    // Lazy-init: attributes stored directly on the feature's properties
+  var _popupEl     = null;   // DOM element, created once
+  var _currentType = null;   // featureType currently shown
+  var _currentIdx  = null;   // featureIndex currently shown
+  var _dragState   = null;   // { startX, startY, initLeft, initTop } while dragging
+
+  function buildPopupEl() {
+    if (_popupEl) return;
+
+    var el = document.createElement("div");
+    el.id = "fp-attr-popup";
+    el.style.display = "none";
+    el.style.left = "320px";
+    el.style.top  = "60px";
+
+    // Header
+    var header = document.createElement("div");
+    header.className = "fp-attr-popup-header";
+
+    var titleEl = document.createElement("span");
+    titleEl.className = "fp-attr-popup-title";
+    header.appendChild(titleEl);
+
+    var closeBtn = document.createElement("button");
+    closeBtn.className = "fp-attr-popup-close";
+    closeBtn.innerHTML = "&times;";
+    closeBtn.title = "Close";
+    closeBtn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      closeAttrPopup();
+    });
+    header.appendChild(closeBtn);
+    el.appendChild(header);
+
+    // Body
+    var body = document.createElement("div");
+    body.className = "fp-attr-popup-body";
+    el.appendChild(body);
+
+    document.body.appendChild(el);
+    _popupEl = el;
+
+    // ---- Drag support ----
+    header.addEventListener("mousedown", function (e) {
+      if (e.button !== 0) return;
+      if (e.target === closeBtn || closeBtn.contains(e.target)) return;
+      e.preventDefault();
+      var rect = el.getBoundingClientRect();
+      _dragState = {
+        startX:   e.clientX,
+        startY:   e.clientY,
+        initLeft: rect.left,
+        initTop:  rect.top
+      };
+      header.classList.add("dragging");
+    });
+
+    document.addEventListener("mousemove", function (e) {
+      if (!_dragState) return;
+      var dx = e.clientX - _dragState.startX;
+      var dy = e.clientY - _dragState.startY;
+      applyClampedPosition(_dragState.initLeft + dx, _dragState.initTop + dy);
+    });
+
+    document.addEventListener("mouseup", function () {
+      if (_dragState) {
+        _dragState = null;
+        var hdr = _popupEl && _popupEl.querySelector(".fp-attr-popup-header");
+        if (hdr) hdr.classList.remove("dragging");
+      }
+    });
+
+    // ---- Escape key ----
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && _popupEl && _popupEl.style.display !== "none") {
+        closeAttrPopup();
+      }
+    });
+
+    // ---- Window resize: keep popup within viewport ----
+    window.addEventListener("resize", function () {
+      if (_popupEl && _popupEl.style.display !== "none") {
+        var r = _popupEl.getBoundingClientRect();
+        applyClampedPosition(r.left, r.top);
+      }
+    });
+  }
+
+  function applyClampedPosition(left, top) {
+    if (!_popupEl) return;
+    var pw = _popupEl.offsetWidth  || 320;
+    var ph = _popupEl.offsetHeight || 200;
+    var minVisible = 40; // keep at least 40px of the popup visible on each side
+    left = Math.max(-(pw - minVisible), Math.min(left, window.innerWidth  - minVisible));
+    top  = Math.max(0,                  Math.min(top,  window.innerHeight - minVisible));
+    _popupEl.style.left = left + "px";
+    _popupEl.style.top  = top  + "px";
+  }
+
+  function populatePopupBody(featureType, featureIndex, feature) {
+    buildPopupEl();
+
+    // Update header title
+    _popupEl.querySelector(".fp-attr-popup-title").textContent =
+      (TYPE_LABELS[featureType] || featureType) + " Attributes";
+
+    // Clear and rebuild body
+    var body = _popupEl.querySelector(".fp-attr-popup-body");
+    body.innerHTML = "";
+
+    // Lazy-init attributes
     if (!feature.properties.attributes) feature.properties.attributes = {};
     var attrs = feature.properties.attributes;
 
-    var panel = document.createElement("div");
-    panel.className = "fp-attr-panel";
-    panel.style.display = "none";
-
-    // --- Top bar: label ---
-    var topbar = document.createElement("div");
-    topbar.className = "fp-attr-topbar";
-    var title = document.createElement("span");
-    title.className = "fp-attr-title";
-    title.textContent = (TYPE_LABELS[featureType] || featureType) + " Attributes";
-    topbar.appendChild(title);
-    panel.appendChild(topbar);
-
-    // --- Name row (always present) ---
+    // Name row (always present)
     var nameInput = document.createElement("input");
     nameInput.type = "text";
     nameInput.className = "fp-attr-input";
     nameInput.value = feature.properties.name || "";
     nameInput.addEventListener("change", function () {
       feature.properties.name = nameInput.value;
-      // Keep the row's fp-name input in sync
-      var wrapper = panel.parentElement;
-      if (wrapper) {
-        var rowName = wrapper.querySelector(".fp-name");
-        if (rowName) rowName.textContent = nameInput.value;
+      // Keep the feature row's fp-name display in sync
+      var items = document.querySelectorAll(".fp-item");
+      for (var i = 0; i < items.length; i++) {
+        var el = items[i];
+        if (el.dataset.featureType === featureType &&
+            parseInt(el.dataset.featureIndex, 10) === featureIndex) {
+          var rowName = el.querySelector(".fp-name");
+          if (rowName) rowName.textContent = nameInput.value;
+          break;
+        }
       }
       saveAttrCache();
     });
     nameInput.addEventListener("keydown", function (e) {
       if (e.key === "Enter") nameInput.blur();
     });
-    panel.appendChild(buildRow("Name", nameInput, null));
+    body.appendChild(buildRow("Name", nameInput, null));
 
-    // --- Type-specific fields ---
+    // Type-specific fields
     var fields = ATTR_FIELDS[featureType] || [];
     fields.forEach(function (field) {
       if (field.hidden) return;
       var result = buildFieldInput(field, attrs, feature, featureType);
-      panel.appendChild(buildRow(field.label, result.el, result.unit));
+      body.appendChild(buildRow(field.label, result.el, result.unit));
     });
 
-    // --- Label-specific: sync attribute changes to marker appearance ---
+    // Label-specific: sync attribute changes to marker appearance
     if (featureType === "label") {
-      panel.addEventListener("change", function () {
-        // Sync stored properties from attributes
-        if (attrs.text !== undefined)      feature.properties.text = attrs.text;
-        if (attrs.fontSize !== undefined)  feature.properties.fontSize = attrs.fontSize;
-        if (attrs.bgColor !== undefined)   { feature.properties.bgColor = attrs.bgColor; feature.properties.color = attrs.bgColor; }
+      body.addEventListener("change", function () {
+        if (attrs.text      !== undefined) feature.properties.text      = attrs.text;
+        if (attrs.fontSize  !== undefined) feature.properties.fontSize  = attrs.fontSize;
+        if (attrs.bgColor   !== undefined) { feature.properties.bgColor = attrs.bgColor; feature.properties.color = attrs.bgColor; }
         if (attrs.textColor !== undefined) feature.properties.textColor = attrs.textColor;
         if (typeof App.updateLabelAppearance === "function") {
           App.updateLabelAppearance(featureIndex);
@@ -469,31 +564,44 @@
       });
     }
 
-    return panel;
+    _currentType = featureType;
+    _currentIdx  = featureIndex;
+  }
+
+  /* ---- Public API ---- */
+
+  App.openAttrPopup = function (featureType, featureIndex, feature) {
+    buildPopupEl();
+
+    // Toggle: clicking gear on the same feature closes the popup
+    if (_popupEl.style.display !== "none" &&
+        _currentType === featureType && _currentIdx === featureIndex) {
+      closeAttrPopup();
+      return;
+    }
+
+    var wasOpen = (_popupEl.style.display !== "none");
+    populatePopupBody(featureType, featureIndex, feature);
+
+    // Only reset position when opening fresh (preserve dragged position when switching features)
+    if (!wasOpen) {
+      _popupEl.style.left = "320px";
+      _popupEl.style.top  = "60px";
+    }
+    _popupEl.style.display = "";
   };
 
-  /* ---- Public: toggle open/closed ---- */
+  function closeAttrPopup() {
+    if (_popupEl) _popupEl.style.display = "none";
+    _currentType = null;
+    _currentIdx  = null;
+  }
 
-  App.toggleAttrPanel = function (itemEl) {
-    var wrapper = itemEl.closest
-      ? itemEl.closest(".fp-item-wrapper")
-      : itemEl.parentElement;
-    if (!wrapper) return;
-    var panel = wrapper.querySelector(".fp-attr-panel");
-    var btn = itemEl.querySelector(".fp-expand");
-    if (!panel) return;
-
-    var isOpen = panel.style.display !== "none";
-    panel.style.display = isOpen ? "none" : "";
-    if (btn) btn.classList.toggle("open", !isOpen);
-
-    // Reset row-level delete confirm when closing
-    if (isOpen) {
-      var confirmDiv = wrapper.querySelector(".fp-delete-confirm");
-      var trashBtn = wrapper.querySelector(".fp-del-btn");
-      if (confirmDiv) confirmDiv.style.display = "none";
-      if (trashBtn) trashBtn.style.display = "";
-    }
+  App.closeAttrPopup    = closeAttrPopup;
+  App.isAttrPopupOpen   = function () { return !!(_popupEl && _popupEl.style.display !== "none"); };
+  App.getAttrPopupFeature = function () {
+    if (!App.isAttrPopupOpen()) return null;
+    return { featureType: _currentType, featureIndex: _currentIdx };
   };
 
 })();
