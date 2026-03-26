@@ -101,8 +101,6 @@
     center: [-104.9903, 39.7392],
     zoom: 10
   });
-  map.addControl(new maplibregl.NavigationControl(), "top-right");
-
   // ---- Default cursor: grab hand ----
   map.on("load", function () {
     map.getCanvas().style.cursor = "grab";
@@ -356,6 +354,7 @@
     this._map = undefined;
   };
 
+  map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
   map.addControl(new BasemapControl(), "bottom-right");
   map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: "imperial" }), "bottom-left");
   map.addControl(new NorthArrowControl(), "bottom-left");
