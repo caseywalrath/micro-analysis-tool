@@ -932,6 +932,19 @@ code { font-family: var(--font-mono); }
   background: #eef1f5;
 }
 
+/* ---- North arrow control ---- */
+.north-arrow-btn {
+  width: 29px;
+  height: 29px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* ---- Analysis module popup ---- */
 .module-popup {
   position: fixed;
