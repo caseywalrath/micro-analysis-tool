@@ -16,6 +16,16 @@
   // Default is expanded; only collapsed sections are stored.
   var _collapsedSections = {};
 
+  var GROUP_KEYS = {
+    station: "stationGroup", line: "lineGroup",
+    route: "routeGroup", polygon: "polygonGroup", label: "labelGroup"
+  };
+
+  var TYPE_LABELS_LOCAL = {
+    station: "Station", line: "Line",
+    route: "Route", polygon: "Polygon", label: "Label"
+  };
+
   var CHEVRON_SVG = '&#9662;';
 
   var COPY_SVG =
@@ -256,6 +266,108 @@
     }
   }
 
+  /* ---- Context menu ---- */
+
+  var _ctxMenu = null;
+
+  function showContextMenu(x, y, options) {
+    if (_ctxMenu) _ctxMenu.remove();
+    var menu = document.createElement("div");
+    menu.id = "fp-context-menu";
+    options.forEach(function (opt) {
+      var btn = document.createElement("button");
+      btn.textContent = opt.label;
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        menu.remove();
+        _ctxMenu = null;
+        opt.action();
+      });
+      menu.appendChild(btn);
+    });
+    document.body.appendChild(menu);
+    _ctxMenu = menu;
+    var mw = menu.offsetWidth || 160;
+    var mh = menu.offsetHeight || 80;
+    var left = Math.min(x, window.innerWidth  - mw - 8);
+    var top  = Math.min(y, window.innerHeight - mh - 8);
+    menu.style.left = Math.max(4, left) + "px";
+    menu.style.top  = Math.max(4, top)  + "px";
+    setTimeout(function () {
+      document.addEventListener("click", function close(e) {
+        if (!menu.contains(e.target)) { menu.remove(); _ctxMenu = null; }
+        document.removeEventListener("click", close);
+      });
+    }, 0);
+  }
+
+  /* ---- Group / ungroup helpers ---- */
+
+  function getFeatureByTypeIndex(type, index) {
+    var map = { station: "stations", line: "lines", route: "routes", polygon: "polygons", label: "labels" };
+    var arr = App[map[type]];
+    return arr ? arr[index] : null;
+  }
+
+  function generateGroupName(type) {
+    var label = TYPE_LABELS_LOCAL[type] || type;
+    var key = GROUP_KEYS[type];
+    var map = { station: "stations", line: "lines", route: "routes", polygon: "polygons", label: "labels" };
+    var arr = App[map[type]] || [];
+    var existing = {};
+    arr.forEach(function (f) {
+      var g = f.properties.attributes && f.properties.attributes[key];
+      if (g) existing[g] = true;
+    });
+    var n = 1;
+    while (existing[label + " Group " + n]) n++;
+    return label + " Group " + n;
+  }
+
+  function groupSelectedFeatures() {
+    var selected = typeof App.getSelectedFeatures === "function" ? App.getSelectedFeatures() : [];
+    if (selected.length < 2) return;
+    var type = selected[0].type;
+    var key = GROUP_KEYS[type];
+    if (!key) return;
+    var name = generateGroupName(type);
+    // For routes: inherit color from the first route already carrying a color in this new group
+    var inheritColor = null;
+    if (type === "route") {
+      for (var i = 0; i < selected.length; i++) {
+        var rf = getFeatureByTypeIndex("route", selected[i].index);
+        if (rf && rf.properties.color) { inheritColor = rf.properties.color; break; }
+      }
+    }
+    selected.forEach(function (s) {
+      var feat = getFeatureByTypeIndex(s.type, s.index);
+      if (!feat) return;
+      if (!feat.properties.attributes) feat.properties.attributes = {};
+      feat.properties.attributes[key] = name;
+      if (inheritColor) feat.properties.color = inheritColor;
+    });
+    if (inheritColor && type === "route") {
+      var rrEl = document.getElementById("routeBufferRadius");
+      var rr = rrEl ? parseFloat(rrEl.value) : 0.5; if (isNaN(rr)) rr = 0.5;
+      if (typeof App.rebuildRouteBuffers === "function") App.rebuildRouteBuffers(rr);
+      if (typeof App.renderRouteLayers    === "function") App.renderRouteLayers();
+    }
+    if (App.cache && typeof App.cache.save === "function") App.cache.save();
+    if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+  }
+
+  function ungroupSelectedFeatures() {
+    var selected = typeof App.getSelectedFeatures === "function" ? App.getSelectedFeatures() : [];
+    selected.forEach(function (s) {
+      var feat = getFeatureByTypeIndex(s.type, s.index);
+      if (!feat || !feat.properties.attributes) return;
+      var key = GROUP_KEYS[s.type];
+      if (key) delete feat.properties.attributes[key];
+    });
+    if (App.cache && typeof App.cache.save === "function") App.cache.save();
+    if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+  }
+
   /* ---- Feature panel item ---- */
 
   function buildItem(feature, featureType, featureIndex, onDelete) {
@@ -358,6 +470,32 @@
         if (typeof App.selectFeature === "function") App.selectFeature(featureType, featureIndex);
         if (typeof App.toggleAttrPanel === "function") App.toggleAttrPanel(div);
       }
+    });
+
+    div.addEventListener("contextmenu", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      // If this item isn't in the current selection, single-select it first
+      if (typeof App.isFeatureSelected === "function" && !App.isFeatureSelected(featureType, featureIndex)) {
+        if (typeof App.selectFeature === "function") App.selectFeature(featureType, featureIndex);
+      }
+      var selected = typeof App.getSelectedFeatures === "function" ? App.getSelectedFeatures() : [];
+      if (!selected.length) return;
+      var options = [];
+      var allSameType = selected.every(function (s) { return s.type === selected[0].type; });
+      if (selected.length >= 2 && allSameType) {
+        var tLabel = TYPE_LABELS_LOCAL[selected[0].type] || selected[0].type;
+        options.push({ label: "Group " + tLabel + "s", action: groupSelectedFeatures });
+      }
+      var anyInGroup = selected.some(function (s) {
+        var feat = getFeatureByTypeIndex(s.type, s.index);
+        var k = GROUP_KEYS[s.type];
+        return feat && feat.properties.attributes && feat.properties.attributes[k];
+      });
+      if (anyInGroup) {
+        options.push({ label: "Ungroup", action: ungroupSelectedFeatures });
+      }
+      if (options.length) showContextMenu(e.clientX, e.clientY, options);
     });
 
     // DOM order: expandBtn [eye] [swatch] [name] [dup?] [trash]
@@ -588,6 +726,39 @@
     var nameSpan = document.createElement("span");
     nameSpan.className = "fp-group-name";
     nameSpan.textContent = groupName;
+    nameSpan.title = "Double-click to rename";
+    (function (span, indices, feats, fType) {
+      span.addEventListener("dblclick", function (e) {
+        e.stopPropagation();
+        var inp = document.createElement("input");
+        inp.type = "text";
+        inp.className = "fp-group-name-edit";
+        inp.value = span.textContent;
+        span.style.display = "none";
+        header.insertBefore(inp, span.nextSibling);
+        inp.focus();
+        inp.select();
+        function save() {
+          var newName = inp.value.trim();
+          inp.remove();
+          span.style.display = "";
+          if (newName && newName !== span.textContent) {
+            var gKey = GROUP_KEYS[fType];
+            indices.forEach(function (idx) {
+              if (!feats[idx].properties.attributes) feats[idx].properties.attributes = {};
+              feats[idx].properties.attributes[gKey] = newName;
+            });
+            if (App.cache && typeof App.cache.save === "function") App.cache.save();
+            if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+          }
+        }
+        inp.addEventListener("blur", save);
+        inp.addEventListener("keydown", function (ev) {
+          if (ev.key === "Enter") inp.blur();
+          if (ev.key === "Escape") { inp.value = span.textContent; inp.blur(); }
+        });
+      });
+    })(nameSpan, idxs, features, featureType);
     header.appendChild(nameSpan);
 
     // Group delete button (margin-left: auto handled by CSS)

@@ -25,7 +25,7 @@
   // Supported types: "text", "number", "select", "checkboxes"
   var ATTR_FIELDS = {
     route: [
-      { key: "routeGroup",    label: "Route Group", type: "text",       placeholder: "e.g. Route 7" },
+      { key: "routeGroup",    label: "Route Group", type: "text",       placeholder: "e.g. Route 7", hidden: true },
       { key: "direction",     label: "Direction",   type: "select",     options: ["Both","NB","SB","EB","WB","Inbound","Outbound","Loop"] },
       { key: "mode",          label: "Mode",        type: "select",     options: ["Bus","BRT","Light Rail","Streetcar"] },
       { key: "routeId",       label: "Route ID",    type: "text",       placeholder: "e.g. 7, Blue" },
@@ -36,21 +36,21 @@
       { key: "avgSpeed",      label: "Avg speed",   type: "number",     unit: "mph" }
     ],
     line: [
-      { key: "lineGroup", label: "Line Group", type: "text", placeholder: "e.g. Express" },
+      { key: "lineGroup", label: "Line Group", type: "text", placeholder: "e.g. Express", hidden: true },
       { key: "lineMode",  label: "Mode",  type: "select", options: ["Light Rail","Commuter Rail","Streetcar","Bus","BRT"] },
       { key: "notes",     label: "Notes", type: "text",   placeholder: "" }
     ],
     station: [
-      { key: "stationGroup",     label: "Station Group", type: "text", placeholder: "e.g. North Corridor" },
+      { key: "stationGroup",     label: "Station Group", type: "text", placeholder: "e.g. North Corridor", hidden: true },
       { key: "stopId",           label: "Stop ID",       type: "text", placeholder: "e.g. 1042" },
       { key: "associatedRoutes", label: "Routes"                                                 }
     ],
     polygon: [
-      { key: "polygonGroup", label: "Polygon Group", type: "text", placeholder: "e.g. Study Area" },
+      { key: "polygonGroup", label: "Polygon Group", type: "text", placeholder: "e.g. Study Area", hidden: true },
       { key: "notes",        label: "Notes",         type: "text", placeholder: "" }
     ],
     label: [
-      { key: "labelGroup", label: "Label Group", type: "text",   placeholder: "e.g. Route Numbers" },
+      { key: "labelGroup", label: "Label Group", type: "text",   placeholder: "e.g. Route Numbers", hidden: true },
       { key: "text",       label: "Text",        type: "text",   placeholder: "Map text" },
       { key: "fontSize",   label: "Size",        type: "select", options: ["Small","Medium","Large","XL"] },
       { key: "bgColor",    label: "Background",  type: "color" },
@@ -450,6 +450,7 @@
     // --- Type-specific fields ---
     var fields = ATTR_FIELDS[featureType] || [];
     fields.forEach(function (field) {
+      if (field.hidden) return;
       var result = buildFieldInput(field, attrs, feature, featureType);
       panel.appendChild(buildRow(field.label, result.el, result.unit));
     });

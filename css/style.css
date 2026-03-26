@@ -575,6 +575,43 @@ input.fp-attr-input[type="number"] {
   white-space: nowrap;
 }
 
+/* Feature panel context menu */
+#fp-context-menu {
+  position: fixed;
+  background: #fff;
+  border: 1px solid #cbd5e0;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.14);
+  padding: 4px 0;
+  z-index: 10000;
+  min-width: 148px;
+}
+#fp-context-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 6px 14px;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  color: #2d3748;
+}
+#fp-context-menu button:hover { background: #f0f4f8; }
+
+/* Inline group name editor */
+.fp-group-name-edit {
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  border: 1px solid #90cdf4;
+  border-radius: 3px;
+  padding: 0 4px;
+  outline: none;
+  flex: 1;
+  min-width: 0;
+  background: #fff;
+}
+
 .fp-actions {
   display: flex;
   gap: 8px;
