@@ -699,10 +699,15 @@
 
     // Color swatch — applies color to all features in the group
     var firstColor = features[idxs[0]].properties.color || getTypeDefaultColor(featureType);
+    var _groupSectionColor = App.sectionColors && App.sectionColors[featureType];
     header.style.borderLeftColor = firstColor;
     var sw = document.createElement("button");
     sw.className = "fp-swatch fp-item-swatch";
-    sw.style.background = firstColor;
+    if (_groupSectionColor && firstColor === _groupSectionColor) {
+      sw.classList.add("fp-swatch-neutral");
+    } else {
+      sw.style.background = firstColor;
+    }
     sw.title = "Change color for all in group";
     (function (swatch, indices, feats) {
       swatch.addEventListener("click", function (e) {
