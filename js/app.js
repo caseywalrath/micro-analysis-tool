@@ -516,15 +516,18 @@
         if (typeof App.cache !== "undefined") App.cache.save();
       } else if (App.drawMode === "line") {
         App.handleLineClick(e.lngLat);
+        if (App.undo) App.undo.updateButtons();
         notifyProject();
         if (typeof App.cache !== "undefined") App.cache.save();
       } else if (App.drawMode === "route") {
         App.handleRouteClick(e.lngLat).then(function () {
+          if (App.undo) App.undo.updateButtons();
           notifyProject();
           if (typeof App.cache !== "undefined") App.cache.save();
         });
       } else if (App.drawMode === "polygon") {
         App.handlePolygonClick(e.lngLat);
+        if (App.undo) App.undo.updateButtons();
         notifyProject();
         if (typeof App.cache !== "undefined") App.cache.save();
       } else if (App.drawMode === "label") {

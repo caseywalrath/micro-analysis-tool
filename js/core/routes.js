@@ -451,33 +451,28 @@
   }
 
   function undoLastRoute() {
-    if (currentWaypoints.length > 0) {
-      currentWaypoints.pop();
-      if (currentWaypoints.length >= 2) {
-        var gen = ++_fetchGen;
-        var snapshot = currentWaypoints.slice();
-        App.setStatus("Routing\u2026");
-        fetchRoute(snapshot).then(function (coords) {
-          if (gen !== _fetchGen) return;
-          currentRouteCoords = coords || snapshot;
-          renderRouteLayers();
-          App.setStatus(currentWaypoints.length + " waypoints \u2014 click last point to save");
-        });
-      } else {
-        currentRouteCoords = [];
+    if (currentWaypoints.length === 0) return;
+    currentWaypoints.pop();
+    if (currentWaypoints.length >= 2) {
+      var gen = ++_fetchGen;
+      var snapshot = currentWaypoints.slice();
+      App.setStatus("Routing\u2026");
+      fetchRoute(snapshot).then(function (coords) {
+        if (gen !== _fetchGen) return;
+        currentRouteCoords = coords || snapshot;
         renderRouteLayers();
-        if (currentWaypoints.length === 0) {
-          App.setStatus("Route drawing cancelled");
-        } else {
-          App.setStatus("Route started \u2014 click to add waypoints, click last point to save");
-        }
+        App.setStatus(currentWaypoints.length + " waypoints \u2014 click last point to save");
+      });
+    } else {
+      currentRouteCoords = [];
+      renderRouteLayers();
+      if (currentWaypoints.length === 0) {
+        App.setStatus("Route drawing cancelled");
+      } else {
+        App.setStatus("Route started \u2014 click to add waypoints, click last point to save");
       }
-      return;
     }
-    if (routes.length > 0) {
-      routes.pop();
-      rebuildRouteBuffers(routeBufferRadiusMiles);
-    }
+    if (App.undo) App.undo.updateButtons();
   }
 
   /* ---- Vertex editing support ---- */

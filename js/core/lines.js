@@ -293,22 +293,15 @@
   }
 
   function undoLastLine() {
-    // If currently drawing, remove the last waypoint
-    if (currentCoords.length > 0) {
-      currentCoords.pop();
-      renderLineLayers();
-      if (currentCoords.length === 0) {
-        App.setStatus("Line drawing cancelled");
-      } else {
-        App.setStatus(currentCoords.length + " waypoints — click last point to save");
-      }
-      return;
+    if (currentCoords.length === 0) return;
+    currentCoords.pop();
+    renderLineLayers();
+    if (currentCoords.length === 0) {
+      App.setStatus("Line drawing cancelled");
+    } else {
+      App.setStatus(currentCoords.length + " waypoints — click last point to save");
     }
-    // Otherwise remove the last saved line
-    if (lines.length > 0) {
-      lines.pop();
-      rebuildLineBuffers(lineBufferRadiusMiles);
-    }
+    if (App.undo) App.undo.updateButtons();
   }
 
   /* ---- Vertex editing support ---- */

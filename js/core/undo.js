@@ -52,7 +52,10 @@
   function updateButtons() {
     var undoBtn = document.getElementById("undo-btn");
     var redoBtn = document.getElementById("redo-btn");
-    if (undoBtn) undoBtn.disabled = (_undoStack.length === 0);
+    var isDrawing = (typeof App._lineDrawingInProgress === "function" && App._lineDrawingInProgress()) ||
+                    (typeof App._routeDrawingInProgress === "function" && App._routeDrawingInProgress()) ||
+                    (typeof App._polygonDrawingInProgress === "function" && App._polygonDrawingInProgress());
+    if (undoBtn) undoBtn.disabled = (_undoStack.length === 0) && !isDrawing;
     if (redoBtn) redoBtn.disabled = (_redoStack.length === 0);
   }
 

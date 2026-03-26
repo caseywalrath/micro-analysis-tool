@@ -265,22 +265,17 @@
   }
 
   function undoLastPolygon() {
-    if (currentCoords.length > 0) {
-      currentCoords.pop();
-      renderPolygonLayers();
-      if (currentCoords.length === 0) {
-        App.setStatus("Polygon drawing cancelled");
-      } else if (currentCoords.length < 3) {
-        App.setStatus(currentCoords.length + " vertices — need at least 3 to close polygon");
-      } else {
-        App.setStatus(currentCoords.length + " vertices — click last point to save");
-      }
-      return;
+    if (currentCoords.length === 0) return;
+    currentCoords.pop();
+    renderPolygonLayers();
+    if (currentCoords.length === 0) {
+      App.setStatus("Polygon drawing cancelled");
+    } else if (currentCoords.length < 3) {
+      App.setStatus(currentCoords.length + " vertices — need at least 3 to close polygon");
+    } else {
+      App.setStatus(currentCoords.length + " vertices — click last point to save");
     }
-    if (polygons.length > 0) {
-      polygons.pop();
-      renderPolygonLayers();
-    }
+    if (App.undo) App.undo.updateButtons();
   }
 
   /* ---- Vertex editing support ---- */
