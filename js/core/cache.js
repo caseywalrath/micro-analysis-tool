@@ -645,7 +645,15 @@
     }
   }
 
-  // ---- Export: Shapefile (SHP) ----
+  // ---- Export: Shapefile (SHP) — self-contained binary writer ----
+  // Uses JSZip v3 (already loaded globally). No external shp-write dependency.
+
+  var SHP_PRJ_WGS84 =
+    'GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",SPHEROID["WGS_1984",6378137.0,298.257223563]],' +
+    'PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]]';
+
+  // SHP shape type constants
+  var SHP_NULL = 0, SHP_POINT = 1, SHP_POLYLINE = 3, SHP_POLYGON = 5;
 
   function _featureProps(feat, typeName) {
     var props = feat.properties || {};
@@ -654,52 +662,285 @@
     for (var i = 0; i < CSV_ATTR_COLS.length; i++) {
       var key = CSV_ATTR_COLS[i];
       var val = attrs[key];
-      // Shapefile DBF field names limited to 10 chars — truncate keys
       var dbfKey = key.substring(0, 10);
       out[dbfKey] = (val != null) ? String(val).substring(0, 254) : "";
     }
     return out;
   }
 
+  // Collect coordinate rings from a geometry. Returns array of arrays of [x,y].
+  // For Point: [[x,y]]. For LineString: [coords]. For Polygon: rings.
+  // For Multi* types: flattens into parts array.
+  function _extractParts(geometry) {
+    var type = geometry.type;
+    var coords = geometry.coordinates;
+    if (type === "Point")              return [[coords]];
+    if (type === "MultiPoint")         return coords.map(function (c) { return [c]; });
+    if (type === "LineString")         return [coords];
+    if (type === "MultiLineString")    return coords;
+    if (type === "Polygon")            return coords;
+    if (type === "MultiPolygon") {
+      var parts = [];
+      for (var i = 0; i < coords.length; i++) {
+        for (var j = 0; j < coords[i].length; j++) parts.push(coords[i][j]);
+      }
+      return parts;
+    }
+    return [];
+  }
+
+  // Compute bounding box from an array of features
+  function _bbox(features) {
+    var xmin = Infinity, ymin = Infinity, xmax = -Infinity, ymax = -Infinity;
+    for (var fi = 0; fi < features.length; fi++) {
+      var parts = _extractParts(features[fi].geometry);
+      for (var pi = 0; pi < parts.length; pi++) {
+        for (var ci = 0; ci < parts[pi].length; ci++) {
+          var x = parts[pi][ci][0], y = parts[pi][ci][1];
+          if (x < xmin) xmin = x; if (x > xmax) xmax = x;
+          if (y < ymin) ymin = y; if (y > ymax) ymax = y;
+        }
+      }
+    }
+    if (xmin === Infinity) { xmin = ymin = xmax = ymax = 0; }
+    return { xmin: xmin, ymin: ymin, xmax: xmax, ymax: ymax };
+  }
+
+  // Ensure polygon ring is clockwise (exterior) per SHP spec.
+  // Shapefile spec: exterior rings are clockwise, holes are counter-clockwise.
+  function _ensureClockwise(ring) {
+    var area = 0;
+    for (var i = 0; i < ring.length - 1; i++) {
+      area += (ring[i + 1][0] - ring[i][0]) * (ring[i + 1][1] + ring[i][1]);
+    }
+    // area > 0 → clockwise in screen coords, but since Y is latitude (up = positive),
+    // positive signed area means counter-clockwise geographically → need to reverse
+    if (area > 0) ring.reverse();
+    return ring;
+  }
+
+  // Write SHP + SHX binary for a set of features of the same shape type.
+  // shapeType: SHP_POINT, SHP_POLYLINE, or SHP_POLYGON
+  function _writeSHPSHX(features, shapeType) {
+    // First pass: compute record content sizes
+    var recordContentSizes = [];
+    for (var fi = 0; fi < features.length; fi++) {
+      var parts = _extractParts(features[fi].geometry);
+      if (shapeType === SHP_POINT) {
+        // Shape type (4) + X (8) + Y (8) = 20 bytes
+        recordContentSizes.push(20);
+      } else {
+        // Shape type (4) + bbox (32) + numParts (4) + numPoints (4) + parts array + points
+        var totalPts = 0;
+        for (var pi = 0; pi < parts.length; pi++) {
+          if (shapeType === SHP_POLYGON) _ensureClockwise(parts[pi]);
+          totalPts += parts[pi].length;
+        }
+        recordContentSizes.push(4 + 32 + 4 + 4 + parts.length * 4 + totalPts * 16);
+      }
+    }
+
+    // Calculate file sizes
+    var shpFileBodySize = 0;
+    for (var ri = 0; ri < recordContentSizes.length; ri++) {
+      shpFileBodySize += 8 + recordContentSizes[ri]; // 8 = record header
+    }
+    var shpFileLength = 100 + shpFileBodySize; // in bytes
+    var shxFileLength = 100 + features.length * 8;
+
+    var shpBuf = new ArrayBuffer(shpFileLength);
+    var shxBuf = new ArrayBuffer(shxFileLength);
+    var shpView = new DataView(shpBuf);
+    var shxView = new DataView(shxBuf);
+
+    var box = _bbox(features);
+
+    // Write file headers (100 bytes each) for both SHP and SHX
+    function writeHeader(view, fileLengthBytes) {
+      view.setInt32(0, 9994, false);                   // file code (big-endian)
+      // bytes 4-23: unused (zeros)
+      view.setInt32(24, fileLengthBytes / 2, false);   // file length in 16-bit words (big-endian)
+      view.setInt32(28, 1000, true);                   // version (little-endian)
+      view.setInt32(32, shapeType, true);               // shape type
+      view.setFloat64(36, box.xmin, true);
+      view.setFloat64(44, box.ymin, true);
+      view.setFloat64(52, box.xmax, true);
+      view.setFloat64(60, box.ymax, true);
+      // bytes 68-99: zmin/zmax/mmin/mmax = 0 (2D only)
+    }
+    writeHeader(shpView, shpFileLength);
+    writeHeader(shxView, shxFileLength);
+
+    // Write records
+    var shpOffset = 100; // current byte offset in SHP file
+    for (var fi2 = 0; fi2 < features.length; fi2++) {
+      var contentSize = recordContentSizes[fi2];
+      var parts2 = _extractParts(features[fi2].geometry);
+
+      // SHX index entry: offset and content length in 16-bit words (big-endian)
+      shxView.setInt32(100 + fi2 * 8, shpOffset / 2, false);
+      shxView.setInt32(100 + fi2 * 8 + 4, contentSize / 2, false);
+
+      // SHP record header: record number (1-based) and content length in 16-bit words (big-endian)
+      shpView.setInt32(shpOffset, fi2 + 1, false);
+      shpView.setInt32(shpOffset + 4, contentSize / 2, false);
+      shpOffset += 8;
+
+      // SHP record content
+      shpView.setInt32(shpOffset, shapeType, true);
+      shpOffset += 4;
+
+      if (shapeType === SHP_POINT) {
+        var pt = features[fi2].geometry.coordinates;
+        shpView.setFloat64(shpOffset, pt[0], true); shpOffset += 8;
+        shpView.setFloat64(shpOffset, pt[1], true); shpOffset += 8;
+      } else {
+        // Bounding box for this record
+        var recBox = _bbox([features[fi2]]);
+        shpView.setFloat64(shpOffset, recBox.xmin, true); shpOffset += 8;
+        shpView.setFloat64(shpOffset, recBox.ymin, true); shpOffset += 8;
+        shpView.setFloat64(shpOffset, recBox.xmax, true); shpOffset += 8;
+        shpView.setFloat64(shpOffset, recBox.ymax, true); shpOffset += 8;
+
+        var numParts = parts2.length;
+        var totalPoints = 0;
+        for (var pp = 0; pp < numParts; pp++) totalPoints += parts2[pp].length;
+
+        shpView.setInt32(shpOffset, numParts, true); shpOffset += 4;
+        shpView.setInt32(shpOffset, totalPoints, true); shpOffset += 4;
+
+        // Parts index array (offset into points array for each part)
+        var ptIdx = 0;
+        for (var pp2 = 0; pp2 < numParts; pp2++) {
+          shpView.setInt32(shpOffset, ptIdx, true); shpOffset += 4;
+          ptIdx += parts2[pp2].length;
+        }
+
+        // Points (x, y pairs)
+        for (var pp3 = 0; pp3 < numParts; pp3++) {
+          for (var ci2 = 0; ci2 < parts2[pp3].length; ci2++) {
+            shpView.setFloat64(shpOffset, parts2[pp3][ci2][0], true); shpOffset += 8;
+            shpView.setFloat64(shpOffset, parts2[pp3][ci2][1], true); shpOffset += 8;
+          }
+        }
+      }
+    }
+
+    return { shp: shpBuf, shx: shxBuf };
+  }
+
+  // Write a DBF file for a set of features with given property objects.
+  function _writeDBF(propsList) {
+    if (!propsList.length) return new ArrayBuffer(0);
+
+    // Determine fields from first record's keys
+    var keys = Object.keys(propsList[0]);
+    var fields = [];
+    for (var ki = 0; ki < keys.length; ki++) {
+      var k = keys[ki];
+      // Determine max value length for field width
+      var maxLen = 10;
+      for (var ri = 0; ri < propsList.length; ri++) {
+        var v = propsList[ri][k];
+        var vLen = (v != null) ? String(v).length : 0;
+        if (vLen > maxLen) maxLen = vLen;
+      }
+      if (maxLen > 254) maxLen = 254;
+      fields.push({ name: k.substring(0, 10), width: maxLen });
+    }
+
+    var numRecords = propsList.length;
+    var numFields = fields.length;
+    var headerSize = 32 + numFields * 32 + 1; // 1 for header terminator (0x0D)
+    var recordWidth = 1; // 1 byte for deletion flag
+    for (var fi = 0; fi < numFields; fi++) recordWidth += fields[fi].width;
+    var fileSize = headerSize + numRecords * recordWidth + 1; // +1 for EOF marker (0x1A)
+
+    var buf = new ArrayBuffer(fileSize);
+    var view = new DataView(buf);
+    var bytes = new Uint8Array(buf);
+
+    // DBF header
+    view.setUint8(0, 3);                          // version: dBASE III
+    var now = new Date();
+    view.setUint8(1, now.getFullYear() - 1900);   // year
+    view.setUint8(2, now.getMonth() + 1);          // month
+    view.setUint8(3, now.getDate());               // day
+    view.setInt32(4, numRecords, true);             // number of records
+    view.setInt16(8, headerSize, true);             // header size
+    view.setInt16(10, recordWidth, true);           // record size
+
+    // Field descriptors (32 bytes each)
+    for (var fi2 = 0; fi2 < numFields; fi2++) {
+      var fdOffset = 32 + fi2 * 32;
+      var nameBytes = [];
+      for (var ni = 0; ni < 11; ni++) {
+        nameBytes.push(ni < fields[fi2].name.length ? fields[fi2].name.charCodeAt(ni) : 0);
+      }
+      for (var ni2 = 0; ni2 < 11; ni2++) bytes[fdOffset + ni2] = nameBytes[ni2];
+      bytes[fdOffset + 11] = 67;  // field type 'C' (character)
+      view.setUint8(fdOffset + 16, fields[fi2].width);  // field length
+    }
+
+    // Header terminator
+    bytes[headerSize - 1] = 0x0D;
+
+    // Records
+    for (var ri2 = 0; ri2 < numRecords; ri2++) {
+      var recOffset = headerSize + ri2 * recordWidth;
+      bytes[recOffset] = 0x20; // deletion flag: space = not deleted
+      var fieldOffset = recOffset + 1;
+      for (var fi3 = 0; fi3 < numFields; fi3++) {
+        var val = propsList[ri2][keys[fi3]];
+        var str = (val != null) ? String(val) : "";
+        // Right-pad with spaces to field width
+        while (str.length < fields[fi3].width) str += " ";
+        str = str.substring(0, fields[fi3].width);
+        for (var si = 0; si < str.length; si++) {
+          bytes[fieldOffset + si] = str.charCodeAt(si) & 0xFF;
+        }
+        fieldOffset += fields[fi3].width;
+      }
+    }
+
+    // EOF marker
+    bytes[fileSize - 1] = 0x1A;
+
+    return buf;
+  }
+
   function exportSHP() {
-    if (typeof shpwrite === "undefined") {
-      alert("Shapefile export library not loaded. Please check your internet connection and reload.");
+    if (typeof JSZip === "undefined") {
+      alert("JSZip library not loaded. Please check your internet connection and reload.");
       return;
     }
     try {
       var points = [], polylines = [], polys = [];
+      var pointProps = [], polylineProps = [], polyProps = [];
 
       for (var si = 0; si < App.stations.length; si++) {
         var s = App.stations[si];
-        points.push({
-          type: "Feature",
-          geometry: s.geometry,
-          properties: _featureProps(s, "station")
-        });
+        if (!s.geometry) continue;
+        points.push({ geometry: s.geometry, properties: s.properties });
+        pointProps.push(_featureProps(s, "station"));
       }
       for (var li = 0; li < App.lines.length; li++) {
         var l = App.lines[li];
-        polylines.push({
-          type: "Feature",
-          geometry: l.geometry,
-          properties: _featureProps(l, "line")
-        });
+        if (!l.geometry) continue;
+        polylines.push({ geometry: l.geometry, properties: l.properties });
+        polylineProps.push(_featureProps(l, "line"));
       }
       for (var ri = 0; ri < App.routes.length; ri++) {
         var r = App.routes[ri];
-        polylines.push({
-          type: "Feature",
-          geometry: r.geometry,
-          properties: _featureProps(r, "route")
-        });
+        if (!r.geometry) continue;
+        polylines.push({ geometry: r.geometry, properties: r.properties });
+        polylineProps.push(_featureProps(r, "route"));
       }
       for (var pi = 0; pi < App.polygons.length; pi++) {
         var p = App.polygons[pi];
-        polys.push({
-          type: "Feature",
-          geometry: p.geometry,
-          properties: _featureProps(p, "polygon")
-        });
+        if (!p.geometry) continue;
+        polys.push({ geometry: p.geometry, properties: p.properties });
+        polyProps.push(_featureProps(p, "polygon"));
       }
 
       if (points.length + polylines.length + polys.length === 0) {
@@ -707,57 +948,45 @@
         return;
       }
 
-      // shpwrite.zip expects a GeoJSON FeatureCollection with mixed types
-      // and internally separates by geometry type
-      var allFeatures = points.concat(polylines).concat(polys);
-      var geojson = { type: "FeatureCollection", features: allFeatures };
+      var zip = new JSZip();
 
-      var options = {
-        folder: "features",
-        types: {
-          point: "stations",
-          polyline: "lines_routes",
-          polygon: "polygons"
-        }
-      };
-
-      // shpwrite.zip returns a content object or a Promise
-      var content = shpwrite.zip(geojson, options);
-
-      if (content && typeof content.then === "function") {
-        content.then(function (result) {
-          _finishSHPExport(result);
-        }).catch(function (err) {
-          console.warn("SHP export failed:", err);
-          App.setStatus("SHP export failed: " + (err.message || err));
-        });
-      } else {
-        _finishSHPExport(content);
+      // Write each geometry-type layer as a set of .shp/.shx/.dbf/.prj files
+      if (points.length) {
+        var ptFiles = _writeSHPSHX(points, SHP_POINT);
+        zip.file("stations.shp", ptFiles.shp);
+        zip.file("stations.shx", ptFiles.shx);
+        zip.file("stations.dbf", _writeDBF(pointProps));
+        zip.file("stations.prj", SHP_PRJ_WGS84);
       }
+      if (polylines.length) {
+        var lnFiles = _writeSHPSHX(polylines, SHP_POLYLINE);
+        zip.file("lines_routes.shp", lnFiles.shp);
+        zip.file("lines_routes.shx", lnFiles.shx);
+        zip.file("lines_routes.dbf", _writeDBF(polylineProps));
+        zip.file("lines_routes.prj", SHP_PRJ_WGS84);
+      }
+      if (polys.length) {
+        var pgFiles = _writeSHPSHX(polys, SHP_POLYGON);
+        zip.file("polygons.shp", pgFiles.shp);
+        zip.file("polygons.shx", pgFiles.shx);
+        zip.file("polygons.dbf", _writeDBF(polyProps));
+        zip.file("polygons.prj", SHP_PRJ_WGS84);
+      }
+
+      var filename = "features-" + _dateStamp() + ".zip";
+      App.setStatus("Generating shapefile...");
+
+      zip.generateAsync({ type: "blob" }).then(function (blob) {
+        _triggerDownload(blob, filename);
+        App.setStatus("Exported " + filename);
+      }).catch(function (err) {
+        console.error("SHP export failed:", err);
+        App.setStatus("SHP export failed: " + (err.message || err));
+      });
     } catch (e) {
-      console.warn("SHP export failed:", e);
+      console.error("SHP export failed:", e);
       App.setStatus("SHP export failed: " + (e.message || e));
     }
-  }
-
-  function _finishSHPExport(content) {
-    var filename = "features-" + _dateStamp() + ".zip";
-    var blob;
-    if (content instanceof Blob) {
-      blob = content;
-    } else if (content && content.base64) {
-      var binary = atob(content.base64);
-      var bytes = new Uint8Array(binary.length);
-      for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      blob = new Blob([bytes], { type: "application/zip" });
-    } else if (content instanceof ArrayBuffer) {
-      blob = new Blob([content], { type: "application/zip" });
-    } else {
-      App.setStatus("SHP export: unexpected output format.");
-      return;
-    }
-    _triggerDownload(blob, filename);
-    App.setStatus("Exported " + filename);
   }
 
   // ---- Import helpers ----
