@@ -29,7 +29,7 @@
 
   // Dark grey type icon SVGs matching toolbar draw icons
   var TYPE_ICON_SVGS = {
-    station: '<svg width="11" height="11" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" fill="#718096"/></svg>',
+    station: '<svg width="11" height="11" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" fill="#718096"/></svg>',
     line:    '<svg width="11" height="11" viewBox="0 0 24 24"><line x1="4" y1="19" x2="20" y2="5" stroke="#718096" stroke-width="3.5" stroke-linecap="round"/></svg>',
     route:   '<svg width="11" height="11" viewBox="0 0 24 24"><path d="M4 18 Q8 6 14 10 Q20 14 20 6" stroke="#718096" stroke-width="2.5" fill="none" stroke-linecap="round"/><circle cx="4" cy="18" r="2.5" fill="#718096"/></svg>',
     polygon: '<svg width="11" height="11" viewBox="0 0 24 24"><polygon points="12,4 21,10 18,20 6,20 3,10" fill="#718096"/></svg>',
