@@ -28,7 +28,7 @@
   // Supported types: "text", "number", "select", "checkboxes"
   var ATTR_FIELDS = {
     route: [
-      { key: "routeGroup",    label: "Route Group", type: "text",       placeholder: "e.g. Route 7", hidden: true },
+      { key: "group",         label: "Group",     type: "text",       placeholder: "e.g. Corridor A", groupPicker: true },
       { key: "direction",     label: "Direction",   type: "select",     options: ["Both","NB","SB","EB","WB","Inbound","Outbound","Loop"] },
       { key: "mode",          label: "Mode",        type: "select",     options: ["Bus","BRT","Light Rail","Streetcar"] },
       { key: "routeId",       label: "Route ID",    type: "text",       placeholder: "e.g. 7, Blue" },
@@ -39,18 +39,18 @@
       { key: "avgSpeed",      label: "Avg speed",   type: "number",     unit: "mph" }
     ],
     line: [
-      { key: "lineGroup", label: "Line Group", type: "text", placeholder: "e.g. Express", hidden: true },
+      { key: "group",    label: "Group", type: "text", placeholder: "e.g. Corridor A", groupPicker: true },
       { key: "lineMode",  label: "Mode",  type: "select", options: ["Light Rail","Commuter Rail","Streetcar","Bus","BRT"] },
       { key: "notes",     label: "Notes", type: "text",   placeholder: "" }
     ],
     station: [
-      { key: "stationGroup",     label: "Station Group", type: "text", placeholder: "e.g. North Corridor", hidden: true },
+      { key: "group",            label: "Group",    type: "text", placeholder: "e.g. North Corridor", groupPicker: true },
       { key: "stopId",           label: "Stop ID",       type: "text", placeholder: "e.g. 1042" },
       { key: "associatedRoutes", label: "Routes"                                                 }
     ],
     polygon: [
-      { key: "polygonGroup", label: "Polygon Group", type: "text", placeholder: "e.g. Study Area", hidden: true },
-      { key: "notes",        label: "Notes",         type: "text", placeholder: "" }
+      { key: "group",  label: "Group",  type: "text", placeholder: "e.g. Study Area", groupPicker: true },
+      { key: "notes",  label: "Notes",  type: "text", placeholder: "" }
     ],
     label: [
       { key: "labelGroup", label: "Label Group", type: "text",   placeholder: "e.g. Route Numbers", hidden: true },
@@ -375,15 +375,82 @@
     return { el: inp, unit: null };
   }
 
+  function buildUniversalGroupPicker(field, attrs, feature, featureType) {
+    var inp = document.createElement("input");
+    inp.type = "text";
+    inp.className = "fp-attr-input";
+    if (field.placeholder) inp.placeholder = field.placeholder;
+    var val = attrs[field.key];
+    inp.value = (val !== undefined && val !== null) ? val : "";
+
+    // Build datalist with all existing universal group names across all feature types
+    var dlId = "fp-universal-group-datalist";
+    var dl = document.getElementById(dlId);
+    if (!dl) {
+      dl = document.createElement("datalist");
+      dl.id = dlId;
+      document.body.appendChild(dl);
+    }
+    dl.innerHTML = "";
+    var seen = {};
+    var allArrays = [App.stations || [], App.lines || [], App.routes || [], App.polygons || []];
+    allArrays.forEach(function (arr) {
+      arr.forEach(function (f) {
+        var g = f.properties.attributes && f.properties.attributes.group;
+        if (g && !seen[g]) {
+          seen[g] = true;
+          var opt = document.createElement("option");
+          opt.value = g;
+          dl.appendChild(opt);
+        }
+      });
+    });
+    inp.setAttribute("list", dlId);
+
+    inp.addEventListener("change", function () {
+      var newVal = inp.value.trim();
+      if (newVal) {
+        attrs[field.key] = newVal;
+        // Inherit color from an existing feature in the same group (any type)
+        var existingColor = null;
+        allArrays.forEach(function (arr) {
+          arr.forEach(function (f) {
+            if (!existingColor && f.properties.color && f.properties !== feature.properties) {
+              var g = f.properties.attributes && f.properties.attributes.group;
+              if (g === newVal) existingColor = f.properties.color;
+            }
+          });
+        });
+        if (existingColor) {
+          feature.properties.color = existingColor;
+          // Trigger re-render for this feature type
+          if (typeof App.updateFeatureColor === "function") {
+            // Find this feature's index in its array
+            var arrMap = { station: App.stations, line: App.lines, route: App.routes, polygon: App.polygons };
+            var arr = arrMap[featureType] || [];
+            var idx = arr.indexOf(feature);
+            if (idx >= 0) App.updateFeatureColor(featureType, idx, existingColor);
+          }
+        }
+      } else {
+        delete attrs[field.key];
+      }
+      saveAttrCache();
+      if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+    });
+    inp.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") inp.blur();
+    });
+    return { el: inp, unit: null };
+  }
+
   function buildFieldInput(field, attrs, feature, featureType) {
     if (field.key === "associatedRoutes") return buildRoutePicker(attrs);
     if (field.type === "select")      return buildSelect(field, attrs);
     if (field.type === "checkboxes")  return buildCheckboxes(field, attrs);
     if (field.type === "color")       return buildColorPicker(field, attrs, feature);
-    if (field.key === "routeGroup")   return buildGroupPicker(field, attrs, feature);
+    if (field.groupPicker)            return buildUniversalGroupPicker(field, attrs, feature, featureType);
     if (field.key === "labelGroup")   return buildLabelGroupPicker(field, attrs, feature);
-    if (field.key === "stationGroup" || field.key === "lineGroup" || field.key === "polygonGroup")
-      return buildGenericGroupPicker(field, attrs, featureType);
     return buildTextOrNumber(field, attrs);
   }
 
@@ -510,6 +577,32 @@
     // Update header title
     _popupEl.querySelector(".fp-attr-popup-title").textContent =
       (TYPE_LABELS[featureType] || featureType) + " Attributes";
+
+    // Update or create color swatch in header
+    var headerEl = _popupEl.querySelector(".fp-attr-popup-header");
+    var existingSwatch = headerEl.querySelector(".fp-attr-popup-swatch");
+    if (existingSwatch) existingSwatch.remove();
+    var featureColor = feature.properties.color ||
+      (typeof App.getTypeDefaultColor === "function" ? App.getTypeDefaultColor(featureType) : "#999");
+    var hdrSwatch = document.createElement("button");
+    hdrSwatch.className = "fp-attr-popup-swatch";
+    hdrSwatch.style.background = featureColor;
+    hdrSwatch.title = "Change color";
+    (function (sw, ft, fi, feat) {
+      sw.addEventListener("click", function (e) {
+        e.stopPropagation();
+        if (typeof App.openColorPicker === "function") {
+          App.openColorPicker(sw, feat.properties.color || sw.style.background, function (newColor) {
+            feat.properties.color = newColor;
+            sw.style.background = newColor;
+            if (typeof App.updateFeatureColor === "function") App.updateFeatureColor(ft, fi, newColor);
+          });
+        }
+      });
+    })(hdrSwatch, featureType, featureIndex, feature);
+    // Insert swatch before title
+    var titleEl = headerEl.querySelector(".fp-attr-popup-title");
+    headerEl.insertBefore(hdrSwatch, titleEl);
 
     // Clear and rebuild body
     var body = _popupEl.querySelector(".fp-attr-popup-body");

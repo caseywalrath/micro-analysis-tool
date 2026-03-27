@@ -112,63 +112,47 @@
         </div>
         <div class="fp-content">
 
-          <div class="fp-section">
-            <div class="fp-section-header">Stations</div>
-            <div id="fp-stations" class="fp-list"></div>
-          </div>
-
-          <div class="fp-section">
-            <div class="fp-section-header">Lines</div>
-            <div id="fp-lines" class="fp-list"></div>
-          </div>
-
-          <div class="fp-section">
-            <div class="fp-section-header">Routes</div>
-            <div id="fp-routes" class="fp-list"></div>
-          </div>
-
-          <div class="fp-section">
-            <div class="fp-section-header">Polygons</div>
-            <div id="fp-polygons" class="fp-list"></div>
-          </div>
+          <div id="fp-features" class="fp-list"></div>
 
           <div class="fp-section">
             <div class="fp-section-header">Labels</div>
             <div id="fp-labels" class="fp-list"></div>
           </div>
 
-          <div class="fp-section">
-            <div class="fp-section-header">Buffers and Line Width</div>
-            <div class="fp-buffer-row">
-              <span class="fp-buffer-label">Stations</span>
-              <input id="bufferRadius" type="number" min="0" step="0.1" value="0.5" class="fp-radius-input" />
-              <span class="fp-radius-unit">mi</span>
-              <input id="stationLineWidth" type="number" min="1" max="5" step="0.1" value="1" class="fp-radius-input" />
-              <span class="fp-radius-unit">×</span>
-            </div>
-            <div class="fp-buffer-row">
-              <span class="fp-buffer-label">Lines</span>
-              <input id="lineBufferRadius" type="number" min="0" step="0.1" value="0.5" class="fp-radius-input" />
-              <span class="fp-radius-unit">mi</span>
-              <input id="lineLineWidth" type="number" min="1" max="5" step="0.1" value="1" class="fp-radius-input" />
-              <span class="fp-radius-unit">×</span>
-            </div>
-            <div class="fp-buffer-row">
-              <span class="fp-buffer-label">Routes</span>
-              <input id="routeBufferRadius" type="number" min="0" step="0.1" value="0.5" class="fp-radius-input" />
-              <span class="fp-radius-unit">mi</span>
-              <input id="routeLineWidth" type="number" min="1" max="5" step="0.1" value="1" class="fp-radius-input" />
-              <span class="fp-radius-unit">×</span>
-            </div>
-            <div class="fp-buffer-row">
-              <span class="fp-buffer-label">Polygons</span>
-              <input id="polygonLineWidth" type="number" min="1" max="5" step="0.1" value="1" class="fp-radius-input" />
-              <span class="fp-radius-unit">×</span>
-            </div>
-            <div class="fp-buffer-row">
-              <label class="fp-buffer-label" for="offsetOverlap">
-                <input type="checkbox" id="offsetOverlap" /> Offset overlapping Lines/Routes
-              </label>
+          <div class="fp-section" id="fp-settings-section">
+            <div class="fp-section-header fp-settings-header">Feature Settings</div>
+            <div class="fp-settings-body" style="display:none">
+              <div class="fp-buffer-row">
+                <span class="fp-buffer-label">Stations</span>
+                <input id="bufferRadius" type="number" min="0" step="0.1" value="0.5" class="fp-radius-input" />
+                <span class="fp-radius-unit">mi</span>
+                <input id="stationLineWidth" type="number" min="1" max="5" step="0.1" value="1" class="fp-radius-input" />
+                <span class="fp-radius-unit">×</span>
+              </div>
+              <div class="fp-buffer-row">
+                <span class="fp-buffer-label">Lines</span>
+                <input id="lineBufferRadius" type="number" min="0" step="0.1" value="0.5" class="fp-radius-input" />
+                <span class="fp-radius-unit">mi</span>
+                <input id="lineLineWidth" type="number" min="1" max="5" step="0.1" value="1" class="fp-radius-input" />
+                <span class="fp-radius-unit">×</span>
+              </div>
+              <div class="fp-buffer-row">
+                <span class="fp-buffer-label">Routes</span>
+                <input id="routeBufferRadius" type="number" min="0" step="0.1" value="0.5" class="fp-radius-input" />
+                <span class="fp-radius-unit">mi</span>
+                <input id="routeLineWidth" type="number" min="1" max="5" step="0.1" value="1" class="fp-radius-input" />
+                <span class="fp-radius-unit">×</span>
+              </div>
+              <div class="fp-buffer-row">
+                <span class="fp-buffer-label">Polygons</span>
+                <input id="polygonLineWidth" type="number" min="1" max="5" step="0.1" value="1" class="fp-radius-input" />
+                <span class="fp-radius-unit">×</span>
+              </div>
+              <div class="fp-buffer-row">
+                <label class="fp-buffer-label" for="offsetOverlap">
+                  <input type="checkbox" id="offsetOverlap" /> Offset overlapping Lines/Routes
+                </label>
+              </div>
             </div>
           </div>
         </div>

@@ -381,12 +381,12 @@ button { cursor: pointer; }
 .fp-attr-popup-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   padding: 10px 14px;
   border-bottom: 1px solid var(--border);
   cursor: grab;
   user-select: none;
   flex-shrink: 0;
+  gap: 0;
 }
 .fp-attr-popup-header.dragging { cursor: grabbing; }
 .fp-attr-popup-title {
@@ -406,6 +406,7 @@ button { cursor: pointer; }
   line-height: var(--leading-none);
   margin: 0;
   flex-shrink: 0;
+  margin-left: auto;
 }
 .fp-attr-popup-close:hover { color: #e53e3e; }
 .fp-attr-popup-body {
@@ -2425,6 +2426,48 @@ code { font-family: var(--font-mono); }
 .fp-swatch-neutral {
   background: #fff !important;
   border-color: #ccc !important;
+}
+
+/* ---- Type icon (replaces per-feature color swatch) ---- */
+.fp-type-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  margin-right: 4px;
+  color: #718096;
+  pointer-events: none;
+}
+.fp-type-icon svg {
+  width: 11px;
+  height: 11px;
+  display: block;
+}
+
+/* ---- Color swatch in attribute popup header ---- */
+.fp-attr-popup-swatch {
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  border-radius: 3px;
+  border: 1px solid rgba(0,0,0,0.28);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  margin-right: 8px;
+}
+.fp-attr-popup-swatch:hover {
+  border-color: rgba(0,0,0,0.55);
+}
+
+/* ---- Feature Settings section (collapsible, pinned to bottom) ---- */
+.fp-settings-header {
+  cursor: pointer;
+}
+.fp-settings-body {
+  padding: 4px 6px 6px;
 }
 
 /* Vertex right-click context menu */
