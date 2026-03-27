@@ -77,7 +77,7 @@ body { margin: 0; font-family: var(--font-sans); background: var(--bg); }
   min-width: 180px;
   padding: 4px 0;
 }
-.export-dropdown button {
+#toolbar .export-dropdown button {
   display: block;
   width: 100%;
   height: auto;
@@ -89,8 +89,9 @@ body { margin: 0; font-family: var(--font-sans); background: var(--bg); }
   font-size: var(--text-sm);
   cursor: pointer;
   color: #333;
+  white-space: nowrap;
 }
-.export-dropdown button:hover {
+#toolbar .export-dropdown button:hover {
   background: rgba(0,0,0,0.05);
 }
 #draw-tools {
