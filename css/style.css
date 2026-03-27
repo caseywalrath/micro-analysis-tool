@@ -56,6 +56,43 @@ body { margin: 0; font-family: var(--font-sans); background: var(--bg); }
   background: var(--panel);
   flex-shrink: 0;
 }
+#file-actions {
+  display: flex;
+  gap: 4px;
+  margin-right: 32px;
+}
+.export-wrapper {
+  position: relative;
+}
+.export-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  z-index: 1000;
+  min-width: 180px;
+  padding: 4px 0;
+}
+.export-dropdown button {
+  display: block;
+  width: 100%;
+  height: auto;
+  padding: 8px 14px;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 0;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  color: #333;
+}
+.export-dropdown button:hover {
+  background: rgba(0,0,0,0.05);
+}
 #draw-tools {
   display: flex;
   gap: 4px;
@@ -170,7 +207,6 @@ button { cursor: pointer; }
 #feature-panel.fp-collapsed #fp-collapse-btn svg { transform: rotate(0deg); }
 #feature-panel.fp-collapsed { width: 24px; }
 #feature-panel.fp-collapsed .fp-content,
-#feature-panel.fp-collapsed .fp-actions,
 #feature-panel.fp-collapsed .fp-header { display: none; }
 
 .fp-section { margin-bottom: 6px; }
@@ -640,19 +676,6 @@ input.fp-attr-input[type="number"] {
   background: #fff;
 }
 
-.fp-actions {
-  display: flex;
-  gap: 8px;
-  padding: 10px;
-  border-top: 1px solid var(--border);
-  background: var(--bg);
-  flex-shrink: 0;
-}
-.fp-actions button {
-  flex: 1;
-  padding: 7px 0;
-  font-size: var(--text-base);
-}
 
 .card {
   border: 1px solid var(--border);

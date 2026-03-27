@@ -662,20 +662,60 @@
       });
     }
 
-    // ---- Import / Export ----
-    document.getElementById("fp-export").addEventListener("click", function () {
-      if (typeof App.cache !== "undefined") App.cache.exportToFile();
-    });
-
+    // ---- Import / Export (toolbar buttons) ----
     var importFileInput = document.getElementById("fp-import-file");
-    document.getElementById("fp-import").addEventListener("click", function () {
-      importFileInput.value = "";   // allow re-importing same file
+    var exportDropdown = document.getElementById("export-dropdown");
+
+    // Import button → open file picker
+    document.getElementById("import-btn").addEventListener("click", function () {
+      importFileInput.value = "";
       importFileInput.click();
     });
+
+    // Route imported file by extension
     importFileInput.addEventListener("change", function (e) {
       var file = e.target.files && e.target.files[0];
-      if (!file) return;
-      if (typeof App.cache !== "undefined") App.cache.importFromFile(file);
+      if (!file || typeof App.cache === "undefined") return;
+      var ext = (file.name.split(".").pop() || "").toLowerCase();
+      if (ext === "json") {
+        App.cache.importFromFile(file);
+      } else if (ext === "csv") {
+        App.cache.importCSV(file);
+      } else if (ext === "kml" || ext === "kmz") {
+        App.cache.importKML(file);
+      } else if (ext === "shp" || ext === "zip") {
+        App.cache.importSHP(file);
+      } else {
+        alert("Unsupported file format: ." + ext + "\nSupported: .json, .csv, .kml, .shp, .zip");
+      }
+    });
+
+    // Export button → toggle dropdown
+    document.getElementById("export-btn").addEventListener("click", function (e) {
+      e.stopPropagation();
+      var isOpen = exportDropdown.style.display !== "none";
+      exportDropdown.style.display = isOpen ? "none" : "block";
+    });
+
+    // Export dropdown item click
+    exportDropdown.addEventListener("click", function (e) {
+      var btn = e.target.closest("button[data-format]");
+      if (!btn || typeof App.cache === "undefined") return;
+      exportDropdown.style.display = "none";
+      var fmt = btn.getAttribute("data-format");
+      if (fmt === "json-features") App.cache.exportFeaturesOnly();
+      else if (fmt === "json-all") App.cache.exportToFile();
+      else if (fmt === "csv") App.cache.exportCSV();
+      else if (fmt === "kml") App.cache.exportKML();
+      else if (fmt === "shp") App.cache.exportSHP();
+    });
+
+    // Close dropdown on outside click or Escape
+    document.addEventListener("click", function () {
+      exportDropdown.style.display = "none";
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") exportDropdown.style.display = "none";
     });
 
     // Save on checkbox / dropdown changes

@@ -18,6 +18,15 @@
     <!-- PapaParse for robust CSV parsing (handles quoted commas) -->
     <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
 
+    <!-- JSZip for zip file handling (SHP import/export, KMZ) -->
+    <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
+
+    <!-- Shapefile reading (SHP import) -->
+    <script src="https://unpkg.com/shapefile@0.6.6/dist/shapefile.js"></script>
+
+    <!-- Shapefile writing (SHP export) -->
+    <script src="https://unpkg.com/shp-write@0.3.2/shpwrite.js"></script>
+
     <!-- App styles -->
     <link rel="stylesheet" href="css/style.css" />
     <link rel="stylesheet" href="css/sidebar-v2.css" />
@@ -29,6 +38,29 @@
   <body>
     <div id="app">
       <div id="toolbar">
+        <div id="file-actions">
+          <button id="import-btn" title="Import">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2d3748" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 3v12"/><polyline points="8,11 12,15 16,11"/>
+              <path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/>
+            </svg>
+          </button>
+          <div class="export-wrapper">
+            <button id="export-btn" title="Export">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2d3748" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 15V3"/><polyline points="16,7 12,3 8,7"/>
+                <path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/>
+              </svg>
+            </button>
+            <div id="export-dropdown" class="export-dropdown" style="display:none;">
+              <button data-format="json-features">JSON (Features only)</button>
+              <button data-format="json-all">JSON (All data)</button>
+              <button data-format="csv">CSV</button>
+              <button data-format="kml">KML</button>
+              <button data-format="shp">Shapefile (SHP)</button>
+            </div>
+          </div>
+        </div>
         <div id="draw-tools">
           <button class="tool-btn" data-mode="station" title="Station">
             <svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" fill="#3182ce"/></svg>
@@ -141,12 +173,8 @@
           </div>
         </div>
 
-        <div class="fp-actions">
-          <button id="fp-import">Import</button>
-          <button id="fp-export">Export</button>
-        </div>
-        <input type="file" id="fp-import-file" accept=".json" style="display:none" />
       </div>
+      <input type="file" id="fp-import-file" accept=".json,.csv,.kml,.kmz,.shp,.zip" style="display:none" />
       </div><!-- #main-content -->
 
       <!-- Analysis module popup (generic container, reused per-module) -->
