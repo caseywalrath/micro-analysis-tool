@@ -74,6 +74,15 @@
           <button class="tool-btn" data-mode="label" title="Label">
             <svg width="22" height="22" viewBox="0 0 24 24"><path d="M4 5h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9l-4 3.5V16H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" fill="#e53e3e"/></svg>
           </button>
+          <button class="tool-btn" data-mode="measure" title="Measure">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+              <rect x="2" y="6" width="20" height="12" rx="2" stroke="#6b46c1" stroke-width="1.8"/>
+              <line x1="6" y1="6" x2="6" y2="11" stroke="#6b46c1" stroke-width="1.5"/>
+              <line x1="10" y1="6" x2="10" y2="13" stroke="#6b46c1" stroke-width="1.5"/>
+              <line x1="14" y1="6" x2="14" y2="11" stroke="#6b46c1" stroke-width="1.5"/>
+              <line x1="18" y1="6" x2="18" y2="13" stroke="#6b46c1" stroke-width="1.5"/>
+            </svg>
+          </button>
         </div>
         <div id="draw-actions">
           <button id="undo-btn" title="Undo (Ctrl+Z)" disabled>
@@ -180,6 +189,7 @@
     <script src="js/core/routes.js"></script>
     <script src="js/core/polygons.js"></script>
     <script src="js/core/labels.js"></script>
+    <script src="js/core/measure.js"></script>
     <script src="js/core/editing.js"></script>
     <script src="js/core/selection.js"></script>
     <script src="js/core/features.js"></script>

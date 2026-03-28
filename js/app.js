@@ -9,7 +9,7 @@
 
   // ---- Draw mode ----
 
-  App.drawMode = null; // null | "station" | "line" | "route" | "polygon" | "label"
+  App.drawMode = null; // null | "station" | "line" | "route" | "polygon" | "label" | "measure"
 
   // ---- Data Inputs panel ----
 
@@ -300,6 +300,9 @@
     App.renderPolygonLayers();
     if (typeof App.renderLabelMarkers === "function") App.renderLabelMarkers();
 
+    // Initialize measure tool layers
+    if (typeof App.initMeasureLayers === "function") App.initMeasureLayers();
+
     // Initialize feature editing (station drag, vertex editing)
     if (typeof App._initEditing === "function") App._initEditing();
 
@@ -363,11 +366,15 @@
         if (prevMode === "polygon" && App.drawMode !== "polygon") {
           App.cancelPolygonDrawing();
         }
+        if (prevMode === "measure" && App.drawMode !== "measure") {
+          if (typeof App.clearMeasure === "function") App.clearMeasure();
+        }
 
         // Clear any lingering preview coordinates
         if (typeof App.setLinePreview === "function") App.setLinePreview(null);
         if (typeof App.setRoutePreview === "function") App.setRoutePreview(null);
         if (typeof App.setPolygonPreview === "function") App.setPolygonPreview(null);
+        if (typeof App.setMeasurePreview === "function") App.setMeasurePreview(null);
 
         // Clear feature selection when entering a draw mode
         if (App.drawMode && typeof App.clearSelection === "function") App.clearSelection();
@@ -412,6 +419,12 @@
 
     // Keyboard shortcuts
     document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && App.drawMode === "measure") {
+        if (typeof App.clearMeasure === "function") App.clearMeasure();
+        App.exitDrawMode();
+        App.setStatus("Ready");
+        return;
+      }
       if (e.key === "Escape" && App.popup.isOpen()) {
         App.popup.close();
       }
@@ -534,6 +547,8 @@
         App.addLabel(e.lngLat.lng, e.lngLat.lat);
         notifyProject();
         if (typeof App.cache !== "undefined") App.cache.save();
+      } else if (App.drawMode === "measure") {
+        App.handleMeasureClick(e.lngLat);
       }
     });
 
@@ -545,6 +560,8 @@
         App.setRoutePreview(e.lngLat);
       } else if (App.drawMode === "polygon") {
         App.setPolygonPreview(e.lngLat);
+      } else if (App.drawMode === "measure") {
+        App.setMeasurePreview(e.lngLat);
       }
     });
 
@@ -580,6 +597,10 @@
       }
       if (App.drawMode === "polygon" && App._polygonDrawingInProgress && App._polygonDrawingInProgress()) {
         App.undoLastPolygon();
+        return;
+      }
+      if (App.drawMode === "measure" && App._measureDrawingInProgress && App._measureDrawingInProgress()) {
+        App.undoLastMeasurePoint();
         return;
       }
       App.undo.undo();
