@@ -302,11 +302,40 @@
     return u;
   }
 
+  function duplicatePolygon(index) {
+    if (index < 0 || index >= polygons.length) return;
+    if (App.undo && !App.undo.isRestoring()) App.undo.push();
+    var src = polygons[index];
+    var idx = polygons.length + 1;
+    var offsetRing = src.geometry.coordinates[0].map(function (c) {
+      return [c[0] + 0.002, c[1]];
+    });
+    var copy = {
+      type: "Feature",
+      properties: {
+        name: "Polygon " + idx,
+        polyIdx: idx,
+        vertices: src.properties.vertices,
+        color: src.properties.color || "",
+        hidden: false
+      },
+      geometry: { type: "Polygon", coordinates: [offsetRing] }
+    };
+    if (src.properties.attributes) {
+      copy.properties.attributes = JSON.parse(JSON.stringify(src.properties.attributes));
+    }
+    polygons.push(copy);
+    renderPolygonLayers();
+    if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+    if (App.cache && typeof App.cache.save === "function") App.cache.save();
+  }
+
   /* ---- Expose on App namespace ---- */
 
   App.polygons = polygons;
   App.polygonUnionPolygon = polygonUnionPolygon;
   App.handlePolygonClick = handlePolygonClick;
+  App.duplicatePolygon = duplicatePolygon;
   App.removePolygon = removePolygon;
   App.clearPolygons = clearPolygons;
   App.undoLastPolygon = undoLastPolygon;

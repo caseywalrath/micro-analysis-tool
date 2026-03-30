@@ -543,6 +543,37 @@
     App.setStatus("Route updated");
   }
 
+  function duplicateRoute(index) {
+    if (index < 0 || index >= routes.length) return;
+    if (App.undo && !App.undo.isRestoring()) App.undo.push();
+    var src = routes[index];
+    var idx = routes.length + 1;
+    var offsetCoords = src.geometry.coordinates.map(function (c) {
+      return [c[0] + 0.002, c[1]];
+    });
+    var offsetWaypoints = (src.properties.waypoints || []).map(function (w) {
+      return [w[0] + 0.002, w[1]];
+    });
+    var copy = {
+      type: "Feature",
+      properties: {
+        name: "Route " + idx,
+        routeIdx: idx,
+        waypoints: offsetWaypoints,
+        color: src.properties.color || "",
+        hidden: false
+      },
+      geometry: { type: "LineString", coordinates: offsetCoords }
+    };
+    if (src.properties.attributes) {
+      copy.properties.attributes = JSON.parse(JSON.stringify(src.properties.attributes));
+    }
+    routes.push(copy);
+    rebuildRouteBuffers(routeBufferRadiusMiles);
+    if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+    if (App.cache && typeof App.cache.save === "function") App.cache.save();
+  }
+
   /* ---- Expose on App namespace ---- */
 
   App.routes = routes;
@@ -551,6 +582,7 @@
   App.routeBufferUnionPolygon = routeBufferUnionPolygon;
   App.handleRouteClick = handleRouteClick;
   App.setRoutePreview = setRoutePreview;
+  App.duplicateRoute = duplicateRoute;
   App.removeRoute = removeRoute;
   App.clearRoutes = clearRoutes;
   App.undoLastRoute = undoLastRoute;

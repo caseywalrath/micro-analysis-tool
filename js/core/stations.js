@@ -139,6 +139,33 @@
 
   // --- Expose on App namespace ---
 
+  function duplicateStation(index) {
+    if (index < 0 || index >= points.length) return;
+    if (App.undo && !App.undo.isRestoring()) App.undo.push();
+    var src = points[index];
+    var idx = points.length + 1;
+    var copy = {
+      type: "Feature",
+      properties: {
+        name: "Station " + idx,
+        stationIdx: idx,
+        color: src.properties.color || "",
+        hidden: false
+      },
+      geometry: {
+        type: "Point",
+        coordinates: [src.geometry.coordinates[0] + 0.002, src.geometry.coordinates[1]]
+      }
+    };
+    if (src.properties.attributes) {
+      copy.properties.attributes = JSON.parse(JSON.stringify(src.properties.attributes));
+    }
+    points.push(copy);
+    rebuildBuffers(bufferRadiusMiles);
+    if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+    if (App.cache && typeof App.cache.save === "function") App.cache.save();
+  }
+
   App.stations = points;
   App.buffers = buffers;
   App.addStationPoint = addStationPoint;
@@ -146,6 +173,7 @@
   App.moveStation = moveStation;
   App.removeStation = removeStation;
   App.clearStations = clearStations;
+  App.duplicateStation = duplicateStation;
   App.undoLastStation = undoLastStation;
   App.renderStationLayers = renderStationLayers;
   App.bufferUnionPolygon = bufferUnionPolygon;

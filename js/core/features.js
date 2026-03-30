@@ -497,6 +497,12 @@
           options.push({ label: "Attributes", action: function () {
             if (typeof App.openAttrPopup === "function") App.openAttrPopup(ft, fi, feat);
           }});
+          var dupFn = { station: App.duplicateStation, line: App.duplicateLine,
+                        route: App.duplicateRoute, polygon: App.duplicatePolygon,
+                        label: App.duplicateLabel }[ft];
+          if (typeof dupFn === "function") {
+            options.push({ label: "Duplicate", action: function () { dupFn(fi); } });
+          }
         })(featureType, featureIndex, feature);
       }
       if (selected.length >= 2) {
