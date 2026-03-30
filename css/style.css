@@ -372,6 +372,48 @@ body.present-mode #present-exit { display: block; }
   color: #e53e3e;
 }
 
+/* ---- OSM feature popups ---- */
+.osm-hover {
+  font-size: var(--text-xs);
+  line-height: var(--leading-snug);
+  max-width: 260px;
+}
+.osm-detail {
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+  max-width: 300px;
+}
+.osm-detail-title {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.osm-detail-row {
+  padding: 1px 0;
+}
+.osm-detail-key {
+  font-weight: var(--weight-semibold);
+  color: var(--muted);
+}
+.osm-detail-val {
+  color: #333;
+}
+.osm-detail-link {
+  margin-top: 6px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+  font-size: var(--text-2xs);
+}
+.osm-detail-link a {
+  color: #2b6cb0;
+  text-decoration: none;
+}
+.osm-detail-link a:hover {
+  text-decoration: underline;
+}
+
 /* Duplicate button (labels) */
 .fp-dup-btn {
   background: transparent;

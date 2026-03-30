@@ -47,12 +47,21 @@
     pois: "points of interest"
   };
 
+  // Tags to skip in the "all tags" detail view
+  var SKIP_TAGS = { _osm_id: 1, _osm_type: 1 };
+
+  // Preferred display order for hover summary
+  var HOVER_KEYS_LINE  = ["name", "ref", "operator", "network", "route"];
+  var HOVER_KEYS_POINT = ["name", "ref", "operator", "amenity"];
+
   // ---- Private state ----
 
   var _activeCategory = null;
   var _moveHandler = null;
   var _debounceTimer = null;
   var _loading = false;
+  var _hoverPopup = null;  // maplibregl.Popup for hover tooltip
+  var _clickPopup = null;  // maplibregl.Popup for click detail
 
   // ---- Overpass bbox from map ----
 
@@ -178,6 +187,119 @@
     _loading = false;
   }
 
+  // ---- Popup helpers ----
+
+  function buildHoverHTML(props, keys) {
+    var parts = [];
+    for (var i = 0; i < keys.length; i++) {
+      var v = props[keys[i]];
+      if (v != null && v !== "") {
+        parts.push("<b>" + escHtml(formatKey(keys[i])) + ":</b> " + escHtml(String(v)));
+      }
+    }
+    if (parts.length === 0) {
+      // Fallback: show first available tag
+      var allKeys = Object.keys(props);
+      for (var j = 0; j < allKeys.length; j++) {
+        if (!SKIP_TAGS[allKeys[j]]) {
+          parts.push("<b>" + escHtml(formatKey(allKeys[j])) + ":</b> " + escHtml(String(props[allKeys[j]])));
+          break;
+        }
+      }
+    }
+    if (parts.length === 0) parts.push("<i>No tags</i>");
+    return '<div class="osm-hover">' + parts.join("<br>") + "</div>";
+  }
+
+  function buildClickHTML(props) {
+    var html = '<div class="osm-detail">';
+
+    // Title: name or ref or type
+    var title = props.name || props.ref || props.amenity || props.route || "OSM Feature";
+    html += '<div class="osm-detail-title">' + escHtml(String(title)) + "</div>";
+
+    // All tags as key/value rows
+    var keys = Object.keys(props).sort();
+    var hasRows = false;
+    for (var i = 0; i < keys.length; i++) {
+      if (SKIP_TAGS[keys[i]]) continue;
+      var v = props[keys[i]];
+      if (v == null || v === "") continue;
+      html += '<div class="osm-detail-row">' +
+        '<span class="osm-detail-key">' + escHtml(formatKey(keys[i])) + "</span> " +
+        '<span class="osm-detail-val">' + escHtml(String(v)) + "</span>" +
+        "</div>";
+      hasRows = true;
+    }
+    if (!hasRows) html += '<div class="osm-detail-row"><i>No tags</i></div>';
+
+    // OSM link
+    var osmType = props._osm_type || "node";
+    var osmId = props._osm_id;
+    if (osmId) {
+      html += '<div class="osm-detail-link">' +
+        '<a href="https://www.openstreetmap.org/' + osmType + '/' + osmId +
+        '" target="_blank" rel="noopener">View on OpenStreetMap</a></div>';
+    }
+
+    html += "</div>";
+    return html;
+  }
+
+  function formatKey(k) {
+    return k.replace(/_/g, " ").replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  function ensurePopups() {
+    if (!_hoverPopup) {
+      _hoverPopup = new maplibregl.Popup({ closeButton: false, closeOnClick: false, maxWidth: "280px" });
+    }
+    if (!_clickPopup) {
+      _clickPopup = new maplibregl.Popup({ closeButton: true, closeOnClick: true, maxWidth: "320px" });
+    }
+  }
+
+  function removePopups() {
+    if (_hoverPopup) _hoverPopup.remove();
+    if (_clickPopup) _clickPopup.remove();
+  }
+
+  function wireLayerEvents(layerId, hoverKeys) {
+    var map = App.map;
+
+    map.on("mouseenter", layerId, function () {
+      if (!App.drawMode) map.getCanvas().style.cursor = "pointer";
+    });
+
+    map.on("mousemove", layerId, function (e) {
+      if (!App.drawMode) map.getCanvas().style.cursor = "pointer";
+      if (e.features && e.features.length > 0) {
+        var props = e.features[0].properties;
+        ensurePopups();
+        _hoverPopup.setLngLat(e.lngLat).setHTML(buildHoverHTML(props, hoverKeys)).addTo(map);
+      }
+    });
+
+    map.on("mouseleave", layerId, function () {
+      map.getCanvas().style.cursor = App.drawMode ? "crosshair" : "grab";
+      if (_hoverPopup) _hoverPopup.remove();
+    });
+
+    map.on("click", layerId, function (e) {
+      if (App.drawMode) return;
+      if (e.features && e.features.length > 0) {
+        var props = e.features[0].properties;
+        ensurePopups();
+        if (_hoverPopup) _hoverPopup.remove();
+        _clickPopup.setLngLat(e.lngLat).setHTML(buildClickHTML(props)).addTo(map);
+      }
+    });
+  }
+
   // ---- Render layers ----
 
   function emptyFC() { return { type: "FeatureCollection", features: [] }; }
@@ -200,6 +322,7 @@
           "circle-opacity": 0.85
         }
       });
+      wireLayerEvents(PT_LAYER, HOVER_KEYS_POINT);
     } else {
       map.getSource(PT_SOURCE).setData(pointFC);
     }
@@ -217,6 +340,7 @@
           "line-opacity": 0.7
         }
       });
+      wireLayerEvents(LN_LAYER, HOVER_KEYS_LINE);
     } else {
       map.getSource(LN_SOURCE).setData(lineFC);
     }
@@ -226,6 +350,7 @@
 
   function clearLayers() {
     var map = App.map;
+    removePopups();
     if (map.getLayer(PT_LAYER))  map.removeLayer(PT_LAYER);
     if (map.getSource(PT_SOURCE)) map.removeSource(PT_SOURCE);
     if (map.getLayer(LN_LAYER))  map.removeLayer(LN_LAYER);
