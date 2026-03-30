@@ -417,8 +417,23 @@
       if (typeof App.cache !== "undefined") App.cache.save();
     });
 
+    // Present mode
+    document.getElementById("present-btn").addEventListener("click", function () {
+      document.body.classList.add("present-mode");
+      App.map.resize();
+    });
+    document.getElementById("present-exit").addEventListener("click", function () {
+      document.body.classList.remove("present-mode");
+      App.map.resize();
+    });
+
     // Keyboard shortcuts
     document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && document.body.classList.contains("present-mode")) {
+        document.body.classList.remove("present-mode");
+        App.map.resize();
+        return;
+      }
       if (e.key === "Escape" && App.drawMode === "measure") {
         if (typeof App.clearMeasure === "function") App.clearMeasure();
         App.exitDrawMode();

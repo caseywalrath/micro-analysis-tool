@@ -296,6 +296,29 @@ button { cursor: pointer; }
   pointer-events: none;
 }
 
+/* ---- Present mode ---- */
+body.present-mode #toolbar { display: none; }
+body.present-mode #sidebar { display: none; }
+body.present-mode #feature-panel { display: none; }
+body.present-mode #fp-attr-popup { display: none; }
+#present-exit {
+  display: none;
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 800;
+  padding: 6px 14px;
+  background: rgba(255,255,255,0.92);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+#present-exit:hover { background: #fff; }
+body.present-mode #present-exit { display: block; }
+
 /* Duplicate button (labels) */
 .fp-dup-btn {
   background: transparent;
