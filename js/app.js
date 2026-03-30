@@ -698,9 +698,10 @@
       });
     }
 
-    // ---- Import / Export (toolbar buttons) ----
+    // ---- Import / Export / Add Data (toolbar buttons) ----
     var importFileInput = document.getElementById("fp-import-file");
     var exportDropdown = document.getElementById("export-dropdown");
+    var addDataDropdown = document.getElementById("add-data-dropdown");
 
     // Import button → open file picker
     document.getElementById("import-btn").addEventListener("click", function () {
@@ -729,6 +730,7 @@
     // Export button → toggle dropdown
     document.getElementById("export-btn").addEventListener("click", function (e) {
       e.stopPropagation();
+      if (addDataDropdown) addDataDropdown.style.display = "none";
       var isOpen = exportDropdown.style.display !== "none";
       exportDropdown.style.display = isOpen ? "none" : "block";
     });
@@ -746,12 +748,43 @@
       else if (fmt === "shp") App.cache.exportSHP();
     });
 
-    // Close dropdown on outside click or Escape
+    // ---- Add Data dropdown ----
+    document.getElementById("add-data-btn").addEventListener("click", function (e) {
+      e.stopPropagation();
+      exportDropdown.style.display = "none";
+      var isOpen = addDataDropdown.style.display !== "none";
+      addDataDropdown.style.display = isOpen ? "none" : "block";
+      // Highlight active category
+      if (!isOpen) {
+        var active = typeof App.osmActiveCategory === "function" ? App.osmActiveCategory() : null;
+        addDataDropdown.querySelectorAll("button[data-osm]").forEach(function (btn) {
+          btn.classList.toggle("add-data-active", btn.getAttribute("data-osm") === active);
+        });
+      }
+    });
+
+    addDataDropdown.addEventListener("click", function (e) {
+      var btn = e.target.closest("button[data-osm]");
+      if (!btn) return;
+      addDataDropdown.style.display = "none";
+      var cat = btn.getAttribute("data-osm");
+      if (cat === "clear") {
+        if (typeof App.osmClearLayers === "function") App.osmClearLayers();
+      } else {
+        if (typeof App.osmToggleCategory === "function") App.osmToggleCategory(cat);
+      }
+    });
+
+    // Close dropdowns on outside click or Escape
     document.addEventListener("click", function () {
       exportDropdown.style.display = "none";
+      addDataDropdown.style.display = "none";
     });
     document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape") exportDropdown.style.display = "none";
+      if (e.key === "Escape") {
+        exportDropdown.style.display = "none";
+        addDataDropdown.style.display = "none";
+      }
     });
 
     // Save on checkbox / dropdown changes

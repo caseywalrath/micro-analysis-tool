@@ -37,6 +37,22 @@
       <button id="present-exit" title="Exit presentation">&#x2715; Exit</button>
       <div id="toolbar">
         <div id="file-actions">
+          <div class="add-data-wrapper">
+            <button id="add-data-btn" title="Add Data">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2d3748" stroke-width="2.5" stroke-linecap="round">
+                <line x1="12" y1="5" x2="12" y2="19"/>
+                <line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+            </button>
+            <div id="add-data-dropdown" class="add-data-dropdown" style="display:none;">
+              <div class="add-data-heading">OpenStreetMap</div>
+              <button data-osm="bus_stops">Bus Stops</button>
+              <button data-osm="transit_routes">Transit Routes</button>
+              <button data-osm="pois">Points of Interest</button>
+              <div class="add-data-divider"></div>
+              <button data-osm="clear" class="add-data-clear">Clear OSM Layer</button>
+            </div>
+          </div>
           <button id="present-btn" title="Present (hide panels)">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2d3748" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="15,3 21,3 21,9"/>
@@ -199,6 +215,7 @@
     <script src="js/core/polygons.js"></script>
     <script src="js/core/labels.js"></script>
     <script src="js/core/measure.js"></script>
+    <script src="js/core/osm.js"></script>
     <script src="js/core/editing.js"></script>
     <script src="js/core/selection.js"></script>
     <script src="js/core/features.js"></script>

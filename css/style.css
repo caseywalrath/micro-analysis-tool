@@ -319,6 +319,59 @@ body.present-mode #fp-attr-popup { display: none; }
 #present-exit:hover { background: #fff; }
 body.present-mode #present-exit { display: block; }
 
+/* ---- Add Data dropdown ---- */
+.add-data-wrapper { position: relative; }
+.add-data-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  z-index: 1000;
+  min-width: 200px;
+  padding: 4px 0;
+}
+.add-data-heading {
+  padding: 6px 14px 4px;
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-md);
+  color: var(--muted);
+}
+#toolbar .add-data-dropdown button {
+  display: block;
+  width: 100%;
+  height: auto;
+  padding: 8px 14px;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 0;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  color: #333;
+  white-space: nowrap;
+}
+#toolbar .add-data-dropdown button:hover {
+  background: rgba(0,0,0,0.05);
+}
+#toolbar .add-data-dropdown button.add-data-active {
+  color: #2b6cb0;
+  background: #f0f5ff;
+}
+.add-data-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+#toolbar .add-data-dropdown button.add-data-clear {
+  color: #e53e3e;
+}
+
 /* Duplicate button (labels) */
 .fp-dup-btn {
   background: transparent;
