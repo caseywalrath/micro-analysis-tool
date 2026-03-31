@@ -323,7 +323,7 @@ button { cursor: pointer; }
 
 /* ---- Present mode ---- */
 body.present-mode #toolbar { display: none; }
-body.present-mode #sidebar { display: none; }
+body.present-mode #sidebar-wrap { display: none; }
 body.present-mode #feature-panel { display: none; }
 body.present-mode #fp-attr-popup { display: none; }
 #present-exit {
