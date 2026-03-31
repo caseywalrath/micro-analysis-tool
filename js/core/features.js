@@ -332,6 +332,18 @@
     return arr ? arr[index] : null;
   }
 
+  function goToFeature(featureType, featureIndex) {
+    var feature = getFeatureByTypeIndex(featureType, featureIndex);
+    if (!feature || !feature.geometry) return;
+    var geom = feature.geometry;
+    if (geom.type === "Point") {
+      App.map.flyTo({ center: geom.coordinates, zoom: Math.max(App.map.getZoom(), 14), duration: 500 });
+    } else {
+      var bbox = turf.bbox(feature);
+      App.map.fitBounds([[bbox[0], bbox[1]], [bbox[2], bbox[3]]], { padding: 80, duration: 500 });
+    }
+  }
+
   function generateGroupName(isLabel) {
     var key = isLabel ? LABEL_GROUP_KEY : UNIVERSAL_GROUP_KEY;
     var prefix = isLabel ? "Label Group " : "Group ";
@@ -494,6 +506,7 @@
       // Single-select: offer Attributes
       if (selected.length === 1 && selected[0].type === featureType && selected[0].index === featureIndex) {
         (function (ft, fi, feat) {
+          options.push({ label: "Go To Feature", action: function () { goToFeature(ft, fi); } });
           options.push({ label: "Attributes", action: function () {
             if (typeof App.openAttrPopup === "function") App.openAttrPopup(ft, fi, feat);
           }});
