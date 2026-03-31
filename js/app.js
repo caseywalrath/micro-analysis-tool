@@ -714,7 +714,17 @@
       if (!file) return;
       var ext = (file.name.split(".").pop() || "").toLowerCase();
       if (ext === "geojson") {
-        if (typeof App.loadRoadNetworkFromFile === "function") App.loadRoadNetworkFromFile(file);
+        // Let user choose: import as map features or as road network
+        var asFeatures = confirm(
+          "Import as map features (stations, lines, polygons)?\n\n" +
+          "OK = Import as features\n" +
+          "Cancel = Import as road network (for offline routing)"
+        );
+        if (asFeatures) {
+          if (typeof App.cache !== "undefined") App.cache.importGeoJSON(file);
+        } else {
+          if (typeof App.loadRoadNetworkFromFile === "function") App.loadRoadNetworkFromFile(file);
+        }
         return;
       }
       if (typeof App.cache === "undefined") return;
@@ -727,7 +737,7 @@
       } else if (ext === "shp" || ext === "zip") {
         App.cache.importSHP(file);
       } else {
-        alert("Unsupported file format: ." + ext + "\nSupported: .json, .csv, .kml, .shp, .zip");
+        alert("Unsupported file format: ." + ext + "\nSupported: .json, .geojson, .csv, .kml, .shp, .zip");
       }
     });
 

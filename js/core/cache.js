@@ -973,6 +973,89 @@
 
   // ---- Import helpers ----
 
+  // ---- Shared import helpers ----
+
+  // Flatten any GeoJSON geometry (including Multi* and GeometryCollection) into
+  // an array of simple {type, coordinates} objects (Point, LineString, Polygon).
+  function _flattenGeometry(geom) {
+    if (!geom || !geom.type) return [];
+    switch (geom.type) {
+      case "Point":
+      case "LineString":
+      case "Polygon":
+        return [{ type: geom.type, coordinates: geom.coordinates }];
+      case "MultiPoint":
+        return (geom.coordinates || []).map(function (c) {
+          return { type: "Point", coordinates: c };
+        });
+      case "MultiLineString":
+        return (geom.coordinates || []).map(function (c) {
+          return { type: "LineString", coordinates: c };
+        });
+      case "MultiPolygon":
+        return (geom.coordinates || []).map(function (c) {
+          return { type: "Polygon", coordinates: c };
+        });
+      case "GeometryCollection":
+        var out = [];
+        var geos = geom.geometries || [];
+        for (var i = 0; i < geos.length; i++) {
+          out = out.concat(_flattenGeometry(geos[i]));
+        }
+        return out;
+      default:
+        return [];
+    }
+  }
+
+  // Recursively reproject a coordinate array from sourceCRS to WGS84 using proj4.
+  // Handles nested arrays (LineString = [[x,y],...], Polygon = [[[x,y],...],...]).
+  function _reprojectCoords(coords, sourceCRS) {
+    if (!Array.isArray(coords) || coords.length === 0) return coords;
+    // Leaf: [x, y] or [x, y, z]
+    if (typeof coords[0] === "number") {
+      var pt = proj4(sourceCRS, "EPSG:4326", [coords[0], coords[1]]);
+      return coords.length > 2 ? [pt[0], pt[1], coords[2]] : pt;
+    }
+    // Recurse into nested arrays
+    return coords.map(function (c) { return _reprojectCoords(c, sourceCRS); });
+  }
+
+  // Try to define a CRS in proj4 from a WKT .prj string or EPSG code string.
+  // Returns the proj4 CRS key on success, or null if proj4 is not loaded or parsing fails.
+  function _tryDefineProj(prjTextOrCode) {
+    if (typeof proj4 === "undefined" || !prjTextOrCode) return null;
+    try {
+      // If it looks like an EPSG code, use it directly
+      var epsgMatch = prjTextOrCode.match(/EPSG[:\s]*(\d+)/i);
+      if (epsgMatch) {
+        var code = "EPSG:" + epsgMatch[1];
+        // proj4 may already know common codes (4326, 3857)
+        try { proj4(code); return code; } catch (_) { /* unknown */ }
+      }
+      // Try parsing as WKT
+      var key = "__import_crs__";
+      proj4.defs(key, prjTextOrCode);
+      // Verify the definition was accepted by doing a test transform
+      proj4(key, "EPSG:4326", [0, 0]);
+      return key;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Check if a CRS key is already WGS84 (no reprojection needed).
+  function _isWGS84(crsKey) {
+    if (!crsKey || typeof proj4 === "undefined") return true;
+    try {
+      var test = proj4(crsKey, "EPSG:4326", [500000, 4000000]);
+      // If input = output (within tolerance), it's already WGS84
+      return Math.abs(test[0] - 500000) < 0.0001 && Math.abs(test[1] - 4000000) < 0.0001;
+    } catch (_) {
+      return true; // can't transform → assume WGS84
+    }
+  }
+
   var MAX_FILE_SIZE = 50 * 1024 * 1024;   // 50 MB hard limit
   var WARN_FILE_SIZE = 10 * 1024 * 1024;   // 10 MB soft warning
 
@@ -989,36 +1072,81 @@
     return true;
   }
 
-  function _confirmReplace() {
+  // Returns "replace", "append", or "cancel".
+  // If no existing features, returns "replace" (no dialog needed).
+  function _confirmReplaceOrAppend() {
     var hasExisting = (App.stations.length > 0 || App.lines.length > 0 ||
                        App.routes.length > 0 || App.polygons.length > 0);
-    if (hasExisting) {
-      return confirm("Import will replace all current features. Continue?");
-    }
-    return true;
+    if (!hasExisting) return "replace";
+
+    // Three-way prompt: append (OK) / replace (second confirm) / cancel
+    var choice = confirm(
+      "Features already exist on the map.\n\n" +
+      "OK = Add imported features to existing\n" +
+      "Cancel = Replace all existing features"
+    );
+    if (choice) return "append";
+    // User chose Cancel → confirm replacement
+    if (confirm("Replace ALL existing features with the imported file?")) return "replace";
+    return "cancel";
   }
 
-  function _applyImportedFeatures(stations, lines, polygons, labels) {
+  function _applyImportedFeatures(stations, lines, polygons, labels, mode) {
     if (typeof App.exitEditMode === "function") App.exitEditMode();
 
-    // Build minimal state for applyState
-    var state = {
-      version: SCHEMA_VERSION,
-      stations: stations || [],
-      lines: lines || [],
-      routes: [],
-      polygons: polygons || [],
-      labels: labels || [],
-      bufferRadius: parseFloat(document.getElementById("bufferRadius").value) || 0.5,
-      lineBufferRadius: parseFloat(document.getElementById("lineBufferRadius").value) || 0.5,
-      routeBufferRadius: parseFloat(document.getElementById("routeBufferRadius").value) || 0.5
-    };
-    applyState(state);
+    stations = stations || [];
+    lines = lines || [];
+    polygons = polygons || [];
+    labels = labels || [];
+
+    if (mode === "append") {
+      // Push new features onto existing arrays
+      for (var si = 0; si < stations.length; si++) App.stations.push(stations[si]);
+      for (var li = 0; li < lines.length; li++) App.lines.push(lines[li]);
+      for (var pi = 0; pi < polygons.length; pi++) App.polygons.push(polygons[pi]);
+      if (App.labels) {
+        for (var la = 0; la < labels.length; la++) App.labels.push(labels[la]);
+      }
+
+      // Rebuild buffers and re-render
+      var stationRadius = parseFloat(document.getElementById("bufferRadius").value) || 0.5;
+      var lineRadius = parseFloat(document.getElementById("lineBufferRadius").value) || 0.5;
+      var routeRadius = parseFloat(document.getElementById("routeBufferRadius").value) || 0.5;
+      App.rebuildBuffers(stationRadius);
+      App.rebuildLineBuffers(lineRadius);
+      App.rebuildRouteBuffers(routeRadius);
+      App.renderPolygonLayers();
+      if (typeof App.renderLabelMarkers === "function") App.renderLabelMarkers();
+      if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+    } else {
+      // Replace: build minimal state for applyState
+      var state = {
+        version: SCHEMA_VERSION,
+        stations: stations,
+        lines: lines,
+        routes: [],
+        polygons: polygons,
+        labels: labels,
+        bufferRadius: parseFloat(document.getElementById("bufferRadius").value) || 0.5,
+        lineBufferRadius: parseFloat(document.getElementById("lineBufferRadius").value) || 0.5,
+        routeBufferRadius: parseFloat(document.getElementById("routeBufferRadius").value) || 0.5
+      };
+      applyState(state);
+    }
+
     save();
     if (typeof App.notifyProject === "function") App.notifyProject();
 
-    var n = state.stations.length + state.lines.length + state.polygons.length + state.labels.length;
-    App.setStatus("Imported " + n + " feature" + (n !== 1 ? "s" : ""));
+    // Richer import summary with type breakdown
+    var n = stations.length + lines.length + polygons.length + labels.length;
+    var parts = [];
+    if (stations.length > 0) parts.push(stations.length + " station" + (stations.length !== 1 ? "s" : ""));
+    if (lines.length > 0) parts.push(lines.length + " line" + (lines.length !== 1 ? "s" : ""));
+    if (polygons.length > 0) parts.push(polygons.length + " polygon" + (polygons.length !== 1 ? "s" : ""));
+    if (labels.length > 0) parts.push(labels.length + " label" + (labels.length !== 1 ? "s" : ""));
+    var modeLabel = mode === "append" ? "Added " : "Imported ";
+    var detail = parts.length > 0 ? " (" + parts.join(", ") + ")" : "";
+    App.setStatus(modeLabel + n + " feature" + (n !== 1 ? "s" : "") + detail);
   }
 
   function _makeFeature(geomType, coordinates, name, color, attrs) {
@@ -1060,7 +1188,8 @@
           return;
         }
 
-        if (!_confirmReplace()) return;
+        var _csvMode = _confirmReplaceOrAppend();
+        if (_csvMode === "cancel") return;
 
         var stations = [], lineFeats = [], polygonFeats = [], labelFeats = [];
         var errors = 0;
@@ -1094,11 +1223,20 @@
 
           if (!coords) { errors++; continue; }
 
-          // Collect known attribute columns
+          // Collect known attribute columns + preserve all extra columns
           var attrs = {};
+          var _csvStandardCols = ["type", "name", "color", "geometry_type", "coordinates", "latitude", "longitude"];
           for (var ai = 0; ai < CSV_ATTR_COLS.length; ai++) {
             var key = CSV_ATTR_COLS[ai];
             if (row[key] != null && row[key] !== "") attrs[key] = row[key];
+          }
+          // Copy any remaining non-standard columns as extra attributes
+          for (var hi = 0; hi < headers.length; hi++) {
+            var col = headers[hi];
+            if (_csvStandardCols.indexOf(col) < 0 && CSV_ATTR_COLS.indexOf(col) < 0 &&
+                row[col] != null && row[col] !== "") {
+              attrs[col] = String(row[col]);
+            }
           }
 
           // Determine feature type from geometry_type or type column
@@ -1134,8 +1272,8 @@
           return;
         }
 
-        _applyImportedFeatures(stations, lineFeats, polygonFeats, labelFeats);
-        if (errors > 0) App.setStatus("Imported " + total + " features (" + errors + " rows skipped)");
+        _applyImportedFeatures(stations, lineFeats, polygonFeats, labelFeats, _csvMode);
+        if (errors > 0) App.setStatus((_csvMode === "append" ? "Added " : "Imported ") + total + " features (" + errors + " rows skipped)");
       } catch (err) {
         App.setStatus("CSV import failed");
         alert("CSV import failed: " + (err.message || err));
@@ -1173,6 +1311,105 @@
     return coords;
   }
 
+  // Parse a KML <Polygon> element into GeoJSON-style coordinate rings,
+  // including inner boundaries (holes).
+  function _parseKmlPolygon(pgEl) {
+    var rings = [];
+    // Outer boundary
+    var outerBound = pgEl.getElementsByTagName("outerBoundaryIs")[0];
+    var outerCoordEl = outerBound ? outerBound.getElementsByTagName("coordinates")[0] :
+                       pgEl.getElementsByTagName("coordinates")[0];
+    if (!outerCoordEl) return null;
+
+    var outerCoords = _parseKmlCoords(outerCoordEl.textContent);
+    if (outerCoords.length < 3) return null;
+
+    // Ensure ring is closed
+    var first = outerCoords[0], last = outerCoords[outerCoords.length - 1];
+    if (first[0] !== last[0] || first[1] !== last[1]) {
+      outerCoords.push([first[0], first[1]]);
+    }
+    rings.push(outerCoords);
+
+    // Inner boundaries (holes)
+    var innerBounds = pgEl.getElementsByTagName("innerBoundaryIs");
+    for (var ib = 0; ib < innerBounds.length; ib++) {
+      var innerCoordEl = innerBounds[ib].getElementsByTagName("coordinates")[0];
+      if (!innerCoordEl) continue;
+      var innerCoords = _parseKmlCoords(innerCoordEl.textContent);
+      if (innerCoords.length < 3) continue;
+      // Ensure inner ring is closed
+      var iFirst = innerCoords[0], iLast = innerCoords[innerCoords.length - 1];
+      if (iFirst[0] !== iLast[0] || iFirst[1] !== iLast[1]) {
+        innerCoords.push([iFirst[0], iFirst[1]]);
+      }
+      rings.push(innerCoords);
+    }
+
+    return rings;
+  }
+
+  // Extract geometries from a KML element (Placemark or MultiGeometry child).
+  // Handles Point, LineString, Polygon, and MultiGeometry (recursive).
+  function _extractKmlGeometries(el, name, color, attrs, stations, lineFeats, polygonFeats) {
+    // Check for MultiGeometry first
+    var multiGeoEls = el.getElementsByTagName("MultiGeometry");
+    if (multiGeoEls.length > 0) {
+      // Process each direct child geometry of the MultiGeometry
+      var mg = multiGeoEls[0];
+      var childIdx = 0;
+      for (var c = 0; c < mg.childNodes.length; c++) {
+        var child = mg.childNodes[c];
+        if (child.nodeType !== 1) continue; // skip text nodes
+        var tag = child.tagName;
+        if (tag === "Point" || tag === "LineString" || tag === "Polygon") {
+          childIdx++;
+          var suffix = " " + childIdx;
+          _extractSingleKmlGeometry(child, tag, name + suffix, color, attrs, stations, lineFeats, polygonFeats);
+        }
+      }
+      return;
+    }
+
+    // Single geometry
+    var ptEl = el.getElementsByTagName("Point")[0];
+    var lsEl = el.getElementsByTagName("LineString")[0];
+    var pgEl = el.getElementsByTagName("Polygon")[0];
+
+    if (ptEl) {
+      _extractSingleKmlGeometry(ptEl, "Point", name, color, attrs, stations, lineFeats, polygonFeats);
+    } else if (lsEl) {
+      _extractSingleKmlGeometry(lsEl, "LineString", name, color, attrs, stations, lineFeats, polygonFeats);
+    } else if (pgEl) {
+      _extractSingleKmlGeometry(pgEl, "Polygon", name, color, attrs, stations, lineFeats, polygonFeats);
+    }
+  }
+
+  function _extractSingleKmlGeometry(geomEl, tag, name, color, attrs, stations, lineFeats, polygonFeats) {
+    if (tag === "Point") {
+      var ptCoordEl = geomEl.getElementsByTagName("coordinates")[0];
+      if (ptCoordEl) {
+        var pts = _parseKmlCoords(ptCoordEl.textContent);
+        if (pts.length > 0) {
+          stations.push(_makeFeature("Point", pts[0], name, color, attrs));
+        }
+      }
+    } else if (tag === "LineString") {
+      var lsCoordEl = geomEl.getElementsByTagName("coordinates")[0];
+      if (lsCoordEl) {
+        var lineCoords = _parseKmlCoords(lsCoordEl.textContent);
+        if (lineCoords.length >= 2) {
+          lineFeats.push(_makeFeature("LineString", lineCoords, name, color, attrs));
+        }
+      }
+    } else if (tag === "Polygon") {
+      var rings = _parseKmlPolygon(geomEl);
+      if (rings) {
+        polygonFeats.push(_makeFeature("Polygon", rings, name, color, attrs));
+      }
+    }
+  }
+
   function _processKmlDoc(doc) {
     var placemarks = doc.getElementsByTagName("Placemark");
     var stations = [], lineFeats = [], polygonFeats = [];
@@ -1204,43 +1441,8 @@
         }
       }
 
-      // Detect geometry type
-      var ptEl = pm.getElementsByTagName("Point")[0];
-      var lsEl = pm.getElementsByTagName("LineString")[0];
-      var pgEl = pm.getElementsByTagName("Polygon")[0];
-
-      if (ptEl) {
-        var ptCoordEl = ptEl.getElementsByTagName("coordinates")[0];
-        if (ptCoordEl) {
-          var pts = _parseKmlCoords(ptCoordEl.textContent);
-          if (pts.length > 0) {
-            stations.push(_makeFeature("Point", pts[0], name, color, attrs));
-          }
-        }
-      } else if (lsEl) {
-        var lsCoordEl = lsEl.getElementsByTagName("coordinates")[0];
-        if (lsCoordEl) {
-          var lineCoords = _parseKmlCoords(lsCoordEl.textContent);
-          if (lineCoords.length >= 2) {
-            lineFeats.push(_makeFeature("LineString", lineCoords, name, color, attrs));
-          }
-        }
-      } else if (pgEl) {
-        var outerBound = pgEl.getElementsByTagName("outerBoundaryIs")[0];
-        var ring = outerBound ? outerBound.getElementsByTagName("coordinates")[0] :
-                   pgEl.getElementsByTagName("coordinates")[0];
-        if (ring) {
-          var polyCoords = _parseKmlCoords(ring.textContent);
-          if (polyCoords.length >= 3) {
-            // Ensure ring is closed
-            var first = polyCoords[0], last = polyCoords[polyCoords.length - 1];
-            if (first[0] !== last[0] || first[1] !== last[1]) {
-              polyCoords.push([first[0], first[1]]);
-            }
-            polygonFeats.push(_makeFeature("Polygon", [polyCoords], name, color, attrs));
-          }
-        }
-      }
+      // Extract geometry elements from Placemark (or from MultiGeometry children)
+      _extractKmlGeometries(pm, name, color, attrs, stations, lineFeats, polygonFeats);
     }
 
     return { stations: stations, lines: lineFeats, polygons: polygonFeats };
@@ -1308,8 +1510,9 @@
         return;
       }
 
-      if (!_confirmReplace()) return;
-      _applyImportedFeatures(result.stations, result.lines, result.polygons, []);
+      var _kmlMode = _confirmReplaceOrAppend();
+      if (_kmlMode === "cancel") return;
+      _applyImportedFeatures(result.stations, result.lines, result.polygons, [], _kmlMode);
     } catch (err) {
       App.setStatus("KML import failed");
       alert("KML import failed: " + (err.message || err));
@@ -1329,7 +1532,7 @@
       if (ext === "zip") {
         _importSHPFromZip(buffer);
       } else if (ext === "shp") {
-        _parseSHPBuffers(buffer, null);
+        _parseSHPBuffers(buffer, null, null);
       } else {
         alert("Expected a .shp or .zip file.");
       }
@@ -1368,16 +1571,25 @@
         var dbfBuf = results[1];
         var prjText = results[2];
 
-        // Warn if projection may not be WGS84
+        // Attempt auto-reprojection for non-WGS84 shapefiles
+        var shpCrsKey = null;
         if (prjText && prjText.indexOf("GCS_WGS_1984") < 0 && prjText.indexOf("4326") < 0 &&
             prjText.indexOf("WGS 84") < 0 && prjText.indexOf("WGS_84") < 0 && prjText.indexOf("WGS84") < 0) {
-          if (!confirm("This shapefile may not use WGS84 (EPSG:4326) coordinates. " +
-                       "Features may appear in the wrong location. Continue anyway?")) {
-            return;
+          shpCrsKey = _tryDefineProj(prjText);
+          if (shpCrsKey && _isWGS84(shpCrsKey)) {
+            shpCrsKey = null; // actually WGS84 after all
+          } else if (shpCrsKey) {
+            App.setStatus("Reprojecting from non-WGS84 coordinate system\u2026");
+          } else {
+            // proj4 couldn't parse the .prj — warn and continue as-is
+            if (!confirm("This shapefile uses an unrecognized coordinate system.\n" +
+                         "Features may appear in the wrong location. Continue anyway?")) {
+              return;
+            }
           }
         }
 
-        _parseSHPBuffers(shpBuf, dbfBuf);
+        _parseSHPBuffers(shpBuf, dbfBuf, shpCrsKey);
       }).catch(function (err) {
         alert("Error reading ZIP contents: " + (err.message || err));
       });
@@ -1386,7 +1598,7 @@
     });
   }
 
-  function _parseSHPBuffers(shpBuf, dbfBuf) {
+  function _parseSHPBuffers(shpBuf, dbfBuf, crsKey) {
     if (typeof shapefile === "undefined") {
       alert("Shapefile library not loaded. Please check your internet connection and reload.");
       return;
@@ -1398,7 +1610,8 @@
         return;
       }
 
-      if (!_confirmReplace()) return;
+      var _shpMode = _confirmReplaceOrAppend();
+      if (_shpMode === "cancel") return;
 
       var stations = [], lineFeats = [], polygonFeats = [];
 
@@ -1423,23 +1636,24 @@
 
         if (!geom) continue;
 
-        if (geom.type === "Point") {
-          stations.push(_makeFeature("Point", geom.coordinates, String(name), "", attrs));
-        } else if (geom.type === "MultiPoint") {
-          for (var mp = 0; mp < geom.coordinates.length; mp++) {
-            stations.push(_makeFeature("Point", geom.coordinates[mp], String(name) + " " + (mp + 1), "", attrs));
+        // Use shared geometry flattener (handles Multi* and GeometryCollection)
+        var simples = _flattenGeometry(geom);
+        for (var s = 0; s < simples.length; s++) {
+          var sg = simples[s];
+          var coords = sg.coordinates;
+
+          // Reproject if non-WGS84 CRS was detected
+          if (crsKey) {
+            coords = _reprojectCoords(coords, crsKey);
           }
-        } else if (geom.type === "LineString") {
-          lineFeats.push(_makeFeature("LineString", geom.coordinates, String(name), "", attrs));
-        } else if (geom.type === "MultiLineString") {
-          for (var ml = 0; ml < geom.coordinates.length; ml++) {
-            lineFeats.push(_makeFeature("LineString", geom.coordinates[ml], String(name) + " " + (ml + 1), "", attrs));
-          }
-        } else if (geom.type === "Polygon") {
-          polygonFeats.push(_makeFeature("Polygon", geom.coordinates, String(name), "", attrs));
-        } else if (geom.type === "MultiPolygon") {
-          for (var mg = 0; mg < geom.coordinates.length; mg++) {
-            polygonFeats.push(_makeFeature("Polygon", geom.coordinates[mg], String(name) + " " + (mg + 1), "", attrs));
+
+          var suffix = simples.length > 1 ? " " + (s + 1) : "";
+          if (sg.type === "Point") {
+            stations.push(_makeFeature("Point", coords, String(name) + suffix, "", attrs));
+          } else if (sg.type === "LineString") {
+            lineFeats.push(_makeFeature("LineString", coords, String(name) + suffix, "", attrs));
+          } else if (sg.type === "Polygon") {
+            polygonFeats.push(_makeFeature("Polygon", coords, String(name) + suffix, "", attrs));
           }
         }
       }
@@ -1450,10 +1664,123 @@
         return;
       }
 
-      _applyImportedFeatures(stations, lineFeats, polygonFeats, []);
+      _applyImportedFeatures(stations, lineFeats, polygonFeats, [], _shpMode);
+      if (crsKey) App.setStatus("Imported and reprojected " + total + " features to WGS84");
     }).catch(function (err) {
       alert("Shapefile import failed: " + (err.message || err));
     });
+  }
+
+  // ---- Import: GeoJSON (FeatureCollection, Feature, or bare Geometry) ----
+
+  function importGeoJSON(file) {
+    if (!_checkFileSize(file)) return;
+
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      try {
+        var data = JSON.parse(e.target.result);
+
+        // Normalize to a features array
+        var features = [];
+        if (data.type === "FeatureCollection" && Array.isArray(data.features)) {
+          features = data.features;
+        } else if (data.type === "Feature" && data.geometry) {
+          features = [data];
+        } else if (data.type && data.coordinates) {
+          // Bare geometry
+          features = [{ type: "Feature", geometry: data, properties: {} }];
+        } else {
+          alert("Unrecognized GeoJSON structure. Expected FeatureCollection, Feature, or Geometry.");
+          return;
+        }
+
+        if (features.length === 0) {
+          alert("GeoJSON contains no features.");
+          return;
+        }
+
+        // Check for CRS property (legacy GeoJSON spec) and reproject if needed
+        var crsKey = null;
+        if (data.crs && data.crs.properties) {
+          var crsName = data.crs.properties.name || data.crs.properties.href || "";
+          // Skip if already WGS84
+          if (crsName.indexOf("4326") < 0 && crsName.indexOf("CRS84") < 0) {
+            crsKey = _tryDefineProj(crsName);
+            if (crsKey && _isWGS84(crsKey)) crsKey = null;
+            if (!crsKey && crsName) {
+              if (!confirm("This GeoJSON specifies CRS \"" + crsName + "\" which could not be auto-reprojected.\n" +
+                           "Features may appear in the wrong location. Continue anyway?")) {
+                return;
+              }
+            }
+          }
+        }
+
+        var _gjMode = _confirmReplaceOrAppend();
+        if (_gjMode === "cancel") return;
+
+        var stations = [], lineFeats = [], polygonFeats = [];
+
+        for (var i = 0; i < features.length; i++) {
+          var feat = features[i];
+          var props = feat.properties || {};
+          var geom = feat.geometry;
+          if (!geom) continue;
+
+          var name = props.name || props.NAME || props.Name || props.label || props.LABEL ||
+                     props.id || props.ID || ("Feature " + (i + 1));
+
+          // Collect all properties as attributes (excluding name)
+          var attrs = {};
+          var propKeys = Object.keys(props);
+          for (var k = 0; k < propKeys.length; k++) {
+            var pk = propKeys[k];
+            var pv = props[pk];
+            if (pv != null && pv !== "" && pk.toLowerCase() !== "name") {
+              attrs[pk] = typeof pv === "object" ? JSON.stringify(pv) : String(pv);
+            }
+          }
+
+          // Detect color from properties
+          var color = props.color || props.stroke || props.fill || "";
+
+          // Flatten geometry (handles Multi* and GeometryCollection)
+          var simples = _flattenGeometry(geom);
+          for (var s = 0; s < simples.length; s++) {
+            var sg = simples[s];
+            var coords = sg.coordinates;
+
+            // Reproject if needed
+            if (crsKey) {
+              coords = _reprojectCoords(coords, crsKey);
+            }
+
+            var suffix = simples.length > 1 ? " " + (s + 1) : "";
+            if (sg.type === "Point") {
+              stations.push(_makeFeature("Point", coords, String(name) + suffix, color, attrs));
+            } else if (sg.type === "LineString") {
+              lineFeats.push(_makeFeature("LineString", coords, String(name) + suffix, color, attrs));
+            } else if (sg.type === "Polygon") {
+              polygonFeats.push(_makeFeature("Polygon", coords, String(name) + suffix, color, attrs));
+            }
+          }
+        }
+
+        var total = stations.length + lineFeats.length + polygonFeats.length;
+        if (total === 0) {
+          alert("No supported geometry types found in GeoJSON.");
+          return;
+        }
+
+        _applyImportedFeatures(stations, lineFeats, polygonFeats, [], _gjMode);
+      } catch (parseErr) {
+        App.setStatus("GeoJSON import failed");
+        alert("GeoJSON import failed: " + (parseErr.message || parseErr));
+      }
+    };
+    reader.onerror = function () { alert("Could not read file."); };
+    reader.readAsText(file);
   }
 
   // ---- Share link: compress full state into URL hash ----
@@ -1524,6 +1851,7 @@
     importCSV: importCSV,
     importKML: importKML,
     importSHP: importSHP,
+    importGeoJSON: importGeoJSON,
     collectState: collectState,
     applyState: applyState,
     STORAGE_KEY: STORAGE_KEY,
