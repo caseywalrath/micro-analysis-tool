@@ -1034,8 +1034,114 @@ code { font-family: var(--font-mono); }
 }
 
 /* ---- Buffer-Area Summary popup ---- */
+/* ---- Analysis dropdown (toolbar) ---- */
+.analysis-wrapper { position: relative; }
+.analysis-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  z-index: 1000;
+  min-width: 220px;
+  padding: 4px 0;
+}
+#toolbar .analysis-dropdown button {
+  display: block;
+  width: 100%;
+  height: auto;
+  padding: 8px 14px;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 0;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  color: #333;
+  white-space: nowrap;
+}
+#toolbar .analysis-dropdown button:hover:not(:disabled) {
+  background: rgba(0,0,0,0.05);
+}
+#toolbar .analysis-dropdown button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---- BAS popup layout ---- */
 .bas-popup-layout {
   padding: 4px 0;
+}
+
+/* BAS variable checklist (inside popup) */
+.bas-variables {
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px 10px;
+  background: var(--panel);
+}
+.bas-var-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.bas-section-label {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-md);
+  color: var(--muted);
+}
+.bas-var-actions {
+  display: flex;
+  gap: 8px;
+}
+.bas-var-actions .var-action-btn {
+  font-size: var(--text-2xs);
+  color: #2b6cb0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+.bas-var-actions .var-action-btn:hover {
+  text-decoration: underline;
+}
+.bas-var-checklist {
+  border: none;
+  margin: 0;
+  padding: 0;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.bas-var-checklist .var-group-label {
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-sm);
+  color: var(--muted);
+  margin: 8px 0 2px;
+}
+.bas-var-checklist .var-group-label:first-child {
+  margin-top: 0;
+}
+.bas-var-checklist .var-check {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--text-sm);
+  padding: 1px 0;
+  cursor: pointer;
+}
+.bas-var-checklist .var-warn-icon {
+  font-size: var(--text-2xs);
+  color: #d97706;
+  cursor: help;
 }
 .bas-settings {
   margin-bottom: 12px;

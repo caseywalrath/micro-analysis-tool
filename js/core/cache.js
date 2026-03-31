@@ -48,19 +48,9 @@
       projYear: App.projYear || null
     };
 
-    // Checkbox selections
-    var boxes = document.querySelectorAll('#varSelect input[type="checkbox"]');
-    var checked = [];
-    for (var i = 0; i < boxes.length; i++) {
-      if (boxes[i].checked) checked.push(boxes[i].value);
-    }
-    // Also collect standalone LODES checkbox (outside fieldset)
-    var lodesCb = document.getElementById("lodesCheckbox");
-    if (lodesCb && lodesCb.checked) checked.push(lodesCb.value);
-    state.checkedVars = checked;
-
-    // Note: geoLevel and year are now managed by the buffer-summary module
-    // via cache.registerModule(). They are stored in state.moduleState["buffer-summary"].
+    // Checkbox selections are now managed by the buffer-summary module
+    // via cache.registerModule("buffer-summary"). Kept for backward compat on restore.
+    // Note: geoLevel and year are also in state.moduleState["buffer-summary"].
 
     // Module state (TPI, RF, buffer-summary, etc.)
     state.moduleState = {};
@@ -159,30 +149,20 @@
     App.renderPolygonLayers();
     if (typeof App.renderLabelMarkers === "function") App.renderLabelMarkers();
 
-    // 5. Restore checkbox selections
-    if (Array.isArray(state.checkedVars)) {
-      var checkedSet = {};
-      for (var ci = 0; ci < state.checkedVars.length; ci++) {
-        checkedSet[state.checkedVars[ci]] = true;
-      }
-      var boxes = document.querySelectorAll('#varSelect input[type="checkbox"]');
-      for (var bi = 0; bi < boxes.length; bi++) {
-        boxes[bi].checked = !!checkedSet[boxes[bi].value];
-      }
-      // Also restore standalone LODES checkbox (outside fieldset)
-      var lodesCb = document.getElementById("lodesCheckbox");
-      if (lodesCb) lodesCb.checked = !!checkedSet["LODES_WAC_C000"];
-    }
-
-    // 6. Migrate old geoLevel/year into moduleState for buffer-summary
+    // 5. Restore checkbox selections — checkboxes now live in buffer-summary popup
+    // (lazy-loaded, not in DOM at restore time). Migrate into moduleState so the
+    // buffer-summary module's apply() handler picks them up.
     if (!state.moduleState) state.moduleState = {};
     if (!state.moduleState["buffer-summary"]) {
-      // Backward compat: old sessions stored these at top level
       state.moduleState["buffer-summary"] = {
         geoLevel: state.geoLevel || "bg",
         year: state.year || "2024",
         apportionByArea: true
       };
+    }
+    // Migrate checkedVars from top-level into buffer-summary module state
+    if (Array.isArray(state.checkedVars) && !state.moduleState["buffer-summary"].checkedVars) {
+      state.moduleState["buffer-summary"].checkedVars = state.checkedVars;
     }
 
     // 7. LODES filename hint (data is NOT cached — too large)

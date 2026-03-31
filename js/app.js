@@ -309,35 +309,26 @@
     // Initialize hover/selection highlight layers
     if (typeof App.initHighlightLayers === "function") App.initHighlightLayers();
 
-    // ---- Register sidebar panels, render, then wire events ----
-    App.sidebar.addPanel({
-      id: "station-data",
-      title: "Data Inputs",
-      html: DATA_INPUTS_PANEL_HTML,
-      collapsed: false,
-      order: 10
-    });
-    if (_modules.size > 0) {
-      App.sidebar.addPanel({
-        id: "analysis",
-        title: "Analysis",
-        html: buildAnalysisButtonsHTML(),
-        collapsed: false,
-        order: 30
-      });
-    }
-    App.sidebar.render();
+    // ---- Sidebar disabled (scaffolding kept for future use) ----
+    // Panels formerly registered here have been relocated:
+    // - Census checkboxes → Feature Area Analysis popup (buffer-summary.js)
+    // - LODES → Add Data dropdown (index.html)
+    // - Analysis modules → Analysis toolbar dropdown (below)
 
-    // Wire popup system and analysis module buttons
+    // Wire popup system
     App.popup.wire(_modules, buildCore);
 
-    var moduleButtons = document.querySelectorAll(".analysis-module-btn");
-    moduleButtons.forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        var moduleId = btn.getAttribute("data-module-id");
-        if (moduleId) App.popup.open(moduleId, _modules, buildCore);
+    // Populate Analysis toolbar dropdown with module buttons
+    var analysisDropdown = document.getElementById("analysis-dropdown");
+    if (analysisDropdown && _modules.size > 0) {
+      analysisDropdown.innerHTML = buildAnalysisButtonsHTML();
+      analysisDropdown.addEventListener("click", function (e) {
+        var btn = e.target.closest("[data-module-id]");
+        if (!btn || btn.disabled) return;
+        analysisDropdown.style.display = "none";
+        App.popup.open(btn.getAttribute("data-module-id"), _modules, buildCore);
       });
-    });
+    }
 
     // ---- Toolbar: draw mode buttons ----
     var toolBtns = document.querySelectorAll(".tool-btn");
@@ -401,21 +392,7 @@
       App.map.getCanvas().style.cursor = "grab";
     };
 
-    // Variable checkbox list: select all / clear all
-    document.getElementById("varSelectAll").addEventListener("click", function () {
-      var boxes = document.querySelectorAll('#varSelect input[type="checkbox"]');
-      for (var i = 0; i < boxes.length; i++) boxes[i].checked = true;
-      var lodesCb = document.getElementById("lodesCheckbox");
-      if (lodesCb) lodesCb.checked = true;
-      if (typeof App.cache !== "undefined") App.cache.save();
-    });
-    document.getElementById("varClearAll").addEventListener("click", function () {
-      var boxes = document.querySelectorAll('#varSelect input[type="checkbox"]');
-      for (var i = 0; i < boxes.length; i++) boxes[i].checked = false;
-      var lodesCb = document.getElementById("lodesCheckbox");
-      if (lodesCb) lodesCb.checked = false;
-      if (typeof App.cache !== "undefined") App.cache.save();
-    });
+    // Variable checkbox Select All / Clear All — now wired in buffer-summary.js init()
 
     // Dark mode toggle
     var _darkBtn = document.getElementById("darkmode-btn");
@@ -646,57 +623,60 @@
       notifyProject();
     });
 
-    // LODES download
-    document.getElementById("downloadLodes").addEventListener("click", async function () {
+    // ---- LODES handlers (Add Data dropdown) ----
+    var lodesFileInput = document.getElementById("lodesFile");
+    var lodesClearBtn = document.getElementById("lodes-clear-btn");
+
+    function updateLodesDropdownUI() {
+      if (lodesClearBtn) lodesClearBtn.style.display = App.lodesData ? "block" : "none";
+    }
+
+    document.getElementById("lodes-download-btn").addEventListener("click", async function () {
+      addDataDropdown.style.display = "none";
       try {
         App.setStatus("Determining state\u2026");
         var info = await App.getStateFromMapCenter();
-        document.getElementById("lodesState").textContent = info.abbr.toUpperCase() + " (FIPS " + info.stateFips + ")";
 
         var lodesYear = "2023";
         var url = "https://lehd.ces.census.gov/data/lodes/LODES8/" + info.abbr + "/wac/" + info.abbr + "_wac_S000_JT00_" + lodesYear + ".csv.gz";
         var filename = info.abbr + "_wac_S000_JT00_" + lodesYear + ".csv.gz";
 
-        document.getElementById("lodesInfo").textContent =
-          "Downloading " + filename + ". Click Add to load into map data.";
-        App.setStatus("Starting download\u2026");
+        App.setStatus("Downloading " + filename + "\u2026");
         App.startDownload(url, filename);
         App.setStatus("Ready");
       } catch (e) {
-        App.setStatus("Error");
-        document.getElementById("lodesInfo").textContent = String(e && e.message ? e.message : e);
+        App.setStatus("LODES error: " + String(e && e.message ? e.message : e));
       }
     });
 
-    // LODES "Open" button — triggers the hidden file input
-    document.getElementById("lodesOpenFile").addEventListener("click", function () {
-      document.getElementById("lodesFile").click();
+    document.getElementById("lodes-add-btn").addEventListener("click", function () {
+      addDataDropdown.style.display = "none";
+      lodesFileInput.value = "";
+      lodesFileInput.click();
     });
 
-    // LODES file upload — merges into any already-loaded state data
-    document.getElementById("lodesFile").addEventListener("change", async function (e) {
+    lodesFileInput.addEventListener("change", async function (e) {
       var file = e.target.files && e.target.files[0];
       if (!file) return;
-      this.value = ""; // allow re-selecting the same file
+      this.value = "";
       try {
         var jobsMap = await App.parseLodesFromUploadedFile(file);
         App.mergeLodesFile(jobsMap, file.name);
-        App.setStatus("Ready");
+        App.setStatus("LODES loaded (" + file.name + ")");
+        updateLodesDropdownUI();
         notifyProject();
         if (typeof App.cache !== "undefined") App.cache.save();
       } catch (err) {
-        App.setStatus("Error");
-        var infoEl = document.getElementById("lodesInfo");
-        if (infoEl) infoEl.textContent = "Error loading " + file.name + ": " + String(err && err.message ? err.message : err);
+        App.setStatus("LODES error: " + String(err && err.message ? err.message : err));
       }
     });
 
-    // LODES clear-all button
-    var lodesClearBtn = document.getElementById("lodesClearAll");
     if (lodesClearBtn) {
       lodesClearBtn.addEventListener("click", function () {
+        addDataDropdown.style.display = "none";
         if (!confirm("Remove all loaded LODES data?")) return;
         App.clearLodesData();
+        updateLodesDropdownUI();
         notifyProject();
         if (typeof App.cache !== "undefined") App.cache.save();
       });
@@ -751,10 +731,20 @@
       }
     });
 
+    // Analysis button → toggle dropdown
+    document.getElementById("analysis-btn").addEventListener("click", function (e) {
+      e.stopPropagation();
+      exportDropdown.style.display = "none";
+      if (addDataDropdown) addDataDropdown.style.display = "none";
+      var isOpen = analysisDropdown.style.display !== "none";
+      analysisDropdown.style.display = isOpen ? "none" : "block";
+    });
+
     // Export button → toggle dropdown
     document.getElementById("export-btn").addEventListener("click", function (e) {
       e.stopPropagation();
       if (addDataDropdown) addDataDropdown.style.display = "none";
+      if (analysisDropdown) analysisDropdown.style.display = "none";
       var isOpen = exportDropdown.style.display !== "none";
       exportDropdown.style.display = isOpen ? "none" : "block";
     });
@@ -782,6 +772,7 @@
     document.getElementById("add-data-btn").addEventListener("click", function (e) {
       e.stopPropagation();
       exportDropdown.style.display = "none";
+      if (analysisDropdown) analysisDropdown.style.display = "none";
       var isOpen = addDataDropdown.style.display !== "none";
       addDataDropdown.style.display = isOpen ? "none" : "block";
       // Highlight active category
@@ -822,26 +813,17 @@
     document.addEventListener("click", function () {
       exportDropdown.style.display = "none";
       addDataDropdown.style.display = "none";
+      if (analysisDropdown) analysisDropdown.style.display = "none";
     });
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape") {
         exportDropdown.style.display = "none";
         addDataDropdown.style.display = "none";
+        if (analysisDropdown) analysisDropdown.style.display = "none";
       }
     });
 
-    // Save on checkbox / dropdown changes
-    document.querySelectorAll('#varSelect input[type="checkbox"]').forEach(function (cb) {
-      cb.addEventListener("change", function () {
-        if (typeof App.cache !== "undefined") App.cache.save();
-      });
-    });
-    var lodesCbSave = document.getElementById("lodesCheckbox");
-    if (lodesCbSave) {
-      lodesCbSave.addEventListener("change", function () {
-        if (typeof App.cache !== "undefined") App.cache.save();
-      });
-    }
+    // Checkbox change listeners — now wired in buffer-summary.js init()
 
     // Restore session: shared link takes priority over localStorage
     var _sharedLoaded = typeof App.cache !== "undefined" && App.cache.loadShareLink();
