@@ -162,6 +162,19 @@
     if (btn) btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
   }
 
+  // ---- Wire sidebar collapse toggle ----
+
+  (function () {
+    var btn = document.getElementById('sb-collapse-btn');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      var wrap = document.getElementById('sidebar-wrap');
+      var collapsed = wrap.classList.toggle('sb-collapsed');
+      btn.title = collapsed ? 'Show sidebar' : 'Hide sidebar';
+      btn.setAttribute('aria-label', collapsed ? 'Show sidebar' : 'Hide sidebar');
+    });
+  })();
+
   // ---- Expose on App namespace ----
 
   App.sidebar = {

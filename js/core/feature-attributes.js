@@ -484,7 +484,7 @@
     var el = document.createElement("div");
     el.id = "fp-attr-popup";
     el.style.display = "none";
-    el.style.left = "320px";
+    el.style.left = "258px";
     el.style.top  = "60px";
 
     // Header

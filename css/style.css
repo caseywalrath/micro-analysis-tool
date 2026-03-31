@@ -210,6 +210,31 @@ button { cursor: pointer; }
 #feature-panel.fp-collapsed .fp-content,
 #feature-panel.fp-collapsed .fp-header { display: none; }
 
+/* ---- Sidebar collapse button ---- */
+#sb-collapse-btn {
+  position: absolute;
+  right: -30px;
+  top: 12px;
+  z-index: 10;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-left: none;
+  border-radius: 0 6px 6px 0;
+  cursor: pointer;
+  color: var(--muted);
+  padding: 8px 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s, background 0.15s;
+  box-shadow: 2px 0 4px rgba(0,0,0,0.08);
+}
+#sb-collapse-btn:hover { color: #2b6cb0; background: #f0f5ff; }
+/* Expanded: chevron points right (›) = click to hide sidebar */
+#sb-collapse-btn svg { transform: rotate(0deg); }
+/* Collapsed: chevron points left (‹) = click to show sidebar */
+#sidebar-wrap.sb-collapsed #sb-collapse-btn svg { transform: rotate(180deg); }
+
 .fp-section { margin-bottom: 6px; }
 .fp-section-header {
   display: flex;
