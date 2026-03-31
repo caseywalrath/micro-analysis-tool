@@ -607,6 +607,7 @@
       App.clearRoutes();
       App.clearPolygons();
       if (typeof App.clearLabels === "function") App.clearLabels();
+      if (typeof App.clearRoadNetwork === "function") App.clearRoadNetwork();
       if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
       if (typeof App.clearCensusOverlay === "function") App.clearCensusOverlay();
       document.getElementById("nGeos").textContent = "0";
@@ -709,6 +710,7 @@
       resetBtn.addEventListener("click", function () {
         if (!confirm("Reset session? This clears all features, settings, and saved data. This cannot be undone.")) return;
         if (typeof App.cache !== "undefined") App.cache.reset();
+        if (typeof App.clearRoadNetwork === "function") App.clearRoadNetwork();
         if (typeof App.clearCensusOverlay === "function") App.clearCensusOverlay();
         clearModules();
         notifyProject();
@@ -729,8 +731,13 @@
     // Route imported file by extension
     importFileInput.addEventListener("change", function (e) {
       var file = e.target.files && e.target.files[0];
-      if (!file || typeof App.cache === "undefined") return;
+      if (!file) return;
       var ext = (file.name.split(".").pop() || "").toLowerCase();
+      if (ext === "geojson") {
+        if (typeof App.loadRoadNetworkFromFile === "function") App.loadRoadNetworkFromFile(file);
+        return;
+      }
+      if (typeof App.cache === "undefined") return;
       if (ext === "json") {
         App.cache.importFromFile(file);
       } else if (ext === "csv") {
@@ -755,9 +762,14 @@
     // Export dropdown item click
     exportDropdown.addEventListener("click", function (e) {
       var btn = e.target.closest("button[data-format]");
-      if (!btn || typeof App.cache === "undefined") return;
+      if (!btn) return;
       exportDropdown.style.display = "none";
       var fmt = btn.getAttribute("data-format");
+      if (fmt === "road-network") {
+        if (typeof App.exportRoadNetwork === "function") App.exportRoadNetwork();
+        return;
+      }
+      if (typeof App.cache === "undefined") return;
       if (fmt === "json-features") App.cache.exportFeaturesOnly();
       else if (fmt === "json-all") App.cache.exportToFile();
       else if (fmt === "csv") App.cache.exportCSV();
@@ -782,6 +794,19 @@
     });
 
     addDataDropdown.addEventListener("click", function (e) {
+      // Road network buttons (no data-osm attribute)
+      if (e.target.id === "road-net-download") {
+        addDataDropdown.style.display = "none";
+        if (typeof App.fetchRoadNetwork === "function") App.fetchRoadNetwork();
+        return;
+      }
+      if (e.target.id === "road-net-clear") {
+        addDataDropdown.style.display = "none";
+        if (typeof App.clearRoadNetwork === "function") App.clearRoadNetwork();
+        App.setStatus("Local map data cleared");
+        return;
+      }
+      // OSM layer buttons
       var btn = e.target.closest("button[data-osm]");
       if (!btn) return;
       addDataDropdown.style.display = "none";

@@ -9,7 +9,11 @@
 (function () {
   var App = window.App = window.App || {};
 
-  var OSRM_URL = "https://routing.openstreetmap.de/routed-car/route/v1/driving/";
+  var OSRM_URLS = [
+    "https://router.project-osrm.org/route/v1/driving/",
+    "https://routing.openstreetmap.de/routed-car/route/v1/driving/"
+  ];
+  var OSRM_TIMEOUT_MS = 5000;
   var ROUTE_COLOR = "#319795"; // teal
   var SNAP_PIXELS = 15;
 
@@ -31,22 +35,52 @@
   // Generation counter to discard stale async fetch results
   var _fetchGen = 0;
 
-  /* ---- OSRM fetch ---- */
+  /* ---- OSRM fetch with cascading fallback ---- */
 
-  async function fetchRoute(waypoints) {
-    if (waypoints.length < 2) return null;
+  // Try a single OSRM server with a timeout
+  async function fetchRouteSingle(waypoints, serverUrl) {
     var coords = waypoints.map(function (wp) { return wp[0] + "," + wp[1]; }).join(";");
-    var url = OSRM_URL + coords + "?overview=full&geometries=geojson";
+    var url = serverUrl + coords + "?overview=full&geometries=geojson";
+    var controller = new AbortController();
+    var timer = setTimeout(function () { controller.abort(); }, OSRM_TIMEOUT_MS);
     try {
-      var res = await fetch(url);
+      var res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timer);
       if (!res.ok) throw new Error("OSRM HTTP " + res.status);
       var data = await res.json();
       if (data.code !== "Ok" || !data.routes || data.routes.length === 0) return null;
       return data.routes[0].geometry.coordinates;
     } catch (e) {
-      console.warn("Route fetch failed:", e);
-      return null;
+      clearTimeout(timer);
+      throw e; // let caller try next server
     }
+  }
+
+  // Main route fetch: local routing first, then cascade through OSRM servers
+  async function fetchRoute(waypoints) {
+    if (waypoints.length < 2) return null;
+
+    // Priority 1: local road network
+    if (typeof App.findLocalRoute === "function" && App.roadNetworkLoaded && App.roadNetworkLoaded()) {
+      var local = App.findLocalRoute(waypoints);
+      if (local) return local;
+      // Fall through to servers if local routing failed (e.g. outside coverage)
+    }
+
+    // Priority 2: cascade through OSRM servers
+    for (var i = 0; i < OSRM_URLS.length; i++) {
+      try {
+        var result = await fetchRouteSingle(waypoints, OSRM_URLS[i]);
+        if (result) return result;
+      } catch (e) {
+        console.warn("OSRM server " + (i + 1) + " failed:", e.message || e);
+        // Continue to next server
+      }
+    }
+
+    // Priority 3: all failed
+    App.setStatus("Server routing unavailable \u2014 using straight line");
+    return null;
   }
 
   /* ---- Buffer functions ---- */
@@ -271,6 +305,19 @@
     var to = previewCoord;
     if (!from || !to) return;
 
+    // Priority 1: local road network — instant, no server needed
+    if (typeof App.findLocalRoute === "function" && App.roadNetworkLoaded && App.roadNetworkLoaded()) {
+      var local = App.findLocalRoute([from, to]);
+      if (local) {
+        previewSnappedCoords = local;
+        var drawSrc = App.map.getSource("routes-drawing");
+        if (drawSrc) drawSrc.setData(currentDrawingGeoJSON());
+        return;
+      }
+      // Fall through to server if outside local coverage
+    }
+
+    // Priority 2: first available OSRM server (don't cascade for preview — too slow)
     if (_previewController) {
       _previewController.abort();
       _previewController = null;
@@ -280,24 +327,33 @@
     var controller = new AbortController();
     _previewController = controller;
 
-    var coordStr = from[0] + "," + from[1] + ";" + to[0] + "," + to[1];
-    fetch(OSRM_URL + coordStr + "?overview=full&geometries=geojson", { signal: controller.signal })
-      .then(function (res) {
-        if (!res.ok) throw new Error("OSRM HTTP " + res.status);
-        return res.json();
-      })
-      .then(function (data) {
+    // Try each server sequentially until one works
+    (async function () {
+      for (var i = 0; i < OSRM_URLS.length; i++) {
         if (gen !== _previewGen) return; // stale
-        _previewController = null;
-        if (data.code !== "Ok" || !data.routes || data.routes.length === 0) return;
-        previewSnappedCoords = data.routes[0].geometry.coordinates;
-        var drawSrc = App.map.getSource("routes-drawing");
-        if (drawSrc) drawSrc.setData(currentDrawingGeoJSON());
-      })
-      .catch(function (e) {
-        if (e.name !== "AbortError") _previewController = null;
-        // On network error: straight-line preview remains
-      });
+        var coordStr = from[0] + "," + from[1] + ";" + to[0] + "," + to[1];
+        var timer = setTimeout(function () { controller.abort(); }, OSRM_TIMEOUT_MS);
+        try {
+          var res = await fetch(OSRM_URLS[i] + coordStr + "?overview=full&geometries=geojson", { signal: controller.signal });
+          clearTimeout(timer);
+          if (!res.ok) throw new Error("OSRM HTTP " + res.status);
+          var data = await res.json();
+          if (gen !== _previewGen) return;
+          _previewController = null;
+          if (data.code === "Ok" && data.routes && data.routes.length > 0) {
+            previewSnappedCoords = data.routes[0].geometry.coordinates;
+            var src = App.map.getSource("routes-drawing");
+            if (src) src.setData(currentDrawingGeoJSON());
+          }
+          return; // success — stop trying
+        } catch (e) {
+          clearTimeout(timer);
+          if (e.name === "AbortError") return; // user-initiated cancel
+          // Try next server
+        }
+      }
+      _previewController = null;
+    })();
   }
 
   function setRoutePreview(lngLat) {
@@ -323,7 +379,13 @@
       return;
     }
 
-    // Throttle: start a timer only if one isn't already running.
+    // Local road network: snap immediately (Dijkstra is fast), no throttle needed
+    if (typeof App.roadNetworkLoaded === "function" && App.roadNetworkLoaded()) {
+      doPreviewFetch();
+      return;
+    }
+
+    // Server routing: throttle to 1 fetch/sec max.
     // When it fires it reads the CURRENT previewCoord, not a stale capture.
     if (!_previewTimer) {
       _previewTimer = setTimeout(function () {

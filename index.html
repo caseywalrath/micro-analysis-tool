@@ -71,6 +71,10 @@
               <button data-osm="pois">Points of Interest</button>
               <div class="add-data-divider"></div>
               <button data-osm="clear" class="add-data-clear">Clear OSM Layer</button>
+              <div class="add-data-divider"></div>
+              <div class="add-data-heading">Local Map Data</div>
+              <button id="road-net-download">Download Roads for Area</button>
+              <button id="road-net-clear" class="add-data-clear" style="display:none;">Clear Local Map Data</button>
             </div>
           </div>
           <button id="import-btn" title="Import">
@@ -93,6 +97,7 @@
               <button data-format="kml">KML</button>
               <button data-format="shp">Shapefile (SHP)</button>
               <button data-format="share-link">Share Link</button>
+              <button data-format="road-network" style="display:none;" id="export-road-net">Local Map Data</button>
             </div>
           </div>
         </div>
@@ -211,7 +216,7 @@
         </div>
 
       </div>
-      <input type="file" id="fp-import-file" accept=".json,.csv,.kml,.kmz,.shp,.zip" style="display:none" />
+      <input type="file" id="fp-import-file" accept=".json,.csv,.kml,.kmz,.shp,.zip,.geojson" style="display:none" />
       </div><!-- #main-content -->
 
       <!-- Analysis module popup (generic container, reused per-module) -->
@@ -231,6 +236,7 @@
     <script src="js/core/utils.js"></script>
     <script src="js/core/sidebar.js"></script>
     <script src="js/core/map.js"></script>
+    <script src="js/core/road-network.js"></script>
     <script src="js/core/stations.js"></script>
     <script src="js/core/lines.js"></script>
     <script src="js/core/routes.js"></script>
