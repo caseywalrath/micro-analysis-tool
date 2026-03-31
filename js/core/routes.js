@@ -9,7 +9,7 @@
 (function () {
   var App = window.App = window.App || {};
 
-  var OSRM_URL = "https://router.project-osrm.org/route/v1/driving/";
+  var OSRM_URL = "https://routing.openstreetmap.de/routed-car/route/v1/driving/";
   var ROUTE_COLOR = "#319795"; // teal
   var SNAP_PIXELS = 15;
 
