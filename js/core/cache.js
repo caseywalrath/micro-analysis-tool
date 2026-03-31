@@ -13,6 +13,7 @@
   var SCHEMA_VERSION = 1;
   var _saveTimer = null;
   var DEBOUNCE_MS = 500;
+  var _viewOnly = false;
 
   // ---- Module state registry ----
   // Analysis modules register collect/apply hooks to persist their own state.
@@ -228,6 +229,7 @@
   // ---- Save (debounced) ----
 
   function save() {
+    if (_viewOnly) return;
     clearTimeout(_saveTimer);
     _saveTimer = setTimeout(function () {
       try {
@@ -1474,6 +1476,57 @@
     });
   }
 
+  // ---- Share link: compress full state into URL hash ----
+
+  function exportShareLink() {
+    try {
+      var state = collectState("full");
+      var json = JSON.stringify(state);
+      var compressed = pako.deflate(json, { level: 9 });
+      var binary = "";
+      for (var i = 0; i < compressed.length; i++) {
+        binary += String.fromCharCode(compressed[i]);
+      }
+      var b64 = btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+      var url = window.location.origin + window.location.pathname + "#share=" + b64;
+      navigator.clipboard.writeText(url).then(function () {
+        App.setStatus("Share link copied to clipboard");
+      }).catch(function () {
+        prompt("Copy this share link:", url);
+      });
+    } catch (e) {
+      App.setStatus("Share link failed: " + (e.message || e));
+    }
+  }
+
+  // ---- Load shared session from URL hash (called on startup) ----
+
+  function loadShareLink() {
+    var match = window.location.hash.match(/^#share=([A-Za-z0-9\-_]+)/);
+    if (!match) return false;
+    try {
+      var b64 = match[1].replace(/-/g, "+").replace(/_/g, "/");
+      while (b64.length % 4) b64 += "=";
+      var binary = atob(b64);
+      var bytes = new Uint8Array(binary.length);
+      for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      var json = pako.inflate(bytes, { to: "string" });
+      var state = JSON.parse(json);
+      var err = validateState(state);
+      if (err) { console.warn("Share link invalid:", err); return false; }
+      applyState(state);
+      _viewOnly = true;
+      document.body.classList.add("view-only-mode");
+      var banner = document.getElementById("view-only-banner");
+      if (banner) banner.style.display = "block";
+      App.setStatus("Viewing shared session");
+      return true;
+    } catch (e) {
+      console.warn("Failed to load share link:", e);
+      return false;
+    }
+  }
+
   // ---- Expose on App namespace ----
 
   App.cache = {
@@ -1482,6 +1535,8 @@
     reset: reset,
     exportToFile: exportToFile,
     exportFeaturesOnly: exportFeaturesOnly,
+    exportShareLink: exportShareLink,
+    loadShareLink: loadShareLink,
     exportCSV: exportCSV,
     exportKML: exportKML,
     exportSHP: exportSHP,

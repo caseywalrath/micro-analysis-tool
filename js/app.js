@@ -746,6 +746,7 @@
       else if (fmt === "csv") App.cache.exportCSV();
       else if (fmt === "kml") App.cache.exportKML();
       else if (fmt === "shp") App.cache.exportSHP();
+      else if (fmt === "share-link") App.cache.exportShareLink();
     });
 
     // ---- Add Data dropdown ----
@@ -800,10 +801,23 @@
       });
     }
 
-    // Restore cached session (runs after sidebar, events, and project init are all ready)
-    if (typeof App.cache !== "undefined" && App.cache.restore()) {
+    // Restore session: shared link takes priority over localStorage
+    var _sharedLoaded = typeof App.cache !== "undefined" && App.cache.loadShareLink();
+    if (_sharedLoaded) {
+      notifyProject();
+    } else if (typeof App.cache !== "undefined" && App.cache.restore()) {
       App.setStatus("Session restored");
       notifyProject();
+    }
+
+    // "Start fresh" link in view-only banner
+    var _viewOnlyFreshBtn = document.getElementById("view-only-start-fresh");
+    if (_viewOnlyFreshBtn) {
+      _viewOnlyFreshBtn.addEventListener("click", function (e) {
+        e.preventDefault();
+        window.location.hash = "";
+        window.location.reload();
+      });
     }
   });
 })();

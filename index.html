@@ -35,6 +35,10 @@
   <body>
     <div id="app">
       <button id="present-exit" title="Exit presentation">&#x2715; Exit</button>
+      <div id="view-only-banner" style="display:none;">
+        <strong>Viewing shared session</strong> &mdash; drawn features are read-only.
+        <a href="#" id="view-only-start-fresh">Start fresh</a>
+      </div>
       <div id="toolbar">
         <div id="file-actions">
           <div class="add-data-wrapper">
@@ -80,6 +84,7 @@
               <button data-format="csv">CSV</button>
               <button data-format="kml">KML</button>
               <button data-format="shp">Shapefile (SHP)</button>
+              <button data-format="share-link">Share Link</button>
             </div>
           </div>
         </div>
