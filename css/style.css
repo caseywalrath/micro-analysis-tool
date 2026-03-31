@@ -2719,3 +2719,233 @@ body.view-only-mode #draw-actions button {
   pointer-events: none;
   cursor: default;
 }
+
+/* ================================================================
+   DARK MODE  —  body.dark-mode overrides
+   ================================================================ */
+body.dark-mode {
+  --border: #374151;
+  --muted:  #9ca3af;
+  --bg:     #1e1e2e;
+  --panel:  #252535;
+  --warnbg: #3d2e1a;
+  --warnbd: #b8860b;
+  --cardbg: #2a2a3d;
+  color: #e2e8f0;
+}
+
+/* ---- Toolbar ---- */
+body.dark-mode #toolbar button { border-color: #4a5568; }
+body.dark-mode #toolbar button:hover { background: rgba(255,255,255,0.07); }
+/* Override hardcoded SVG strokes on plain icon buttons (file-actions, draw-actions) */
+body.dark-mode #file-actions button svg { stroke: #e2e8f0; }
+body.dark-mode #draw-actions button svg { stroke: #e2e8f0; }
+/* Dark mode toggle icon: fill matches stroke */
+body.dark-mode #darkmode-btn svg path[fill="#2d3748"] { fill: #e2e8f0; }
+body.dark-mode #darkmode-btn svg circle { stroke: #e2e8f0; }
+body.dark-mode .tool-btn.active {
+  border-color: #63b3ed !important;
+  box-shadow: 0 0 0 1.5px #63b3ed;
+}
+body.dark-mode #reset.reset-btn { border-color: #fc8181; }
+body.dark-mode #reset.reset-btn:hover { background: rgba(252,129,129,0.12); }
+
+/* ---- Export / Add Data dropdowns ---- */
+body.dark-mode #toolbar .export-dropdown button,
+body.dark-mode #toolbar .add-data-dropdown button { color: #e2e8f0; }
+body.dark-mode #toolbar .export-dropdown button:hover,
+body.dark-mode #toolbar .add-data-dropdown button:hover { background: rgba(255,255,255,0.07); }
+body.dark-mode #toolbar .add-data-dropdown button.add-data-active {
+  color: #63b3ed; background: rgba(99,179,237,0.12);
+}
+body.dark-mode #toolbar .add-data-dropdown button.add-data-clear { color: #fc8181; }
+
+/* ---- Present-mode exit button ---- */
+body.dark-mode #present-exit { background: rgba(30,30,46,0.95); color: #e2e8f0; }
+body.dark-mode #present-exit:hover { background: #252535; }
+
+/* ---- View-only banner ---- */
+body.dark-mode #view-only-banner {
+  background: #3d2e1a; border-color: #b8860b; color: #fbbf24;
+}
+body.dark-mode #view-only-banner a { color: #fbbf24; }
+
+/* ---- Sidebar & feature-panel collapse tab buttons ---- */
+body.dark-mode #sb-collapse-btn,
+body.dark-mode #fp-collapse-btn { background: #252535; }
+
+/* ---- Feature panel rows ---- */
+body.dark-mode .fp-item:hover { background: rgba(255,255,255,0.06); }
+body.dark-mode .fp-item.fp-selected { background: rgba(99,179,237,0.12); }
+body.dark-mode .fp-section-header { color: #9ca3af; }
+body.dark-mode .fp-settings-header { color: #9ca3af; }
+
+/* ---- Context menu ---- */
+body.dark-mode #fp-context-menu { background: #252535; border-color: #374151; }
+body.dark-mode #fp-context-menu button { color: #e2e8f0; }
+body.dark-mode #fp-context-menu button:hover { background: rgba(255,255,255,0.07); }
+
+/* ---- Group name inline editor ---- */
+body.dark-mode .fp-group-name-edit {
+  background: #2a2a3d; color: #e2e8f0; border-color: #4a5568;
+}
+
+/* ---- Attribute popup ---- */
+body.dark-mode #fp-attr-popup { background: #1e1e2e; }
+body.dark-mode .fp-attr-popup-title { color: #e2e8f0; }
+body.dark-mode .fp-attr-input {
+  background: #2a2a3d; color: #e2e8f0; border-color: #4a5568;
+}
+body.dark-mode .fp-attr-confirm-no { background: #374151; color: #e2e8f0; }
+body.dark-mode .fp-attr-confirm-no:hover { background: #4a5568; }
+body.dark-mode .fp-attr-confirm > span { color: #fca5a5; }
+
+/* ---- Basemap switcher ---- */
+body.dark-mode .basemap-btn { background: #2a2a3d; color: #e2e8f0; }
+body.dark-mode .basemap-btn:hover { background: #374151; }
+body.dark-mode .basemap-dropdown { background: #252535; }
+body.dark-mode .basemap-option { color: #e2e8f0; }
+body.dark-mode .basemap-option:hover { background: rgba(255,255,255,0.07); }
+body.dark-mode .basemap-option.active { color: #63b3ed; background: rgba(99,179,237,0.12); }
+body.dark-mode .basemap-toggle-row { color: #e2e8f0; }
+body.dark-mode .basemap-toggle-row:hover { background: rgba(255,255,255,0.07); }
+
+/* ---- Module popup dialogs ---- */
+body.dark-mode .module-popup-dialog { background: #1e1e2e; }
+body.dark-mode .module-popup-close:hover { color: #fc8181; }
+
+/* ---- Floating map widgets (TPI/RF legends) ---- */
+body.dark-mode .floating-widget { background: rgba(30,30,46,0.95); }
+body.dark-mode .floating-widget-title { color: #e2e8f0; }
+body.dark-mode .floating-widget-close:hover { color: #fc8181; }
+
+/* ---- Analysis module buttons ---- */
+body.dark-mode .analysis-module-btn { background: #2a2a3d; color: #e2e8f0; }
+body.dark-mode .analysis-module-btn:hover:not(:disabled) {
+  background: rgba(255,255,255,0.07); border-color: #63b3ed;
+}
+
+/* ---- Generic inputs / selects inside popups ---- */
+body.dark-mode .module-popup-body select,
+body.dark-mode .module-popup-body input[type="text"],
+body.dark-mode .module-popup-body input[type="number"],
+body.dark-mode .module-popup-body input[type="file"],
+body.dark-mode .module-popup-body textarea {
+  background: #2a2a3d; color: #e2e8f0; border-color: #4a5568;
+}
+body.dark-mode .module-popup-body select:focus,
+body.dark-mode .module-popup-body input[type="text"]:focus,
+body.dark-mode .module-popup-body input[type="number"]:focus {
+  border-color: #63b3ed;
+  box-shadow: 0 0 0 2px rgba(99,179,237,0.2);
+  outline: none;
+}
+
+/* ---- Pills and breakpoint items ---- */
+body.dark-mode .bpItem { background: #2a2a3d; }
+body.dark-mode .pill { background: #2a2a3d; }
+body.dark-mode .pill.high { background: #1a3a2a; border-color: #2d6a4f; color: #6ee7b7; }
+body.dark-mode .pill.mh   { background: #1e3a5f; border-color: #2b6cb0; color: #90cdf4; }
+body.dark-mode .pill.med  { background: #3d3000; border-color: #92680a; color: #fde68a; }
+body.dark-mode .pill.ml   { background: #3d2200; border-color: #9a4e00; color: #fdba74; }
+body.dark-mode .pill.low  { background: #3a1a1a; border-color: #7f1d1d; color: #fca5a5; }
+
+/* ---- Shared tab style (FTA / RF / TVI) ---- */
+body.dark-mode .fta-tab:hover,
+body.dark-mode .rf-tab:hover,
+body.dark-mode .tvi-tab:hover { color: #e2e8f0; }
+body.dark-mode .fta-tab-active,
+body.dark-mode .rf-tab-active,
+body.dark-mode .tvi-tab-active { color: #63b3ed; border-bottom-color: #63b3ed; }
+
+/* ---- TPI ---- */
+body.dark-mode .tpi-popup-actions button { background: #2a2a3d; }
+body.dark-mode .tpi-popup-actions button:hover:not(:disabled) { background: rgba(255,255,255,0.07); }
+body.dark-mode .tpi-status { background: #2a2a3d; }
+body.dark-mode .tpi-status-done { background: #1a3a2a; color: #6ee7b7; border-color: #2d6a4f; }
+body.dark-mode .tpi-status-error { background: #3a1a1a; color: #fca5a5; border-color: #7f1d1d; }
+body.dark-mode .tpi-factor-name,
+body.dark-mode .tpi-composite-label,
+body.dark-mode .tpi-slider-label { color: #e2e8f0; }
+body.dark-mode .tpi-composite-value { color: #f1f5f9; }
+body.dark-mode .tpi-slider-value {
+  color: #f1f5f9; background: #2a2a3d; border-color: #4a5568;
+}
+body.dark-mode .tpi-tract-marker,
+body.dark-mode .tpi-footnote { color: #6b7280; }
+body.dark-mode .tpi-legend { background: rgba(30,30,46,0.95); }
+body.dark-mode .tpi-legend-title,
+body.dark-mode .tpi-legend-row { color: #e2e8f0; }
+
+/* ---- Ridership Forecasting ---- */
+body.dark-mode .rf-status { background: #2a2a3d; }
+body.dark-mode .rf-status-stale { color: #fbbf24; }
+body.dark-mode .rf-status-done { background: #1a3a2a; color: #6ee7b7; border-color: #2d6a4f; }
+body.dark-mode .rf-status-error { background: #3a1a1a; color: #fca5a5; border-color: #7f1d1d; }
+body.dark-mode .rf-cdi-value,
+body.dark-mode .rf-stat-value,
+body.dark-mode .rf-range-value,
+body.dark-mode .rf-route-factor-score { color: #f1f5f9; }
+body.dark-mode .rf-cdi-badge { background: #374151; color: #e2e8f0; }
+body.dark-mode .rf-cdi-high    { background: #1a3a2a; color: #6ee7b7; }
+body.dark-mode .rf-cdi-medium  { background: #3d3000; color: #fde68a; }
+body.dark-mode .rf-cdi-lowmedium { background: #3d2200; color: #fdba74; }
+body.dark-mode .rf-cdi-low     { background: #3a1a1a; color: #fca5a5; }
+body.dark-mode .rf-cdi-tooltip {
+  background: #1e3a5f; border-color: #2b6cb0; color: #bfdbfe;
+}
+body.dark-mode .rf-info-btn { color: #63b3ed; }
+body.dark-mode .rf-info-btn:hover { color: #90cdf4; }
+body.dark-mode .rf-next-step {
+  background: #1e3a5f; border-color: #2b6cb0; color: #bfdbfe;
+}
+body.dark-mode .rf-next-step a { color: #90cdf4; }
+body.dark-mode .rf-note { background: #1e3a5f; border-color: #2b6cb0; color: #bfdbfe; }
+body.dark-mode .rf-warning { color: #fbbf24; }
+body.dark-mode .rf-segment-label,
+body.dark-mode .rf-premium-label,
+body.dark-mode .rf-route-factor-name { color: #e2e8f0; }
+body.dark-mode .rf-premium-range { color: #63b3ed; }
+body.dark-mode .rf-range-mid { background: rgba(99,179,237,0.12); }
+body.dark-mode .rf-range-row { border-bottom-color: #374151; }
+body.dark-mode .rf-segment-row { border-bottom-color: #374151; }
+body.dark-mode .rf-segment-class { background: #374151; color: #e2e8f0; }
+body.dark-mode .rf-match-ok   { background: #1a3a2a; }
+body.dark-mode .rf-match-fail { background: #3d2e1a; }
+body.dark-mode .rf-match-ok .rf-match-icon   { color: #6ee7b7; }
+body.dark-mode .rf-match-fail .rf-match-icon { color: #fbbf24; }
+body.dark-mode .rf-match-feature { color: #63b3ed; }
+body.dark-mode .rf-scenario-col-header { color: #63b3ed; border-bottom-color: #63b3ed; }
+body.dark-mode .rf-compare-table th,
+body.dark-mode .rf-proj-table th:first-child { background: #252535; }
+body.dark-mode .rf-compare-table td { border-bottom-color: #374151; }
+body.dark-mode .rf-compare-table tr:hover td { background: #2a2a3d; }
+body.dark-mode .rf-highlight-row td,
+body.dark-mode .rf-proj-cdi-row td { background: rgba(99,179,237,0.10); }
+body.dark-mode .rf-proj-table td:first-child { background: #1e1e2e; }
+body.dark-mode .rf-route-score-list { background: #2a2a3d; }
+body.dark-mode .rf-route-score-row:hover { background: rgba(255,255,255,0.07); }
+body.dark-mode .rf-route-score-detail { background: #252535; border-top-color: #374151; }
+body.dark-mode .rf-route-factor-bar-wrap { background: #374151; }
+body.dark-mode .rf-route-factor-sys-marker { background: #e2e8f0; }
+body.dark-mode .rf-info-box { background: #252535; }
+body.dark-mode .rf-weights-modal-box { background: #1e1e2e; }
+body.dark-mode .rf-weights-modal-title { color: #f1f5f9; }
+body.dark-mode .rf-btn-sm { background: #2a2a3d; color: #e2e8f0; }
+body.dark-mode .rf-btn-sm:hover:not(:disabled) { background: rgba(255,255,255,0.07); }
+
+/* ---- Title VI ---- */
+body.dark-mode .tvi-finding-card,
+body.dark-mode .tvi-alteration-card { background: #2a2a3d; }
+body.dark-mode .tvi-finding-table td { border-bottom-color: #374151; }
+body.dark-mode .tvi-baseline-box { background: #1e3a5f; border-color: #2b6cb0; }
+body.dark-mode .tvi-stale-banner {
+  background: #3d2e1a; border-color: #b8860b; color: #fbbf24;
+}
+body.dark-mode .tvi-route-table th,
+body.dark-mode .tvi-comparison-table th { background: #252535; }
+body.dark-mode .tvi-alt-delete:hover { color: #fc8181; }
+
+/* ---- Results modal ---- */
+body.dark-mode .results-modal-dialog { background: #1e1e2e; }
+body.dark-mode .result-error td { color: #fc8181; }

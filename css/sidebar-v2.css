@@ -287,3 +287,27 @@
   cursor: pointer;
   text-decoration: underline;
 }
+
+/* ---- Dark mode ---- */
+body.dark-mode #sidebar-wrap.sb-collapsed #sb-collapse-btn { background: #252535; }
+body.dark-mode #sidebar .sb2-panel-header:hover { background: rgba(255,255,255,0.06); }
+body.dark-mode #sidebar select,
+body.dark-mode #sidebar input[type="text"],
+body.dark-mode #sidebar input[type="number"],
+body.dark-mode #sidebar input[type="file"] {
+  background: #2a2a3d; color: #e2e8f0; border-color: #4a5568;
+}
+body.dark-mode #sidebar select:focus,
+body.dark-mode #sidebar input[type="text"]:focus,
+body.dark-mode #sidebar input[type="number"]:focus {
+  border-color: #63b3ed; box-shadow: 0 0 0 2px rgba(99,179,237,0.2);
+}
+body.dark-mode #sidebar button { background: #2a2a3d; color: #e2e8f0; }
+body.dark-mode #sidebar button:hover { background: rgba(255,255,255,0.07); }
+body.dark-mode #sidebar .var-checklist { background: #2a2a3d; }
+body.dark-mode #sidebar .var-checklist legend { color: #e2e8f0; }
+body.dark-mode #sidebar .sb2-section-label { color: #e2e8f0; }
+body.dark-mode #sidebar .var-group-label { color: #9ca3af; }
+body.dark-mode #sidebar .var-action-btn { color: #63b3ed; }
+body.dark-mode #sidebar label { color: #e2e8f0; }
+body.dark-mode #sidebar h3 { color: #e2e8f0; }

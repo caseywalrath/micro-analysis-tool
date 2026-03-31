@@ -417,6 +417,23 @@
       if (typeof App.cache !== "undefined") App.cache.save();
     });
 
+    // Dark mode toggle
+    var _darkBtn = document.getElementById("darkmode-btn");
+    var _DARK_KEY = "mat-dark-mode";
+    if (_darkBtn) {
+      _darkBtn.addEventListener("click", function () {
+        var isDark = document.body.classList.toggle("dark-mode");
+        localStorage.setItem(_DARK_KEY, isDark ? "1" : "0");
+        if (typeof App.switchBasemap === "function") {
+          App.switchBasemap(isDark ? "carto-dark" : "carto-light");
+        }
+      });
+    }
+    // Restore basemap to match dark mode preference (class already set by no-flash script in <head>)
+    if (document.body.classList.contains("dark-mode") && typeof App.switchBasemap === "function") {
+      App.switchBasemap("carto-dark");
+    }
+
     // Present mode
     document.getElementById("present-btn").addEventListener("click", function () {
       document.body.classList.add("present-mode");
