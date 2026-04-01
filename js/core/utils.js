@@ -25,7 +25,14 @@
 
   // --- Status ---
 
-  function setStatus(s) { var el = document.getElementById("status"); if (el) el.textContent = s; }
+  var _statusTimer = null;
+  function setStatus(s) {
+    var el = document.getElementById("status");
+    if (!el) return;
+    el.textContent = s;
+    clearTimeout(_statusTimer);
+    if (s) _statusTimer = setTimeout(function () { el.textContent = ""; }, 5000);
+  }
 
   // --- CSV parsing + helpers ---
 
