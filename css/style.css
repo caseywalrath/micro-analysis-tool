@@ -283,7 +283,7 @@ button { cursor: pointer; }
 .map-label:active { cursor: grabbing; }
 
 /* ---- Measure tool ---- */
-.tool-btn[data-mode="measure"] { margin-left: 8px; }
+.tool-btn[data-mode="measure"] { margin-left: 0; }
 .msr-label {
   font-family: 'Open Sans', var(--font-sans);
   font-size: var(--text-xs);
