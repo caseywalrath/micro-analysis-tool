@@ -20,6 +20,14 @@
   var _segmentIndex = null; // Array of {feature, startKey, endKey, startCoord, endCoord} per segment
   var _featureCount = 0;
 
+  // ---- Byte formatting helper ----
+
+  function formatBytes(bytes) {
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + " KB";
+    return (bytes / 1048576).toFixed(1) + " MB";
+  }
+
   // ---- Node key helper ----
 
   function nodeKey(coord) {
@@ -307,6 +315,10 @@
   async function fetchRoadNetwork() {
     if (!App.map) return;
 
+    // Prevent double-clicks
+    var btn = document.getElementById("road-net-download");
+    if (btn) btn.disabled = true;
+
     var b = App.map.getBounds();
     var south = b.getSouth(), west = b.getWest(), north = b.getNorth(), east = b.getEast();
 
@@ -328,7 +340,41 @@
 
       if (!resp.ok) throw new Error("Overpass API error: " + resp.status);
 
-      var data = await resp.json();
+      // Stream the response to track download progress
+      var contentLength = parseInt(resp.headers.get("Content-Length") || "0", 10);
+      var reader = resp.body.getReader();
+      var receivedBytes = 0;
+      var chunks = [];
+      var lastUpdate = 0;
+
+      while (true) {
+        var result = await reader.read();
+        if (result.done) break;
+        chunks.push(result.value);
+        receivedBytes += result.value.length;
+
+        // Throttle status updates to every 200ms
+        var now = Date.now();
+        if (now - lastUpdate > 200) {
+          lastUpdate = now;
+          var msg = "Downloading road network\u2026 " + formatBytes(receivedBytes);
+          if (contentLength > 0) {
+            msg += " / " + formatBytes(contentLength) +
+              " (" + Math.round((receivedBytes / contentLength) * 100) + "%)";
+          }
+          App.setStatus(msg);
+        }
+      }
+
+      // Parse the downloaded data
+      App.setStatus("Parsing road network (" + formatBytes(receivedBytes) + ")\u2026");
+      var combined = new Uint8Array(receivedBytes);
+      var offset = 0;
+      for (var c = 0; c < chunks.length; c++) {
+        combined.set(chunks[c], offset);
+        offset += chunks[c].length;
+      }
+      var data = JSON.parse(new TextDecoder().decode(combined));
       var elements = data.elements || [];
 
       if (elements.length === 0) {
@@ -336,10 +382,9 @@
         return;
       }
 
-      App.setStatus("Building routing graph (" + elements.length + " ways)\u2026");
-
-      // Convert Overpass JSON to GeoJSON (ways only, as LineStrings)
+      // Convert Overpass JSON to GeoJSON with progress updates
       var features = [];
+      var graphLastUpdate = Date.now();
       for (var i = 0; i < elements.length; i++) {
         var el = elements[i];
         if (el.type !== "way" || !el.geometry || el.geometry.length < 2) continue;
@@ -353,6 +398,13 @@
           },
           geometry: { type: "LineString", coordinates: coords }
         });
+
+        // Update status every 500 elements and yield to keep UI responsive
+        if (i % 500 === 0 && i > 0) {
+          App.setStatus("Building routing graph (" +
+            (i + 1).toLocaleString() + " / " + elements.length.toLocaleString() + " ways)\u2026");
+          await new Promise(function (r) { setTimeout(r, 0); });
+        }
       }
 
       var geojson = { type: "FeatureCollection", features: features };
@@ -362,9 +414,11 @@
       _roadGeoJSON = geojson;
 
       updateUI();
-      App.setStatus(_featureCount.toLocaleString() + " road segments loaded — local routing enabled");
+      App.setStatus(_featureCount.toLocaleString() + " road segments loaded \u2014 local routing enabled");
     } catch (e) {
       App.setStatus("Road network download failed: " + (e.message || e));
+    } finally {
+      if (btn) btn.disabled = false;
     }
   }
 

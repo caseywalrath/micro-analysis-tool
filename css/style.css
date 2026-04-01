@@ -2827,6 +2827,34 @@ body.view-only-mode #draw-actions button {
 }
 
 /* ================================================================
+   STATUS BAR
+   ================================================================ */
+#status {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 4px 12px;
+  font-size: var(--text-sm);
+  color: var(--muted);
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  z-index: 900;
+  min-height: 24px;
+  transition: opacity 0.3s;
+}
+#status:empty {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Disabled state for Add Data dropdown buttons */
+#toolbar .add-data-dropdown button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ================================================================
    DARK MODE  —  body.dark-mode overrides
    ================================================================ */
 body.dark-mode {
