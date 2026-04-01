@@ -475,10 +475,6 @@
   function updateUI() {
     var loaded = !!_graph;
 
-    // Show/hide clear button in Add Data dropdown
-    var clearBtn = document.getElementById("road-net-clear");
-    if (clearBtn) clearBtn.style.display = loaded ? "" : "none";
-
     // Show/hide export button in Export dropdown
     var exportBtn = document.getElementById("export-road-net");
     if (exportBtn) exportBtn.style.display = loaded ? "" : "none";

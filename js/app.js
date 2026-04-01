@@ -585,6 +585,7 @@
       App.clearPolygons();
       if (typeof App.clearLabels === "function") App.clearLabels();
       if (typeof App.clearRoadNetwork === "function") App.clearRoadNetwork();
+      if (typeof App.osmClearLayers === "function") App.osmClearLayers();
       if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
       if (typeof App.clearCensusOverlay === "function") App.clearCensusOverlay();
       document.getElementById("nGeos").textContent = "0";
@@ -702,8 +703,9 @@
     var exportDropdown = document.getElementById("export-dropdown");
     var addDataDropdown = document.getElementById("add-data-dropdown");
 
-    // Import button → open file picker
-    document.getElementById("import-btn").addEventListener("click", function () {
+    // Import file button (inside Add Data dropdown) → open file picker
+    document.getElementById("import-file-btn").addEventListener("click", function () {
+      addDataDropdown.style.display = "none";
       importFileInput.value = "";
       importFileInput.click();
     });
@@ -785,16 +787,10 @@
     });
 
     addDataDropdown.addEventListener("click", function (e) {
-      // Road network buttons (no data-osm attribute)
+      // Road network download
       if (e.target.id === "road-net-download") {
         addDataDropdown.style.display = "none";
         if (typeof App.fetchRoadNetwork === "function") App.fetchRoadNetwork();
-        return;
-      }
-      if (e.target.id === "road-net-clear") {
-        addDataDropdown.style.display = "none";
-        if (typeof App.clearRoadNetwork === "function") App.clearRoadNetwork();
-        App.setStatus("Local map data cleared");
         return;
       }
       // OSM layer buttons
@@ -802,11 +798,7 @@
       if (!btn) return;
       addDataDropdown.style.display = "none";
       var cat = btn.getAttribute("data-osm");
-      if (cat === "clear") {
-        if (typeof App.osmClearLayers === "function") App.osmClearLayers();
-      } else {
-        if (typeof App.osmToggleCategory === "function") App.osmToggleCategory(cat);
-      }
+      if (typeof App.osmToggleCategory === "function") App.osmToggleCategory(cat);
     });
 
     // Close dropdowns on outside click or Escape

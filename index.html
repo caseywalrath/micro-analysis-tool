@@ -70,25 +70,20 @@
               <button data-osm="transit_routes">Transit Routes</button>
               <button data-osm="pois">Points of Interest</button>
               <div class="add-data-divider"></div>
-              <button data-osm="clear" class="add-data-clear">Clear OSM Layer</button>
-              <div class="add-data-divider"></div>
               <div class="add-data-heading">Local Map Data</div>
               <button id="road-net-download">Download Roads for Area</button>
-              <button id="road-net-clear" class="add-data-clear" style="display:none;">Clear Local Map Data</button>
               <div class="add-data-divider"></div>
               <div class="add-data-heading">Employment (LODES)</div>
               <button id="lodes-download-btn">Download LODES Data</button>
               <button id="lodes-add-btn">Add State File</button>
               <button id="lodes-clear-btn" class="add-data-clear" style="display:none;">Clear LODES Data</button>
+              <div class="add-data-divider"></div>
+              <div class="add-data-heading">Import</div>
+              <button id="import-file-btn">Import Spatial Data</button>
             </div>
             <input id="lodesFile" type="file" accept=".gz,.csv.gz" style="display:none" />
+            <input id="fp-import-file" type="file" accept=".json,.csv,.kml,.kmz,.shp,.zip,.geojson" style="display:none" />
           </div>
-          <button id="import-btn" title="Import">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2d3748" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 3v12"/><polyline points="8,11 12,15 16,11"/>
-              <path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/>
-            </svg>
-          </button>
           <div class="export-wrapper">
             <button id="export-btn" title="Export">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2d3748" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -232,7 +227,6 @@
         </div>
 
       </div>
-      <input type="file" id="fp-import-file" accept=".json,.csv,.kml,.kmz,.shp,.zip,.geojson" style="display:none" />
       </div><!-- #main-content -->
       <div id="status"></div>
 
