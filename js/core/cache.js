@@ -45,7 +45,9 @@
       offsetOverlap: !!document.getElementById("offsetOverlap").checked,
       lodesFileNames: App.lodesFileNames || [],
       projFileName: App.projFileName || "",
-      projYear: App.projYear || null
+      projYear: App.projYear || null,
+      mapCenter: App.map ? [App.map.getCenter().lng, App.map.getCenter().lat] : null,
+      mapZoom: App.map ? App.map.getZoom() : null
     };
 
     // Checkbox selections are now managed by the buffer-summary module
@@ -149,6 +151,11 @@
     App.renderPolygonLayers();
     if (typeof App.renderLabelMarkers === "function") App.renderLabelMarkers();
 
+    // 4b. Restore map position (if saved)
+    if (state.mapCenter && state.mapZoom != null && App.map) {
+      App.map.jumpTo({ center: state.mapCenter, zoom: state.mapZoom });
+    }
+
     // 5. Restore checkbox selections — checkboxes now live in buffer-summary popup
     // (lazy-loaded, not in DOM at restore time). Migrate into moduleState so the
     // buffer-summary module's apply() handler picks them up.
@@ -244,6 +251,11 @@
       console.warn("Cache restore failed:", e);
       return false;
     }
+  }
+
+  // ---- Auto-save on map movement (pan/zoom) ----
+  if (App.map) {
+    App.map.on("moveend", function () { save(); });
   }
 
   // ---- Reset: clear cache and all app state ----
