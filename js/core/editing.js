@@ -803,12 +803,21 @@
       var feature = dataMap[featureType][featureIndex];
 
       if (typeof App.showContextMenu === "function") {
+        var isHidden = !!feature.properties.hidden;
         App.showContextMenu(
           e.originalEvent.clientX,
           e.originalEvent.clientY,
-          [{ label: "Attributes", action: function () {
-            if (typeof App.openAttrPopup === "function") App.openAttrPopup(featureType, featureIndex, feature);
-          }}]
+          [
+            { label: "Attributes", action: function () {
+                if (typeof App.openAttrPopup === "function") App.openAttrPopup(featureType, featureIndex, feature);
+            }},
+            { label: isHidden ? "Show" : "Hide", action: function () {
+                feature.properties.hidden = !feature.properties.hidden;
+                if (App.cache && typeof App.cache.save === "function") App.cache.save();
+                if (typeof App.rerenderForType === "function") App.rerenderForType(featureType);
+                if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+            }}
+          ]
         );
       }
     });
