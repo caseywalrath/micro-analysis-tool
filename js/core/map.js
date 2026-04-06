@@ -101,6 +101,7 @@
     center: [-104.9903, 39.7392],
     zoom: 10
   });
+  map.scrollZoom.setWheelZoomRate(1 / 900); // half the default (1/450) for finer zoom granularity
   // ---- Default cursor: grab hand ----
   map.on("load", function () {
     map.getCanvas().style.cursor = "grab";
