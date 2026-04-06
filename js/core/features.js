@@ -1054,6 +1054,7 @@
 
   App.refreshFeaturePanel = refreshFeaturePanel;
   App.getTypeDefaultColor = getTypeDefaultColor;
+  App.showContextMenu     = showContextMenu;
 
   // Wire feature panel collapse toggle
   (function () {

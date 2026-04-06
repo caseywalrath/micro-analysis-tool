@@ -760,20 +760,57 @@
       }
     });
 
-    // ---- Right-click: context menu for vertex deletion ----
+    // ---- Right-click: vertex deletion (priority) or feature attributes ----
     map.on("contextmenu", function (e) {
-      if (!editState || editState.type !== "vertex-edit") return;
-      var editHits = safeQuery(e.point, [EDIT_LAYER]);
-      if (editHits.length === 0) return;
+      if (App.drawMode) return;
+
+      // Priority 1: vertex handle hit during vertex-edit mode → delete vertex
+      if (editState && editState.type === "vertex-edit") {
+        var editHits = safeQuery(e.point, [EDIT_LAYER]);
+        if (editHits.length > 0) {
+          e.preventDefault();
+          var vIdx = editHits[0].properties.vertexIdx;
+          showVertexCtxMenu(
+            e.originalEvent.clientX,
+            e.originalEvent.clientY,
+            editState.featureType,
+            editState.featureIndex,
+            vIdx
+          );
+          return;
+        }
+      }
+
+      // Priority 2: feature hit → show attributes context menu
+      var stHits = safeQuery(e.point, ["stations-layer"]);
+      var fHits  = safeQuery(e.point, ["lines-layer", "routes-layer", "polygons-fill"]);
+      var hit    = (stHits.length ? stHits : fHits)[0];
+      if (!hit) return;
+
       e.preventDefault();
-      var vIdx = editHits[0].properties.vertexIdx;
-      showVertexCtxMenu(
-        e.originalEvent.clientX,
-        e.originalEvent.clientY,
-        editState.featureType,
-        editState.featureIndex,
-        vIdx
-      );
+      var layerId      = hit.layer.id;
+      var featureType  = null;
+      var featureIndex = -1;
+      if      (layerId === "stations-layer") { featureType = "station";  featureIndex = findStationIndex(hit); }
+      else if (layerId === "lines-layer")    { featureType = "line";     featureIndex = findLineIndex(hit); }
+      else if (layerId === "routes-layer")   { featureType = "route";    featureIndex = findRouteIndex(hit); }
+      else if (layerId === "polygons-fill")  { featureType = "polygon";  featureIndex = findPolygonIndex(hit); }
+      if (featureType === null || featureIndex < 0) return;
+
+      if (typeof App.selectFeature === "function") App.selectFeature(featureType, featureIndex);
+
+      var dataMap = { station: App.stations, line: App.lines, route: App.routes, polygon: App.polygons };
+      var feature = dataMap[featureType][featureIndex];
+
+      if (typeof App.showContextMenu === "function") {
+        App.showContextMenu(
+          e.originalEvent.clientX,
+          e.originalEvent.clientY,
+          [{ label: "Attributes", action: function () {
+            if (typeof App.openAttrPopup === "function") App.openAttrPopup(featureType, featureIndex, feature);
+          }}]
+        );
+      }
     });
   }
 
