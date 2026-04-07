@@ -793,7 +793,8 @@
     init:    function (core) { init(core); },
     onOpen:  function (core) { onOpen(core); },
     onClose: function () {},
-    update:  async function (core) {}
+    update:  async function (core) {},
+    clear:   function () { clearGTFS(); }
   });
 
 })();
