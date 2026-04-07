@@ -49,13 +49,13 @@ js/
     utils.js                CSV parsing, number formatting, GEOID normalization, VAR_META (with label/category), getSelectedVars
     sidebar.js              Sidebar panel manager: addPanel, removePanel, toggle, render
     map.js                  MapLibre GL map instance, basemap registry + switcher control, cursor management
-    stations.js             Station points, user-defined buffers (default 0.5 mi), union polygon, station drag support
+    points.js               Points, user-defined buffers (default 0.5 mi), union polygon, point drag support
     lines.js                Line drawing (polylines with snap-to-close), line buffers (default 0.5 mi), rubber-band preview, vertex editing
     routes.js               Route drawing (OSRM street-snapped), route buffers (default 0.5 mi), throttled snapped preview, waypoint-only vertex editing
     polygons.js             Polygon drawing (vertex-by-vertex with snap-to-close), rubber-band preview, vertex editing
-    editing.js              Feature editing: station click-drag, line/polygon/route vertex editing with orange handles
+    editing.js              Feature editing: point click-drag, line/polygon/route vertex editing with orange handles
     features.js             Right-side feature panel: lists features, editable names, per-item color swatches, gear icon (⚙) per row to open the floating attributes popup, right-click context menu with Attributes option. Row click selects/highlights feature on map only. Delete (trash icon) stays in the row with an inline confirm strip. Exports refreshFeaturePanel, openColorPicker, updateFeatureColor.
-    feature-attributes.js   Floating draggable attribute popup (singleton, #fp-attr-popup): ATTR_FIELDS config per type, openAttrPopup(featureType, featureIndex, feature), closeAttrPopup(), isAttrPopupOpen(), getAttrPopupFeature(). Popup is 320px wide, position: fixed, draggable by header, clamped within viewport, closes on Escape or X button. Auto-updates when a different feature is selected while open. Attributes stored in feature.properties.attributes (lazy-init). Route fields: routeGroup, direction, mode, routeId, frequency, spanStart, spanEnd, daysOfService, avgSpeed. Line fields: lineMode, notes. Polygon fields: notes. Station: name only.
+    feature-attributes.js   Floating draggable attribute popup (singleton, #fp-attr-popup): ATTR_FIELDS config per type, openAttrPopup(featureType, featureIndex, feature), closeAttrPopup(), isAttrPopupOpen(), getAttrPopupFeature(). Popup is 320px wide, position: fixed, draggable by header, clamped within viewport, closes on Escape or X button. Auto-updates when a different feature is selected while open. Attributes stored in feature.properties.attributes (lazy-init). Route fields: routeGroup, direction, mode, routeId, frequency, spanStart, spanEnd, daysOfService, avgSpeed. Line fields: lineMode, notes. Polygon fields: notes. Point: name only.
     census.js               TIGERweb geometry queries, ACS data fetch, area-weighted aggregation
     lodes.js                LODES .csv.gz download/upload/parse, block-level employment
     cache.js                Session cache: save/restore/reset via localStorage; JSON import/export
@@ -109,16 +109,16 @@ Order matters because modules depend on earlier ones:
 utils.js    (no deps)
 sidebar.js  (needs App namespace from utils.js)
 map.js      (creates App.map, basemap switcher, cursor handlers)
-stations.js (needs App.map, turf)
+points.js (needs App.map, turf)
 lines.js    (needs App.map, turf)
 routes.js   (needs App.map, turf, fetch/AbortController)
 polygons.js (needs App.map)
-editing.js  (needs App.map, App.stations, App.lines, App.routes, App.polygons, move/update functions)
-features.js           (needs App.stations, App.lines, App.routes, App.polygons, App.removeStation, etc.)
+editing.js  (needs App.map, App.points, App.lines, App.routes, App.polygons, move/update functions)
+features.js           (needs App.points, App.lines, App.routes, App.polygons, App.removePoint, etc.)
 feature-attributes.js (needs App namespace; defines App.openAttrPopup, App.closeAttrPopup, App.isAttrPopupOpen, App.getAttrPopupFeature)
 census.js             (needs App.map, App.bboxStringFromFeature, App.getMeta, turf)
 lodes.js    (needs App.map, App.bboxStringFromFeature, App.bufferUnionPolygon, pako, turf)
-cache.js    (needs App.stations, App.lines, App.routes, App.polygons, render/rebuild functions)
+cache.js    (needs App.points, App.lines, App.routes, App.polygons, render/rebuild functions)
 popup.js    (needs App namespace; defines App.popup)
 app.js              (wires everything; registers sidebar panels; defines App.registerModule; calls cache.restore)
 <modules>           (call App.registerModule)
@@ -150,8 +150,8 @@ Panel config: `{ id, title, html, collapsed (default false), order (default 100)
 
 Basemap IDs: `"carto-light"` (default), `"carto-dark"`, `"osm"`, `"satellite"`
 
-### stations.js
-`stations` (Point array), `buffers` (Polygon array), `addStationPoint(lon, lat)`, `rebuildBuffers(radiusMiles)`, `moveStation(index, lng, lat)`, `removeStation(index)`, `clearStations()`, `undoLastStation()`, `renderStationLayers()`, `bufferUnionPolygon()`, `getUnion()` (alias), `bboxStringFromFeature(feat)`
+### points.js
+`points` (Point array), `buffers` (Polygon array), `addPoint(lon, lat)`, `addPointWithOpts(lon, lat, opts)`, `rebuildBuffers(radiusMiles)`, `movePoint(index, lng, lat)`, `removePoint(index)`, `clearPoints()`, `undoLastPoint()`, `duplicatePoint(index)`, `renderPointLayers()`, `bufferUnionPolygon()`, `getUnion()` (alias), `bboxStringFromFeature(feat)`
 
 ### lines.js
 `lines` (LineString array), `lineBuffers` (Polygon array), `handleLineClick(lngLat)`, `rebuildLineBuffers(radiusMiles)`, `lineBufferUnionPolygon()`, `removeLine(index)`, `clearLines()`, `undoLastLine()`, `cancelLineDrawing()`, `renderLineLayers()`, `setLinePreview(lngLat)`, `updateLineVertex(lineIndex, vertexIndex, lng, lat)`
@@ -183,7 +183,7 @@ Route features store `properties.waypoints` (user click points) separately from 
 
 **Auto-update on selection:** `selection.js selectFeature()` calls `openAttrPopup` if the popup is already open, so clicking a different feature row or map feature automatically switches the popup content.
 
-**Feature attribute storage:** All feature types (routes, lines, stations, polygons) can carry a `properties.attributes` object. Preserved automatically by session cache serialization. Lazy-init means old sessions without the field restore cleanly.
+**Feature attribute storage:** All feature types (routes, lines, points, polygons) can carry a `properties.attributes` object. Preserved automatically by session cache serialization. Lazy-init means old sessions without the field restore cleanly.
 
 **Route grouping (future-ready):** The `routeGroup` field stored on route attributes seeds future pattern grouping. Routes sharing the same `routeGroup` string are intended to be treated as directional patterns of one logical route. No grouping logic is implemented yet — `computePerRouteCDI`, `matchRoutesToCSV`, and the corridor dropdown will need updating when that feature is built. The `direction` field (NB/SB/EB/WB/Inbound/Outbound/Loop) labels each pattern within its group.
 
@@ -196,9 +196,9 @@ Route features store `properties.waypoints` (user click points) separately from 
 ### cache.js
 `cache.save()`, `cache.restore()`, `cache.reset()`, `cache.exportToFile()`, `cache.importFromFile(file)`, `cache.registerModule(id, handlers)`, `cache.STORAGE_KEY`
 
-Saves session state (stations, lines, routes, polygons, buffer radii, form selections, LODES filename) to `localStorage` under key `"mat-session"`. Routes store full geometry + waypoints; no re-routing needed on restore. Restore runs automatically at end of map load. Save is debounced (500ms) and called after every state mutation. Reset clears localStorage and all app state. LODES data is NOT cached (too large); only the filename is stored as a re-upload hint.
+Saves session state (points, lines, routes, polygons, buffer radii, form selections, LODES filename) to `localStorage` under key `"mat-session"`. Routes store full geometry + waypoints; no re-routing needed on restore. Restore runs automatically at end of map load. Save is debounced (500ms) and called after every state mutation. Reset clears localStorage and all app state. LODES data is NOT cached (too large); only the filename is stored as a re-upload hint.
 
-`exportToFile()` serializes current state to a timestamped `.json` file and triggers a browser download. `importFromFile(file)` reads a JSON file (from a hidden `<input type="file">`), validates it, and applies the state — replacing all current features. Both use the same schema as localStorage (`version: 1`).
+`exportToFile()` serializes current state to a timestamped `.json` file and triggers a browser download. `importFromFile(file)` reads a JSON file (from a hidden `<input type="file">`), validates it, and applies the state — replacing all current features. Both use the same schema as localStorage (`version: 2`). Schema v1 sessions (with `stations` key) are automatically migrated to v2 (`points` key) on restore.
 
 `registerModule(id, { collect(mode), apply(data) })` — analysis modules call this at load time to opt into session persistence. `collect(mode)` returns a serializable object; `mode` is `"light"` (localStorage, skip heavy geometry) or `"full"` (file export, includes geos for choropleth restore). `apply(data)` restores state from a previously collected object. Module state is stored under `state.moduleState[moduleId]` in the JSON schema. The RF module registers as `"rf"` and persists weights, scenario forms, calibration metadata, per-route CDI, system demand result, shared-pool mode flag, and baseline uncertainty percentage (TPI geographies included in full export only). RF session schema is at **v3** (v1/v2 restored with backward-compat migration; v3 adds `sharedPoolMode`; `baselineUncertaintyPct` added gracefully — defaults to 0.25 when absent, no schema version bump needed).
 
@@ -417,7 +417,7 @@ Passed to `init()`, `onOpen()`, `onClose()`, and `update()`. Provides the module
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `stations` | Array | Current station Point features |
+| `points` | Array | Current Point features |
 | `buffers` | Array | Current buffer Polygon features |
 | `routes` | Array | Current route LineString features (with `properties.waypoints`) |
 | `routeBuffers` | Array | Current route buffer Polygon features |
@@ -447,14 +447,14 @@ Multiple modules can be active simultaneously. No core code needs to change.
 
 ### How to run with no modules
 
-Remove all module `<script>` tags from `index.html`. The Analysis sidebar panel will not appear. The core app (map, stations, ACS summaries, LODES) works independently.
+Remove all module `<script>` tags from `index.html`. The Analysis sidebar panel will not appear. The core app (map, points, ACS summaries, LODES) works independently.
 
 ## Layout
 
 ```
 +---------------------------------------------------------------+
 |  Toolbar                                                      |
-|  [Station] [Line] [Route] [Polygon]   [Delete Last] [Clear] [Reset Session] |
+|  [Point] [Line] [Route] [Polygon]   [Delete Last] [Clear] [Reset Session] |
 +------------------+------------------------+-------------------+
 |  Sidebar (left)  |        Map (center)    | Feature Panel (R) |
 |  310px           |        flex            | 240px             |
@@ -491,10 +491,10 @@ Clicking an analysis module button opens a popup window over the map. The Buffer
 ```
 +-----------------------------+
 |  Features                   |
-|  STATIONS                   |  Per-station rows: editable name +
-|    Station 1        [⚙][🗑]|  gear (⚙) opens floating attr popup.
-|    Station 2        [⚙][🗑]|  Row click selects on map only.
-|  LINES                      |  Stations can be dragged on the map.
+|  POINTS                     |  Per-point rows: editable name +
+|    Point 1          [⚙][🗑]|  gear (⚙) opens floating attr popup.
+|    Point 2          [⚙][🗑]|  Row click selects on map only.
+|  LINES                      |  Points can be dragged on the map.
 |    Line 1           [⚙][🗑]|  Per-line: name, mode, notes.
 |  ROUTES                     |  Per-route: name, route group,
 |    Route 1          [⚙][🗑]|  direction, mode, route ID,
@@ -503,7 +503,7 @@ Clicking an analysis module button opens a popup window over the map. The Buffer
 |  POLYGONS                   |  Per-polygon: name, notes.
 |    Polygon 1          [▸]  |
 |  BUFFERS                    |
-|    Stations [_0.5_] mi      |  Radius input: default 0.5 mi.
+|    Points   [_0.5_] mi      |  Radius input: default 0.5 mi.
 |    Lines    [_0.5_] mi      |  Separate buffer for line features.
 |    Routes   [_0.5_] mi      |  Separate buffer for route features.
 |  [Import] [Export]          |  Anchored to bottom (flex footer).
