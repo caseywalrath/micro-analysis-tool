@@ -14,6 +14,7 @@
   var _initialized  = false;
   var _showRoutes   = true;
   var _showStops    = true;
+  var _shapesFC     = null;  // stored shapes FeatureCollection for full-geometry lookup
   var _hoverPopup   = null;  // maplibregl.Popup for hover tooltips
   var _clickPopup   = null;  // maplibregl.Popup for click details
 
@@ -206,6 +207,7 @@
     // --- shapes.txt → route geometry ---
     if (_gtfsData && _gtfsData.has("shapes.txt")) {
       var shapesFC = buildShapesGeoJSON(_gtfsData.get("shapes.txt").rows, routeLookup);
+      _shapesFC = shapesFC;
       map.addSource("gtfs-shapes", { type: "geojson", data: shapesFC });
       map.addLayer({
         id:     "gtfs-shapes-layer",
@@ -259,6 +261,7 @@
     var map = App.map;
     if (!map) return;
     removePopups();
+    _shapesFC = null;
     ["gtfs-shapes-layer", "gtfs-stops-layer"].forEach(function (id) {
       if (map.getLayer(id)) map.removeLayer(id);
     });
@@ -282,6 +285,73 @@
     if (map && map.getLayer("gtfs-stops-layer")) {
       map.setLayoutProperty("gtfs-stops-layer", "visibility",
         visible ? "visible" : "none");
+    }
+  }
+
+  // ---- GTFS → Feature copy helpers ----
+
+  var ROUTE_TYPE_TO_LINE_MODE = {
+    0: "Streetcar",
+    1: "Light Rail",
+    2: "Commuter Rail",
+    3: "Bus",
+    5: "Streetcar",
+    7: "Light Rail",
+    11: "Bus"
+  };
+
+  function copyShapeToLine(props) {
+    var shapeId = props.shape_id;
+    if (!shapeId || !_shapesFC) return;
+
+    var fullFeature = null;
+    for (var i = 0; i < _shapesFC.features.length; i++) {
+      if (_shapesFC.features[i].properties.shape_id === shapeId) {
+        fullFeature = _shapesFC.features[i];
+        break;
+      }
+    }
+    if (!fullFeature) return;
+
+    var coords = fullFeature.geometry.coordinates;
+    var name = props.route_short_name || props.route_long_name || shapeId;
+    var routeType = parseInt(props.route_type, 10);
+    var lineMode = ROUTE_TYPE_TO_LINE_MODE[routeType] || null;
+
+    var color = null;
+    var rc = (props.route_color || "").replace(/^#/, "");
+    if (rc && rc.toLowerCase() !== "ffffff" && rc.length === 6) {
+      color = "#" + rc;
+    }
+
+    var attrs = {};
+    if (lineMode) attrs.lineMode = lineMode;
+    var notesParts = [];
+    if (props.route_id) notesParts.push("route_id: " + props.route_id);
+    if (shapeId) notesParts.push("shape_id: " + shapeId);
+    if (notesParts.length) attrs.notes = notesParts.join(", ");
+
+    if (typeof App.addLineFromCoords === "function") {
+      App.addLineFromCoords(coords, {
+        name: name,
+        color: color,
+        attributes: attrs
+      });
+    }
+  }
+
+  function copyStopToStation(props, lngLat) {
+    var lon = parseFloat(props.stop_lon) || lngLat.lng;
+    var lat = parseFloat(props.stop_lat) || lngLat.lat;
+    var name = props.stop_name || props.stop_code || props.stop_id || "Station";
+    var attrs = {};
+    if (props.stop_id) attrs.stopId = String(props.stop_id);
+
+    if (typeof App.addStationWithOpts === "function") {
+      App.addStationWithOpts(lon, lat, {
+        name: name,
+        attributes: attrs
+      });
     }
   }
 
@@ -331,6 +401,36 @@
           .setLngLat(e.lngLat)
           .setHTML(buildClickHTML(e.features[0].properties, isStop))
           .addTo(map);
+      });
+
+      map.on("contextmenu", layerId, function (e) {
+        if (!e.features || !e.features.length) return;
+        e.originalEvent.preventDefault();
+        if (_hoverPopup) _hoverPopup.remove();
+
+        var props  = e.features[0].properties;
+        var lngLat = e.lngLat;
+        var options = [];
+
+        if (isStop) {
+          options.push({
+            label: "Copy to Stations",
+            action: function () { copyStopToStation(props, lngLat); }
+          });
+        } else {
+          options.push({
+            label: "Copy to Lines",
+            action: function () { copyShapeToLine(props); }
+          });
+        }
+
+        if (typeof App.showContextMenu === "function") {
+          App.showContextMenu(
+            e.originalEvent.clientX,
+            e.originalEvent.clientY,
+            options
+          );
+        }
       });
     });
   }

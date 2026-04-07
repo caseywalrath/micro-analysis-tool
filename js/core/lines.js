@@ -269,6 +269,35 @@
     if (typeof App.exitDrawMode === "function") App.exitDrawMode();
   }
 
+  function addLineFromCoords(coords, opts) {
+    if (!coords || coords.length < 2) return;
+    opts = opts || {};
+    if (App.undo && !App.undo.isRestoring()) App.undo.push();
+    var idx = lines.length + 1;
+    var colorIdx = lines.length + (App.routes ? App.routes.length : 0);
+    var color = opts.color ||
+                (App.sectionColors && App.sectionColors.line) ||
+                App.FEATURE_COLORS[colorIdx % App.FEATURE_COLORS.length];
+    var feature = {
+      type: "Feature",
+      properties: {
+        name: opts.name || ("Line " + idx),
+        lineIdx: idx,
+        waypoints: coords.length,
+        color: color
+      },
+      geometry: { type: "LineString", coordinates: coords.slice() }
+    };
+    if (opts.attributes) {
+      feature.properties.attributes = opts.attributes;
+    }
+    lines.push(feature);
+    rebuildLineBuffers(lineBufferRadiusMiles);
+    if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+    if (App.cache && typeof App.cache.save === "function") App.cache.save();
+    App.setStatus(feature.properties.name + " added (" + coords.length + " waypoints)");
+  }
+
   function cancelLineDrawing() {
     if (currentCoords.length === 0 && !previewCoord) return;
     currentCoords.length = 0;
@@ -350,6 +379,7 @@
   App.rebuildLineBuffers = rebuildLineBuffers;
   App.lineBufferUnionPolygon = lineBufferUnionPolygon;
   App.handleLineClick = handleLineClick;
+  App.addLineFromCoords = addLineFromCoords;
   App.duplicateLine = duplicateLine;
   App.removeLine = removeLine;
   App.clearLines = clearLines;

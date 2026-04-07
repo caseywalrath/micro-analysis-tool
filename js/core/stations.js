@@ -80,6 +80,29 @@
     rebuildBuffers(bufferRadiusMiles);
   }
 
+  function addStationWithOpts(lon, lat, opts) {
+    opts = opts || {};
+    if (App.undo && !App.undo.isRestoring()) App.undo.push();
+    var idx = points.length + 1;
+    var feature = {
+      type: "Feature",
+      properties: {
+        name: opts.name || ("Station " + idx),
+        stationIdx: idx,
+        color: ""
+      },
+      geometry: { type: "Point", coordinates: [lon, lat] }
+    };
+    if (opts.attributes) {
+      feature.properties.attributes = opts.attributes;
+    }
+    points.push(feature);
+    rebuildBuffers(bufferRadiusMiles);
+    if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+    if (App.cache && typeof App.cache.save === "function") App.cache.save();
+    App.setStatus(feature.properties.name + " added");
+  }
+
   // Rebuild all buffers from current stations at the given radius.
   // If radius is 0, buffers are cleared (points remain on the map).
   function rebuildBuffers(radiusMiles) {
@@ -169,6 +192,7 @@
   App.stations = points;
   App.buffers = buffers;
   App.addStationPoint = addStationPoint;
+  App.addStationWithOpts = addStationWithOpts;
   App.rebuildBuffers = rebuildBuffers;
   App.moveStation = moveStation;
   App.removeStation = removeStation;
