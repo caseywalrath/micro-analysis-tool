@@ -1,7 +1,7 @@
 // js/core/features.js
-// Right-side feature panel: lists all stations, lines, routes, polygons
+// Right-side feature panel: lists all points, lines, routes, polygons
 // with editable names, per-item color swatches, and per-item delete buttons.
-// Depends on: App.stations (stations.js), App.lines (lines.js),
+// Depends on: App.points (points.js), App.lines (lines.js),
 //             App.polygons (polygons.js).
 // Exports: refreshFeaturePanel, openColorPicker, updateFeatureColor
 
@@ -21,7 +21,7 @@
   var LABEL_GROUP_KEY = "labelGroup";
 
   var TYPE_LABELS_LOCAL = {
-    station: "Point", line: "Line",
+    point: "Point", line: "Line",
     route: "Route", polygon: "Polygon", label: "Label"
   };
 
@@ -29,7 +29,7 @@
 
   // Dark grey type icon SVGs matching toolbar draw icons
   var TYPE_ICON_SVGS = {
-    station: '<svg width="11" height="11" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" fill="#718096"/></svg>',
+    point: '<svg width="11" height="11" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" fill="#718096"/></svg>',
     line:    '<svg width="11" height="11" viewBox="0 0 24 24"><line x1="4" y1="19" x2="20" y2="5" stroke="#718096" stroke-width="3.5" stroke-linecap="round"/></svg>',
     route:   '<svg width="11" height="11" viewBox="0 0 24 24"><path d="M4 18 Q8 6 14 10 Q20 14 20 6" stroke="#718096" stroke-width="2.5" fill="none" stroke-linecap="round"/><circle cx="4" cy="18" r="2.5" fill="#718096"/></svg>',
     polygon: '<svg width="11" height="11" viewBox="0 0 24 24"><polygon points="12,4 21,10 18,20 6,20 3,10" fill="#718096"/></svg>',
@@ -206,9 +206,9 @@
 
   App.updateFeatureColor = function (featureType, featureIndex, newColor) {
     if (App.undo && !App.undo.isRestoring()) App.undo.push();
-    if (featureType === "station") {
-      if (App.stations[featureIndex]) App.stations[featureIndex].properties.color = newColor;
-      if (typeof App.renderStationLayers === "function") App.renderStationLayers();
+    if (featureType === "point") {
+      if (App.points[featureIndex]) App.points[featureIndex].properties.color = newColor;
+      if (typeof App.renderPointLayers === "function") App.renderPointLayers();
     } else if (featureType === "line") {
       App.lines[featureIndex].properties.color = newColor;
       var lrEl = document.getElementById("lineBufferRadius");
@@ -240,7 +240,7 @@
   function getTypeDefaultColor(featureType) {
     var sc = App.sectionColors && App.sectionColors[featureType];
     if (sc) return sc;
-    var defaults = { station: "#2b6cb0", line: "#e53e3e", route: "#319795", polygon: "#b0c4de", label: "#1a202c" };
+    var defaults = { point: "#2b6cb0", line: "#e53e3e", route: "#319795", polygon: "#b0c4de", label: "#1a202c" };
     return defaults[featureType] || "#999999";
   }
 
@@ -277,7 +277,7 @@
       var lrEl = document.getElementById("lineBufferRadius");
       var lr = lrEl ? parseFloat(lrEl.value) : 0.5; if (isNaN(lr)) lr = 0.5;
       if (typeof App.rebuildLineBuffers === "function") App.rebuildLineBuffers(lr);
-    } else if (ft === "station") {
+    } else if (ft === "point") {
       var srEl = document.getElementById("bufferRadius");
       var sr = srEl ? parseFloat(srEl.value) : 0.5; if (isNaN(sr)) sr = 0.5;
       if (typeof App.rebuildBuffers === "function") App.rebuildBuffers(sr);
@@ -327,7 +327,7 @@
   /* ---- Group / ungroup helpers ---- */
 
   function getFeatureByTypeIndex(type, index) {
-    var map = { station: "stations", line: "lines", route: "routes", polygon: "polygons", label: "labels" };
+    var map = { point: "points", line: "lines", route: "routes", polygon: "polygons", label: "labels" };
     var arr = App[map[type]];
     return arr ? arr[index] : null;
   }
@@ -349,7 +349,7 @@
     var prefix = isLabel ? "Label Group " : "Group ";
     var existing = {};
     var allArrays = isLabel ? [App.labels || []] :
-      [App.stations || [], App.lines || [], App.routes || [], App.polygons || []];
+      [App.points || [], App.lines || [], App.routes || [], App.polygons || []];
     allArrays.forEach(function (arr) {
       arr.forEach(function (f) {
         var g = f.properties.attributes && f.properties.attributes[key];
@@ -510,7 +510,7 @@
           options.push({ label: "Attributes", action: function () {
             if (typeof App.openAttrPopup === "function") App.openAttrPopup(ft, fi, feat);
           }});
-          var dupFn = { station: App.duplicateStation, line: App.duplicateLine,
+          var dupFn = { point: App.duplicatePoint, line: App.duplicateLine,
                         route: App.duplicateRoute, polygon: App.duplicatePolygon,
                         label: App.duplicateLabel }[ft];
           if (typeof dupFn === "function") {
@@ -793,7 +793,7 @@
 
   function getRemoveFnForType(type) {
     var map = {
-      station: App.removeStation,
+      point: App.removePoint,
       line:    App.removeLine,
       route:   App.removeRoute,
       polygon: App.removePolygon,
@@ -806,7 +806,7 @@
 
   function collectAllFeatures() {
     var all = [];
-    (App.stations || []).forEach(function (f, i) { all.push({ feature: f, type: "station", index: i }); });
+    (App.points || []).forEach(function (f, i) { all.push({ feature: f, type: "point", index: i }); });
     (App.lines    || []).forEach(function (f, i) { all.push({ feature: f, type: "line",    index: i }); });
     (App.routes   || []).forEach(function (f, i) { all.push({ feature: f, type: "route",   index: i }); });
     (App.polygons || []).forEach(function (f, i) { all.push({ feature: f, type: "polygon", index: i }); });

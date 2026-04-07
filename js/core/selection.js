@@ -7,7 +7,7 @@
 //   _multiSelected — [{ type, index }, ...]  — locked set, toggled by Ctrl/Cmd+click
 //
 // Single-select is a special case: _multiSelected with exactly 1 item.
-// App._selected is derived for backward compat (editing.js station-drag gate):
+// App._selected is derived for backward compat (editing.js point-drag gate):
 //   _multiSelected.length === 1 ? _multiSelected[0] : null
 //
 // Map shows: all _multiSelected items + _hovered (if any)
@@ -20,13 +20,13 @@
 (function () {
   var App = window.App = window.App || {};
 
-  var _hovered = null;        // { type: "station"|"line"|"route"|"polygon"|"label", index: N }
+  var _hovered = null;        // { type: "point"|"line"|"route"|"polygon"|"label", index: N }
   var _multiSelected = [];    // Array of { type, index }
 
   var EMPTY_FC = { type: "FeatureCollection", features: [] };
 
   var TYPE_COLOR = {
-    station: "#2b6cb0",
+    point: "#2b6cb0",
     line:    "#e53e3e",
     route:   "#319795",
     polygon: "#38a169"
@@ -46,7 +46,7 @@
   }
 
   function syncVertexEditing() {
-    if (_multiSelected.length === 1 && _multiSelected[0].type !== "station") {
+    if (_multiSelected.length === 1 && _multiSelected[0].type !== "point") {
       if (typeof App.activateVertexEdit === "function")
         App.activateVertexEdit(_multiSelected[0].type, _multiSelected[0].index);
     } else {
@@ -117,7 +117,7 @@
       }
     });
 
-    // Station point — larger circle with stronger stroke
+    // Point — larger circle with stronger stroke
     map.addLayer({
       id: "hl-circle",
       type: "circle",
@@ -156,8 +156,8 @@
 
     items.forEach(function (active) {
       var feature = null, buffer = null;
-      if (active.type === "station") {
-        feature = App.stations && App.stations[active.index];
+      if (active.type === "point") {
+        feature = App.points && App.points[active.index];
         buffer  = App.buffers  && App.buffers[active.index];
       } else if (active.type === "line") {
         feature = App.lines       && App.lines[active.index];
@@ -229,7 +229,7 @@
   }
 
   function getFeatureFromApp(type, index) {
-    if (type === "station") return App.stations && App.stations[index];
+    if (type === "point") return App.points && App.points[index];
     if (type === "line")    return App.lines    && App.lines[index];
     if (type === "route")   return App.routes   && App.routes[index];
     if (type === "polygon") return App.polygons && App.polygons[index];

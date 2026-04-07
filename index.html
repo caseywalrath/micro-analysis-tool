@@ -118,7 +118,7 @@
           </div>
         </div>
         <div id="draw-tools">
-          <button class="tool-btn" data-mode="station" title="Point">
+          <button class="tool-btn" data-mode="point" title="Point">
             <svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" fill="#3182ce"/></svg>
           </button>
           <button class="tool-btn" data-mode="line" title="Line">
@@ -200,7 +200,7 @@
                 <span class="fp-buffer-label">Points</span>
                 <input id="bufferRadius" type="number" min="0" step="0.1" value="0.5" class="fp-radius-input" />
                 <span class="fp-radius-unit">mi</span>
-                <input id="stationLineWidth" type="number" min="1" max="5" step="0.1" value="1" class="fp-radius-input" />
+                <input id="pointLineWidth" type="number" min="1" max="5" step="0.1" value="1" class="fp-radius-input" />
                 <span class="fp-radius-unit">×</span>
               </div>
               <div class="fp-buffer-row">
@@ -253,7 +253,7 @@
     <script src="js/core/sidebar.js"></script>
     <script src="js/core/map.js"></script>
     <script src="js/core/road-network.js"></script>
-    <script src="js/core/stations.js"></script>
+    <script src="js/core/points.js"></script>
     <script src="js/core/lines.js"></script>
     <script src="js/core/routes.js"></script>
     <script src="js/core/polygons.js"></script>

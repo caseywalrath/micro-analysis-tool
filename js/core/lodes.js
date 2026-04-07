@@ -1,7 +1,7 @@
 // js/core/lodes.js
 // LODES file download/upload/parse and block-level employment computation.
-// Depends on: App.map (map.js), App.bboxStringFromFeature (stations.js),
-//             App.bufferUnionPolygon (stations.js), pako (CDN), turf (CDN).
+// Depends on: App.map (map.js), App.bboxStringFromFeature (points.js),
+//             App.bufferUnionPolygon (points.js), pako (CDN), turf (CDN).
 // Exports: STATE_FIPS_TO_ABBR, getStateFromMapCenter, startDownload, lodesData,
 //          lodesFileName, setLodesLoadedUI, parseLodesFromUploadedFile,
 //          fetchBlocksInternalPointsInUnion, computeEmploymentServedOnly

@@ -21,7 +21,7 @@
   App.POLYGON_DEFAULT_COLOR = "#b0c4de";
 
   // Per-section color overrides (null = use sequential or built-in default)
-  App.sectionColors = { station: null, line: null, route: null, polygon: null };
+  App.sectionColors = { point: null, line: null, route: null, polygon: null };
 
   // --- Status ---
 

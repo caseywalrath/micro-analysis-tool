@@ -186,7 +186,7 @@
 
   function firstUserLayer() {
     var map = App.map;
-    var candidates = ["stations-layer", "lines-layer", "routes-layer", "polygons-fill"];
+    var candidates = ["points-layer", "lines-layer", "routes-layer", "polygons-fill"];
     for (var i = 0; i < candidates.length; i++) {
       if (map.getLayer(candidates[i])) return candidates[i];
     }
@@ -340,15 +340,15 @@
     }
   }
 
-  function copyStopToStation(props, lngLat) {
+  function copyStopToPoint(props, lngLat) {
     var lon = parseFloat(props.stop_lon) || lngLat.lng;
     var lat = parseFloat(props.stop_lat) || lngLat.lat;
     var name = props.stop_name || props.stop_code || props.stop_id || "Point";
     var attrs = {};
     if (props.stop_id) attrs.stopId = String(props.stop_id);
 
-    if (typeof App.addStationWithOpts === "function") {
-      App.addStationWithOpts(lon, lat, {
+    if (typeof App.addPointWithOpts === "function") {
+      App.addPointWithOpts(lon, lat, {
         name: name,
         attributes: attrs
       });
@@ -415,7 +415,7 @@
         if (isStop) {
           options.push({
             label: "Copy As Point",
-            action: function () { copyStopToStation(props, lngLat); }
+            action: function () { copyStopToPoint(props, lngLat); }
           });
         } else {
           options.push({

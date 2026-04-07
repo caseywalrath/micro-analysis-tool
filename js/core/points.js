@@ -1,8 +1,8 @@
-// js/core/stations.js
-// Station point + buffer management, map layer rendering.
+// js/core/points.js
+// Point feature + buffer management, map layer rendering.
 // Depends on: App.map (map.js), turf (CDN).
-// Exports: stations, buffers, addStationPoint, clearStations, undoLastStation,
-//          renderStationLayers, bufferUnionPolygon, getUnion, bboxStringFromFeature
+// Exports: points, buffers, addPoint, clearPoints, undoLastPoint,
+//          renderPointLayers, bufferUnionPolygon, getUnion, bboxStringFromFeature
 
 (function () {
   var App = window.App = window.App || {};
@@ -18,11 +18,11 @@
     if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
   }
 
-  function renderStationLayers() {
+  function renderPointLayers() {
     var map = App.map;
-    var stationColor = (App.sectionColors && App.sectionColors.station) || "#2b6cb0";
-    var ptsSrc = "stations";
-    var ptsLayer = "stations-layer";
+    var pointColor = (App.sectionColors && App.sectionColors.point) || "#2b6cb0";
+    var ptsSrc = "points-src";
+    var ptsLayer = "points-layer";
     var bufSrc = "buffers";
     var bufFillLayer = "buffers-fill";
     var bufLineLayer = "buffers-line";
@@ -33,21 +33,21 @@
         id: bufFillLayer,
         type: "fill",
         source: bufSrc,
-        paint: { "fill-color": stationColor, "fill-opacity": 0.08 }
+        paint: { "fill-color": pointColor, "fill-opacity": 0.08 }
       });
       map.addLayer({
         id: bufLineLayer,
         type: "line",
         source: bufSrc,
-        paint: { "line-color": stationColor, "line-width": 2, "line-opacity": 0.4 }
+        paint: { "line-color": pointColor, "line-width": 2, "line-opacity": 0.4 }
       });
     } else {
       map.getSource(bufSrc).setData(buffersGeoJSON());
-      map.setPaintProperty(bufFillLayer, "fill-color", stationColor);
-      map.setPaintProperty(bufLineLayer, "line-color", stationColor);
+      map.setPaintProperty(bufFillLayer, "fill-color", pointColor);
+      map.setPaintProperty(bufLineLayer, "line-color", pointColor);
     }
 
-    var stationColorExpr = ["case", ["all", ["has", "color"], ["!=", ["get", "color"], ""]], ["get", "color"], stationColor];
+    var pointColorExpr = ["case", ["all", ["has", "color"], ["!=", ["get", "color"], ""]], ["get", "color"], pointColor];
     if (!map.getSource(ptsSrc)) {
       map.addSource(ptsSrc, { type: "geojson", data: pointsGeoJSON() });
       map.addLayer({
@@ -57,30 +57,30 @@
         paint: {
           "circle-radius": 6,
           "circle-stroke-width": 2,
-          "circle-color": stationColorExpr,
+          "circle-color": pointColorExpr,
           "circle-stroke-color": "#ffffff"
         }
       });
     } else {
       map.getSource(ptsSrc).setData(pointsGeoJSON());
-      map.setPaintProperty(ptsLayer, "circle-color", stationColorExpr);
+      map.setPaintProperty(ptsLayer, "circle-color", pointColorExpr);
     }
 
     updateCoordsPanel();
   }
 
-  function addStationPoint(lon, lat) {
+  function addPoint(lon, lat) {
     if (App.undo && !App.undo.isRestoring()) App.undo.push();
     var idx = points.length + 1;
     points.push({
       type: "Feature",
-      properties: { name: "Point " + idx, stationIdx: idx, color: "" },
+      properties: { name: "Point " + idx, pointIdx: idx, color: "" },
       geometry: { type: "Point", coordinates: [lon, lat] }
     });
     rebuildBuffers(bufferRadiusMiles);
   }
 
-  function addStationWithOpts(lon, lat, opts) {
+  function addPointWithOpts(lon, lat, opts) {
     opts = opts || {};
     if (App.undo && !App.undo.isRestoring()) App.undo.push();
     var idx = points.length + 1;
@@ -88,7 +88,7 @@
       type: "Feature",
       properties: {
         name: opts.name || ("Point " + idx),
-        stationIdx: idx,
+        pointIdx: idx,
         color: ""
       },
       geometry: { type: "Point", coordinates: [lon, lat] }
@@ -103,7 +103,7 @@
     App.setStatus(feature.properties.name + " added");
   }
 
-  // Rebuild all buffers from current stations at the given radius.
+  // Rebuild all buffers from current points at the given radius.
   // If radius is 0, buffers are cleared (points remain on the map).
   function rebuildBuffers(radiusMiles) {
     if (typeof App.clearCensusOverlay === "function") App.clearCensusOverlay();
@@ -118,11 +118,11 @@
         buffers.push({
           type: circle.type,
           geometry: circle.geometry,
-          properties: { stationIdx: points[i].properties.stationIdx }
+          properties: { pointIdx: points[i].properties.pointIdx }
         });
       }
     }
-    renderStationLayers();
+    renderPointLayers();
   }
 
   function bufferUnionPolygon() {
@@ -134,35 +134,33 @@
 
   function bboxStringFromFeature(feat) { return turf.bbox(feat).join(","); }
 
-  function moveStation(index, lng, lat) {
+  function movePoint(index, lng, lat) {
     if (index < 0 || index >= points.length) return;
     if (App.undo && !App.undo.isRestoring()) App.undo.push();
     points[index].geometry.coordinates = [lng, lat];
     rebuildBuffers(bufferRadiusMiles);
   }
 
-  function removeStation(index) {
+  function removePoint(index) {
     if (index < 0 || index >= points.length) return;
     if (App.undo && !App.undo.isRestoring()) App.undo.push();
     points.splice(index, 1);
     rebuildBuffers(bufferRadiusMiles);
   }
 
-  function clearStations() {
+  function clearPoints() {
     points.length = 0;
     buffers.length = 0;
-    renderStationLayers();
+    renderPointLayers();
   }
 
-  function undoLastStation() {
+  function undoLastPoint() {
     if (points.length === 0) return;
     points.pop();
     rebuildBuffers(bufferRadiusMiles);
   }
 
-  // --- Expose on App namespace ---
-
-  function duplicateStation(index) {
+  function duplicatePoint(index) {
     if (index < 0 || index >= points.length) return;
     if (App.undo && !App.undo.isRestoring()) App.undo.push();
     var src = points[index];
@@ -171,7 +169,7 @@
       type: "Feature",
       properties: {
         name: "Point " + idx,
-        stationIdx: idx,
+        pointIdx: idx,
         color: src.properties.color || "",
         hidden: false
       },
@@ -189,17 +187,19 @@
     if (App.cache && typeof App.cache.save === "function") App.cache.save();
   }
 
-  App.stations = points;
+  /* ---- Expose on App namespace ---- */
+
+  App.points = points;
   App.buffers = buffers;
-  App.addStationPoint = addStationPoint;
-  App.addStationWithOpts = addStationWithOpts;
+  App.addPoint = addPoint;
+  App.addPointWithOpts = addPointWithOpts;
   App.rebuildBuffers = rebuildBuffers;
-  App.moveStation = moveStation;
-  App.removeStation = removeStation;
-  App.clearStations = clearStations;
-  App.duplicateStation = duplicateStation;
-  App.undoLastStation = undoLastStation;
-  App.renderStationLayers = renderStationLayers;
+  App.movePoint = movePoint;
+  App.removePoint = removePoint;
+  App.clearPoints = clearPoints;
+  App.duplicatePoint = duplicatePoint;
+  App.undoLastPoint = undoLastPoint;
+  App.renderPointLayers = renderPointLayers;
   App.bufferUnionPolygon = bufferUnionPolygon;
   App.bboxStringFromFeature = bboxStringFromFeature;
   App.getUnion = bufferUnionPolygon;

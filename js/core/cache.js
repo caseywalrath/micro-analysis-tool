@@ -1,7 +1,7 @@
 // js/core/cache.js
 // Session cache: save/restore/reset via localStorage.
 // JSON import/export via file download/upload.
-// Depends on: App.stations, App.lines, App.routes, App.polygons,
+// Depends on: App.points, App.lines, App.routes, App.polygons,
 //             App.rebuildBuffers, App.rebuildLineBuffers, App.rebuildRouteBuffers,
 //             App.renderPolygonLayers, App.clearRoutes, App.refreshFeaturePanel.
 // Exports: App.cache
@@ -10,7 +10,23 @@
   var App = window.App = window.App || {};
 
   var STORAGE_KEY = "mat-session";
-  var SCHEMA_VERSION = 1;
+  var SCHEMA_VERSION = 2;
+
+  // ---- Schema migration ----
+  function migrateV1toV2(state) {
+    if (state.stations) { state.points = state.stations; delete state.stations; }
+    if (state.stationLineWidth != null) { state.pointLineWidth = state.stationLineWidth; delete state.stationLineWidth; }
+    if (Array.isArray(state.points)) {
+      state.points.forEach(function (f) {
+        if (f.properties && f.properties.stationIdx != null) {
+          f.properties.pointIdx = f.properties.stationIdx;
+          delete f.properties.stationIdx;
+        }
+      });
+    }
+    state.version = 2;
+    return state;
+  }
   var _saveTimer = null;
   var DEBOUNCE_MS = 500;
   var _viewOnly = false;
@@ -30,7 +46,7 @@
   function collectState(mode) {
     var state = {
       version: SCHEMA_VERSION,
-      stations: App.stations.slice(),
+      points: App.points.slice(),
       lines: App.lines.slice(),
       routes: App.routes.slice(),
       polygons: App.polygons.slice(),
@@ -38,7 +54,7 @@
       bufferRadius: parseFloat(document.getElementById("bufferRadius").value) || 0.5,
       lineBufferRadius: parseFloat(document.getElementById("lineBufferRadius").value) || 0.5,
       routeBufferRadius: parseFloat(document.getElementById("routeBufferRadius").value) || 0.5,
-      stationLineWidth:  parseFloat(document.getElementById("stationLineWidth").value)  || 1,
+      pointLineWidth:  parseFloat(document.getElementById("pointLineWidth").value)  || 1,
       lineLineWidth:     parseFloat(document.getElementById("lineLineWidth").value)     || 1,
       routeLineWidth:    parseFloat(document.getElementById("routeLineWidth").value)    || 1,
       polygonLineWidth:  parseFloat(document.getElementById("polygonLineWidth").value)  || 1,
@@ -74,15 +90,15 @@
 
   function applyState(state) {
     // 1. Clear all feature arrays unconditionally (in-place to preserve closure refs)
-    App.stations.length = 0;
+    App.points.length = 0;
     App.lines.length = 0;
     App.routes.length = 0;
     App.polygons.length = 0;
     if (App.labels) App.labels.length = 0;
 
     // 2. Push features
-    if (Array.isArray(state.stations)) {
-      for (var i = 0; i < state.stations.length; i++) App.stations.push(state.stations[i]);
+    if (Array.isArray(state.points)) {
+      for (var i = 0; i < state.points.length; i++) App.points.push(state.points[i]);
     }
     if (Array.isArray(state.lines)) {
       for (var j = 0; j < state.lines.length; j++) App.lines.push(state.lines[j]);
@@ -112,12 +128,12 @@
     }
 
     // 3b. Restore line width DOM inputs and apply paint properties
-    var stWEl = document.getElementById("stationLineWidth");
-    if (stWEl && state.stationLineWidth != null) {
-      stWEl.value = state.stationLineWidth;
-      var sw = state.stationLineWidth;
-      App.map.setPaintProperty("stations-layer", "circle-radius", 6 * sw);
-      App.map.setPaintProperty("stations-layer", "circle-stroke-width", 2 * sw);
+    var stWEl = document.getElementById("pointLineWidth");
+    if (stWEl && state.pointLineWidth != null) {
+      stWEl.value = state.pointLineWidth;
+      var sw = state.pointLineWidth;
+      App.map.setPaintProperty("points-layer", "circle-radius", 6 * sw);
+      App.map.setPaintProperty("points-layer", "circle-stroke-width", 2 * sw);
     }
     var liWEl = document.getElementById("lineLineWidth");
     if (liWEl && state.lineLineWidth != null) {
@@ -142,10 +158,10 @@
     }
 
     // 4. Rebuild derived buffers and re-render map layers
-    var stationRadius = parseFloat(bufRadEl ? bufRadEl.value : "0.5") || 0.5;
+    var pointRadius = parseFloat(bufRadEl ? bufRadEl.value : "0.5") || 0.5;
     var lineRadius = parseFloat(lineBufRadEl ? lineBufRadEl.value : "0.5") || 0.5;
     var routeRadius = parseFloat(routeBufRadEl ? routeBufRadEl.value : "0.5") || 0.5;
-    App.rebuildBuffers(stationRadius);
+    App.rebuildBuffers(pointRadius);
     App.rebuildLineBuffers(lineRadius);
     App.rebuildRouteBuffers(routeRadius);
     App.renderPolygonLayers();
@@ -237,14 +253,16 @@
       if (!raw) return false;
 
       var state = JSON.parse(raw);
-      if (!state || state.version !== SCHEMA_VERSION) {
+      if (!state) return false;
+      if (state.version === 1) state = migrateV1toV2(state);
+      if (state.version !== SCHEMA_VERSION) {
         console.warn("Cache: schema version mismatch, ignoring cached data.");
         return false;
       }
 
       applyState(state);
 
-      return (App.stations.length > 0 || App.lines.length > 0 ||
+      return (App.points.length > 0 || App.lines.length > 0 ||
               App.routes.length > 0 || App.polygons.length > 0 ||
               (App.labels && App.labels.length > 0));
     } catch (e) {
@@ -270,7 +288,7 @@
 
     // 2. Clear all features
     if (typeof App.exitEditMode === "function") App.exitEditMode();
-    App.clearStations();
+    App.clearPoints();
     App.clearLines();
     App.clearRoutes();
     App.clearPolygons();
@@ -318,12 +336,13 @@
     if (!state || typeof state !== "object") {
       return "File does not contain a valid JSON object.";
     }
+    if (state.version === 1) migrateV1toV2(state);
     if (state.version !== SCHEMA_VERSION) {
       return "Unsupported file version (expected " + SCHEMA_VERSION +
              ", got " + (state.version || "none") + ").";
     }
-    if (state.stations != null && !Array.isArray(state.stations)) {
-      return "Invalid stations data.";
+    if (state.points != null && !Array.isArray(state.points)) {
+      return "Invalid points data.";
     }
     if (state.lines != null && !Array.isArray(state.lines)) {
       return "Invalid lines data.";
@@ -382,7 +401,7 @@
         }
 
         // Confirm if replacing existing features
-        var hasExisting = (App.stations.length > 0 || App.lines.length > 0 ||
+        var hasExisting = (App.points.length > 0 || App.lines.length > 0 ||
                            App.routes.length > 0 || App.polygons.length > 0);
         if (hasExisting) {
           if (!confirm("Import will replace all current features and settings. Continue?")) {
@@ -398,7 +417,7 @@
 
         if (typeof App.notifyProject === "function") App.notifyProject();
 
-        var nFeatures = App.stations.length + App.lines.length + App.routes.length + App.polygons.length + (App.labels ? App.labels.length : 0);
+        var nFeatures = App.points.length + App.lines.length + App.routes.length + App.polygons.length + (App.labels ? App.labels.length : 0);
         App.setStatus("Imported " + nFeatures + " feature" + (nFeatures !== 1 ? "s" : ""));
       } catch (parseErr) {
         App.setStatus("Import failed");
@@ -441,7 +460,7 @@
       var state = {
         version: SCHEMA_VERSION,
         exportType: "features",
-        stations: App.stations.slice(),
+        points: App.points.slice(),
         lines: App.lines.slice(),
         routes: App.routes.slice(),
         polygons: App.polygons.slice(),
@@ -466,7 +485,7 @@
   var CSV_ATTR_COLS = [
     "routeGroup", "direction", "mode", "routeId", "frequency",
     "spanStart", "spanEnd", "daysOfService", "avgSpeed",
-    "lineMode", "notes", "stopId", "stationGroup", "lineGroup",
+    "lineMode", "notes", "stopId", "pointGroup", "lineGroup",
     "polygonGroup", "labelGroup"
   ];
 
@@ -503,7 +522,7 @@
   function exportCSV() {
     try {
       var rows = [];
-      for (var si = 0; si < App.stations.length; si++) rows.push(_featureToCSVRow(App.stations[si], "station"));
+      for (var si = 0; si < App.points.length; si++) rows.push(_featureToCSVRow(App.points[si], "point"));
       for (var li = 0; li < App.lines.length; li++) rows.push(_featureToCSVRow(App.lines[li], "line"));
       for (var ri = 0; ri < App.routes.length; ri++) rows.push(_featureToCSVRow(App.routes[ri], "route"));
       for (var pi = 0; pi < App.polygons.length; pi++) rows.push(_featureToCSVRow(App.polygons[pi], "polygon"));
@@ -601,7 +620,7 @@
       kml += "  <name>Micro Analysis Tool Export</name>\n";
 
       var groups = [
-        { name: "Stations", items: App.stations, type: "station" },
+        { name: "Points", items: App.points, type: "point" },
         { name: "Lines", items: App.lines, type: "line" },
         { name: "Routes", items: App.routes, type: "route" },
         { name: "Polygons", items: App.polygons, type: "polygon" }
@@ -912,11 +931,11 @@
       var points = [], polylines = [], polys = [];
       var pointProps = [], polylineProps = [], polyProps = [];
 
-      for (var si = 0; si < App.stations.length; si++) {
-        var s = App.stations[si];
+      for (var si = 0; si < App.points.length; si++) {
+        var s = App.points[si];
         if (!s.geometry) continue;
         points.push({ geometry: s.geometry, properties: s.properties });
-        pointProps.push(_featureProps(s, "station"));
+        pointProps.push(_featureProps(s, "point"));
       }
       for (var li = 0; li < App.lines.length; li++) {
         var l = App.lines[li];
@@ -947,10 +966,10 @@
       // Write each geometry-type layer as a set of .shp/.shx/.dbf/.prj files
       if (points.length) {
         var ptFiles = _writeSHPSHX(points, SHP_POINT);
-        zip.file("stations.shp", ptFiles.shp);
-        zip.file("stations.shx", ptFiles.shx);
-        zip.file("stations.dbf", _writeDBF(pointProps));
-        zip.file("stations.prj", SHP_PRJ_WGS84);
+        zip.file("points.shp", ptFiles.shp);
+        zip.file("points.shx", ptFiles.shx);
+        zip.file("points.dbf", _writeDBF(pointProps));
+        zip.file("points.prj", SHP_PRJ_WGS84);
       }
       if (polylines.length) {
         var lnFiles = _writeSHPSHX(polylines, SHP_POLYLINE);
@@ -1002,7 +1021,7 @@
   }
 
   function _confirmReplace() {
-    var hasExisting = (App.stations.length > 0 || App.lines.length > 0 ||
+    var hasExisting = (App.points.length > 0 || App.lines.length > 0 ||
                        App.routes.length > 0 || App.polygons.length > 0);
     if (hasExisting) {
       return confirm("Import will replace all current features. Continue?");
@@ -1010,13 +1029,13 @@
     return true;
   }
 
-  function _applyImportedFeatures(stations, lines, polygons, labels) {
+  function _applyImportedFeatures(pts, lines, polygons, labels) {
     if (typeof App.exitEditMode === "function") App.exitEditMode();
 
     // Build minimal state for applyState
     var state = {
       version: SCHEMA_VERSION,
-      stations: stations || [],
+      points: pts || [],
       lines: lines || [],
       routes: [],
       polygons: polygons || [],
@@ -1029,7 +1048,7 @@
     save();
     if (typeof App.notifyProject === "function") App.notifyProject();
 
-    var n = state.stations.length + state.lines.length + state.polygons.length + state.labels.length;
+    var n = state.points.length + state.lines.length + state.polygons.length + state.labels.length;
     App.setStatus("Imported " + n + " feature" + (n !== 1 ? "s" : ""));
   }
 
@@ -1074,7 +1093,7 @@
 
         if (!_confirmReplace()) return;
 
-        var stations = [], lineFeats = [], polygonFeats = [], labelFeats = [];
+        var ptFeats = [], lineFeats = [], polygonFeats = [], labelFeats = [];
         var errors = 0;
 
         for (var i = 0; i < rows.length; i++) {
@@ -1117,9 +1136,9 @@
           var gType = geomType || "Point";
           var feat = _makeFeature(gType, coords, name, color, attrs);
 
-          if (gType === "Point" || typeName === "station") {
+          if (gType === "Point" || typeName === "point" || typeName === "station") {
             feat.geometry.type = "Point";
-            stations.push(feat);
+            ptFeats.push(feat);
           } else if (gType === "LineString" || typeName === "line" || typeName === "route") {
             feat.geometry.type = "LineString";
             lineFeats.push(feat);
@@ -1132,7 +1151,7 @@
             // Fallback: point if coords is simple pair, else line
             if (typeof coords[0] === "number" && !Array.isArray(coords[0])) {
               feat.geometry.type = "Point";
-              stations.push(feat);
+              ptFeats.push(feat);
             } else {
               feat.geometry.type = "LineString";
               lineFeats.push(feat);
@@ -1140,13 +1159,13 @@
           }
         }
 
-        var total = stations.length + lineFeats.length + polygonFeats.length + labelFeats.length;
+        var total = ptFeats.length + lineFeats.length + polygonFeats.length + labelFeats.length;
         if (total === 0) {
           alert("No valid features found in CSV." + (errors > 0 ? " (" + errors + " rows had errors)" : ""));
           return;
         }
 
-        _applyImportedFeatures(stations, lineFeats, polygonFeats, labelFeats);
+        _applyImportedFeatures(ptFeats, lineFeats, polygonFeats, labelFeats);
         if (errors > 0) App.setStatus("Imported " + total + " features (" + errors + " rows skipped)");
       } catch (err) {
         App.setStatus("CSV import failed");
@@ -1187,7 +1206,7 @@
 
   function _processKmlDoc(doc) {
     var placemarks = doc.getElementsByTagName("Placemark");
-    var stations = [], lineFeats = [], polygonFeats = [];
+    var ptFeats = [], lineFeats = [], polygonFeats = [];
 
     for (var i = 0; i < placemarks.length; i++) {
       var pm = placemarks[i];
@@ -1226,7 +1245,7 @@
         if (ptCoordEl) {
           var pts = _parseKmlCoords(ptCoordEl.textContent);
           if (pts.length > 0) {
-            stations.push(_makeFeature("Point", pts[0], name, color, attrs));
+            ptFeats.push(_makeFeature("Point", pts[0], name, color, attrs));
           }
         }
       } else if (lsEl) {
@@ -1255,7 +1274,7 @@
       }
     }
 
-    return { stations: stations, lines: lineFeats, polygons: polygonFeats };
+    return { points: ptFeats, lines: lineFeats, polygons: polygonFeats };
   }
 
   function importKML(file) {
@@ -1313,7 +1332,7 @@
       }
 
       var result = _processKmlDoc(doc);
-      var total = result.stations.length + result.lines.length + result.polygons.length;
+      var total = result.points.length + result.lines.length + result.polygons.length;
 
       if (total === 0) {
         alert("No valid features found in KML file.");
@@ -1321,7 +1340,7 @@
       }
 
       if (!_confirmReplace()) return;
-      _applyImportedFeatures(result.stations, result.lines, result.polygons, []);
+      _applyImportedFeatures(result.points, result.lines, result.polygons, []);
     } catch (err) {
       App.setStatus("KML import failed");
       alert("KML import failed: " + (err.message || err));
@@ -1412,7 +1431,7 @@
 
       if (!_confirmReplace()) return;
 
-      var stations = [], lineFeats = [], polygonFeats = [];
+      var ptFeats = [], lineFeats = [], polygonFeats = [];
 
       for (var i = 0; i < geojson.features.length; i++) {
         var feat = geojson.features[i];
@@ -1436,10 +1455,10 @@
         if (!geom) continue;
 
         if (geom.type === "Point") {
-          stations.push(_makeFeature("Point", geom.coordinates, String(name), "", attrs));
+          ptFeats.push(_makeFeature("Point", geom.coordinates, String(name), "", attrs));
         } else if (geom.type === "MultiPoint") {
           for (var mp = 0; mp < geom.coordinates.length; mp++) {
-            stations.push(_makeFeature("Point", geom.coordinates[mp], String(name) + " " + (mp + 1), "", attrs));
+            ptFeats.push(_makeFeature("Point", geom.coordinates[mp], String(name) + " " + (mp + 1), "", attrs));
           }
         } else if (geom.type === "LineString") {
           lineFeats.push(_makeFeature("LineString", geom.coordinates, String(name), "", attrs));
@@ -1456,13 +1475,13 @@
         }
       }
 
-      var total = stations.length + lineFeats.length + polygonFeats.length;
+      var total = ptFeats.length + lineFeats.length + polygonFeats.length;
       if (total === 0) {
         alert("No supported geometry types found in shapefile.");
         return;
       }
 
-      _applyImportedFeatures(stations, lineFeats, polygonFeats, []);
+      _applyImportedFeatures(ptFeats, lineFeats, polygonFeats, []);
     }).catch(function (err) {
       alert("Shapefile import failed: " + (err.message || err));
     });

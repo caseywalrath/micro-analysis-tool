@@ -19,7 +19,7 @@
   var TYPE_LABELS = {
     route:   "Route",
     line:    "Line",
-    station: "Point",
+    point: "Point",
     polygon: "Polygon",
     label:   "Label"
   };
@@ -43,7 +43,7 @@
       { key: "lineMode",  label: "Mode",  type: "select", options: ["Light Rail","Commuter Rail","Streetcar","Bus","BRT"] },
       { key: "notes",     label: "Notes", type: "text",   placeholder: "" }
     ],
-    station: [
+    point: [
       { key: "group",            label: "Group",    type: "text", placeholder: "e.g. North Corridor", groupPicker: true },
       { key: "stopId",           label: "Stop ID",       type: "text", placeholder: "e.g. 1042" },
       { key: "associatedRoutes", label: "Routes"                                                 }
@@ -255,7 +255,7 @@
     var val = attrs[field.key];
     inp.value = (val !== undefined && val !== null) ? val : "";
 
-    var TYPE_TO_ARRAY = { station: "stations", line: "lines", polygon: "polygons" };
+    var TYPE_TO_ARRAY = { point: "points", line: "lines", polygon: "polygons" };
     var dlId = "fp-" + featureType + "-group-datalist";
     var dl = document.getElementById(dlId);
     if (!dl) {
@@ -393,7 +393,7 @@
     }
     dl.innerHTML = "";
     var seen = {};
-    var allArrays = [App.stations || [], App.lines || [], App.routes || [], App.polygons || []];
+    var allArrays = [App.points || [], App.lines || [], App.routes || [], App.polygons || []];
     allArrays.forEach(function (arr) {
       arr.forEach(function (f) {
         var g = f.properties.attributes && f.properties.attributes.group;
@@ -426,7 +426,7 @@
           // Trigger re-render for this feature type
           if (typeof App.updateFeatureColor === "function") {
             // Find this feature's index in its array
-            var arrMap = { station: App.stations, line: App.lines, route: App.routes, polygon: App.polygons };
+            var arrMap = { point: App.points, line: App.lines, route: App.routes, polygon: App.polygons };
             var arr = arrMap[featureType] || [];
             var idx = arr.indexOf(feature);
             if (idx >= 0) App.updateFeatureColor(featureType, idx, existingColor);

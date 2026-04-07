@@ -14,8 +14,8 @@
   var _lastResult = null;
   var _weights = TPI.getDefaultWeights();
   var _pendingWeights = null;     // temporary copy while Adjust Weights modal is open
-  var _tpiFeatureFilter = null;   // { routeIndices, lineIndices, stationIndices, polygonIndices } or null (= all)
-  var _selectedCorridor = "all";  // "all" | "route:N" | "line:N" | "station:N" | "polygon:N"
+  var _tpiFeatureFilter = null;   // { routeIndices, lineIndices, pointIndices, polygonIndices } or null (= all)
+  var _selectedCorridor = "all";  // "all" | "route:N" | "line:N" | "point:N" | "polygon:N"
   var _stale = false;
   var _running = false;
   var _rescoreTimer = null;
@@ -44,7 +44,7 @@
     var polys = [];
     var routeBuffers = App.routeBuffers || [];
     var lineBuffers  = App.lineBuffers  || [];
-    var stationBufs  = App.buffers      || [];
+    var pointBufs    = App.buffers      || [];
     var polygons     = App.polygons     || [];
     var i, idx;
 
@@ -60,10 +60,10 @@
         if (lineBuffers[idx]) polys.push(lineBuffers[idx]);
       }
     }
-    if (filter.stationIndices) {
-      for (i = 0; i < filter.stationIndices.length; i++) {
-        idx = filter.stationIndices[i];
-        if (stationBufs[idx]) polys.push(stationBufs[idx]);
+    if (filter.pointIndices) {
+      for (i = 0; i < filter.pointIndices.length; i++) {
+        idx = filter.pointIndices[i];
+        if (pointBufs[idx]) polys.push(pointBufs[idx]);
       }
     }
     if (filter.polygonIndices) {
@@ -85,7 +85,7 @@
     if (!el) return null;
     var boxes = el.querySelectorAll("input[type=checkbox]");
     if (!boxes.length) return null;
-    var routeIndices = [], lineIndices = [], stationIndices = [], polygonIndices = [];
+    var routeIndices = [], lineIndices = [], pointIndices = [], polygonIndices = [];
     var allChecked = true;
     for (var i = 0; i < boxes.length; i++) {
       var cb = boxes[i];
@@ -94,7 +94,7 @@
       if (cb.checked) {
         if      (type === "route")   routeIndices.push(idx);
         else if (type === "line")    lineIndices.push(idx);
-        else if (type === "station") stationIndices.push(idx);
+        else if (type === "point")   pointIndices.push(idx);
         else if (type === "polygon") polygonIndices.push(idx);
       } else {
         allChecked = false;
@@ -102,7 +102,7 @@
     }
     if (allChecked) return null; // no filter needed
     return { routeIndices: routeIndices, lineIndices: lineIndices,
-             stationIndices: stationIndices, polygonIndices: polygonIndices };
+             pointIndices: pointIndices, polygonIndices: polygonIndices };
   }
 
   // ---- Feature checklist ----
@@ -153,13 +153,13 @@
 
     var routes   = App.routes   || [];
     var lines    = App.lines    || [];
-    var stations = App.stations || [];
+    var pts      = App.points   || [];
     var polys    = App.polygons || [];
 
-    for (var ri = 0; ri < routes.length;   ri++) addRow("route",   ri, (routes[ri].properties   && routes[ri].properties.name)   || ("Route "   + (ri + 1)), "R");
-    for (var li = 0; li < lines.length;    li++) addRow("line",    li, (lines[li].properties    && lines[li].properties.name)    || ("Line "    + (li + 1)), "L");
-    for (var si = 0; si < stations.length; si++) addRow("station", si, (stations[si].properties && stations[si].properties.name) || ("Point " + (si + 1)), "S");
-    for (var gi = 0; gi < polys.length;    gi++) addRow("polygon", gi, (polys[gi].properties    && polys[gi].properties.name)    || ("Polygon " + (gi + 1)), "P");
+    for (var ri = 0; ri < routes.length; ri++) addRow("route",   ri, (routes[ri].properties && routes[ri].properties.name) || ("Route "   + (ri + 1)), "R");
+    for (var li = 0; li < lines.length;  li++) addRow("line",    li, (lines[li].properties  && lines[li].properties.name)  || ("Line "    + (li + 1)), "L");
+    for (var si = 0; si < pts.length;    si++) addRow("point",   si, (pts[si].properties    && pts[si].properties.name)    || ("Point " + (si + 1)), "S");
+    for (var gi = 0; gi < polys.length;  gi++) addRow("polygon", gi, (polys[gi].properties  && polys[gi].properties.name)  || ("Polygon " + (gi + 1)), "P");
 
     if (!hasFeatures) {
       el.innerHTML = '<div style="padding:6px;color:var(--muted);font-size:12px;">No features drawn.</div>';
@@ -178,7 +178,7 @@
 
     var routes   = App.routes   || [];
     var lines    = App.lines    || [];
-    var stations = App.stations || [];
+    var pts      = App.points   || [];
     var polys    = App.polygons || [];
     var opt;
 
@@ -194,10 +194,10 @@
       opt.textContent = (lines[li].properties && lines[li].properties.name) || ("Line " + (li + 1));
       sel.appendChild(opt);
     }
-    for (var si = 0; si < stations.length; si++) {
+    for (var si = 0; si < pts.length; si++) {
       opt = document.createElement("option");
-      opt.value = "station:" + si;
-      opt.textContent = (stations[si].properties && stations[si].properties.name) || ("Point " + (si + 1));
+      opt.value = "point:" + si;
+      opt.textContent = (pts[si].properties && pts[si].properties.name) || ("Point " + (si + 1));
       sel.appendChild(opt);
     }
     for (var gi = 0; gi < polys.length; gi++) {
@@ -226,7 +226,7 @@
     var bufferPoly;
     if      (type === "route")   bufferPoly = (App.routeBuffers || [])[idx];
     else if (type === "line")    bufferPoly = (App.lineBuffers  || [])[idx];
-    else if (type === "station") bufferPoly = (App.buffers      || [])[idx];
+    else if (type === "point")   bufferPoly = (App.buffers      || [])[idx];
     else if (type === "polygon") bufferPoly = (App.polygons     || [])[idx];
     if (!bufferPoly) return result.geos;
     return result.geos.filter(function (geo) {
@@ -779,17 +779,17 @@
 
   function _buildGeoFeatureMap(geos) {
     var allFeatures = [];
-    var stations     = App.stations     || [];
-    var stationBufs  = App.buffers      || [];
+    var pts          = App.points       || [];
+    var pointBufs    = App.buffers      || [];
     var lines        = App.lines        || [];
     var lineBuffers  = App.lineBuffers  || [];
     var routes       = App.routeBuffers ? App.routes || [] : [];
     var routeBuffers = App.routeBuffers || [];
     var polys        = App.polygons     || [];
 
-    for (var si = 0; si < stations.length; si++) {
-      if (si < stationBufs.length && stationBufs[si])
-        allFeatures.push({ name: (stations[si].properties && stations[si].properties.name) || ("Point " + (si + 1)), coverage: stationBufs[si] });
+    for (var si = 0; si < pts.length; si++) {
+      if (si < pointBufs.length && pointBufs[si])
+        allFeatures.push({ name: (pts[si].properties && pts[si].properties.name) || ("Point " + (si + 1)), coverage: pointBufs[si] });
     }
     for (var li = 0; li < lines.length; li++) {
       if (li < lineBuffers.length && lineBuffers[li])

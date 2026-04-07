@@ -198,7 +198,7 @@
     // Check for buffer union
     var unionFeat = App.bufferUnionPolygon();
     if (!unionFeat) {
-      var errMsg = (App.stations.length === 0 && App.lines.length === 0 &&
+      var errMsg = (App.points.length === 0 && App.lines.length === 0 &&
                     App.routes.length === 0 && App.polygons.length === 0)
         ? "No features placed" : "No buffers set";
       for (var k = 0; k < displayVars.length; k++) {

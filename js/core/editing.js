@@ -1,9 +1,9 @@
 // js/core/editing.js
-// Feature editing: station click-drag, line/polygon/route vertex editing.
-// Depends on: App.map, App.stations, App.lines, App.polygons, App.routes,
-//             App.moveStation, App.updateLineVertex, App.updatePolygonVertex,
+// Feature editing: point click-drag, line/polygon/route vertex editing.
+// Depends on: App.map, App.points, App.lines, App.polygons, App.routes,
+//             App.movePoint, App.updateLineVertex, App.updatePolygonVertex,
 //             App.updateRouteWaypoint, App.insertRouteWaypoint, App.rerouteFeature,
-//             App.renderStationLayers, App.renderLineLayers, App.renderPolygonLayers,
+//             App.renderPointLayers, App.renderLineLayers, App.renderPolygonLayers,
 //             App.renderRouteLayers, App.refreshFeaturePanel.
 // Exports: App._editing, App.exitEditMode, App._initEditing,
 //          App.activateVertexEdit, App.deactivateVertexEdit, App.showEditVertices
@@ -13,7 +13,7 @@
 
   // ---- Edit state ----
   // null when idle. Otherwise one of:
-  //   { type: "station-drag", index: N }
+  //   { type: "point-drag", index: N }
   //   { type: "vertex-edit", featureType: "line"|"route"|"polygon", featureIndex: N }
   //   { type: "vertex-drag", featureType: "line"|"route"|"polygon", featureIndex: N, vertexIndex: N }
 
@@ -97,17 +97,17 @@
 
   // ---- Feature index matching ----
 
-  function findStationIndex(hitFeature) {
-    var targetIdx = hitFeature.properties && hitFeature.properties.stationIdx;
+  function findPointIndex(hitFeature) {
+    var targetIdx = hitFeature.properties && hitFeature.properties.pointIdx;
     if (targetIdx != null) {
-      for (var i = 0; i < App.stations.length; i++) {
-        if (App.stations[i].properties.stationIdx == targetIdx) return i;
+      for (var i = 0; i < App.points.length; i++) {
+        if (App.points[i].properties.pointIdx == targetIdx) return i;
       }
     }
     // Fallback: match by coordinates
     var hitCoords = hitFeature.geometry.coordinates;
-    for (var j = 0; j < App.stations.length; j++) {
-      var c = App.stations[j].geometry.coordinates;
+    for (var j = 0; j < App.points.length; j++) {
+      var c = App.points[j].geometry.coordinates;
       if (Math.abs(c[0] - hitCoords[0]) < 1e-6 && Math.abs(c[1] - hitCoords[1]) < 1e-6) {
         return j;
       }
@@ -144,9 +144,9 @@
 
   // ---- Index lookup by property value (for buffer hits) ----
 
-  function findStationIndexByProp(stationIdx) {
-    for (var i = 0; i < App.stations.length; i++) {
-      if (App.stations[i].properties.stationIdx == stationIdx) return i;
+  function findPointIndexByProp(pointIdx) {
+    for (var i = 0; i < App.points.length; i++) {
+      if (App.points[i].properties.pointIdx == pointIdx) return i;
     }
     return -1;
   }
@@ -364,7 +364,7 @@
     map.on("mousemove", function (e) {
       if (App.drawMode) return;
       // Don't change cursor during active drags
-      if (editState && (editState.type === "station-drag" || editState.type === "vertex-drag")) return;
+      if (editState && (editState.type === "point-drag" || editState.type === "vertex-drag")) return;
 
       // Check edit vertex handles first (highest priority)
       if (editState && editState.type === "vertex-edit") {
@@ -397,13 +397,13 @@
         return;
       }
 
-      // Check stations — show "move" only if already selected, otherwise "pointer"
-      var stationHits = safeQuery(e.point, ["stations-layer"]);
-      if (stationHits.length > 0) {
-        var sIdx = findStationIndex(stationHits[0]);
-        var isSelStation = App._selected && App._selected.type === "station" && App._selected.index === sIdx;
-        map.getCanvas().style.cursor = isSelStation ? "move" : "pointer";
-        if (sIdx >= 0 && typeof App.setHoveredFeature === "function") App.setHoveredFeature("station", sIdx);
+      // Check points — show "move" only if already selected, otherwise "pointer"
+      var pointHits = safeQuery(e.point, ["points-layer"]);
+      if (pointHits.length > 0) {
+        var sIdx = findPointIndex(pointHits[0]);
+        var isSelPoint = App._selected && App._selected.type === "point" && App._selected.index === sIdx;
+        map.getCanvas().style.cursor = isSelPoint ? "move" : "pointer";
+        if (sIdx >= 0 && typeof App.setHoveredFeature === "function") App.setHoveredFeature("point", sIdx);
         return;
       }
 
@@ -426,16 +426,16 @@
         return;
       }
 
-      // Check buffer areas (station / line / route buffers)
+      // Check buffer areas (point / line / route buffers)
       var bufferHits = safeQuery(e.point, ["buffers-fill", "line-buffers-fill", "route-buffers-fill"]);
       if (bufferHits.length > 0) {
         map.getCanvas().style.cursor = "pointer";
         var bHit = bufferHits[0];
         var bLid = bHit.layer.id;
         var bProps = bHit.properties || {};
-        if (bLid === "buffers-fill" && bProps.stationIdx != null) {
-          var bsIdx = findStationIndexByProp(bProps.stationIdx);
-          if (bsIdx >= 0 && typeof App.setHoveredFeature === "function") App.setHoveredFeature("station", bsIdx);
+        if (bLid === "buffers-fill" && bProps.pointIdx != null) {
+          var bsIdx = findPointIndexByProp(bProps.pointIdx);
+          if (bsIdx >= 0 && typeof App.setHoveredFeature === "function") App.setHoveredFeature("point", bsIdx);
         } else if (bLid === "line-buffers-fill" && bProps.lineIdx != null) {
           var blIdx = findLineIndexByProp(bProps.lineIdx);
           if (blIdx >= 0 && typeof App.setHoveredFeature === "function") App.setHoveredFeature("line", blIdx);
@@ -451,7 +451,7 @@
       map.getCanvas().style.cursor = "grab";
     });
 
-    // ---- Mousedown: start station drag or vertex drag ----
+    // ---- Mousedown: start point drag or vertex drag ----
     map.on("mousedown", function (e) {
       if (App.drawMode) return;
       if (e.originalEvent && e.originalEvent.button === 2) return; // right-click handled by contextmenu
@@ -475,14 +475,14 @@
         }
       }
 
-      // Check for station drag — only allowed when station is already selected
-      var stationHits = safeQuery(e.point, ["stations-layer"]);
-      if (stationHits.length > 0) {
-        var stationIdx = findStationIndex(stationHits[0]);
-        if (stationIdx >= 0 &&
-            App._selected && App._selected.type === "station" && App._selected.index === stationIdx) {
+      // Check for point drag — only allowed when point is already selected
+      var pointHits = safeQuery(e.point, ["points-layer"]);
+      if (pointHits.length > 0) {
+        var ptIdx = findPointIndex(pointHits[0]);
+        if (ptIdx >= 0 &&
+            App._selected && App._selected.type === "point" && App._selected.index === ptIdx) {
           e.preventDefault();
-          editState = { type: "station-drag", index: stationIdx };
+          editState = { type: "point-drag", index: ptIdx };
           App._editing = editState;
           map.dragPan.disable();
           map.getCanvas().style.cursor = "grabbing";
@@ -494,11 +494,11 @@
     map.on("mousemove", function (e) {
       if (!editState) return;
 
-      if (editState.type === "station-drag") {
+      if (editState.type === "point-drag") {
         // Lightweight live update (no buffer rebuild)
-        App.stations[editState.index].geometry.coordinates = [e.lngLat.lng, e.lngLat.lat];
-        var stSrc = map.getSource("stations");
-        if (stSrc) stSrc.setData({ type: "FeatureCollection", features: App.stations });
+        App.points[editState.index].geometry.coordinates = [e.lngLat.lng, e.lngLat.lat];
+        var stSrc = map.getSource("points-src");
+        if (stSrc) stSrc.setData({ type: "FeatureCollection", features: App.points });
         return;
       }
 
@@ -601,12 +601,12 @@
     map.on("mouseup", function (e) {
       if (!editState) return;
 
-      if (editState.type === "station-drag") {
-        App.moveStation(editState.index, e.lngLat.lng, e.lngLat.lat);
+      if (editState.type === "point-drag") {
+        App.movePoint(editState.index, e.lngLat.lng, e.lngLat.lat);
         editState = null;
         App._editing = null;
         map.dragPan.enable();
-        map.getCanvas().style.cursor = "move"; // still hovering over the (now-moved) station
+        map.getCanvas().style.cursor = "move"; // still hovering over the (now-moved) point
         if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
         if (typeof App.cache !== "undefined") App.cache.save();
         return;
@@ -713,11 +713,11 @@
         return;
       }
 
-      // Not in edit mode: station click → select; line/route/polygon click → enter vertex edit mode
-      var stationHits = safeQuery(e.point, ["stations-layer"]);
-      if (stationHits.length > 0) {
-        var sIdx = findStationIndex(stationHits[0]);
-        if (sIdx >= 0 && typeof App.selectFeature === "function") App.selectFeature("station", sIdx);
+      // Not in edit mode: point click → select; line/route/polygon click → enter vertex edit mode
+      var pointHits = safeQuery(e.point, ["points-layer"]);
+      if (pointHits.length > 0) {
+        var sIdx = findPointIndex(pointHits[0]);
+        if (sIdx >= 0 && typeof App.selectFeature === "function") App.selectFeature("point", sIdx);
         return;
       }
 
@@ -729,9 +729,9 @@
           var bh = bufHits[0];
           var bhLid = bh.layer.id;
           var bhProps = bh.properties || {};
-          if (bhLid === "buffers-fill" && bhProps.stationIdx != null) {
-            var bsi = findStationIndexByProp(bhProps.stationIdx);
-            if (bsi >= 0 && typeof App.selectFeature === "function") App.selectFeature("station", bsi);
+          if (bhLid === "buffers-fill" && bhProps.pointIdx != null) {
+            var bsi = findPointIndexByProp(bhProps.pointIdx);
+            if (bsi >= 0 && typeof App.selectFeature === "function") App.selectFeature("point", bsi);
           } else if (bhLid === "line-buffers-fill" && bhProps.lineIdx != null) {
             var bli = findLineIndexByProp(bhProps.lineIdx);
             if (bli >= 0 && typeof App.selectFeature === "function") App.selectFeature("line", bli);
@@ -782,7 +782,7 @@
       }
 
       // Priority 2: feature hit → show attributes context menu
-      var stHits = safeQuery(e.point, ["stations-layer"]);
+      var stHits = safeQuery(e.point, ["points-layer"]);
       var fHits  = safeQuery(e.point, ["lines-layer", "routes-layer", "polygons-fill"]);
       var hit    = (stHits.length ? stHits : fHits)[0];
       if (!hit) return;
@@ -791,7 +791,7 @@
       var layerId      = hit.layer.id;
       var featureType  = null;
       var featureIndex = -1;
-      if      (layerId === "stations-layer") { featureType = "station";  featureIndex = findStationIndex(hit); }
+      if      (layerId === "points-layer") { featureType = "point";  featureIndex = findPointIndex(hit); }
       else if (layerId === "lines-layer")    { featureType = "line";     featureIndex = findLineIndex(hit); }
       else if (layerId === "routes-layer")   { featureType = "route";    featureIndex = findRouteIndex(hit); }
       else if (layerId === "polygons-fill")  { featureType = "polygon";  featureIndex = findPolygonIndex(hit); }
@@ -799,7 +799,7 @@
 
       if (typeof App.selectFeature === "function") App.selectFeature(featureType, featureIndex);
 
-      var dataMap = { station: App.stations, line: App.lines, route: App.routes, polygon: App.polygons };
+      var dataMap = { point: App.points, line: App.lines, route: App.routes, polygon: App.polygons };
       var feature = dataMap[featureType][featureIndex];
 
       if (typeof App.showContextMenu === "function") {

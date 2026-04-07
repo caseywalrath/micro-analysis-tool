@@ -1,7 +1,7 @@
 // js/app.js
 // Startup: wires core modules together, loads active project panel,
 // contains summary runners and core event bindings.
-// Depends on: all core modules (utils, map, stations, census, lodes).
+// Depends on: all core modules (utils, map, points, census, lodes).
 // Exports: registerProject
 
 (function () {
@@ -9,7 +9,7 @@
 
   // ---- Draw mode ----
 
-  App.drawMode = null; // null | "station" | "line" | "route" | "polygon" | "label" | "measure"
+  App.drawMode = null; // null | "point" | "line" | "route" | "polygon" | "label" | "measure"
 
   // ---- Data Inputs panel ----
 
@@ -91,11 +91,11 @@
   // Backward-compat alias so existing project files still work during migration
   App.registerProject = App.registerModule;
 
-  // Override bufferUnionPolygon to include line and route buffers alongside station buffers.
+  // Override bufferUnionPolygon to include line and route buffers alongside point buffers.
   // Must happen before any user interaction; census.js and lodes.js call this at runtime.
-  var _stationUnion = App.bufferUnionPolygon;
+  var _pointUnion = App.bufferUnionPolygon;
   App.bufferUnionPolygon = function () {
-    var su = _stationUnion();
+    var su = _pointUnion();
     var lu = App.lineBufferUnionPolygon ? App.lineBufferUnionPolygon() : null;
     var ru = App.routeBufferUnionPolygon ? App.routeBufferUnionPolygon() : null;
     var pu = App.polygonUnionPolygon ? App.polygonUnionPolygon() : null;
@@ -110,7 +110,7 @@
   // Rebuilt each call so values like lodesData are always current.
   function buildCore() {
     return {
-      stations: App.stations,
+      points: App.points,
       buffers: App.buffers,
       routes: App.routes,
       routeBuffers: App.routeBuffers,
@@ -294,7 +294,7 @@
 
   App.map.on("load", async function () {
     App.setStatus("Ready");
-    App.renderStationLayers();
+    App.renderPointLayers();
     App.renderLineLayers();
     App.renderRouteLayers();
     App.renderPolygonLayers();
@@ -303,7 +303,7 @@
     // Initialize measure tool layers
     if (typeof App.initMeasureLayers === "function") App.initMeasureLayers();
 
-    // Initialize feature editing (station drag, vertex editing)
+    // Initialize feature editing (point drag, vertex editing)
     if (typeof App._initEditing === "function") App._initEditing();
 
     // Initialize hover/selection highlight layers
@@ -467,7 +467,7 @@
       }
     });
 
-    // Buffer radius input (stations)
+    // Buffer radius input (points)
     document.getElementById("bufferRadius").addEventListener("input", function () {
       var val = parseFloat(this.value);
       if (isNaN(val) || val < 0) val = 0;
@@ -495,10 +495,10 @@
     });
 
     // Line width inputs (visual only — no notifyProject)
-    document.getElementById("stationLineWidth").addEventListener("input", function () {
+    document.getElementById("pointLineWidth").addEventListener("input", function () {
       var w = Math.min(5, Math.max(1, parseFloat(this.value) || 1));
-      App.map.setPaintProperty("stations-layer", "circle-radius", 6 * w);
-      App.map.setPaintProperty("stations-layer", "circle-stroke-width", 2 * w);
+      App.map.setPaintProperty("points-layer", "circle-radius", 6 * w);
+      App.map.setPaintProperty("points-layer", "circle-stroke-width", 2 * w);
       if (typeof App.cache !== "undefined") App.cache.save();
     });
 
@@ -532,8 +532,8 @@
 
     // Map click: dispatch based on draw mode
     App.map.on("click", function (e) {
-      if (App.drawMode === "station") {
-        App.addStationPoint(e.lngLat.lng, e.lngLat.lat);
+      if (App.drawMode === "point") {
+        App.addPoint(e.lngLat.lng, e.lngLat.lat);
         notifyProject();
         if (typeof App.cache !== "undefined") App.cache.save();
       } else if (App.drawMode === "line") {
@@ -579,7 +579,7 @@
       if (!confirm("Clear all features?")) return;
       if (App.undo && !App.undo.isRestoring()) App.undo.push();
       if (typeof App.exitEditMode === "function") App.exitEditMode();
-      App.clearStations();
+      App.clearPoints();
       App.clearLines();
       App.clearRoutes();
       App.clearPolygons();
