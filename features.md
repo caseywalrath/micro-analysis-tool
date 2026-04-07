@@ -100,6 +100,33 @@ Upload a GTFS `.zip` via Add Data (+) → GTFS → Load GTFS Feed. Routes (shape
 - Filter displayed routes by route_type or agency
 - Persist GTFS feed across sessions (localStorage is too small; IndexedDB or a re-upload prompt would be needed)
 
+### FTA STOPS-Style Ridership Modeling — Not started
+A new analysis module that replicates or approximates the methodology of FTA's STOPS (Simplified Trips-on-Project Software) model. STOPS is FTA's official ridership forecasting tool for Small Starts and some New Starts projects. It estimates **station-level boardings** by modeling three things: where people want to go (destination attractiveness), how well transit gets them there (accessibility via travel time), and how likely they are to choose transit over driving (mode share).
+
+**What the app already covers (demand/demographic side):**
+- Population and employment density scoring (TPI's 9-factor system, ACS + LODES)
+- Station placement with configurable walk-access buffers
+- GTFS feed parsing (shapes, stops, stop_times, routes, trips all available in-browser)
+- Corridor Demand Index (CDI) — population-weighted composite demand score per route
+- Area-weighted census aggregation within buffer polygons
+- Ridership calibration workflow (ratio and OLS regression against observed data)
+
+**What's missing (accessibility/supply side):**
+1. **Transit travel time engine** — Parsing GTFS `stop_times.txt` to compute actual A-to-B transit trip durations including transfers, wait times, and walk access. The GTFS module currently displays feed data but does not route through it. Implementing a RAPTOR or Connection Scan algorithm in JS is feasible but computationally intensive for large feeds.
+2. **Auto travel time matrix** — Zone-to-zone driving times for mode choice comparison. The app already uses OSRM for route snapping, but building a full matrix for hundreds of zones would require many API calls.
+3. **Origin-destination trip table** — STOPS uses a simplified O-D matrix derived from census journey-to-work data (CTPP or ACS commuting flows). The app has employment via LODES but not the O-D flow structure.
+4. **Mode choice model** — A logit function estimating probability of choosing transit vs. auto based on relative travel time, cost, and traveler characteristics. The math is straightforward; calibration data is the constraint.
+5. **Station-level boarding allocation** — Distributing corridor-level demand across individual stations based on walk catchment area and destination accessibility.
+
+**Architectural options:**
+- **Pure in-browser:** Consistent with the app's zero-build-step philosophy. Demand-side and mode choice math are lightweight. The bottleneck is transit travel time computation from raw GTFS — JS implementations of RAPTOR exist but may struggle with large feeds (thousands of trips). Auto travel time matrices would require heavy OSRM usage.
+- **Local helper tool:** A Python or Node CLI that runs OTP or OSRM locally to precompute travel time matrices, exporting results as JSON for the web app to import. Breaks the "just open index.html" simplicity but handles the computationally intensive piece.
+- **Hybrid (recommended):** The web app handles UI, demographics, scoring, mode choice, and boarding allocation. A lightweight local helper precomputes the travel time matrix from the GTFS feed + road network and exports a JSON file that the web app imports as a data input (similar to how LODES CSVs are uploaded today). Keeps interactive analysis in-browser while offloading the one piece that genuinely needs more horsepower.
+
+**Dependencies:** Builds on `census.js` (ACS fetch), `lodes.js` (employment), `tpi-scoring.js` (demand scoring), `gtfs.js` (feed parsing), `stations.js` (station placement + buffers), and the popup module system. The travel time matrix — whether computed in-browser or imported — is the critical new data input.
+
+**Files (anticipated):** `js/projects/fta-stops.js`, `projects/fta-stops-popup.html`, and potentially a standalone helper script (Python or Node) for travel time matrix generation.
+
 ### CSV point import — Not started
 Upload a CSV with lat/lon columns (auto-detected via `App.guessHeader`) and plot as a styled point layer. Common uses: existing stop-level boardings, peer-system data, community facility inventories. Pairs with the future Layer Panel for visibility control.
 
