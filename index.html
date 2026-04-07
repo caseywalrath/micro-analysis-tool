@@ -80,9 +80,14 @@
               <div class="add-data-divider"></div>
               <div class="add-data-heading">Import</div>
               <button id="import-file-btn">Import Spatial Data</button>
+              <div class="add-data-divider"></div>
+              <div class="add-data-heading">GTFS</div>
+              <button id="gtfs-load-btn">Load GTFS Feed</button>
+              <button id="gtfs-clear-btn" class="add-data-clear" style="display:none;">Clear GTFS Feed</button>
             </div>
             <input id="lodesFile" type="file" accept=".gz,.csv.gz" style="display:none" />
             <input id="fp-import-file" type="file" accept=".json,.csv,.kml,.kmz,.shp,.zip,.geojson" style="display:none" />
+            <input id="gtfs-file-input" type="file" accept=".zip" style="display:none" />
           </div>
           <div class="export-wrapper">
             <button id="export-btn" title="Export">
@@ -276,5 +281,6 @@
     <script src="js/projects/ridership-forecasting.js"></script>
     <script src="js/projects/title-vi-engine.js"></script>
     <script src="js/projects/title-vi.js"></script>
+    <script src="js/projects/gtfs.js"></script>
   </body>
 </html>
