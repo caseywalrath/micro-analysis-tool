@@ -213,7 +213,16 @@
         source: "gtfs-shapes",
         layout: { "line-join": "round", "line-cap": "round" },
         paint: {
-          "line-color":   "#718096",
+          "line-color": [
+            "case",
+            ["all",
+              ["has", "route_color"],
+              ["!=", ["get", "route_color"], ""],
+              ["!=", ["downcase", ["get", "route_color"]], "ffffff"]
+            ],
+            ["concat", "#", ["get", "route_color"]],
+            "#718096"
+          ],
           "line-width":   2,
           "line-opacity": 0.65,
           "line-dasharray": [4, 2]
