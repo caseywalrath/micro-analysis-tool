@@ -92,8 +92,13 @@ A new analysis module for Title VI civil rights compliance reporting. Title VI o
 
 **Files (anticipated):** `js/projects/title-vi.js`, `projects/title-vi-popup.html`
 
-### GTFS import — Not started, High Priority
-Upload a GTFS `.zip` and visualize existing routes and stops as a non-editable reference layer on the map. Enables direct before/after service comparison alongside drawn proposed routes. Feeds the "existing service" context for Title VI analysis and Ridership Forecasting calibration. Client-side GTFS parsing is feasible with a zip reader (JSZip) and PapaParse; no backend required. Potential to derive frequency/span from stop_times for automatic heatmap display.
+### GTFS import — Implemented
+Upload a GTFS `.zip` via Add Data (+) → GTFS → Load GTFS Feed. Routes (shapes.txt) render as dashed gray reference lines and stops (stops.txt) as hollow circles below user-drawn features. Hovering shows a tooltip (route name + mode, or stop name + ID); clicking shows a full detail popup with route color swatch, GTFS fields, and wheelchair/location-type labels. Route info is pre-joined from trips.txt + routes.txt at load time. The analysis popup shows all files in the ZIP with REQ/OPT badges and a scrollable CSV table viewer (capped at 500 rows). Layer visibility toggles in the popup. Feed is not persisted across sessions (re-upload required).
+
+**Potential future enhancements:**
+- Derive frequency/headway from stop_times.txt for an automatic frequency heatmap overlay
+- Filter displayed routes by route_type or agency
+- Persist GTFS feed across sessions (localStorage is too small; IndexedDB or a re-upload prompt would be needed)
 
 ### CSV point import — Not started
 Upload a CSV with lat/lon columns (auto-detected via `App.guessHeader`) and plot as a styled point layer. Common uses: existing stop-level boardings, peer-system data, community facility inventories. Pairs with the future Layer Panel for visibility control.

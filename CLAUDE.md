@@ -69,6 +69,7 @@ js/
     ridership-forecasting.js  Ridership Forecasting module: 4-tab popup (Calibrate | Demand | Elasticity | Scenarios), 3-step calibration workflow, corridor dropdown, choropleth + segment map, scenario comparison table, GeoJSON/CSV/JSON export; shared-pool normalization mode for cross-system calibration
     title-vi-engine.js      Title VI engine: policy profiles, major-change rules, geometric divergence detection (turf.nearestPointOnLine), service change area computation (turf.difference), alteration metrics orchestration, demographic fetching, finding evaluation, scenario comparison (window.TitleVI namespace)
     title-vi.js             Title VI Service Equity module: 3-tab popup (Policies & Inputs | Analysis | Scenarios), route alteration pairing UI (before/after feature dropdowns), auto-computed route miles and % altered, service loss/gain map overlay, system baseline vs impacted area demographic comparison, CSV/GeoJSON/JSON export, session persistence
+    gtfs.js                 GTFS Feed Viewer: loads a GTFS ZIP (JSZip + PapaParse), renders shapes.txt as dashed reference lines (gtfs-shapes-layer) and stops.txt as hollow circles (gtfs-stops-layer) below user-drawn features, hover tooltip + click detail popup on both layers (route name/mode for shapes; stop name/ID for stops), shape_id → route info pre-joined from trips.txt + routes.txt at load time, two-column analysis popup (file directory with REQ/OPT badges | scrollable CSV table, capped at 500 rows), layer visibility toggles, clear-feed button. No session persistence (feed must be re-uploaded per session). Wires Add Data dropdown buttons directly (no app.js changes needed).
 projects/
   buffer-summary-popup.html   Buffer-Area Summary popup body: settings (geography, year, apportion) + results table
   fta-small-starts-popup.html  FTA popup body: 2-tab layout (Ratings | Data Inputs); Ratings tab has 2-column layout (settings + 5 rating cards); Data Inputs tab has CRE/ESS/LBAR file uploads with column mapping selects
@@ -80,6 +81,7 @@ projects/
   ridership-forecasting-popup.html  RF popup body: 4-tab layout (Calibrate first), 3-step calibration workflow UI (system analysis → CSV upload → match/calibrate); "Adjust Weights" button above "Analyze System" opens an in-popup modal overlay with 9 factor weight sliders (Confirm / Cancel / Reset to Defaults / Copy From TPI); expandable per-route factor breakdowns with quintile bars; headway normalization note (`rfCalibHeadwayNote`); shared-pool refit note (`rfCalibSharedPoolNote`); LODES warning icons (⚠) next to ACS Year in Calibrate and Demand tabs (shows tooltip when LODES not loaded); corridor dropdown in Demand tab, CDI info button (ⓘ toggle), segment breakdown, "Shared pool normalization" checkbox (`rfSharedPoolMode`) with info tooltip (`rfSharedPoolTooltip`) in Demand tab feature section, elasticity sliders — frequency elasticity (`rfFreqElastSlider`/`rfFreqElastValue`, 0.1–1.0, default 0.50) and service span elasticity (`rfSpanElastSlider`/`rfSpanElastValue`, 0.1–1.0, default 0.70, typical range 0.5–0.9) — in Elasticity tab left column; service type premium sliders (`rfServicePremLow`/`rfServicePremLowVal` and `rfServicePremHigh`/`rfServicePremHighVal`, 0–150% range) in Elasticity tab right column (replaces static Frequency/Speed/Mode breakdown), baseline uncertainty slider (`rfBaseUncertSlider`/`rfBaseUncertValue`, 0–60% range, default 25%) in Elasticity tab with "Baseline Projection" result card (`rfBaselineBand`) showing pre-service uncertainty band, 4-column scenario grid (A|B|C|D), comparison table
   ridership-legend.html     RF demand legend: 5-class Blues swatches for CDI score (High → Low)
   title-vi-popup.html       Title VI popup body: 3-tab layout (Policies & Inputs | Analysis | Scenarios); Policies tab has 2-column layout (policy settings left, route alteration cards + impact method right); Analysis tab has baseline computation + equity findings; Scenarios tab has scenario manager + comparison table
+  gtfs-popup.html           GTFS Feed popup body: two-column layout (left: scrollable file directory with REQ/OPT badges + layer visibility checkboxes + Clear button; right: scrollable CSV table for the selected file with row/column count)
 docs/
   ridership-forecasting-plan.md  Strategic evaluation and implementation plan for the ridership forecasting tool
 Ridership_Forecast_Readme.md    User-facing documentation for the Ridership Forecasting module (plain-language, transit professional audience)
@@ -97,7 +99,7 @@ Ridership_Forecast_Readme.md    User-facing documentation for the Ridership Fore
 - **CSS namespacing.** TPI styles use `.tpi-` prefix. Ridership Forecasting styles use `.rf-` prefix. FTA Small Starts styles use `.fta-` prefix. Title VI styles use `.tvi-` prefix. Rating pill colors use `.pill.high` through `.pill.low`. All live in `css/style.css`.
 - **Typography variables.** All font sizes, weights, line heights, letter spacing, and font families are defined as CSS custom properties in `:root` (top of `css/style.css`). Use the variables (`var(--text-sm)`, `var(--weight-semibold)`, etc.) — never hardcode `px` values for typography. Scale: `--text-2xs` (10px) through `--text-3xl` (28px). Weights: `--weight-normal` (400), `--weight-medium` (500), `--weight-semibold` (600), `--weight-bold` (700). Line heights: `--leading-none` (1) through `--leading-relaxed` (1.5). Letter spacing: `--tracking-normal` (0) through `--tracking-lg` (0.06em).
 - **Typography hierarchy.** Structural labels follow a unified hierarchy across both sidebar and feature panels. Panel titles (DATA INPUTS, FEATURES): 11px semibold uppercase, 0.04em tracking, muted (#555). Section headers (STATIONS, CENSUS): 11px semibold uppercase, 0.04em tracking, muted. Group labels (DEMOGRAPHICS, EQUITY): 11px semibold uppercase, 0.03em tracking, muted. Attribute panel titles (ROUTE ATTRIBUTES): 10px semibold uppercase, 0.04em tracking, muted. Body text and labels: 13px normal weight, #333. Secondary labels (attr labels, units): 11–12px, #555. Text colors: #333 for primary content, var(--muted) (#555) for structural labels and secondary text.
-- **External libraries via CDN:** MapLibre GL JS, Turf.js, pako (gzip), PapaParse (CSV).
+- **External libraries via CDN:** MapLibre GL JS, Turf.js, pako (gzip), PapaParse (CSV), JSZip (GTFS ZIP parsing).
 
 ## Script Load Order
 
@@ -128,9 +130,10 @@ app.js              (wires everything; registers sidebar panels; defines App.reg
   ridership-forecasting.js (needs RidershipModel, TPI, App.registerModule, App.popup, App.map, App.renderCensusOverlay)
   title-vi-engine.js    (needs App namespace, turf; defines window.TitleVI)
   title-vi.js           (needs TitleVI, App.registerModule, App.popup, App.map, App.cache)
+  gtfs.js               (needs JSZip, PapaParse, maplibregl, App.registerModule, App.popup, App.map; no scoring engine deps)
 ```
 
-**Active modules:** Buffer-Area Summary is enabled (popup-based, settings + results table). TPI is enabled (popup-based, 2-column). FTA Small Starts is enabled (popup-based, 2-tab). Ridership Forecasting is enabled (popup-based, 4-tab). Title VI Service Equity is enabled (popup-based, 3-tab).
+**Active modules:** Buffer-Area Summary is enabled (popup-based, settings + results table). TPI is enabled (popup-based, 2-column). FTA Small Starts is enabled (popup-based, 2-tab). Ridership Forecasting is enabled (popup-based, 4-tab). Title VI Service Equity is enabled (popup-based, 3-tab). GTFS Feed Viewer is enabled (popup-based, 2-column file browser + map layers).
 
 ## App Namespace (Public API)
 
@@ -339,6 +342,35 @@ Registers module `"title-vi"` as a popup-based analysis. Opens in a 3-tab popup 
 **Internal functions**: `addAlteration()`, `removeAlteration(idx)`, `onAlterationChanged(idx)`, `renderAlterationCards()`, `buildAlterationCard(idx, alt)`, `displayComputedMetrics(card, alt)`, `buildFeatureSelect(selectedRef)`, `parseFeatureRef(selectEl)`, `readManualInputs(card)`, `runBaseline(core)`, `runAnalysis(core)`, `runInstantReevaluation()`, `displayResults(result)`, `displayFinding(prefix, finding)`, `renderImpactedArea(geometry)`, `renderServiceGainOverlay()`, `clearOverlay()`, `switchScenario(idx)`, `duplicateScenario()`, `renameScenario()`, `deleteScenario()`, `exportFindingsCSV()`, `exportImpactedGeoJSON()`, `exportSessionJSON()`, `exportComparisonCSV()`, `importSessionJSON(file)`.
 
 **Module-local state**: `_policy` (current policy profile), `_scenarios` (array of scenario objects), `_activeScenarioIdx`, `_baseline` (system-wide demographics), `_results` (scenarioId → analysis result), `_cachedDemographics` (for instant threshold re-evaluation), `_cachedImpactedGeom`, `_baselineFeatureFilter`, `_stale`, `_running`, `_initialized`, `_activeTab`. Session persistence via `App.cache.registerModule("title-vi", ...)` at schema **v2** (v1 backward-compat migration adds empty `alterations[]` and maps `selected_routes` impact method to `full_route_buffer`).
+
+### gtfs.js (GTFS Feed Viewer, limited public API)
+Registers module `"gtfs"` as a popup-based analysis. Opens in a 2-column popup (960px wide). All state is private to the IIFE closure. No session persistence — the feed must be re-uploaded each session.
+
+**Entry point:** Add Data (+) dropdown → "GTFS" section → "Load GTFS Feed" triggers a hidden `<input id="gtfs-file-input" type="file" accept=".zip">`. The button wiring is done inside `gtfs.js`, not `app.js`.
+
+**Feed loading:** `loadGTFSFile(file)` uses JSZip to unzip the file, then PapaParse to parse each `.txt` entry. Files inside a top-level subfolder are handled (folder prefix is stripped). All parsed files are stored in `_gtfsData` (Map of filename → `{ headers, rows }`).
+
+**Map layers:** Two non-editable reference layers added below user-drawn features:
+- Source `gtfs-shapes` / Layer `gtfs-shapes-layer`: dashed gray lines (color #718096, width 2, opacity 0.65, dash [4,2]) built from `shapes.txt`.
+- Source `gtfs-stops` / Layer `gtfs-stops-layer`: hollow white circles with gray stroke (radius 4, stroke 1.5) built from `stops.txt` (location_type 0 or absent only).
+- Both layers support `mouseenter`/`mousemove`/`mouseleave`/`click` events (identical pattern to `js/core/osm.js`).
+
+**Hover tooltip** (`.gtfs-hover`): Route shapes → route short name + mode label. Stops → stop name + stop_id.
+
+**Click detail popup** (`.gtfs-detail`): Route shapes → colored swatch in title + route_id, long name, mode, agency, shape_id. Stops → stop_id, code, desc, location type, wheelchair status, parent_station, zone_id.
+
+**Route-info join:** `buildRouteLookup(data)` joins `trips.txt → routes.txt` at load time to build a `shape_id → { route_id, route_short_name, route_long_name, route_type, route_color, route_text_color, agency_id }` Map. These fields are merged directly into each `shapes.txt` GeoJSON feature's properties by `buildShapesGeoJSON(rows, routeLookup)`, so hover requires no runtime join. Feeds without `trips.txt` or `routes.txt` fall back to displaying `shape_id` only.
+
+**Analysis popup:** Left column — scrollable file directory listing all `.txt` files found in the ZIP with REQ/OPT badges (required files per GTFS spec: agency, stops, routes, trips, stop_times, calendar, calendar_dates). Clicking a file populates the right column. Right column — scrollable CSV table with sticky header, capped at 500 rendered rows with a count note (important for `stop_times.txt` which can have millions of rows). Layer visibility checkboxes and a Clear button appear below the file list once a feed is loaded.
+
+**CSS:** `.gtfs-*` prefix. All styles in `css/style.css` inside the `/* GTFS Feed Viewer module */` block. Includes dark mode overrides.
+
+**Constants:** `ROUTE_TYPE_LABELS` (GTFS route_type integers → readable strings), `LOCATION_TYPE_LABELS` (stop location types), `WHEELCHAIR_LABELS`, `FILE_ORDER` (preferred display order), `REQUIRED` (required-file lookup).
+
+**Public API (on `App`):**
+`App.loadGTFSFile(file)` — loads a File object as a GTFS ZIP (same as the file picker flow).
+`App.clearGTFS()` — clears the feed, removes map layers, resets UI.
+`App.gtfsData` — set at module load time to `null`; note this is a static snapshot, not a live reference to the Map — check `_gtfsData` is not exported live. Future modules needing feed data should call `App.loadGTFSFile` and observe the map layers, or the approach may need revision.
 
 ## Analysis Module System
 
