@@ -1,18 +1,21 @@
 // js/projects/gtfs.js
 // GTFS Feed Viewer: loads a GTFS ZIP, renders shapes + stops as reference
-// map layers, and provides a popup CSV table viewer for all feed files.
-// Depends on: JSZip (CDN), PapaParse (CDN), App namespace, App.popup.
+// map layers with hover/click popups, and provides a popup CSV table viewer
+// for all feed files.
+// Depends on: JSZip (CDN), PapaParse (CDN), maplibregl (CDN), App namespace.
 
 (function () {
   "use strict";
   var App = window.App = window.App || {};
 
   // ---- Module-local state ----
-  var _gtfsData   = null;   // Map<filename, { headers: [], rows: [] }>
-  var _selectedFile = null; // currently active file in the directory list
+  var _gtfsData    = null;   // Map<filename, { headers: [], rows: [] }>
+  var _selectedFile = null;  // currently active file in the directory list
   var _initialized  = false;
   var _showRoutes   = true;
   var _showStops    = true;
+  var _hoverPopup   = null;  // maplibregl.Popup for hover tooltips
+  var _clickPopup   = null;  // maplibregl.Popup for click details
 
   // GTFS files in preferred display order
   var FILE_ORDER = [
@@ -22,17 +25,53 @@
     "feed_info.txt", "attributions.txt"
   ];
 
-  // Files classified as Required in the spec
+  // Files classified as Required in the GTFS spec
   var REQUIRED = {
     "agency.txt": true, "stops.txt": true, "routes.txt": true,
     "trips.txt": true, "stop_times.txt": true,
     "calendar.txt": true, "calendar_dates.txt": true
   };
 
-  // ---- Popup guard ----
+  // GTFS route_type integer → human-readable label
+  var ROUTE_TYPE_LABELS = {
+    0: "Tram/Streetcar", 1: "Subway/Metro", 2: "Rail", 3: "Bus",
+    4: "Ferry", 5: "Cable Car", 6: "Aerial Tramway", 7: "Funicular",
+    11: "Trolleybus", 12: "Monorail"
+  };
+
+  // location_type mappings for stop click popup
+  var LOCATION_TYPE_LABELS = {
+    "0": "Stop", "1": "Station", "2": "Entrance/Exit",
+    "3": "Generic Node", "4": "Boarding Area"
+  };
+
+  // wheelchair_boarding mappings
+  var WHEELCHAIR_LABELS = {
+    "1": "Accessible", "2": "Not accessible"
+  };
+
+  // ---- Popup guard (analysis popup, not map popups) ----
   function isPopupVisible() {
     return App.popup && App.popup.isOpen() &&
            App.popup.currentModuleId() === "gtfs";
+  }
+
+  // ---- MapLibre popup helpers ----
+
+  function ensurePopups() {
+    if (!_hoverPopup)
+      _hoverPopup = new maplibregl.Popup({
+        closeButton: false, closeOnClick: false, maxWidth: "280px"
+      });
+    if (!_clickPopup)
+      _clickPopup = new maplibregl.Popup({
+        closeButton: true, closeOnClick: true, maxWidth: "320px"
+      });
+  }
+
+  function removePopups() {
+    if (_hoverPopup) _hoverPopup.remove();
+    if (_clickPopup) _clickPopup.remove();
   }
 
   // ---- ZIP / CSV parsing ----
@@ -98,7 +137,7 @@
   function clearGTFS() {
     _gtfsData = null;
     _selectedFile = null;
-    removeMapLayers();
+    removeMapLayers(); // also removes popups
     updateDropdownUI();
     if (isPopupVisible()) {
       renderFileList();
@@ -107,6 +146,39 @@
       if (mc) mc.style.display = "none";
     }
     App.setStatus("GTFS feed cleared.");
+  }
+
+  // ---- Route lookup (shape_id → route info) ----
+  // Built from trips.txt + routes.txt when available. Merged into shape
+  // feature properties at load time so hover requires no runtime join.
+
+  function buildRouteLookup(data) {
+    var lookup = new Map();
+    if (!data.has("trips.txt") || !data.has("routes.txt")) return lookup;
+
+    var routeById = new Map();
+    data.get("routes.txt").rows.forEach(function (r) {
+      if (r.route_id) routeById.set(r.route_id, r);
+    });
+
+    data.get("trips.txt").rows.forEach(function (r) {
+      var sid = r.shape_id;
+      if (!sid || lookup.has(sid)) return; // use first match per shape
+      var route = routeById.get(r.route_id);
+      if (!route) return;
+      lookup.set(sid, {
+        route_id:         route.route_id         || "",
+        route_short_name: route.route_short_name  || "",
+        route_long_name:  route.route_long_name   || "",
+        route_desc:       route.route_desc        || "",
+        route_type:       route.route_type        || "",
+        route_color:      route.route_color       || "",
+        route_text_color: route.route_text_color  || "",
+        agency_id:        route.agency_id         || ""
+      });
+    });
+
+    return lookup;
   }
 
   // ---- Map layers ----
@@ -128,9 +200,12 @@
 
     var before = firstUserLayer();
 
+    // Build route lookup for shapes (empty Map if trips/routes not present)
+    var routeLookup = _gtfsData ? buildRouteLookup(_gtfsData) : new Map();
+
     // --- shapes.txt → route geometry ---
     if (_gtfsData && _gtfsData.has("shapes.txt")) {
-      var shapesFC = buildShapesGeoJSON(_gtfsData.get("shapes.txt").rows);
+      var shapesFC = buildShapesGeoJSON(_gtfsData.get("shapes.txt").rows, routeLookup);
       map.addSource("gtfs-shapes", { type: "geojson", data: shapesFC });
       map.addLayer({
         id:     "gtfs-shapes-layer",
@@ -152,9 +227,6 @@
     if (_gtfsData && _gtfsData.has("stops.txt")) {
       var stopsFC = buildStopsGeoJSON(_gtfsData.get("stops.txt").rows);
       map.addSource("gtfs-stops", { type: "geojson", data: stopsFC });
-      // Insert above shapes but still below user layers
-      var beforeStops = map.getLayer("gtfs-shapes-layer") ? "gtfs-shapes-layer" : before;
-      // Stops should be above shapes
       map.addLayer({
         id:     "gtfs-stops-layer",
         type:   "circle",
@@ -170,11 +242,14 @@
       map.setLayoutProperty("gtfs-stops-layer", "visibility",
         _showStops ? "visible" : "none");
     }
+
+    wireHoverEvents();
   }
 
   function removeMapLayers() {
     var map = App.map;
     if (!map) return;
+    removePopups();
     ["gtfs-shapes-layer", "gtfs-stops-layer"].forEach(function (id) {
       if (map.getLayer(id)) map.removeLayer(id);
     });
@@ -201,9 +276,131 @@
     }
   }
 
+  // ---- Hover / click event wiring ----
+  // MapLibre deregisters listeners automatically when removeLayer() is called,
+  // so wireHoverEvents() can be called each time addMapLayers() runs without
+  // accumulating duplicate listeners.
+
+  function wireHoverEvents() {
+    var map = App.map;
+    if (!map) return;
+
+    var layers = [
+      { id: "gtfs-shapes-layer", isStop: false },
+      { id: "gtfs-stops-layer",  isStop: true  }
+    ];
+
+    layers.forEach(function (layer) {
+      if (!map.getLayer(layer.id)) return;
+      var layerId = layer.id;
+      var isStop  = layer.isStop;
+
+      map.on("mouseenter", layerId, function () {
+        if (!App.drawMode) map.getCanvas().style.cursor = "pointer";
+      });
+
+      map.on("mousemove", layerId, function (e) {
+        if (!e.features || !e.features.length) return;
+        if (!App.drawMode) map.getCanvas().style.cursor = "pointer";
+        ensurePopups();
+        _hoverPopup
+          .setLngLat(e.lngLat)
+          .setHTML(buildHoverHTML(e.features[0].properties, isStop))
+          .addTo(map);
+      });
+
+      map.on("mouseleave", layerId, function () {
+        map.getCanvas().style.cursor = App.drawMode ? "crosshair" : "grab";
+        if (_hoverPopup) _hoverPopup.remove();
+      });
+
+      map.on("click", layerId, function (e) {
+        if (!e.features || !e.features.length) return;
+        if (_hoverPopup) _hoverPopup.remove();
+        ensurePopups();
+        _clickPopup
+          .setLngLat(e.lngLat)
+          .setHTML(buildClickHTML(e.features[0].properties, isStop))
+          .addTo(map);
+      });
+    });
+  }
+
+  // ---- Popup HTML builders ----
+
+  function buildHoverHTML(props, isStop) {
+    var html = '<div class="gtfs-hover">';
+    if (isStop) {
+      var name = props.stop_name || props.stop_code || props.stop_id || "";
+      html += "<b>" + escHtml(name) + "</b>";
+      if (props.stop_name && props.stop_id) {
+        html += '<br><span style="color:var(--muted)">stop_id: ' +
+                escHtml(props.stop_id) + "</span>";
+      }
+    } else {
+      var routeLabel = props.route_short_name || props.route_long_name || props.shape_id || "";
+      var typeLabel  = ROUTE_TYPE_LABELS[parseInt(props.route_type, 10)] || "";
+      html += "<b>" + escHtml(routeLabel) + "</b>";
+      if (typeLabel) {
+        html += '<br><span style="color:var(--muted)">' + escHtml(typeLabel) + "</span>";
+      }
+    }
+    html += "</div>";
+    return html;
+  }
+
+  function detailRow(label, val) {
+    if (val == null || val === "") return "";
+    return '<div class="gtfs-detail-row">' +
+           '<span class="gtfs-detail-key">' + escHtml(label) + ':</span> ' +
+           '<span class="gtfs-detail-val">' + escHtml(String(val)) + '</span>' +
+           '</div>';
+  }
+
+  function buildClickHTML(props, isStop) {
+    var html = '<div class="gtfs-detail">';
+
+    if (isStop) {
+      var title = props.stop_name || props.stop_id || "Stop";
+      html += '<div class="gtfs-detail-title">' + escHtml(title) + '</div>';
+      html += detailRow("stop_id",   props.stop_id);
+      html += detailRow("stop_code", props.stop_code);
+      html += detailRow("desc",      props.stop_desc);
+      var ltLabel = LOCATION_TYPE_LABELS[String(props.location_type)] || "";
+      if (ltLabel) html += detailRow("type", ltLabel);
+      var wlLabel = WHEELCHAIR_LABELS[String(props.wheelchair_boarding)] || "";
+      if (wlLabel) html += detailRow("wheelchair", wlLabel);
+      html += detailRow("parent_station", props.parent_station);
+      html += detailRow("zone_id",        props.zone_id);
+    } else {
+      // Build title with optional color swatch
+      var routeName = props.route_short_name || props.route_long_name || props.shape_id || "Route";
+      var titleHtml = '<div class="gtfs-detail-title">';
+      var color = (props.route_color || "").replace(/^#/, "");
+      if (color && color.toLowerCase() !== "ffffff" && color.length === 6) {
+        titleHtml += '<span class="gtfs-route-swatch" style="background:#' +
+                     escHtml(color) + '"></span>';
+      }
+      titleHtml += escHtml(routeName) + "</div>";
+      html += titleHtml;
+
+      html += detailRow("route_id",    props.route_id);
+      html += detailRow("short_name",  props.route_short_name);
+      html += detailRow("long_name",   props.route_long_name);
+      html += detailRow("desc",        props.route_desc);
+      var rtLabel = ROUTE_TYPE_LABELS[parseInt(props.route_type, 10)] || props.route_type || "";
+      if (rtLabel) html += detailRow("mode", rtLabel);
+      html += detailRow("agency_id",   props.agency_id);
+      html += detailRow("shape_id",    props.shape_id);
+    }
+
+    html += "</div>";
+    return html;
+  }
+
   // ---- GeoJSON builders ----
 
-  function buildShapesGeoJSON(rows) {
+  function buildShapesGeoJSON(rows, routeLookup) {
     // Group points by shape_id, sort by sequence, build LineStrings
     var groups = {};
     for (var i = 0; i < rows.length; i++) {
@@ -220,14 +417,19 @@
     var features = [];
     var ids = Object.keys(groups);
     for (var j = 0; j < ids.length; j++) {
-      var sid = ids[j];
-      var pts = groups[sid];
+      var sid  = ids[j];
+      var pts  = groups[sid];
       pts.sort(function (a, b) { return a[0] - b[0]; });
       var coords = pts.map(function (p) { return [p[1], p[2]]; });
       if (coords.length < 2) continue;
+
+      // Merge route info from lookup (empty object if not found)
+      var routeInfo = (routeLookup && routeLookup.get(sid)) || {};
+      var props = Object.assign({ shape_id: sid }, routeInfo);
+
       features.push({
         type: "Feature",
-        properties: { shape_id: sid },
+        properties: props,
         geometry: { type: "LineString", coordinates: coords }
       });
     }
@@ -263,7 +465,7 @@
     clearBtn.style.display = hasData ? "" : "none";
   }
 
-  // ---- Popup rendering ----
+  // ---- Popup rendering (analysis popup, not map popups) ----
 
   function renderFileList() {
     var list = document.getElementById("gtfsFileList");
@@ -288,10 +490,10 @@
 
     list.innerHTML = "";
     for (var i = 0; i < allFiles.length; i++) {
-      var fname   = allFiles[i];
+      var fname    = allFiles[i];
       var fileData = _gtfsData.get(fname);
-      var isReq   = !!REQUIRED[fname];
-      var active  = fname === _selectedFile ? " gtfs-file-active" : "";
+      var isReq    = !!REQUIRED[fname];
+      var active   = fname === _selectedFile ? " gtfs-file-active" : "";
 
       var btn = document.createElement("button");
       btn.className = "gtfs-file-item" + active;
@@ -305,7 +507,7 @@
       (function (f) {
         btn.addEventListener("click", function () {
           _selectedFile = f;
-          renderFileList(); // re-render to update active state
+          renderFileList();
           renderTable(f);
         });
       })(fname);
@@ -350,7 +552,6 @@
     var rows    = fileData.rows;
     var shown   = Math.min(rows.length, TABLE_ROW_LIMIT);
 
-    // Build thead
     var thHtml = "<tr>";
     for (var h = 0; h < headers.length; h++) {
       thHtml += "<th>" + escHtml(headers[h]) + "</th>";
@@ -358,7 +559,6 @@
     thHtml += "</tr>";
     thead.innerHTML = thHtml;
 
-    // Build tbody (capped)
     var tbHtml = "";
     for (var r = 0; r < shown; r++) {
       tbHtml += "<tr>";
@@ -375,10 +575,8 @@
         "</td></tr>";
     }
     tbody.innerHTML = tbHtml;
-
     wrapper.style.display = "";
 
-    // Meta line
     if (meta) {
       meta.textContent =
         rows.length.toLocaleString() + " row" + (rows.length !== 1 ? "s" : "") +
@@ -400,7 +598,6 @@
   function init(core) {
     _initialized = true;
 
-    // Show routes checkbox
     var showRoutes = document.getElementById("gtfsShowRoutes");
     if (showRoutes) {
       showRoutes.checked = _showRoutes;
@@ -409,7 +606,6 @@
       });
     }
 
-    // Show stops checkbox
     var showStops = document.getElementById("gtfsShowStops");
     if (showStops) {
       showStops.checked = _showStops;
@@ -418,7 +614,6 @@
       });
     }
 
-    // In-popup clear button
     var clearBtn = document.getElementById("gtfsClearBtn");
     if (clearBtn) {
       clearBtn.addEventListener("click", function () {
@@ -428,7 +623,6 @@
   }
 
   function onOpen(core) {
-    // Sync checkbox state in case it was changed outside the popup
     var showRoutes = document.getElementById("gtfsShowRoutes");
     if (showRoutes) showRoutes.checked = _showRoutes;
     var showStops = document.getElementById("gtfsShowStops");
@@ -444,13 +638,11 @@
   }
 
   // ---- Wire Add Data dropdown buttons ----
-  // (done here rather than app.js so all GTFS logic stays in one file)
 
   var _fileInput = document.getElementById("gtfs-file-input");
   var _dropdown  = document.getElementById("add-data-dropdown");
-
-  var _loadBtn  = document.getElementById("gtfs-load-btn");
-  var _clearBtn = document.getElementById("gtfs-clear-btn");
+  var _loadBtn   = document.getElementById("gtfs-load-btn");
+  var _clearBtn  = document.getElementById("gtfs-clear-btn");
 
   if (_loadBtn && _fileInput) {
     _loadBtn.addEventListener("click", function () {
@@ -477,9 +669,9 @@
   }
 
   // ---- Expose on App namespace ----
-  App.gtfsData        = _gtfsData;   // live reference (null until loaded)
-  App.loadGTFSFile    = loadGTFSFile;
-  App.clearGTFS       = clearGTFS;
+  App.gtfsData     = _gtfsData;   // null until loaded
+  App.loadGTFSFile = loadGTFSFile;
+  App.clearGTFS    = clearGTFS;
 
   // ---- Register analysis module ----
   App.registerModule({

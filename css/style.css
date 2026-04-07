@@ -3221,6 +3221,46 @@ body.dark-mode .result-error td { color: #fc8181; }
   padding: 16px 0;
 }
 
+/* ---- Hover tooltip ---- */
+
+.gtfs-hover {
+  font-size: var(--text-xs);
+  line-height: var(--leading-snug);
+  max-width: 260px;
+}
+
+/* ---- Click detail popup ---- */
+
+.gtfs-detail {
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+  max-width: 300px;
+}
+
+.gtfs-detail-title {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.gtfs-detail-row { padding: 1px 0; }
+.gtfs-detail-key { font-weight: var(--weight-semibold); color: var(--muted); }
+.gtfs-detail-val { color: #333; }
+
+.gtfs-route-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  border: 1px solid rgba(0,0,0,0.15);
+}
+
 /* ---- Dark mode ---- */
 
 body.dark-mode .gtfs-file-item { color: #ccc; }
@@ -3234,3 +3274,5 @@ body.dark-mode .gtfs-table tr:hover td { background: rgba(255,255,255,0.03); }
 body.dark-mode .gtfs-table-truncated td { background: #1e1e2e; color: #718096; }
 body.dark-mode .gtfs-table-wrapper { border-color: #3a3a50; }
 body.dark-mode .gtfs-map-controls { border-color: #3a3a50; }
+body.dark-mode .gtfs-detail-val { color: #ccc; }
+body.dark-mode .gtfs-detail-title { border-color: #3a3a50; }
