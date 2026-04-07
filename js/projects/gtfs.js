@@ -414,12 +414,12 @@
 
         if (isStop) {
           options.push({
-            label: "Copy to Stations",
+            label: "Copy As Station",
             action: function () { copyStopToStation(props, lngLat); }
           });
         } else {
           options.push({
-            label: "Copy to Lines",
+            label: "Copy As Line",
             action: function () { copyShapeToLine(props); }
           });
         }
