@@ -158,7 +158,7 @@
 
     for (var ri = 0; ri < routes.length;   ri++) addRow("route",   ri, (routes[ri].properties   && routes[ri].properties.name)   || ("Route "   + (ri + 1)), "R");
     for (var li = 0; li < lines.length;    li++) addRow("line",    li, (lines[li].properties    && lines[li].properties.name)    || ("Line "    + (li + 1)), "L");
-    for (var si = 0; si < stations.length; si++) addRow("station", si, (stations[si].properties && stations[si].properties.name) || ("Station " + (si + 1)), "S");
+    for (var si = 0; si < stations.length; si++) addRow("station", si, (stations[si].properties && stations[si].properties.name) || ("Point " + (si + 1)), "S");
     for (var gi = 0; gi < polys.length;    gi++) addRow("polygon", gi, (polys[gi].properties    && polys[gi].properties.name)    || ("Polygon " + (gi + 1)), "P");
 
     if (!hasFeatures) {
@@ -197,7 +197,7 @@
     for (var si = 0; si < stations.length; si++) {
       opt = document.createElement("option");
       opt.value = "station:" + si;
-      opt.textContent = (stations[si].properties && stations[si].properties.name) || ("Station " + (si + 1));
+      opt.textContent = (stations[si].properties && stations[si].properties.name) || ("Point " + (si + 1));
       sel.appendChild(opt);
     }
     for (var gi = 0; gi < polys.length; gi++) {
@@ -789,7 +789,7 @@
 
     for (var si = 0; si < stations.length; si++) {
       if (si < stationBufs.length && stationBufs[si])
-        allFeatures.push({ name: (stations[si].properties && stations[si].properties.name) || ("Station " + (si + 1)), coverage: stationBufs[si] });
+        allFeatures.push({ name: (stations[si].properties && stations[si].properties.name) || ("Point " + (si + 1)), coverage: stationBufs[si] });
     }
     for (var li = 0; li < lines.length; li++) {
       if (li < lineBuffers.length && lineBuffers[li])

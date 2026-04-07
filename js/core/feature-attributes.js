@@ -19,7 +19,7 @@
   var TYPE_LABELS = {
     route:   "Route",
     line:    "Line",
-    station: "Station",
+    station: "Point",
     polygon: "Polygon",
     label:   "Label"
   };

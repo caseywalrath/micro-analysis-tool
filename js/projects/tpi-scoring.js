@@ -585,7 +585,7 @@
     // 1. Get buffer union (use custom polygon if provided, else global union)
     onProgress("Getting buffer union...");
     var unionFeat = options.unionPolygon || App.bufferUnionPolygon();
-    if (!unionFeat) throw new Error("No buffers set. Place stations, lines, or routes first.");
+    if (!unionFeat) throw new Error("No buffers set. Place points, lines, or routes first.");
 
     // 2. Fetch census geographies
     onProgress("Fetching census geographies...");

@@ -74,7 +74,7 @@
     var idx = points.length + 1;
     points.push({
       type: "Feature",
-      properties: { name: "Station " + idx, stationIdx: idx, color: "" },
+      properties: { name: "Point " + idx, stationIdx: idx, color: "" },
       geometry: { type: "Point", coordinates: [lon, lat] }
     });
     rebuildBuffers(bufferRadiusMiles);
@@ -87,7 +87,7 @@
     var feature = {
       type: "Feature",
       properties: {
-        name: opts.name || ("Station " + idx),
+        name: opts.name || ("Point " + idx),
         stationIdx: idx,
         color: ""
       },
@@ -170,7 +170,7 @@
     var copy = {
       type: "Feature",
       properties: {
-        name: "Station " + idx,
+        name: "Point " + idx,
         stationIdx: idx,
         color: src.properties.color || "",
         hidden: false

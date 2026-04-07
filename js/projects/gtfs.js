@@ -343,7 +343,7 @@
   function copyStopToStation(props, lngLat) {
     var lon = parseFloat(props.stop_lon) || lngLat.lng;
     var lat = parseFloat(props.stop_lat) || lngLat.lat;
-    var name = props.stop_name || props.stop_code || props.stop_id || "Station";
+    var name = props.stop_name || props.stop_code || props.stop_id || "Point";
     var attrs = {};
     if (props.stop_id) attrs.stopId = String(props.stop_id);
 
@@ -414,7 +414,7 @@
 
         if (isStop) {
           options.push({
-            label: "Copy As Station",
+            label: "Copy As Point",
             action: function () { copyStopToStation(props, lngLat); }
           });
         } else {

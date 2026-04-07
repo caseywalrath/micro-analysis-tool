@@ -21,7 +21,7 @@
   var LABEL_GROUP_KEY = "labelGroup";
 
   var TYPE_LABELS_LOCAL = {
-    station: "Station", line: "Line",
+    station: "Point", line: "Line",
     route: "Route", polygon: "Polygon", label: "Label"
   };
 

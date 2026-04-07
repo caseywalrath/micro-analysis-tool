@@ -410,7 +410,7 @@
     setVal("bpEssValue",  "\u2014");
     setVal("bpLbarNote",  "Requires LBAR inventory + counties");
     setVal("bpCreNote",   "Requires CRE upload");
-    setVal("bpEssNote",   "Requires ESS upload + stations");
+    setVal("bpEssNote",   "Requires ESS upload + points");
 
     _lastRatings = null;
 
@@ -433,7 +433,7 @@
       employment: { value: NaN, label: "N/A", pill: "na", formatted: "\u2014", source: "LODES WAC C000" },
       lbar:       { value: NaN, label: "N/A", pill: "na", formatted: "\u2014", note: "Requires LBAR inventory + counties" },
       cre:        { value: NaN, label: "N/A", pill: "na", formatted: "\u2014", note: "Requires CRE upload" },
-      ess:        { value: NaN, label: "N/A", pill: "na", formatted: "\u2014", note: "Requires ESS upload + stations" }
+      ess:        { value: NaN, label: "N/A", pill: "na", formatted: "\u2014", note: "Requires ESS upload + points" }
     };
 
     try {
@@ -482,7 +482,7 @@
         setVal("bpEssValue", essFmt);
         var essClass = classify(ess.avg, BP.essentialAvg);
         setPill("bpEssPill", essClass.label, essClass.pill);
-        var essNote = "1-mi buffers; " + App.stations.length + " stations; " + ESS_POINTS.length + " service points.";
+        var essNote = "1-mi buffers; " + App.stations.length + " points; " + ESS_POINTS.length + " service points.";
         setVal("bpEssNote", essNote);
         ratings.ess = { value: ess.avg, label: essClass.label, pill: essClass.pill, formatted: essFmt, note: essNote };
       }
@@ -493,7 +493,7 @@
         setVal("bpLbarNote", lbar.note || "");
 
         if (Number.isFinite(lbar.ratio)) {
-          var lbarFmt = lbar.ratio.toFixed(2) + " (station " +
+          var lbarFmt = lbar.ratio.toFixed(2) + " (point " +
             (lbar.shareStation * 100).toFixed(2) + "% / county " +
             (lbar.shareCounty * 100).toFixed(2) + "%)";
           setVal("bpLbarValue", lbarFmt);
