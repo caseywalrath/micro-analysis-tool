@@ -211,14 +211,12 @@
       if (typeof App.renderPointLayers === "function") App.renderPointLayers();
     } else if (featureType === "line") {
       App.lines[featureIndex].properties.color = newColor;
-      var lrEl = document.getElementById("lineBufferRadius");
-      var lr = lrEl ? parseFloat(lrEl.value) : 0.5; if (isNaN(lr)) lr = 0.5;
+      var lr = (App.featureSettings && App.featureSettings.lineBufferRadius != null) ? App.featureSettings.lineBufferRadius : 0;
       App.rebuildLineBuffers(lr);
       App.renderLineLayers();
     } else if (featureType === "route") {
       App.routes[featureIndex].properties.color = newColor;
-      var rrEl = document.getElementById("routeBufferRadius");
-      var rr = rrEl ? parseFloat(rrEl.value) : 0.5; if (isNaN(rr)) rr = 0.5;
+      var rr = (App.featureSettings && App.featureSettings.routeBufferRadius != null) ? App.featureSettings.routeBufferRadius : 0;
       App.rebuildRouteBuffers(rr);
       App.renderRouteLayers();
     } else if (featureType === "polygon") {
@@ -270,16 +268,13 @@
 
   function rerenderForType(ft) {
     if (ft === "route") {
-      var rrEl = document.getElementById("routeBufferRadius");
-      var rr = rrEl ? parseFloat(rrEl.value) : 0.5; if (isNaN(rr)) rr = 0.5;
+      var rr = (App.featureSettings && App.featureSettings.routeBufferRadius != null) ? App.featureSettings.routeBufferRadius : 0;
       if (typeof App.rebuildRouteBuffers === "function") App.rebuildRouteBuffers(rr);
     } else if (ft === "line") {
-      var lrEl = document.getElementById("lineBufferRadius");
-      var lr = lrEl ? parseFloat(lrEl.value) : 0.5; if (isNaN(lr)) lr = 0.5;
+      var lr = (App.featureSettings && App.featureSettings.lineBufferRadius != null) ? App.featureSettings.lineBufferRadius : 0;
       if (typeof App.rebuildLineBuffers === "function") App.rebuildLineBuffers(lr);
     } else if (ft === "point") {
-      var srEl = document.getElementById("bufferRadius");
-      var sr = srEl ? parseFloat(srEl.value) : 0.5; if (isNaN(sr)) sr = 0.5;
+      var sr = (App.featureSettings && App.featureSettings.bufferRadius != null) ? App.featureSettings.bufferRadius : 0;
       if (typeof App.rebuildBuffers === "function") App.rebuildBuffers(sr);
     } else if (ft === "polygon") {
       if (typeof App.renderPolygonLayers === "function") App.renderPolygonLayers();

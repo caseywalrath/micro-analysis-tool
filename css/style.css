@@ -2758,6 +2758,94 @@ code { font-family: var(--font-mono); }
   padding: 4px 6px 6px;
 }
 
+/* Settings icon grid */
+.fp-settings-grid {
+  display: grid;
+  grid-template-columns: 50px repeat(3, 1fr);
+  align-items: center;
+  row-gap: 2px;
+  padding: 2px 0 4px;
+}
+.fp-sg-label {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  padding-left: 2px;
+  white-space: nowrap;
+}
+.fp-sg-col-hdr {
+  font-size: 9px;
+  color: var(--muted);
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding-bottom: 2px;
+}
+.fp-sg-cell {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Settings icon button (always visible, not hover-gated) */
+.fp-sib {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 3px;
+  color: var(--muted);
+  line-height: 1;
+  border-radius: 3px;
+  transition: color 0.15s, background 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.fp-sib:hover { color: #2b6cb0; background: rgba(43,108,176,0.08); }
+.fp-sib.fp-sib-active { color: #2b6cb0; background: rgba(43,108,176,0.12); }
+
+/* Vertical slider popover */
+#fp-slider-popover {
+  position: fixed;
+  z-index: 10100;
+  background: var(--bg, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 6px;
+  box-shadow: 0 3px 12px rgba(0,0,0,0.15);
+  padding: 8px 6px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 44px;
+}
+.fp-slider-val {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: #2b6cb0;
+  min-width: 24px;
+  text-align: center;
+}
+.fp-slider-unit {
+  font-size: 9px;
+  color: var(--muted);
+  text-align: center;
+}
+.fp-slider-vert {
+  writing-mode: vertical-lr;
+  direction: rtl;
+  height: 100px;
+  width: 20px;
+  accent-color: #2b6cb0;
+  cursor: pointer;
+}
+
+/* Dark mode overrides */
+body.dark-mode .fp-sib { color: var(--muted); }
+body.dark-mode .fp-sib:hover { color: #63b3ed; background: rgba(99,179,237,0.1); }
+body.dark-mode .fp-sib.fp-sib-active { color: #63b3ed; background: rgba(99,179,237,0.15); }
+body.dark-mode #fp-slider-popover { background: var(--cardbg, #2a2a3d); border-color: var(--border, #374151); }
+body.dark-mode .fp-slider-val { color: #63b3ed; }
+
 /* Vertex right-click context menu */
 #vertex-ctx-menu {
   position: fixed;

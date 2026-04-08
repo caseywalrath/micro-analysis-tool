@@ -196,31 +196,37 @@
           <div class="fp-section" id="fp-settings-section">
             <div class="fp-section-header fp-settings-header">Feature Settings</div>
             <div class="fp-settings-body" style="display:none">
-              <div class="fp-buffer-row">
-                <span class="fp-buffer-label">Points</span>
-                <input id="bufferRadius" type="number" min="0" step="0.1" value="0.5" class="fp-radius-input" />
-                <span class="fp-radius-unit">mi</span>
-                <input id="pointLineWidth" type="number" min="1" max="5" step="0.1" value="1" class="fp-radius-input" />
-                <span class="fp-radius-unit">×</span>
-              </div>
-              <div class="fp-buffer-row">
-                <span class="fp-buffer-label">Lines</span>
-                <input id="lineBufferRadius" type="number" min="0" step="0.1" value="0.5" class="fp-radius-input" />
-                <span class="fp-radius-unit">mi</span>
-                <input id="lineLineWidth" type="number" min="1" max="5" step="0.1" value="1" class="fp-radius-input" />
-                <span class="fp-radius-unit">×</span>
-              </div>
-              <div class="fp-buffer-row">
-                <span class="fp-buffer-label">Routes</span>
-                <input id="routeBufferRadius" type="number" min="0" step="0.1" value="0.5" class="fp-radius-input" />
-                <span class="fp-radius-unit">mi</span>
-                <input id="routeLineWidth" type="number" min="1" max="5" step="0.1" value="1" class="fp-radius-input" />
-                <span class="fp-radius-unit">×</span>
-              </div>
-              <div class="fp-buffer-row">
-                <span class="fp-buffer-label">Polygons</span>
-                <input id="polygonLineWidth" type="number" min="1" max="5" step="0.1" value="1" class="fp-radius-input" />
-                <span class="fp-radius-unit">×</span>
+              <div class="fp-settings-grid">
+                <!-- Column headers -->
+                <div class="fp-sg-label"></div>
+                <div class="fp-sg-col-hdr">Opacity</div>
+                <div class="fp-sg-col-hdr">Buffer</div>
+                <div class="fp-sg-col-hdr">Width</div>
+                <!-- Points -->
+                <div class="fp-sg-label">Points</div>
+                <div class="fp-sg-cell"><button id="fp-set-pointOpacity"      class="fp-sib" title="Point opacity"></button></div>
+                <div class="fp-sg-cell"><button id="fp-set-bufferRadius"      class="fp-sib" title="Point buffer radius (mi)"></button></div>
+                <div class="fp-sg-cell"><button id="fp-set-pointLineWidth"    class="fp-sib" title="Point size"></button></div>
+                <!-- Lines -->
+                <div class="fp-sg-label">Lines</div>
+                <div class="fp-sg-cell"><button id="fp-set-lineOpacity"       class="fp-sib" title="Line opacity"></button></div>
+                <div class="fp-sg-cell"><button id="fp-set-lineBufferRadius"  class="fp-sib" title="Line buffer radius (mi)"></button></div>
+                <div class="fp-sg-cell"><button id="fp-set-lineLineWidth"     class="fp-sib" title="Line width"></button></div>
+                <!-- Routes -->
+                <div class="fp-sg-label">Routes</div>
+                <div class="fp-sg-cell"><button id="fp-set-routeOpacity"      class="fp-sib" title="Route opacity"></button></div>
+                <div class="fp-sg-cell"><button id="fp-set-routeBufferRadius" class="fp-sib" title="Route buffer radius (mi)"></button></div>
+                <div class="fp-sg-cell"><button id="fp-set-routeLineWidth"    class="fp-sib" title="Route width"></button></div>
+                <!-- Polygons -->
+                <div class="fp-sg-label">Polygons</div>
+                <div class="fp-sg-cell"><button id="fp-set-polygonOpacity"    class="fp-sib" title="Polygon opacity"></button></div>
+                <div class="fp-sg-cell"></div>
+                <div class="fp-sg-cell"><button id="fp-set-polygonLineWidth"  class="fp-sib" title="Polygon border width"></button></div>
+                <!-- Buffers -->
+                <div class="fp-sg-label">Buffers</div>
+                <div class="fp-sg-cell"><button id="fp-set-bufferOpacity"     class="fp-sib" title="Buffer opacity"></button></div>
+                <div class="fp-sg-cell"></div>
+                <div class="fp-sg-cell"><button id="fp-set-bufferLineWidth"   class="fp-sib" title="Buffer border width"></button></div>
               </div>
               <div class="fp-buffer-row">
                 <label class="fp-buffer-label" for="offsetOverlap">
@@ -228,6 +234,13 @@
                 </label>
               </div>
             </div>
+          </div>
+
+          <!-- Shared vertical slider popover for Feature Settings -->
+          <div id="fp-slider-popover" style="display:none">
+            <span id="fp-slider-value" class="fp-slider-val"></span>
+            <input id="fp-slider-input" type="range" class="fp-slider-vert" />
+            <span id="fp-slider-unit" class="fp-slider-unit"></span>
           </div>
         </div>
 

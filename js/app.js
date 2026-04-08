@@ -290,6 +290,101 @@
     if (typeof App.cache !== "undefined") App.cache.save();
   };
 
+  // ---- Feature Settings: centralized state + apply helpers ----
+
+  App.featureSettings = {
+    pointOpacity:      100,
+    lineOpacity:       100,
+    routeOpacity:      100,
+    polygonOpacity:    50,
+    bufferOpacity:     50,
+    bufferRadius:      0,
+    lineBufferRadius:  0,
+    routeBufferRadius: 0,
+    pointLineWidth:    1,
+    lineLineWidth:     1,
+    routeLineWidth:    1,
+    polygonLineWidth:  1,
+    bufferLineWidth:   1
+  };
+
+  function _safeSetPaint(layerId, prop, val) {
+    if (App.map && App.map.getLayer(layerId)) {
+      App.map.setPaintProperty(layerId, prop, val);
+    }
+  }
+
+  function _polyOpacityValues(S) {
+    if (S <= 50) {
+      var t = S / 50;
+      return { fill: 0.15 * t, border: 0.8 * t };
+    }
+    var t = (S - 50) / 50;
+    return { fill: 0.15 + 0.85 * t, border: 0.8 + 0.2 * t };
+  }
+
+  function _bufOpacityValues(S) {
+    if (S <= 50) {
+      var t = S / 50;
+      return { fill: 0.08 * t, border: 0.4 * t };
+    }
+    var t = (S - 50) / 50;
+    return { fill: 0.08 + 0.92 * t, border: 0.4 + 0.6 * t };
+  }
+
+  App.applyFeatureOpacity = function (type) {
+    var fs = App.featureSettings;
+    if (type === "point" || type === "all") {
+      var op = fs.pointOpacity / 100;
+      _safeSetPaint("points-layer", "circle-opacity", op);
+      _safeSetPaint("points-layer", "circle-stroke-opacity", op);
+    }
+    if (type === "line" || type === "all") {
+      _safeSetPaint("lines-layer", "line-opacity", fs.lineOpacity / 100);
+    }
+    if (type === "route" || type === "all") {
+      _safeSetPaint("routes-layer", "line-opacity", fs.routeOpacity / 100);
+    }
+    if (type === "polygon" || type === "all") {
+      var pc = _polyOpacityValues(fs.polygonOpacity);
+      _safeSetPaint("polygons-fill", "fill-opacity", pc.fill);
+      _safeSetPaint("polygons-outlines-layer", "line-opacity", pc.border);
+    }
+    if (type === "buffer" || type === "all") {
+      var bc = _bufOpacityValues(fs.bufferOpacity);
+      _safeSetPaint("buffers-fill", "fill-opacity", bc.fill);
+      _safeSetPaint("buffers-line", "line-opacity", bc.border);
+      _safeSetPaint("line-buffers-fill", "fill-opacity", bc.fill);
+      _safeSetPaint("line-buffers-line", "line-opacity", bc.border);
+      _safeSetPaint("route-buffers-fill", "fill-opacity", bc.fill);
+      _safeSetPaint("route-buffers-line", "line-opacity", bc.border);
+    }
+  };
+
+  App.applyLineWidth = function (type) {
+    var fs = App.featureSettings;
+    if (type === "point" || type === "all") {
+      _safeSetPaint("points-layer", "circle-radius", 6 * fs.pointLineWidth);
+      _safeSetPaint("points-layer", "circle-stroke-width", 2 * fs.pointLineWidth);
+    }
+    if (type === "line" || type === "all") {
+      _safeSetPaint("lines-layer", "line-width", 3 * fs.lineLineWidth);
+    }
+    if (type === "route" || type === "all") {
+      _safeSetPaint("routes-layer", "line-width", 3 * fs.routeLineWidth);
+    }
+    if (type === "polygon" || type === "all") {
+      _safeSetPaint("polygons-outlines-layer", "line-width", 3 * fs.polygonLineWidth);
+    }
+  };
+
+  App.applyBufferLineWidth = function () {
+    var w = App.featureSettings.bufferLineWidth;
+    _safeSetPaint("buffers-line", "line-width", 2 * w);
+    _safeSetPaint("line-buffers-line", "line-width", 2 * w);
+    _safeSetPaint("route-buffers-line", "line-width", 2 * w);
+  };
+
   // ---- Map load: wire everything ----
 
   App.map.on("load", async function () {
@@ -467,58 +562,118 @@
       }
     });
 
-    // Buffer radius input (points)
-    document.getElementById("bufferRadius").addEventListener("input", function () {
-      var val = parseFloat(this.value);
-      if (isNaN(val) || val < 0) val = 0;
-      App.rebuildBuffers(val);
-      notifyProject();
-      if (typeof App.cache !== "undefined") App.cache.save();
+    // ---- Feature Settings slider popover ----
+
+    var OPACITY_SVG = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="8" cy="8" r="6" stroke-dasharray="3 2"/></svg>';
+    var BUFFER_SVG  = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="2" fill="currentColor" stroke="none"/></svg>';
+    var WIDTH_SVG   = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-linecap="round"><line x1="2" y1="8" x2="14" y2="8" stroke-width="2.5"/></svg>';
+
+    // Populate icon buttons with SVGs
+    var _iconDefs = [
+      ["fp-set-pointOpacity",      OPACITY_SVG],
+      ["fp-set-lineOpacity",       OPACITY_SVG],
+      ["fp-set-routeOpacity",      OPACITY_SVG],
+      ["fp-set-polygonOpacity",    OPACITY_SVG],
+      ["fp-set-bufferOpacity",     OPACITY_SVG],
+      ["fp-set-bufferRadius",      BUFFER_SVG],
+      ["fp-set-lineBufferRadius",  BUFFER_SVG],
+      ["fp-set-routeBufferRadius", BUFFER_SVG],
+      ["fp-set-pointLineWidth",    WIDTH_SVG],
+      ["fp-set-lineLineWidth",     WIDTH_SVG],
+      ["fp-set-routeLineWidth",    WIDTH_SVG],
+      ["fp-set-polygonLineWidth",  WIDTH_SVG],
+      ["fp-set-bufferLineWidth",   WIDTH_SVG]
+    ];
+    _iconDefs.forEach(function (pair) {
+      var el = document.getElementById(pair[0]);
+      if (el) el.innerHTML = pair[1];
     });
 
-    // Buffer radius input (lines)
-    document.getElementById("lineBufferRadius").addEventListener("input", function () {
-      var val = parseFloat(this.value);
-      if (isNaN(val) || val < 0) val = 0;
-      App.rebuildLineBuffers(val);
-      notifyProject();
-      if (typeof App.cache !== "undefined") App.cache.save();
-    });
+    var _fpActiveBtn = null;
 
-    // Buffer radius input (routes)
-    document.getElementById("routeBufferRadius").addEventListener("input", function () {
-      var val = parseFloat(this.value);
-      if (isNaN(val) || val < 0) val = 0;
-      App.rebuildRouteBuffers(val);
-      notifyProject();
-      if (typeof App.cache !== "undefined") App.cache.save();
-    });
+    function _closeFpSlider() {
+      var pop = document.getElementById("fp-slider-popover");
+      if (pop) pop.style.display = "none";
+      if (_fpActiveBtn) { _fpActiveBtn.classList.remove("fp-sib-active"); _fpActiveBtn = null; }
+    }
 
-    // Line width inputs (visual only — no notifyProject)
-    document.getElementById("pointLineWidth").addEventListener("input", function () {
-      var w = Math.min(5, Math.max(1, parseFloat(this.value) || 1));
-      App.map.setPaintProperty("points-layer", "circle-radius", 6 * w);
-      App.map.setPaintProperty("points-layer", "circle-stroke-width", 2 * w);
-      if (typeof App.cache !== "undefined") App.cache.save();
-    });
+    function _openFpSlider(btn, cfg) {
+      // Toggle off if same button clicked again
+      if (_fpActiveBtn === btn) { _closeFpSlider(); return; }
+      _closeFpSlider();
 
-    document.getElementById("lineLineWidth").addEventListener("input", function () {
-      var w = Math.min(5, Math.max(1, parseFloat(this.value) || 1));
-      App.map.setPaintProperty("lines-layer", "line-width", 3 * w);
-      if (typeof App.cache !== "undefined") App.cache.save();
-    });
+      var pop = document.getElementById("fp-slider-popover");
+      if (!pop) return;
+      var slider = document.getElementById("fp-slider-input");
+      var valEl  = document.getElementById("fp-slider-value");
+      var unitEl = document.getElementById("fp-slider-unit");
+      if (!slider || !valEl) return;
 
-    document.getElementById("routeLineWidth").addEventListener("input", function () {
-      var w = Math.min(5, Math.max(1, parseFloat(this.value) || 1));
-      App.map.setPaintProperty("routes-layer", "line-width", 3 * w);
-      if (typeof App.cache !== "undefined") App.cache.save();
-    });
+      slider.min   = cfg.min;
+      slider.max   = cfg.max;
+      slider.step  = cfg.step;
+      slider.value = App.featureSettings[cfg.key];
+      valEl.textContent  = _fmtSlider(App.featureSettings[cfg.key], cfg);
+      if (unitEl) unitEl.textContent = cfg.unit || "";
 
-    document.getElementById("polygonLineWidth").addEventListener("input", function () {
-      var w = Math.min(5, Math.max(1, parseFloat(this.value) || 1));
-      App.map.setPaintProperty("polygons-outlines-layer", "line-width", 3 * w);
-      if (typeof App.cache !== "undefined") App.cache.save();
-    });
+      slider.oninput = function () {
+        var v = parseFloat(this.value);
+        App.featureSettings[cfg.key] = v;
+        valEl.textContent = _fmtSlider(v, cfg);
+        cfg.onChange(v);
+        if (typeof App.cache !== "undefined") App.cache.save();
+      };
+
+      // Position popover below (or above) the icon
+      var rect = btn.getBoundingClientRect();
+      var popW = 44, popH = 160;
+      var left = rect.left + rect.width / 2 - popW / 2;
+      var top  = rect.bottom + 6;
+      if (top + popH > window.innerHeight - 8) top = rect.top - popH - 6;
+      left = Math.max(4, Math.min(left, window.innerWidth - popW - 4));
+      pop.style.left    = Math.round(left) + "px";
+      pop.style.top     = Math.round(top)  + "px";
+      pop.style.display = "flex";
+
+      btn.classList.add("fp-sib-active");
+      _fpActiveBtn = btn;
+    }
+
+    function _fmtSlider(v, cfg) {
+      if (cfg.step < 1) return parseFloat(v).toFixed(1);
+      return Math.round(v).toString();
+    }
+
+    // Close on outside mousedown (not click — avoids missing fast drags)
+    document.addEventListener("mousedown", function (e) {
+      if (!_fpActiveBtn) return;
+      var pop = document.getElementById("fp-slider-popover");
+      if (!pop) return;
+      if (!pop.contains(e.target) && e.target !== _fpActiveBtn && !_fpActiveBtn.contains(e.target)) {
+        _closeFpSlider();
+      }
+    }, true);
+
+    // Wire each icon button
+    function _wireFpBtn(id, cfg) {
+      var btn = document.getElementById(id);
+      if (!btn) return;
+      btn.addEventListener("click", function (e) { e.stopPropagation(); _openFpSlider(btn, cfg); });
+    }
+
+    _wireFpBtn("fp-set-pointOpacity",      { key:"pointOpacity",      min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("point"); } });
+    _wireFpBtn("fp-set-lineOpacity",       { key:"lineOpacity",       min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("line"); } });
+    _wireFpBtn("fp-set-routeOpacity",      { key:"routeOpacity",      min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("route"); } });
+    _wireFpBtn("fp-set-polygonOpacity",    { key:"polygonOpacity",    min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("polygon"); } });
+    _wireFpBtn("fp-set-bufferOpacity",     { key:"bufferOpacity",     min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("buffer"); } });
+    _wireFpBtn("fp-set-bufferRadius",      { key:"bufferRadius",      min:0, max:2,   step:0.1, unit:"mi", onChange: function(v) { App.rebuildBuffers(v); notifyProject(); } });
+    _wireFpBtn("fp-set-lineBufferRadius",  { key:"lineBufferRadius",  min:0, max:2,   step:0.1, unit:"mi", onChange: function(v) { App.rebuildLineBuffers(v); notifyProject(); } });
+    _wireFpBtn("fp-set-routeBufferRadius", { key:"routeBufferRadius", min:0, max:2,   step:0.1, unit:"mi", onChange: function(v) { App.rebuildRouteBuffers(v); notifyProject(); } });
+    _wireFpBtn("fp-set-pointLineWidth",    { key:"pointLineWidth",    min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyLineWidth("point"); } });
+    _wireFpBtn("fp-set-lineLineWidth",     { key:"lineLineWidth",     min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyLineWidth("line"); } });
+    _wireFpBtn("fp-set-routeLineWidth",    { key:"routeLineWidth",    min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyLineWidth("route"); } });
+    _wireFpBtn("fp-set-polygonLineWidth",  { key:"polygonLineWidth",  min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyLineWidth("polygon"); } });
+    _wireFpBtn("fp-set-bufferLineWidth",   { key:"bufferLineWidth",   min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyBufferLineWidth(); } });
 
     // Offset overlapping lines/routes toggle
     document.getElementById("offsetOverlap").addEventListener("change", function () {
@@ -812,10 +967,30 @@
         exportDropdown.style.display = "none";
         addDataDropdown.style.display = "none";
         if (analysisDropdown) analysisDropdown.style.display = "none";
+        if (typeof _closeFpSlider === "function") _closeFpSlider();
       }
     });
 
     // Checkbox change listeners — now wired in buffer-summary.js init()
+
+    // Wrap render/rebuild functions to re-apply opacity + line width after layers are recreated
+    (function () {
+      function _wrapRender(fnName, applyFn) {
+        var orig = App[fnName];
+        if (typeof orig !== "function") return;
+        App[fnName] = function () {
+          orig.apply(this, arguments);
+          applyFn();
+        };
+      }
+      _wrapRender("rebuildBuffers",     function () { App.applyFeatureOpacity("buffer"); App.applyBufferLineWidth(); });
+      _wrapRender("rebuildLineBuffers", function () { App.applyFeatureOpacity("buffer"); App.applyBufferLineWidth(); });
+      _wrapRender("rebuildRouteBuffers",function () { App.applyFeatureOpacity("buffer"); App.applyBufferLineWidth(); });
+      _wrapRender("renderPointLayers",  function () { App.applyFeatureOpacity("point");  App.applyLineWidth("point"); });
+      _wrapRender("renderLineLayers",   function () { App.applyFeatureOpacity("line");   App.applyLineWidth("line"); });
+      _wrapRender("renderRouteLayers",  function () { App.applyFeatureOpacity("route");  App.applyLineWidth("route"); });
+      _wrapRender("renderPolygonLayers",function () { App.applyFeatureOpacity("polygon"); App.applyLineWidth("polygon"); });
+    })();
 
     // Restore session: shared link takes priority over localStorage
     var _sharedLoaded = typeof App.cache !== "undefined" && App.cache.loadShareLink();

@@ -51,13 +51,19 @@
       routes: App.routes.slice(),
       polygons: App.polygons.slice(),
       labels: App.labels ? App.labels.slice() : [],
-      bufferRadius: parseFloat(document.getElementById("bufferRadius").value) || 0.5,
-      lineBufferRadius: parseFloat(document.getElementById("lineBufferRadius").value) || 0.5,
-      routeBufferRadius: parseFloat(document.getElementById("routeBufferRadius").value) || 0.5,
-      pointLineWidth:  parseFloat(document.getElementById("pointLineWidth").value)  || 1,
-      lineLineWidth:     parseFloat(document.getElementById("lineLineWidth").value)     || 1,
-      routeLineWidth:    parseFloat(document.getElementById("routeLineWidth").value)    || 1,
-      polygonLineWidth:  parseFloat(document.getElementById("polygonLineWidth").value)  || 1,
+      bufferRadius:      (App.featureSettings && App.featureSettings.bufferRadius      != null) ? App.featureSettings.bufferRadius      : 0,
+      lineBufferRadius:  (App.featureSettings && App.featureSettings.lineBufferRadius  != null) ? App.featureSettings.lineBufferRadius  : 0,
+      routeBufferRadius: (App.featureSettings && App.featureSettings.routeBufferRadius != null) ? App.featureSettings.routeBufferRadius : 0,
+      pointLineWidth:    (App.featureSettings && App.featureSettings.pointLineWidth    != null) ? App.featureSettings.pointLineWidth    : 1,
+      lineLineWidth:     (App.featureSettings && App.featureSettings.lineLineWidth     != null) ? App.featureSettings.lineLineWidth     : 1,
+      routeLineWidth:    (App.featureSettings && App.featureSettings.routeLineWidth    != null) ? App.featureSettings.routeLineWidth    : 1,
+      polygonLineWidth:  (App.featureSettings && App.featureSettings.polygonLineWidth  != null) ? App.featureSettings.polygonLineWidth  : 1,
+      bufferLineWidth:   (App.featureSettings && App.featureSettings.bufferLineWidth   != null) ? App.featureSettings.bufferLineWidth   : 1,
+      pointOpacity:      (App.featureSettings && App.featureSettings.pointOpacity      != null) ? App.featureSettings.pointOpacity      : 100,
+      lineOpacity:       (App.featureSettings && App.featureSettings.lineOpacity       != null) ? App.featureSettings.lineOpacity       : 100,
+      routeOpacity:      (App.featureSettings && App.featureSettings.routeOpacity      != null) ? App.featureSettings.routeOpacity      : 100,
+      polygonOpacity:    (App.featureSettings && App.featureSettings.polygonOpacity    != null) ? App.featureSettings.polygonOpacity    : 50,
+      bufferOpacity:     (App.featureSettings && App.featureSettings.bufferOpacity     != null) ? App.featureSettings.bufferOpacity     : 50,
       offsetOverlap: !!document.getElementById("offsetOverlap").checked,
       lodesFileNames: App.lodesFileNames || [],
       projFileName: App.projFileName || "",
@@ -113,58 +119,44 @@
       for (var li = 0; li < state.labels.length; li++) App.labels.push(state.labels[li]);
     }
 
-    // 3. Set buffer radius DOM inputs before rebuilding
-    var bufRadEl = document.getElementById("bufferRadius");
-    if (bufRadEl && state.bufferRadius != null) {
-      bufRadEl.value = state.bufferRadius;
-    }
-    var lineBufRadEl = document.getElementById("lineBufferRadius");
-    if (lineBufRadEl && state.lineBufferRadius != null) {
-      lineBufRadEl.value = state.lineBufferRadius;
-    }
-    var routeBufRadEl = document.getElementById("routeBufferRadius");
-    if (routeBufRadEl && state.routeBufferRadius != null) {
-      routeBufRadEl.value = state.routeBufferRadius;
-    }
-
-    // 3b. Restore line width DOM inputs and apply paint properties
-    var stWEl = document.getElementById("pointLineWidth");
-    if (stWEl && state.pointLineWidth != null) {
-      stWEl.value = state.pointLineWidth;
-      var sw = state.pointLineWidth;
-      App.map.setPaintProperty("points-layer", "circle-radius", 6 * sw);
-      App.map.setPaintProperty("points-layer", "circle-stroke-width", 2 * sw);
-    }
-    var liWEl = document.getElementById("lineLineWidth");
-    if (liWEl && state.lineLineWidth != null) {
-      liWEl.value = state.lineLineWidth;
-      App.map.setPaintProperty("lines-layer", "line-width", 3 * state.lineLineWidth);
-    }
-    var rtWEl = document.getElementById("routeLineWidth");
-    if (rtWEl && state.routeLineWidth != null) {
-      rtWEl.value = state.routeLineWidth;
-      App.map.setPaintProperty("routes-layer", "line-width", 3 * state.routeLineWidth);
-    }
-    var polyWEl = document.getElementById("polygonLineWidth");
-    if (polyWEl && state.polygonLineWidth != null) {
-      polyWEl.value = state.polygonLineWidth;
-      App.map.setPaintProperty("polygons-outlines-layer", "line-width", 3 * state.polygonLineWidth);
+    // 3. Restore feature settings into App.featureSettings
+    if (App.featureSettings) {
+      var fs = App.featureSettings;
+      if (state.bufferRadius      != null) fs.bufferRadius      = state.bufferRadius;
+      if (state.lineBufferRadius  != null) fs.lineBufferRadius  = state.lineBufferRadius;
+      if (state.routeBufferRadius != null) fs.routeBufferRadius = state.routeBufferRadius;
+      if (state.pointLineWidth    != null) fs.pointLineWidth    = state.pointLineWidth;
+      if (state.lineLineWidth     != null) fs.lineLineWidth     = state.lineLineWidth;
+      if (state.routeLineWidth    != null) fs.routeLineWidth    = state.routeLineWidth;
+      if (state.polygonLineWidth  != null) fs.polygonLineWidth  = state.polygonLineWidth;
+      if (state.bufferLineWidth   != null) fs.bufferLineWidth   = state.bufferLineWidth;
+      // Opacity — default gracefully for old sessions without these fields
+      fs.pointOpacity   = (state.pointOpacity   != null) ? state.pointOpacity   : 100;
+      fs.lineOpacity    = (state.lineOpacity     != null) ? state.lineOpacity    : 100;
+      fs.routeOpacity   = (state.routeOpacity    != null) ? state.routeOpacity   : 100;
+      fs.polygonOpacity = (state.polygonOpacity  != null) ? state.polygonOpacity : 50;
+      fs.bufferOpacity  = (state.bufferOpacity   != null) ? state.bufferOpacity  : 50;
     }
 
-    // 3c. Restore offset toggle (actual offset computed after render via auto-recompute hook)
+    // 3b. Restore offset toggle (actual offset computed after render via auto-recompute hook)
     var offsetEl = document.getElementById("offsetOverlap");
     if (offsetEl && state.offsetOverlap) {
       offsetEl.checked = true;
     }
 
     // 4. Rebuild derived buffers and re-render map layers
-    var pointRadius = parseFloat(bufRadEl ? bufRadEl.value : "0.5") || 0.5;
-    var lineRadius = parseFloat(lineBufRadEl ? lineBufRadEl.value : "0.5") || 0.5;
-    var routeRadius = parseFloat(routeBufRadEl ? routeBufRadEl.value : "0.5") || 0.5;
+    var pointRadius  = (App.featureSettings && App.featureSettings.bufferRadius      != null) ? App.featureSettings.bufferRadius      : 0;
+    var lineRadius   = (App.featureSettings && App.featureSettings.lineBufferRadius  != null) ? App.featureSettings.lineBufferRadius  : 0;
+    var routeRadius  = (App.featureSettings && App.featureSettings.routeBufferRadius != null) ? App.featureSettings.routeBufferRadius : 0;
     App.rebuildBuffers(pointRadius);
     App.rebuildLineBuffers(lineRadius);
     App.rebuildRouteBuffers(routeRadius);
     App.renderPolygonLayers();
+
+    // 4b. Apply line widths and opacity (after layers exist)
+    if (typeof App.applyLineWidth        === "function") App.applyLineWidth("all");
+    if (typeof App.applyBufferLineWidth  === "function") App.applyBufferLineWidth();
+    if (typeof App.applyFeatureOpacity   === "function") App.applyFeatureOpacity("all");
     if (typeof App.renderLabelMarkers === "function") App.renderLabelMarkers();
 
     // 4b. Restore map position (if saved)
@@ -294,13 +286,25 @@
     App.clearPolygons();
     if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
 
-    // 3. Reset buffer radii to defaults
-    var bufRadEl = document.getElementById("bufferRadius");
-    if (bufRadEl) bufRadEl.value = "0.5";
-    var lineBufRadEl = document.getElementById("lineBufferRadius");
-    if (lineBufRadEl) lineBufRadEl.value = "0.5";
-    var routeBufRadEl = document.getElementById("routeBufferRadius");
-    if (routeBufRadEl) routeBufRadEl.value = "0.5";
+    // 3. Reset feature settings to defaults
+    if (App.featureSettings) {
+      App.featureSettings.bufferRadius      = 0;
+      App.featureSettings.lineBufferRadius  = 0;
+      App.featureSettings.routeBufferRadius = 0;
+      App.featureSettings.pointLineWidth    = 1;
+      App.featureSettings.lineLineWidth     = 1;
+      App.featureSettings.routeLineWidth    = 1;
+      App.featureSettings.polygonLineWidth  = 1;
+      App.featureSettings.bufferLineWidth   = 1;
+      App.featureSettings.pointOpacity      = 100;
+      App.featureSettings.lineOpacity       = 100;
+      App.featureSettings.routeOpacity      = 100;
+      App.featureSettings.polygonOpacity    = 50;
+      App.featureSettings.bufferOpacity     = 50;
+    }
+    if (typeof App.applyLineWidth       === "function") App.applyLineWidth("all");
+    if (typeof App.applyBufferLineWidth === "function") App.applyBufferLineWidth();
+    if (typeof App.applyFeatureOpacity  === "function") App.applyFeatureOpacity("all");
 
     // 4. Clear LODES state
     if (typeof App.clearLodesData === "function") {
