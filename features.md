@@ -198,15 +198,7 @@ A dedicated panel listing all drawn feature groups and imported reference layers
 ### Keyboard shortcuts — Not started
 Standard single-key shortcuts for draw modes: `S` = Station, `L` = Line, `R` = Route, `P` = Polygon. `Escape` cancels current draw operation; `Enter` finishes a line/route. Shortcut hints shown in toolbar button tooltips on hover.
 
-### Feature search / jump-to — Not started
-A search input (in the feature panel or command palette) that filters the feature list and pans/zooms the map to the matching feature. Important in sessions with 20+ drawn routes.
 
-
-### Mini map / overview inset — Not started
-A small inset map in a corner (e.g. bottom-right, above the basemap switcher) showing the full project extent with a rectangle indicating the current viewport. Useful when zoomed into detail editing on a large corridor.
-
-### Dark mode (full UI) — Not started
-The basemap switcher already has a Carto Dark option; extend a dark theme to the sidebar, feature panel, toolbar, and all popups. Implement via a CSS class toggle on `<body>` with CSS custom property overrides. No new dependencies needed.
 
 ### Print / presentation mode — Not started
 A "present" button that temporarily hides the sidebar, feature panel, and toolbar to show the map full-screen. Useful for screen-sharing in stakeholder meetings. Toggle back with a persistent floating button or keyboard shortcut.
