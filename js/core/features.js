@@ -510,6 +510,12 @@
           if (typeof dupFn === "function") {
             options.push({ label: "Duplicate", action: function () { dupFn(fi); } });
           }
+          options.push({ label: feat.properties.hidden ? "Show" : "Hide", action: function () {
+            feat.properties.hidden = !feat.properties.hidden;
+            if (App.cache && typeof App.cache.save === "function") App.cache.save();
+            if (typeof App.rerenderForType === "function") App.rerenderForType(ft);
+            if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+          }});
           options.push({ label: "Delete", action: function () { onDelete(); } });
         })(featureType, featureIndex, feature);
       }

@@ -811,6 +811,11 @@
             { label: "Attributes", action: function () {
                 if (typeof App.openAttrPopup === "function") App.openAttrPopup(featureType, featureIndex, feature);
             }},
+            { label: "Duplicate", action: function () {
+                var dupFns = { point: App.duplicatePoint, line: App.duplicateLine, route: App.duplicateRoute, polygon: App.duplicatePolygon };
+                var fn = dupFns[featureType];
+                if (typeof fn === "function") fn(featureIndex);
+            }},
             { label: isHidden ? "Show" : "Hide", action: function () {
                 feature.properties.hidden = !feature.properties.hidden;
                 if (App.cache && typeof App.cache.save === "function") App.cache.save();
