@@ -816,6 +816,16 @@
                 if (App.cache && typeof App.cache.save === "function") App.cache.save();
                 if (typeof App.rerenderForType === "function") App.rerenderForType(featureType);
                 if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+            }},
+            { label: "Delete", action: function () {
+                if (typeof App.isAttrPopupOpen === "function" && App.isAttrPopupOpen()) {
+                  var pf = typeof App.getAttrPopupFeature === "function" ? App.getAttrPopupFeature() : null;
+                  if (pf && pf.featureType === featureType && pf.featureIndex === featureIndex) App.closeAttrPopup();
+                }
+                var removeFns = { point: App.removePoint, line: App.removeLine, route: App.removeRoute, polygon: App.removePolygon };
+                var fn = removeFns[featureType];
+                if (typeof fn === "function") fn(featureIndex);
+                if (typeof App.onFeatureDelete === "function") App.onFeatureDelete();
             }}
           ]
         );
