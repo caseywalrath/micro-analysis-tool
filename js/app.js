@@ -659,21 +659,34 @@
       var btn = document.getElementById(id);
       if (!btn) return;
       btn.addEventListener("click", function (e) { e.stopPropagation(); _openFpSlider(btn, cfg); });
+      btn.addEventListener("dblclick", function (e) {
+        e.stopPropagation();
+        App.featureSettings[cfg.key] = cfg.def;
+        cfg.onChange(cfg.def);
+        if (typeof App.cache !== "undefined") App.cache.save();
+        // If this slider is currently open, sync its display
+        if (_fpActiveBtn === btn) {
+          var slider = document.getElementById("fp-slider-input");
+          var valEl  = document.getElementById("fp-slider-value");
+          if (slider) slider.value = cfg.def;
+          if (valEl)  valEl.textContent = _fmtSlider(cfg.def, cfg);
+        }
+      });
     }
 
-    _wireFpBtn("fp-set-pointOpacity",      { key:"pointOpacity",      min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("point"); } });
-    _wireFpBtn("fp-set-lineOpacity",       { key:"lineOpacity",       min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("line"); } });
-    _wireFpBtn("fp-set-routeOpacity",      { key:"routeOpacity",      min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("route"); } });
-    _wireFpBtn("fp-set-polygonOpacity",    { key:"polygonOpacity",    min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("polygon"); } });
-    _wireFpBtn("fp-set-bufferOpacity",     { key:"bufferOpacity",     min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("buffer"); } });
-    _wireFpBtn("fp-set-bufferRadius",      { key:"bufferRadius",      min:0, max:2,   step:0.1, unit:"mi", onChange: function(v) { App.rebuildBuffers(v); notifyProject(); } });
-    _wireFpBtn("fp-set-lineBufferRadius",  { key:"lineBufferRadius",  min:0, max:2,   step:0.1, unit:"mi", onChange: function(v) { App.rebuildLineBuffers(v); notifyProject(); } });
-    _wireFpBtn("fp-set-routeBufferRadius", { key:"routeBufferRadius", min:0, max:2,   step:0.1, unit:"mi", onChange: function(v) { App.rebuildRouteBuffers(v); notifyProject(); } });
-    _wireFpBtn("fp-set-pointLineWidth",    { key:"pointLineWidth",    min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyLineWidth("point"); } });
-    _wireFpBtn("fp-set-lineLineWidth",     { key:"lineLineWidth",     min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyLineWidth("line"); } });
-    _wireFpBtn("fp-set-routeLineWidth",    { key:"routeLineWidth",    min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyLineWidth("route"); } });
-    _wireFpBtn("fp-set-polygonLineWidth",  { key:"polygonLineWidth",  min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyLineWidth("polygon"); } });
-    _wireFpBtn("fp-set-bufferLineWidth",   { key:"bufferLineWidth",   min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyBufferLineWidth(); } });
+    _wireFpBtn("fp-set-pointOpacity",      { key:"pointOpacity",      def:100, min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("point"); } });
+    _wireFpBtn("fp-set-lineOpacity",       { key:"lineOpacity",        def:100, min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("line"); } });
+    _wireFpBtn("fp-set-routeOpacity",      { key:"routeOpacity",       def:100, min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("route"); } });
+    _wireFpBtn("fp-set-polygonOpacity",    { key:"polygonOpacity",     def:50,  min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("polygon"); } });
+    _wireFpBtn("fp-set-bufferOpacity",     { key:"bufferOpacity",      def:50,  min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("buffer"); } });
+    _wireFpBtn("fp-set-bufferRadius",      { key:"bufferRadius",       def:0,   min:0, max:2,   step:0.1, unit:"mi", onChange: function(v) { App.rebuildBuffers(v); notifyProject(); } });
+    _wireFpBtn("fp-set-lineBufferRadius",  { key:"lineBufferRadius",   def:0,   min:0, max:2,   step:0.1, unit:"mi", onChange: function(v) { App.rebuildLineBuffers(v); notifyProject(); } });
+    _wireFpBtn("fp-set-routeBufferRadius", { key:"routeBufferRadius",  def:0,   min:0, max:2,   step:0.1, unit:"mi", onChange: function(v) { App.rebuildRouteBuffers(v); notifyProject(); } });
+    _wireFpBtn("fp-set-pointLineWidth",    { key:"pointLineWidth",     def:1,   min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyLineWidth("point"); } });
+    _wireFpBtn("fp-set-lineLineWidth",     { key:"lineLineWidth",      def:1,   min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyLineWidth("line"); } });
+    _wireFpBtn("fp-set-routeLineWidth",    { key:"routeLineWidth",     def:1,   min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyLineWidth("route"); } });
+    _wireFpBtn("fp-set-polygonLineWidth",  { key:"polygonLineWidth",   def:1,   min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyLineWidth("polygon"); } });
+    _wireFpBtn("fp-set-bufferLineWidth",   { key:"bufferLineWidth",    def:1,   min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyBufferLineWidth(); } });
 
     // Offset overlapping lines/routes toggle
     document.getElementById("offsetOverlap").addEventListener("change", function () {
