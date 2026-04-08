@@ -469,13 +469,7 @@
     trashBtn.innerHTML = TRASH_SVG;
     trashBtn.addEventListener("click", function (e) {
       e.stopPropagation();
-      var wrapper = div.closest ? div.closest(".fp-item-wrapper") : div.parentElement;
-      if (!wrapper) return;
-      var confirmDiv = wrapper.querySelector(".fp-delete-confirm");
-      if (confirmDiv) {
-        confirmDiv.style.display = "";
-        trashBtn.style.display = "none";
-      }
+      onDelete();
     });
 
     // Hover and click wiring
@@ -516,6 +510,7 @@
           if (typeof dupFn === "function") {
             options.push({ label: "Duplicate", action: function () { dupFn(fi); } });
           }
+          options.push({ label: "Delete", action: function () { onDelete(); } });
         })(featureType, featureIndex, feature);
       }
       if (selected.length >= 2) {
@@ -541,37 +536,6 @@
     div.appendChild(gearBtn);
     div.appendChild(trashBtn);
     return div;
-  }
-
-  function buildDeleteConfirm(onDelete) {
-    var container = document.createElement("div");
-    container.className = "fp-delete-confirm";
-    container.style.display = "none";
-    var text = document.createElement("span");
-    text.textContent = "Delete this feature?";
-    var yesBtn = document.createElement("button");
-    yesBtn.className = "fp-attr-confirm-yes";
-    yesBtn.textContent = "Delete";
-    yesBtn.addEventListener("click", function (e) {
-      e.stopPropagation();
-      if (typeof onDelete === "function") onDelete();
-    });
-    var noBtn = document.createElement("button");
-    noBtn.className = "fp-attr-confirm-no";
-    noBtn.textContent = "Cancel";
-    noBtn.addEventListener("click", function (e) {
-      e.stopPropagation();
-      container.style.display = "none";
-      var wrapper = container.closest ? container.closest(".fp-item-wrapper") : container.parentElement;
-      if (wrapper) {
-        var trashBtn = wrapper.querySelector(".fp-del-btn");
-        if (trashBtn) trashBtn.style.display = "";
-      }
-    });
-    container.appendChild(text);
-    container.appendChild(yesBtn);
-    container.appendChild(noBtn);
-    return container;
   }
 
   /* ---- Section-level color swatches (Labels section only) ---- */
@@ -842,7 +806,6 @@
       };
     })(item.type, item.index);
     wrapper.appendChild(buildItem(item.feature, item.type, item.index, onDelete));
-    wrapper.appendChild(buildDeleteConfirm(onDelete));
     return wrapper;
   }
 
