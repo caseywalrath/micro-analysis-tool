@@ -854,12 +854,14 @@
       var checks = lodesStateList ? lodesStateList.querySelectorAll("input[type=checkbox]:checked") : [];
       if (!checks.length) { App.setStatus("No states selected."); return; }
       var year = "2023";
-      Array.prototype.forEach.call(checks, function (cb) {
-        var abbr = cb.value;
-        var url = "https://lehd.ces.census.gov/data/lodes/LODES8/" + abbr + "/wac/" + abbr + "_wac_S000_JT00_" + year + ".csv.gz";
-        App.startDownload(url, abbr + "_wac_S000_JT00_" + year + ".csv.gz");
+      var abbrs = Array.prototype.map.call(checks, function (cb) { return cb.value; });
+      abbrs.forEach(function (abbr, i) {
+        setTimeout(function () {
+          var url = "https://lehd.ces.census.gov/data/lodes/LODES8/" + abbr + "/wac/" + abbr + "_wac_S000_JT00_" + year + ".csv.gz";
+          App.startDownload(url, abbr + "_wac_S000_JT00_" + year + ".csv.gz");
+        }, i * 300);
       });
-      App.setStatus("Download started for " + checks.length + " state(s).");
+      App.setStatus("Download started for " + abbrs.length + " state(s).");
     });
 
     // Add File
