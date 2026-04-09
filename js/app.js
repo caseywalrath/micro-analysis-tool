@@ -823,10 +823,11 @@
       LODES_STATES.forEach(function (s) {
         var lbl = document.createElement("label");
         lbl.className = "lodes-state-item";
-        var cb = document.createElement("input");
-        cb.type = "checkbox";
-        cb.value = s.abbr;
-        lbl.appendChild(cb);
+        var rb = document.createElement("input");
+        rb.type = "radio";
+        rb.name = "lodes-state";
+        rb.value = s.abbr;
+        lbl.appendChild(rb);
         lbl.appendChild(document.createTextNode(" " + s.name));
         lodesStateList.appendChild(lbl);
       });
@@ -849,24 +850,19 @@
       }
     });
 
-    // Download Selected
+    // Download
     document.getElementById("lodes-popup-download").addEventListener("click", function () {
-      var checks = lodesStateList ? lodesStateList.querySelectorAll("input[type=checkbox]:checked") : [];
-      if (!checks.length) { App.setStatus("No states selected."); return; }
+      var selected = lodesStateList ? lodesStateList.querySelector("input[type=radio]:checked") : null;
+      if (!selected) { App.setStatus("No state selected."); return; }
+      var abbr = selected.value;
       var year = "2023";
-      var abbrs = Array.prototype.map.call(checks, function (cb) { return cb.value; });
-      abbrs.forEach(function (abbr, i) {
-        setTimeout(function () {
-          var url = "https://lehd.ces.census.gov/data/lodes/LODES8/" + abbr + "/wac/" + abbr + "_wac_S000_JT00_" + year + ".csv.gz";
-          App.startDownload(url, abbr + "_wac_S000_JT00_" + year + ".csv.gz");
-        }, i * 300);
-      });
-      App.setStatus("Download started for " + abbrs.length + " state(s).");
+      var url = "https://lehd.ces.census.gov/data/lodes/LODES8/" + abbr + "/wac/" + abbr + "_wac_S000_JT00_" + year + ".csv.gz";
+      App.startDownload(url, abbr + "_wac_S000_JT00_" + year + ".csv.gz");
+      App.setStatus("Downloading " + abbr.toUpperCase() + " LODES data\u2026");
     });
 
-    // Add File
+    // Add to Map
     document.getElementById("lodes-popup-add").addEventListener("click", function () {
-      lodesPopup.style.display = "none";
       lodesFileInput.value = "";
       lodesFileInput.click();
     });
