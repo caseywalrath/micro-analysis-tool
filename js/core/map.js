@@ -311,25 +311,6 @@
       dropdown.appendChild(opt);
     }
 
-    // Divider + municipal boundaries toggle
-    var divider = document.createElement("div");
-    divider.className = "basemap-divider";
-    dropdown.appendChild(divider);
-
-    var toggleRow = document.createElement("label");
-    toggleRow.className = "basemap-toggle-row";
-
-    var cb = document.createElement("input");
-    cb.type = "checkbox";
-    cb.checked = _muniBoundariesVisible;
-    cb.addEventListener("change", function () {
-      toggleMuniBoundaries(cb.checked);
-    });
-
-    toggleRow.appendChild(cb);
-    toggleRow.appendChild(document.createTextNode(" Municipal boundaries"));
-    dropdown.appendChild(toggleRow);
-
     btn.addEventListener("click", function (e) {
       e.stopPropagation();
       dropdown.style.display = dropdown.style.display === "none" ? "block" : "none";
@@ -364,4 +345,5 @@
 
   App.map = map;
   App.switchBasemap = switchBasemap;
+  App.toggleMuniBoundaries = toggleMuniBoundaries;
 })();

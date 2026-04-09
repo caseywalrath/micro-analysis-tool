@@ -67,13 +67,6 @@
     // ---- Employment (LODES) section ----
     '<div class="sb2-section-label">Employment (LODES)</div>' +
     '<label class="var-check"><input type="checkbox" id="lodesCheckbox" value="LODES_WAC_C000"> Total existing employment \u2014 file required</label>' +
-    '<div class="lodes-actions">' +
-      '<button type="button" id="downloadLodes">Download</button>' +
-      '<button type="button" id="lodesOpenFile">Add State</button>' +
-      '<button type="button" id="lodesClearAll" style="display:none;">Clear All</button>' +
-    '</div>' +
-    '<input id="lodesFile" type="file" accept=".gz,.csv.gz" style="display:none" />' +
-    '<div id="lodesInfo" class="sb2-tiny" style="margin-top:4px;"></div>' +
     '<span id="lodesState" style="display:none"></span>' +
     '<span id="lodesLoaded" style="display:none"></span>' +
 
@@ -792,34 +785,86 @@
       notifyProject();
     });
 
-    // ---- LODES handlers (Add Data dropdown) ----
+    // ---- LODES handlers (Add Data dropdown → LODES popup) ----
     var lodesFileInput = document.getElementById("lodesFile");
-    var lodesClearBtn = document.getElementById("lodes-clear-btn");
+    var lodesPopup = document.getElementById("lodes-popup");
 
-    function updateLodesDropdownUI() {
-      if (lodesClearBtn) lodesClearBtn.style.display = App.lodesData ? "block" : "none";
+    // Build state checkbox list once
+    var LODES_STATES = [
+      { name: "Alabama", abbr: "al" }, { name: "Alaska", abbr: "ak" },
+      { name: "Arizona", abbr: "az" }, { name: "Arkansas", abbr: "ar" },
+      { name: "California", abbr: "ca" }, { name: "Colorado", abbr: "co" },
+      { name: "Connecticut", abbr: "ct" }, { name: "Delaware", abbr: "de" },
+      { name: "District of Columbia", abbr: "dc" }, { name: "Florida", abbr: "fl" },
+      { name: "Georgia", abbr: "ga" }, { name: "Hawaii", abbr: "hi" },
+      { name: "Idaho", abbr: "id" }, { name: "Illinois", abbr: "il" },
+      { name: "Indiana", abbr: "in" }, { name: "Iowa", abbr: "ia" },
+      { name: "Kansas", abbr: "ks" }, { name: "Kentucky", abbr: "ky" },
+      { name: "Louisiana", abbr: "la" }, { name: "Maine", abbr: "me" },
+      { name: "Maryland", abbr: "md" }, { name: "Massachusetts", abbr: "ma" },
+      { name: "Michigan", abbr: "mi" }, { name: "Minnesota", abbr: "mn" },
+      { name: "Mississippi", abbr: "ms" }, { name: "Missouri", abbr: "mo" },
+      { name: "Montana", abbr: "mt" }, { name: "Nebraska", abbr: "ne" },
+      { name: "Nevada", abbr: "nv" }, { name: "New Hampshire", abbr: "nh" },
+      { name: "New Jersey", abbr: "nj" }, { name: "New Mexico", abbr: "nm" },
+      { name: "New York", abbr: "ny" }, { name: "North Carolina", abbr: "nc" },
+      { name: "North Dakota", abbr: "nd" }, { name: "Ohio", abbr: "oh" },
+      { name: "Oklahoma", abbr: "ok" }, { name: "Oregon", abbr: "or" },
+      { name: "Pennsylvania", abbr: "pa" }, { name: "Rhode Island", abbr: "ri" },
+      { name: "South Carolina", abbr: "sc" }, { name: "South Dakota", abbr: "sd" },
+      { name: "Tennessee", abbr: "tn" }, { name: "Texas", abbr: "tx" },
+      { name: "Utah", abbr: "ut" }, { name: "Vermont", abbr: "vt" },
+      { name: "Virginia", abbr: "va" }, { name: "Washington", abbr: "wa" },
+      { name: "West Virginia", abbr: "wv" }, { name: "Wisconsin", abbr: "wi" },
+      { name: "Wyoming", abbr: "wy" }
+    ];
+    var lodesStateList = document.getElementById("lodes-state-list");
+    if (lodesStateList) {
+      LODES_STATES.forEach(function (s) {
+        var lbl = document.createElement("label");
+        lbl.className = "lodes-state-item";
+        var cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.value = s.abbr;
+        lbl.appendChild(cb);
+        lbl.appendChild(document.createTextNode(" " + s.name));
+        lodesStateList.appendChild(lbl);
+      });
     }
 
-    document.getElementById("lodes-download-btn").addEventListener("click", async function () {
+    // Open/close LODES popup
+    document.getElementById("lodes-employment-btn").addEventListener("click", function () {
       addDataDropdown.style.display = "none";
-      try {
-        App.setStatus("Determining state\u2026");
-        var info = await App.getStateFromMapCenter();
-
-        var lodesYear = "2023";
-        var url = "https://lehd.ces.census.gov/data/lodes/LODES8/" + info.abbr + "/wac/" + info.abbr + "_wac_S000_JT00_" + lodesYear + ".csv.gz";
-        var filename = info.abbr + "_wac_S000_JT00_" + lodesYear + ".csv.gz";
-
-        App.setStatus("Downloading " + filename + "\u2026");
-        App.startDownload(url, filename);
-        App.setStatus("Ready");
-      } catch (e) {
-        App.setStatus("LODES error: " + String(e && e.message ? e.message : e));
+      lodesPopup.style.display = lodesPopup.style.display === "none" ? "block" : "none";
+    });
+    document.getElementById("lodes-popup-close").addEventListener("click", function () {
+      lodesPopup.style.display = "none";
+    });
+    // Close popup on outside click
+    document.addEventListener("click", function (e) {
+      if (lodesPopup && lodesPopup.style.display !== "none" &&
+          !lodesPopup.contains(e.target) &&
+          e.target.id !== "lodes-employment-btn") {
+        lodesPopup.style.display = "none";
       }
     });
 
-    document.getElementById("lodes-add-btn").addEventListener("click", function () {
-      addDataDropdown.style.display = "none";
+    // Download Selected
+    document.getElementById("lodes-popup-download").addEventListener("click", function () {
+      var checks = lodesStateList ? lodesStateList.querySelectorAll("input[type=checkbox]:checked") : [];
+      if (!checks.length) { App.setStatus("No states selected."); return; }
+      var year = "2023";
+      Array.prototype.forEach.call(checks, function (cb) {
+        var abbr = cb.value;
+        var url = "https://lehd.ces.census.gov/data/lodes/LODES8/" + abbr + "/wac/" + abbr + "_wac_S000_JT00_" + year + ".csv.gz";
+        App.startDownload(url, abbr + "_wac_S000_JT00_" + year + ".csv.gz");
+      });
+      App.setStatus("Download started for " + checks.length + " state(s).");
+    });
+
+    // Add File
+    document.getElementById("lodes-popup-add").addEventListener("click", function () {
+      lodesPopup.style.display = "none";
       lodesFileInput.value = "";
       lodesFileInput.click();
     });
@@ -832,24 +877,12 @@
         var jobsMap = await App.parseLodesFromUploadedFile(file);
         App.mergeLodesFile(jobsMap, file.name);
         App.setStatus("LODES loaded (" + file.name + ")");
-        updateLodesDropdownUI();
         notifyProject();
         if (typeof App.cache !== "undefined") App.cache.save();
       } catch (err) {
         App.setStatus("LODES error: " + String(err && err.message ? err.message : err));
       }
     });
-
-    if (lodesClearBtn) {
-      lodesClearBtn.addEventListener("click", function () {
-        addDataDropdown.style.display = "none";
-        if (!confirm("Remove all loaded LODES data?")) return;
-        App.clearLodesData();
-        updateLodesDropdownUI();
-        notifyProject();
-        if (typeof App.cache !== "undefined") App.cache.save();
-      });
-    }
 
     // PPACG Projection UI has moved to the Ridership Forecasting Projections tab.
 
@@ -876,6 +909,15 @@
       addDataDropdown.style.display = "none";
       importFileInput.value = "";
       importFileInput.click();
+    });
+
+    // Municipal Boundaries toggle
+    var _muniBoundariesActive = false;
+    document.getElementById("muni-boundaries-btn").addEventListener("click", function () {
+      addDataDropdown.style.display = "none";
+      _muniBoundariesActive = !_muniBoundariesActive;
+      this.classList.toggle("add-data-active", _muniBoundariesActive);
+      if (typeof App.toggleMuniBoundaries === "function") App.toggleMuniBoundaries(_muniBoundariesActive);
     });
 
     // Route imported file by extension

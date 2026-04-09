@@ -65,25 +65,31 @@
               </svg>
             </button>
             <div id="add-data-dropdown" class="add-data-dropdown" style="display:none;">
-              <div class="add-data-heading">OpenStreetMap</div>
-              <button data-osm="bus_stops">Bus Stops</button>
-              <button data-osm="transit_routes">Transit Routes</button>
-              <button data-osm="pois">Points of Interest</button>
+              <div class="add-data-heading">LOCAL</div>
+              <button id="import-file-btn">Spatial Data</button>
+              <button id="gtfs-load-btn">GTFS Feed</button>
+              <button id="lodes-employment-btn">LODES Employment</button>
               <div class="add-data-divider"></div>
-              <div class="add-data-heading">Local Map Data</div>
-              <button id="road-net-download">Download Roads for Area</button>
-              <div class="add-data-divider"></div>
-              <div class="add-data-heading">Employment (LODES)</div>
-              <button id="lodes-download-btn">Download LODES Data</button>
-              <button id="lodes-add-btn">Add State File</button>
-              <button id="lodes-clear-btn" class="add-data-clear" style="display:none;">Clear LODES Data</button>
-              <div class="add-data-divider"></div>
-              <div class="add-data-heading">Import</div>
-              <button id="import-file-btn">Import Spatial Data</button>
-              <div class="add-data-divider"></div>
-              <div class="add-data-heading">GTFS</div>
-              <button id="gtfs-load-btn">Load GTFS Feed</button>
-              <button id="gtfs-clear-btn" class="add-data-clear" style="display:none;">Clear GTFS Feed</button>
+              <div class="add-data-heading">ONLINE</div>
+              <button data-osm="bus_stops">Bus Stops (Open Street Maps)</button>
+              <button data-osm="transit_routes">Transit Routes (Open Street Maps)</button>
+              <button id="road-net-download">Area Roads for Street Routing</button>
+              <button id="muni-boundaries-btn">Municipal Boundaries</button>
+            </div>
+            <div id="lodes-popup" style="display:none;">
+              <div class="lodes-popup-header">
+                <span>LODES Employment Data</span>
+                <button id="lodes-popup-close" class="lodes-popup-x">&#10005;</button>
+              </div>
+              <div class="lodes-popup-body">
+                <div class="lodes-popup-label">Select states to download:</div>
+                <div id="lodes-state-list" class="lodes-state-list"></div>
+                <div id="lodesInfo" class="lodes-loaded-info"></div>
+              </div>
+              <div class="lodes-popup-footer">
+                <button id="lodes-popup-download">Download Selected</button>
+                <button id="lodes-popup-add">Add File&#8230;</button>
+              </div>
             </div>
             <input id="lodesFile" type="file" accept=".gz,.csv.gz" style="display:none" />
             <input id="fp-import-file" type="file" accept=".json,.csv,.kml,.kmz,.shp,.zip,.geojson" style="display:none" />
