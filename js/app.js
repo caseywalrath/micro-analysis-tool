@@ -841,14 +841,6 @@
     document.getElementById("lodes-popup-close").addEventListener("click", function () {
       lodesPopup.style.display = "none";
     });
-    // Close popup on outside click
-    document.addEventListener("click", function (e) {
-      if (lodesPopup && lodesPopup.style.display !== "none" &&
-          !lodesPopup.contains(e.target) &&
-          e.target.id !== "lodes-employment-btn") {
-        lodesPopup.style.display = "none";
-      }
-    });
 
     // Download
     document.getElementById("lodes-popup-download").addEventListener("click", function () {
