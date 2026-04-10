@@ -571,6 +571,18 @@
     _popupEl.style.top  = top  + "px";
   }
 
+  // SVG icons for per-feature override buttons
+  var _OVR_OPACITY_SVG = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="8" cy="8" r="6" stroke-dasharray="3 2"/></svg>';
+  var _OVR_BUFFER_SVG  = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="2" fill="currentColor" stroke="none"/></svg>';
+  var _OVR_WIDTH_SVG   = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-linecap="round"><line x1="2" y1="8" x2="14" y2="8" stroke-width="2.5"/></svg>';
+  var _OVR_DEFAULT_SVG = '<svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 6.5A4 4 0 1 1 8 2.5"/><polyline points="8 0.5 10.5 2.5 8 4.5"/></svg>';
+
+  // Inverse of _polyOpacityValues fill component → returns S (0–100)
+  function _invertPolyFillOpacity(fill) {
+    if (fill <= 0.15) return Math.round(fill * 50 / 0.15);
+    return Math.round(50 + (fill - 0.15) * 50 / 0.85);
+  }
+
   function populatePopupBody(featureType, featureIndex, feature) {
     buildPopupEl();
 
@@ -603,6 +615,166 @@
     // Insert swatch before title
     var titleEl = headerEl.querySelector(".fp-attr-popup-title");
     headerEl.insertBefore(hdrSwatch, titleEl);
+
+    // Remove existing overrides container, then rebuild it
+    var existingOverrides = headerEl.querySelector(".fp-attr-overrides");
+    if (existingOverrides) existingOverrides.remove();
+
+    var closeBtn = headerEl.querySelector(".fp-attr-popup-close");
+    var overrides = document.createElement("div");
+    overrides.className = "fp-attr-overrides";
+
+    if (featureType !== "label") {
+      // Per-type key mappings
+      var TYPE_KEYS = {
+        point:   { opacityKey: "pointOpacity",   widthKey: "pointLineWidth",   bufferKey: "bufferRadius" },
+        line:    { opacityKey: "lineOpacity",     widthKey: "lineLineWidth",    bufferKey: "lineBufferRadius" },
+        route:   { opacityKey: "routeOpacity",    widthKey: "routeLineWidth",   bufferKey: "routeBufferRadius" },
+        polygon: { opacityKey: "polygonOpacity",  widthKey: "polygonLineWidth", bufferKey: null }
+      };
+      var REBUILD_FNS = {
+        point:  function (v) { if (typeof App.rebuildBuffers      === "function") App.rebuildBuffers(v); },
+        line:   function (v) { if (typeof App.rebuildLineBuffers  === "function") App.rebuildLineBuffers(v); },
+        route:  function (v) { if (typeof App.rebuildRouteBuffers === "function") App.rebuildRouteBuffers(v); },
+        polygon: null
+      };
+      var keys = TYPE_KEYS[featureType] || TYPE_KEYS.point;
+      var rebuildFn = REBUILD_FNS[featureType] || null;
+
+      // ---- Opacity button ----
+      var opacityBtn = document.createElement("button");
+      opacityBtn.type = "button";
+      opacityBtn.className = "fp-sib";
+      opacityBtn.title = "Per-feature opacity";
+      opacityBtn.innerHTML = _OVR_OPACITY_SVG;
+      if (feature.properties._opacity != null || feature.properties._fillOpacity != null) {
+        opacityBtn.classList.add("fp-sib-has-override");
+      }
+      (function (btn, feat, ft, ok) {
+        btn.addEventListener("click", function (e) {
+          e.stopPropagation();
+          var curVal;
+          if (ft === "polygon") {
+            curVal = (feat.properties._fillOpacity != null)
+              ? _invertPolyFillOpacity(feat.properties._fillOpacity)
+              : (App.featureSettings ? App.featureSettings[ok] : 50);
+          } else {
+            curVal = (feat.properties._opacity != null)
+              ? feat.properties._opacity * 100
+              : (App.featureSettings ? App.featureSettings[ok] : 100);
+          }
+          if (typeof App._openFpSlider === "function") {
+            App._openFpSlider(btn, {
+              min: 0, max: 100, step: 1, unit: "%",
+              value: curVal,
+              onChange: function (S) {
+                if (ft === "polygon") {
+                  var pc = App._polyOpacityValues(S);
+                  feat.properties._fillOpacity   = pc.fill;
+                  feat.properties._borderOpacity = pc.border;
+                } else {
+                  feat.properties._opacity = S / 100;
+                }
+                App.applyFeatureOpacity(ft);
+                if (typeof App.cache !== "undefined") App.cache.save();
+              }
+            });
+          }
+        });
+      })(opacityBtn, feature, featureType, keys.opacityKey);
+      overrides.appendChild(opacityBtn);
+
+      // ---- Buffer button (not for polygons) ----
+      if (featureType !== "polygon") {
+        var bufferBtn = document.createElement("button");
+        bufferBtn.type = "button";
+        bufferBtn.className = "fp-sib";
+        bufferBtn.title = "Per-feature buffer radius";
+        bufferBtn.innerHTML = _OVR_BUFFER_SVG;
+        if (feature.properties._bufferRadius != null) {
+          bufferBtn.classList.add("fp-sib-has-override");
+        }
+        (function (btn, feat, bk, rbFn) {
+          btn.addEventListener("click", function (e) {
+            e.stopPropagation();
+            var curVal = (feat.properties._bufferRadius != null)
+              ? feat.properties._bufferRadius
+              : (App.featureSettings ? App.featureSettings[bk] : 0);
+            if (typeof App._openFpSlider === "function") {
+              App._openFpSlider(btn, {
+                min: 0, max: 2, step: 0.1, unit: "mi",
+                value: curVal,
+                onChange: function (v) {
+                  feat.properties._bufferRadius = v;
+                  if (rbFn) rbFn(App.featureSettings ? App.featureSettings[bk] : 0);
+                  if (typeof App.cache !== "undefined") App.cache.save();
+                }
+              });
+            }
+          });
+        })(bufferBtn, feature, keys.bufferKey, rebuildFn);
+        overrides.appendChild(bufferBtn);
+      }
+
+      // ---- Width button ----
+      var widthBtn = document.createElement("button");
+      widthBtn.type = "button";
+      widthBtn.className = "fp-sib";
+      widthBtn.title = "Per-feature line width";
+      widthBtn.innerHTML = _OVR_WIDTH_SVG;
+      if (feature.properties._lineWidth != null) {
+        widthBtn.classList.add("fp-sib-has-override");
+      }
+      (function (btn, feat, ft, wk) {
+        btn.addEventListener("click", function (e) {
+          e.stopPropagation();
+          var curVal = (feat.properties._lineWidth != null)
+            ? feat.properties._lineWidth
+            : (App.featureSettings ? App.featureSettings[wk] : 1);
+          if (typeof App._openFpSlider === "function") {
+            App._openFpSlider(btn, {
+              min: 0, max: 5, step: 0.1, unit: "×",
+              value: curVal,
+              onChange: function (v) {
+                feat.properties._lineWidth = v;
+                App.applyLineWidth(ft);
+                if (typeof App.cache !== "undefined") App.cache.save();
+              }
+            });
+          }
+        });
+      })(widthBtn, feature, featureType, keys.widthKey);
+      overrides.appendChild(widthBtn);
+
+      // ---- Default (reset) button ----
+      var defaultBtn = document.createElement("button");
+      defaultBtn.type = "button";
+      defaultBtn.className = "fp-sib";
+      defaultBtn.title = "Reset to global defaults";
+      defaultBtn.innerHTML = _OVR_DEFAULT_SVG;
+      (function (btn, feat, ft, bk, rbFn) {
+        btn.addEventListener("click", function (e) {
+          e.stopPropagation();
+          delete feat.properties._opacity;
+          delete feat.properties._fillOpacity;
+          delete feat.properties._borderOpacity;
+          delete feat.properties._lineWidth;
+          delete feat.properties._bufferRadius;
+          App.applyFeatureOpacity(ft);
+          App.applyLineWidth(ft);
+          if (rbFn) rbFn(App.featureSettings ? (App.featureSettings[bk] || 0) : 0);
+          if (typeof App.cache !== "undefined") App.cache.save();
+          if (typeof App._closeFpSlider === "function") App._closeFpSlider();
+          // Remove has-override indicators
+          overrides.querySelectorAll(".fp-sib-has-override").forEach(function (el) {
+            el.classList.remove("fp-sib-has-override");
+          });
+        });
+      })(defaultBtn, feature, featureType, keys.bufferKey, rebuildFn);
+      overrides.appendChild(defaultBtn);
+    }
+
+    headerEl.insertBefore(overrides, closeBtn);
 
     // Clear and rebuild body
     var body = _popupEl.querySelector(".fp-attr-popup-body");

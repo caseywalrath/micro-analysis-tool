@@ -89,10 +89,13 @@
     if (typeof App.clearCensusOverlay === "function") App.clearCensusOverlay();
     routeBufferRadiusMiles = radiusMiles;
     routeBuffers.splice(0);
-    if (radiusMiles > 0) {
-      for (var i = 0; i < routes.length; i++) {
-        if (routes[i].properties.hidden) continue;
-        var buf = turf.buffer(routes[i], radiusMiles, { units: "miles", steps: 64 });
+    for (var i = 0; i < routes.length; i++) {
+      if (routes[i].properties.hidden) continue;
+      var r = (routes[i].properties._bufferRadius != null)
+        ? routes[i].properties._bufferRadius
+        : radiusMiles;
+      if (r > 0) {
+        var buf = turf.buffer(routes[i], r, { units: "miles", steps: 64 });
         routeBuffers.push({ type: buf.type, geometry: buf.geometry, properties: { routeIdx: routes[i].properties.routeIdx, color: routes[i].properties.color } });
       }
     }

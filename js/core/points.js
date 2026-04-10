@@ -109,12 +109,15 @@
     if (typeof App.clearCensusOverlay === "function") App.clearCensusOverlay();
     bufferRadiusMiles = radiusMiles;
     buffers.length = 0;
-    if (radiusMiles > 0) {
-      for (var i = 0; i < points.length; i++) {
-        if (points[i].properties.hidden) continue;
+    for (var i = 0; i < points.length; i++) {
+      if (points[i].properties.hidden) continue;
+      var r = (points[i].properties._bufferRadius != null)
+        ? points[i].properties._bufferRadius
+        : radiusMiles;
+      if (r > 0) {
         var coords = points[i].geometry.coordinates;
         var pt = turf.point(coords);
-        var circle = turf.circle(pt, radiusMiles, { units: "miles", steps: 64 });
+        var circle = turf.circle(pt, r, { units: "miles", steps: 64 });
         buffers.push({
           type: circle.type,
           geometry: circle.geometry,

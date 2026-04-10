@@ -325,23 +325,30 @@
     return { fill: 0.08 + 0.92 * t, border: 0.4 + 0.6 * t };
   }
 
+  App._polyOpacityValues = _polyOpacityValues;
+
   App.applyFeatureOpacity = function (type) {
     var fs = App.featureSettings;
     if (type === "point" || type === "all") {
       var op = fs.pointOpacity / 100;
-      _safeSetPaint("points-layer", "circle-opacity", op);
-      _safeSetPaint("points-layer", "circle-stroke-opacity", op);
+      var opExpr = ["case", ["has", "_opacity"], ["get", "_opacity"], op];
+      _safeSetPaint("points-layer", "circle-opacity", opExpr);
+      _safeSetPaint("points-layer", "circle-stroke-opacity", opExpr);
     }
     if (type === "line" || type === "all") {
-      _safeSetPaint("lines-layer", "line-opacity", fs.lineOpacity / 100);
+      _safeSetPaint("lines-layer", "line-opacity",
+        ["case", ["has", "_opacity"], ["get", "_opacity"], fs.lineOpacity / 100]);
     }
     if (type === "route" || type === "all") {
-      _safeSetPaint("routes-layer", "line-opacity", fs.routeOpacity / 100);
+      _safeSetPaint("routes-layer", "line-opacity",
+        ["case", ["has", "_opacity"], ["get", "_opacity"], fs.routeOpacity / 100]);
     }
     if (type === "polygon" || type === "all") {
       var pc = _polyOpacityValues(fs.polygonOpacity);
-      _safeSetPaint("polygons-fill", "fill-opacity", pc.fill);
-      _safeSetPaint("polygons-outlines-layer", "line-opacity", pc.border);
+      _safeSetPaint("polygons-fill", "fill-opacity",
+        ["case", ["has", "_fillOpacity"], ["get", "_fillOpacity"], pc.fill]);
+      _safeSetPaint("polygons-outlines-layer", "line-opacity",
+        ["case", ["has", "_borderOpacity"], ["get", "_borderOpacity"], pc.border]);
     }
     if (type === "buffer" || type === "all") {
       var bc = _bufOpacityValues(fs.bufferOpacity);
@@ -357,17 +364,22 @@
   App.applyLineWidth = function (type) {
     var fs = App.featureSettings;
     if (type === "point" || type === "all") {
-      _safeSetPaint("points-layer", "circle-radius", 6 * fs.pointLineWidth);
-      _safeSetPaint("points-layer", "circle-stroke-width", 2 * fs.pointLineWidth);
+      _safeSetPaint("points-layer", "circle-radius",
+        ["case", ["has", "_lineWidth"], ["*", 6, ["get", "_lineWidth"]], 6 * fs.pointLineWidth]);
+      _safeSetPaint("points-layer", "circle-stroke-width",
+        ["case", ["has", "_lineWidth"], ["*", 2, ["get", "_lineWidth"]], 2 * fs.pointLineWidth]);
     }
     if (type === "line" || type === "all") {
-      _safeSetPaint("lines-layer", "line-width", 3 * fs.lineLineWidth);
+      _safeSetPaint("lines-layer", "line-width",
+        ["case", ["has", "_lineWidth"], ["*", 3, ["get", "_lineWidth"]], 3 * fs.lineLineWidth]);
     }
     if (type === "route" || type === "all") {
-      _safeSetPaint("routes-layer", "line-width", 3 * fs.routeLineWidth);
+      _safeSetPaint("routes-layer", "line-width",
+        ["case", ["has", "_lineWidth"], ["*", 3, ["get", "_lineWidth"]], 3 * fs.routeLineWidth]);
     }
     if (type === "polygon" || type === "all") {
-      _safeSetPaint("polygons-outlines-layer", "line-width", 3 * fs.polygonLineWidth);
+      _safeSetPaint("polygons-outlines-layer", "line-width",
+        ["case", ["has", "_lineWidth"], ["*", 3, ["get", "_lineWidth"]], 3 * fs.polygonLineWidth]);
     }
   };
 
@@ -605,16 +617,17 @@
       slider.min   = cfg.min;
       slider.max   = cfg.max;
       slider.step  = cfg.step;
-      slider.value = App.featureSettings[cfg.key];
-      valEl.textContent  = _fmtSlider(App.featureSettings[cfg.key], cfg);
+      var initVal = (cfg.value != null) ? cfg.value : (cfg.key ? App.featureSettings[cfg.key] : 0);
+      slider.value = initVal;
+      valEl.textContent  = _fmtSlider(initVal, cfg);
       if (unitEl) unitEl.textContent = cfg.unit || "";
 
       slider.oninput = function () {
         var v = parseFloat(this.value);
-        App.featureSettings[cfg.key] = v;
+        if (cfg.key) App.featureSettings[cfg.key] = v;
         valEl.textContent = _fmtSlider(v, cfg);
         cfg.onChange(v);
-        if (typeof App.cache !== "undefined") App.cache.save();
+        if (cfg.key && typeof App.cache !== "undefined") App.cache.save();
       };
 
       // Position popover below (or above) the icon
@@ -680,6 +693,10 @@
     _wireFpBtn("fp-set-routeLineWidth",    { key:"routeLineWidth",     def:1,   min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyLineWidth("route"); } });
     _wireFpBtn("fp-set-polygonLineWidth",  { key:"polygonLineWidth",   def:1,   min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyLineWidth("polygon"); } });
     _wireFpBtn("fp-set-bufferLineWidth",   { key:"bufferLineWidth",    def:1,   min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyBufferLineWidth(); } });
+
+    // Expose slider infrastructure for per-feature overrides in feature-attributes.js
+    App._openFpSlider  = _openFpSlider;
+    App._closeFpSlider = _closeFpSlider;
 
     // Offset overlapping lines/routes toggle
     document.getElementById("offsetOverlap").addEventListener("change", function () {

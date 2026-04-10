@@ -699,9 +699,17 @@ body.present-mode #present-exit { display: block; }
   line-height: var(--leading-none);
   margin: 0;
   flex-shrink: 0;
-  margin-left: auto;
 }
 .fp-attr-popup-close:hover { color: #e53e3e; }
+.fp-attr-overrides {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  margin-left: auto;
+  margin-right: 2px;
+  flex-shrink: 0;
+}
+.fp-sib.fp-sib-has-override { color: #2b6cb0; }
 .fp-attr-popup-body {
   padding: 12px 14px 14px;
   overflow-y: auto;
@@ -2954,6 +2962,7 @@ code { font-family: var(--font-mono); }
 body.dark-mode .fp-sib { color: var(--muted); }
 body.dark-mode .fp-sib:hover { color: #63b3ed; background: rgba(99,179,237,0.1); }
 body.dark-mode .fp-sib.fp-sib-active { color: #63b3ed; background: rgba(99,179,237,0.15); }
+body.dark-mode .fp-sib.fp-sib-has-override { color: #63b3ed; }
 body.dark-mode #fp-slider-popover { background: var(--cardbg, #2a2a3d); border-color: var(--border, #374151); }
 body.dark-mode .fp-slider-val { color: #63b3ed; }
 
