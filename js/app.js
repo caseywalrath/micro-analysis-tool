@@ -867,6 +867,7 @@
         var jobsMap = await App.parseLodesFromUploadedFile(file);
         App.mergeLodesFile(jobsMap, file.name);
         App.setStatus("LODES loaded (" + file.name + ")");
+        updateAddDataClearIcons();
         notifyProject();
         if (typeof App.cache !== "undefined") App.cache.save();
       } catch (err) {
@@ -909,6 +910,91 @@
       this.classList.toggle("add-data-active", _muniBoundariesActive);
       if (typeof App.toggleMuniBoundaries === "function") App.toggleMuniBoundaries(_muniBoundariesActive);
     });
+
+    // ---- Add Data clear icons ----
+    var _CLRSVG = '<svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="5.5" cy="5.5" r="4.5"/><line x1="3.5" y1="3.5" x2="7.5" y2="7.5"/><line x1="7.5" y1="3.5" x2="3.5" y2="7.5"/></svg>';
+
+    var _adClrCfgs = [
+      {
+        btnId: "gtfs-load-btn",
+        isLoaded: function () {
+          return !!(App.map && typeof App.map.getLayer === "function" && App.map.getLayer("gtfs-shapes-layer"));
+        },
+        clear: function () {
+          if (typeof App.clearGTFS === "function") App.clearGTFS();
+        }
+      },
+      {
+        btnId: "lodes-employment-btn",
+        isLoaded: function () { return !!App.lodesData; },
+        clear: function () {
+          if (typeof App.clearLodesData === "function") App.clearLodesData();
+        }
+      },
+      {
+        osmCat: "bus_stops",
+        isLoaded: function () {
+          return typeof App.osmActiveCategory === "function" && App.osmActiveCategory() === "bus_stops";
+        },
+        clear: function () {
+          if (typeof App.osmToggleCategory === "function") App.osmToggleCategory("bus_stops");
+        }
+      },
+      {
+        osmCat: "transit_routes",
+        isLoaded: function () {
+          return typeof App.osmActiveCategory === "function" && App.osmActiveCategory() === "transit_routes";
+        },
+        clear: function () {
+          if (typeof App.osmToggleCategory === "function") App.osmToggleCategory("transit_routes");
+        }
+      },
+      {
+        btnId: "road-net-download",
+        isLoaded: function () {
+          return typeof App.roadNetworkLoaded === "function" && App.roadNetworkLoaded();
+        },
+        clear: function () {
+          if (typeof App.clearRoadNetwork === "function") App.clearRoadNetwork();
+        }
+      },
+      {
+        btnId: "muni-boundaries-btn",
+        isLoaded: function () { return _muniBoundariesActive; },
+        clear: function () {
+          _muniBoundariesActive = false;
+          var b = document.getElementById("muni-boundaries-btn");
+          if (b) b.classList.remove("add-data-active");
+          if (typeof App.toggleMuniBoundaries === "function") App.toggleMuniBoundaries(false);
+        }
+      }
+    ];
+
+    _adClrCfgs.forEach(function (cfg) {
+      var btn = cfg.btnId
+        ? document.getElementById(cfg.btnId)
+        : addDataDropdown.querySelector("button[data-osm='" + cfg.osmCat + "']");
+      if (!btn) return;
+      var span = document.createElement("span");
+      span.className = "add-data-clr";
+      span.innerHTML = _CLRSVG;
+      span.style.display = "none";
+      span.addEventListener("click", function (e) {
+        e.stopPropagation();
+        cfg.clear();
+        updateAddDataClearIcons();
+        notifyProject();
+        if (typeof App.cache !== "undefined") App.cache.save();
+      });
+      btn.appendChild(span);
+      cfg._span = span;
+    });
+
+    function updateAddDataClearIcons() {
+      _adClrCfgs.forEach(function (cfg) {
+        if (cfg._span) cfg._span.style.display = cfg.isLoaded() ? "inline-flex" : "none";
+      });
+    }
 
     // Route imported file by extension
     importFileInput.addEventListener("change", function (e) {
@@ -983,6 +1069,7 @@
         addDataDropdown.querySelectorAll("button[data-osm]").forEach(function (btn) {
           btn.classList.toggle("add-data-active", btn.getAttribute("data-osm") === active);
         });
+        updateAddDataClearIcons();
       }
     });
 
