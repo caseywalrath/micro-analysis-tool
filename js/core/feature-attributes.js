@@ -577,6 +577,15 @@
   var _OVR_WIDTH_SVG   = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-linecap="round"><line x1="2" y1="8" x2="14" y2="8" stroke-width="2.5"/></svg>';
   var _OVR_DEFAULT_SVG = '<svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 6.5A4 4 0 1 1 8 2.5"/><polyline points="8 0.5 10.5 2.5 8 4.5"/></svg>';
 
+  // Push updated feature GeoJSON data to MapLibre source so data-driven
+  // paint expressions pick up any changed feature.properties immediately.
+  // (The wrapped render functions also re-apply paint expressions via _wrapRender.)
+  function _pushFeatureLayer(ft) {
+    var fnName = { point: "renderPointLayers", line: "renderLineLayers",
+                   route: "renderRouteLayers", polygon: "renderPolygonLayers" }[ft];
+    if (fnName && typeof App[fnName] === "function") App[fnName]();
+  }
+
   // Inverse of _polyOpacityValues fill component → returns S (0–100)
   function _invertPolyFillOpacity(fill) {
     if (fill <= 0.15) return Math.round(fill * 50 / 0.15);
@@ -675,7 +684,7 @@
                 } else {
                   feat.properties._opacity = S / 100;
                 }
-                App.applyFeatureOpacity(ft);
+                _pushFeatureLayer(ft);
                 if (typeof App.cache !== "undefined") App.cache.save();
               }
             });
@@ -737,7 +746,7 @@
               value: curVal,
               onChange: function (v) {
                 feat.properties._lineWidth = v;
-                App.applyLineWidth(ft);
+                _pushFeatureLayer(ft);
                 if (typeof App.cache !== "undefined") App.cache.save();
               }
             });
@@ -760,8 +769,7 @@
           delete feat.properties._borderOpacity;
           delete feat.properties._lineWidth;
           delete feat.properties._bufferRadius;
-          App.applyFeatureOpacity(ft);
-          App.applyLineWidth(ft);
+          _pushFeatureLayer(ft);
           if (rbFn) rbFn(App.featureSettings ? (App.featureSettings[bk] || 0) : 0);
           if (typeof App.cache !== "undefined") App.cache.save();
           if (typeof App._closeFpSlider === "function") App._closeFpSlider();
