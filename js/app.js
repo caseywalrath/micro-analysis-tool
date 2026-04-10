@@ -911,8 +911,10 @@
       if (typeof App.toggleMuniBoundaries === "function") App.toggleMuniBoundaries(_muniBoundariesActive);
     });
 
-    // ---- Add Data clear icons ----
+    // ---- Add Data clear + eye icons ----
     var _CLRSVG = '<svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="5.5" cy="5.5" r="4.5"/><line x1="3.5" y1="3.5" x2="7.5" y2="7.5"/><line x1="7.5" y1="3.5" x2="3.5" y2="7.5"/></svg>';
+    var _EYESVG_OPEN   = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M1 6s2.5-4 5-4 5 4 5 4-2.5 4-5 4-5-4-5-4z"/><circle cx="6" cy="6" r="1.5"/></svg>';
+    var _EYESVG_CLOSED = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M1 6s2.5-4 5-4 5 4 5 4-2.5 4-5 4-5-4-5-4z"/><circle cx="6" cy="6" r="1.5"/><line x1="2" y1="10" x2="10" y2="2"/></svg>';
 
     var _adClrCfgs = [
       {
@@ -922,6 +924,14 @@
         },
         clear: function () {
           if (typeof App.clearGTFS === "function") App.clearGTFS();
+        },
+        hasEye: true,
+        isVisible: function () {
+          return !!(App.map.getLayer("gtfs-shapes-layer") &&
+            App.map.getLayoutProperty("gtfs-shapes-layer", "visibility") !== "none");
+        },
+        setVisible: function (v) {
+          if (typeof App.setGtfsLayersVisible === "function") App.setGtfsLayersVisible(v);
         }
       },
       {
@@ -938,6 +948,15 @@
         },
         clear: function () {
           if (typeof App.osmToggleCategory === "function") App.osmToggleCategory("bus_stops");
+        },
+        hasEye: true,
+        isVisible: function () {
+          return !!(App.map.getLayer("osm-points-layer") &&
+            App.map.getLayoutProperty("osm-points-layer", "visibility") !== "none");
+        },
+        setVisible: function (v) {
+          if (App.map.getLayer("osm-points-layer"))
+            App.map.setLayoutProperty("osm-points-layer", "visibility", v ? "visible" : "none");
         }
       },
       {
@@ -947,6 +966,15 @@
         },
         clear: function () {
           if (typeof App.osmToggleCategory === "function") App.osmToggleCategory("transit_routes");
+        },
+        hasEye: true,
+        isVisible: function () {
+          return !!(App.map.getLayer("osm-lines-layer") &&
+            App.map.getLayoutProperty("osm-lines-layer", "visibility") !== "none");
+        },
+        setVisible: function (v) {
+          if (App.map.getLayer("osm-lines-layer"))
+            App.map.setLayoutProperty("osm-lines-layer", "visibility", v ? "visible" : "none");
         }
       },
       {
@@ -966,6 +994,14 @@
           var b = document.getElementById("muni-boundaries-btn");
           if (b) b.classList.remove("add-data-active");
           if (typeof App.toggleMuniBoundaries === "function") App.toggleMuniBoundaries(false);
+        },
+        hasEye: true,
+        isVisible: function () {
+          return !!(App.map.getLayer("muni-boundaries-line") &&
+            App.map.getLayoutProperty("muni-boundaries-line", "visibility") !== "none");
+        },
+        setVisible: function (v) {
+          if (typeof App.setMuniBoundariesLayerVisible === "function") App.setMuniBoundariesLayerVisible(v);
         }
       }
     ];
@@ -975,6 +1011,22 @@
         ? document.getElementById(cfg.btnId)
         : addDataDropdown.querySelector("button[data-osm='" + cfg.osmCat + "']");
       if (!btn) return;
+
+      // Eye icon (left of clear) — only for items with a persistent map layer
+      if (cfg.hasEye) {
+        var eyeSpan = document.createElement("span");
+        eyeSpan.className = "add-data-eye";
+        eyeSpan.style.display = "none";
+        eyeSpan.addEventListener("click", function (e) {
+          e.stopPropagation();
+          cfg.setVisible(!cfg.isVisible());
+          updateAddDataClearIcons();
+        });
+        btn.appendChild(eyeSpan);
+        cfg._eyeSpan = eyeSpan;
+      }
+
+      // Clear icon (right)
       var span = document.createElement("span");
       span.className = "add-data-clr";
       span.innerHTML = _CLRSVG;
@@ -992,7 +1044,12 @@
 
     function updateAddDataClearIcons() {
       _adClrCfgs.forEach(function (cfg) {
-        if (cfg._span) cfg._span.style.display = cfg.isLoaded() ? "inline-flex" : "none";
+        var loaded = cfg.isLoaded();
+        if (cfg._span) cfg._span.style.display = loaded ? "inline-flex" : "none";
+        if (cfg._eyeSpan) {
+          cfg._eyeSpan.style.display = loaded ? "inline-flex" : "none";
+          if (loaded) cfg._eyeSpan.innerHTML = cfg.isVisible() ? _EYESVG_OPEN : _EYESVG_CLOSED;
+        }
       });
     }
 

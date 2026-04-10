@@ -781,6 +781,10 @@
   App.gtfsData     = _gtfsData;   // null until loaded
   App.loadGTFSFile = loadGTFSFile;
   App.clearGTFS    = clearGTFS;
+  App.setGtfsLayersVisible = function (visible) {
+    if (typeof setRouteLayerVisibility === "function") setRouteLayerVisibility(visible);
+    if (typeof setStopLayerVisibility  === "function") setStopLayerVisibility(visible);
+  };
 
   // ---- Register analysis module ----
   App.registerModule({

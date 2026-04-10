@@ -346,4 +346,18 @@
   App.map = map;
   App.switchBasemap = switchBasemap;
   App.toggleMuniBoundaries = toggleMuniBoundaries;
+  App.setMuniBoundariesLayerVisible = function (visible) {
+    var LAYER = "muni-boundaries-line";
+    if (visible) {
+      if (map.getLayer(LAYER)) {
+        map.setLayoutProperty(LAYER, "visibility", "visible");
+      } else {
+        toggleMuniBoundaries(true);
+      }
+    } else {
+      if (map.getLayer(LAYER)) {
+        map.setLayoutProperty(LAYER, "visibility", "none");
+      }
+    }
+  };
 })();

@@ -382,11 +382,21 @@ body.present-mode #present-exit { display: block; }
   color: #333;
   white-space: nowrap;
 }
-.add-data-clr {
+.add-data-eye {
   display: none;
   flex-shrink: 0;
   margin-left: auto;
   padding-left: 8px;
+  color: #ccc;
+  line-height: 0;
+  cursor: pointer;
+  border-radius: 50%;
+}
+.add-data-eye:hover { color: #888; }
+.add-data-clr {
+  display: none;
+  flex-shrink: 0;
+  padding-left: 4px;
   color: #ccc;
   line-height: 0;
   cursor: pointer;
@@ -3082,6 +3092,8 @@ body.dark-mode #toolbar .add-data-dropdown button.add-data-active {
   color: #63b3ed; background: rgba(99,179,237,0.12);
 }
 body.dark-mode #toolbar .add-data-dropdown button.add-data-clear { color: #fc8181; }
+body.dark-mode .add-data-eye { color: #555; }
+body.dark-mode .add-data-eye:hover { color: #aaa; }
 body.dark-mode .add-data-clr { color: #555; }
 body.dark-mode .add-data-clr:hover { color: #aaa; }
 
