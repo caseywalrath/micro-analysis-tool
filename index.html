@@ -73,8 +73,21 @@
               <div class="add-data-heading">ONLINE</div>
               <button data-osm="bus_stops">Bus Stops (Open Street Maps)</button>
               <button data-osm="transit_routes">Transit Routes (Open Street Maps)</button>
+              <button id="osm-poi-btn">Points of Interest (OSM)</button>
               <button id="road-net-download">Area Roads for Street Routing</button>
               <button id="muni-boundaries-btn">Municipal Boundaries</button>
+            </div>
+            <div id="osm-poi-popup" style="display:none;">
+              <div class="lodes-popup-header">
+                <span>OSM Points of Interest</span>
+                <button id="osm-poi-popup-close" class="lodes-popup-x">&#10005;</button>
+              </div>
+              <div class="lodes-popup-body" id="osm-poi-category-list">
+                <!-- checkboxes built dynamically by osm-pois.js -->
+              </div>
+              <div class="lodes-popup-footer">
+                <button id="osm-poi-fetch-btn">Fetch POIs</button>
+              </div>
             </div>
             <div id="lodes-popup" style="display:none;">
               <div class="lodes-popup-header">
@@ -279,6 +292,7 @@
     <script src="js/core/labels.js"></script>
     <script src="js/core/measure.js"></script>
     <script src="js/core/osm.js"></script>
+    <script src="js/core/osm-pois.js"></script>
     <script src="js/core/editing.js"></script>
     <script src="js/core/selection.js"></script>
     <script src="js/core/features.js"></script>

@@ -995,6 +995,23 @@
         }
       },
       {
+        btnId: "osm-poi-btn",
+        isLoaded: function () {
+          return typeof App.osmPoiLoaded === "function" && App.osmPoiLoaded();
+        },
+        clear: function () {
+          if (typeof App.clearOsmPois === "function") App.clearOsmPois();
+        },
+        hasEye: true,
+        isVisible: function () {
+          return !!(App.map.getLayer("osm-poi-layer") &&
+            App.map.getLayoutProperty("osm-poi-layer", "visibility") !== "none");
+        },
+        setVisible: function (v) {
+          if (typeof App.setOsmPoiLayerVisible === "function") App.setOsmPoiLayerVisible(v);
+        }
+      },
+      {
         btnId: "road-net-download",
         isLoaded: function () {
           return typeof App.roadNetworkLoaded === "function" && App.roadNetworkLoaded();

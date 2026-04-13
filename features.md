@@ -41,7 +41,6 @@ Duplicate a drawn feature in place (Ctrl+D shortcut or context menu item). Creat
 ## Data & Analysis
 
 **Potential future TPI enhancements:**
-- User-uploaded facility points (schools, health centers, transit stops) for proximity scoring
 - GTFS integration for existing transit service overlay
 - Custom factor upload for local datasets not available via Census APIs
 - Alternative normalization methods (z-scores, Jenks natural breaks)
@@ -50,7 +49,22 @@ Duplicate a drawn feature in place (Ctrl+D shortcut or context menu item). Creat
 - Ability to filter cloropaths (top/bottom 50% and top/bottom 10%)
 - Show missing data in "Scoring Summary" column
 - Methodology/inputs for manual land use scoring
-- Manual placement of destinations by type on map (possibly similar to Stations)
+
+### TPI "Important Destinations" factor — Not started
+
+Add an optional 10th factor to the TPI scoring engine using OSM Points of Interest loaded via the Add Data tool (`App.osmPoiFeatures`). Surfaces trip attractors that ACS data cannot capture: a regional hospital in a low-density suburb, a community college, a park-and-ride terminal. The factor is opt-in (active only when POIs are loaded and enabled in TPI settings), carries a fixed default weight of 5 (not user-adjustable via the Adjust Weights modal), and is clearly flagged in TPI results and CSV exports when active.
+
+**Scoring method — proximity-weighted sum, then quintile:**
+For each block group, compute `score_i = Σ (importance_j / turf.distance(centroid_i, poi_j, "miles"))` across all loaded POIs. This produces a smooth, non-sparse distribution that correctly propagates the benefit of nearby destinations to surrounding block groups — not just the one containing the facility. Block group centroids computed via `turf.centroid()`. No new Census API calls; pure client-side geometry run after TIGERweb geographies are fetched.
+
+**Double-counting note:** Overlap with Employment Density is real but limited to the specific case where a major employer sits in an already-dense block group. For the primary use case — an atypical destination in a low-density area — overlap is minimal and the factor adds unique signal.
+
+**Subjectivity mitigation:** Labelled "User-Defined Destinations" in results and CSV export. The fixed 5-point weight prevents it from overriding the objective ACS/LODES factors. A footnote in the TPI results panel mirrors the existing LODES warning pattern.
+
+**Files to modify:**
+- `js/projects/tpi-scoring.js` — add 10th factor definition; read `App.osmPoiFeatures` to compute proximity scores; integrate into `TPI.computeTPI()` pipeline
+- `js/projects/transit-propensity.js` — show/hide Destinations row in factor breakdowns; add footnote when active; exclude from Adjust Weights modal (fixed weight)
+- `js/core/osm-pois.js` — `App.osmPoiFeatures` already exposed; no changes needed
 
 ### Transit Costing module
 Produce estimates for service and revenue miles, hours, potential blocking scenarioss, pullout requirements, and staffing
@@ -91,6 +105,15 @@ A new analysis module for Title VI civil rights compliance reporting. Title VI o
 **Dependencies:** Builds on `census.js` (ACS fetch + aggregation), `tpi-scoring.js` (factor definitions, batch ACS), and the popup module system (`App.registerModule`). Would register as a new popup-based module in the Analysis panel.
 
 **Files (anticipated):** `js/projects/title-vi.js`, `projects/title-vi-popup.html`
+
+### OSM Points of Interest — Implemented
+
+Load curated transit-relevant destination categories from OpenStreetMap via the Overpass API. Available under Add Data (+) → ONLINE → "Points of Interest (OSM)". A category picker popup lets users select from 15 destination types grouped into Health, Education, Transit, Retail, Government, and Recreation. Selected categories are fetched for the current map viewport and re-fetched automatically on pan/zoom (debounced 2 s). Each POI renders as a purple circle; size reflects importance (Hospital/University/Rail Station = large, School/Stadium = medium, others = small). Hide (eye) and Clear (×) icons follow the same Add Data pattern as GTFS and LODES. No session persistence — categories must be re-selected each session. Loaded POI features are exposed as `App.osmPoiFeatures` for downstream use by analysis modules (see TPI Destinations factor below).
+
+**Potential future enhancements:**
+- Filter loaded POIs by importance tier (show only High, Medium, or both)
+- User-editable importance override per individual POI via the click detail popup
+- Auto-populate `destinationImportance` attribute on new user-placed Points based on proximity to loaded OSM POIs
 
 ### GTFS import — Implemented
 Upload a GTFS `.zip` via Add Data (+) → GTFS → Load GTFS Feed. Routes (shapes.txt) render as dashed gray reference lines and stops (stops.txt) as hollow circles below user-drawn features. Hovering shows a tooltip (route name + mode, or stop name + ID); clicking shows a full detail popup with route color swatch, GTFS fields, and wheelchair/location-type labels. Route info is pre-joined from trips.txt + routes.txt at load time. The analysis popup shows all files in the ZIP with REQ/OPT badges and a scrollable CSV table viewer (capped at 500 rows). Layer visibility toggles in the popup. Feed is not persisted across sessions (re-upload required).
