@@ -25,8 +25,11 @@
     { group: "Government",  id: "post_office", label: "Post Office",      tag: "amenity", value: "post_office",      importance: 1 },
     { group: "Government",  id: "community",   label: "Community Centre", tag: "amenity", value: "community_centre", importance: 1 },
     { group: "Government",  id: "townhall",    label: "Town Hall / Gov.", tag: "amenity", value: "townhall",         importance: 2 },
+    { group: "Government",  id: "courthouse",  label: "Courthouse",       tag: "amenity", value: "courthouse",       importance: 2 },
     { group: "Recreation",  id: "stadium",     label: "Stadium / Arena",  tag: "leisure", value: "stadium",          importance: 2 },
-    { group: "Recreation",  id: "park",        label: "Park",             tag: "leisure", value: "park",             importance: 1 }
+    { group: "Recreation",  id: "park",        label: "Park",             tag: "leisure", value: "park",             importance: 1 },
+    { group: "Social Services", id: "social_facility", label: "Social Facility",   tag: "amenity", value: "social_facility",   importance: 2 },
+    { group: "Community",   id: "place_of_worship",    label: "Place of Worship",  tag: "amenity", value: "place_of_worship",  importance: 1 }
   ];
 
   // Lookup by id
