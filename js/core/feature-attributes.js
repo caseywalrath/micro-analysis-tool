@@ -471,6 +471,29 @@
     return row;
   }
 
+  function fmtLength(miles) {
+    if (miles < 0.1) {
+      var ft = miles * 5280;
+      return ft < 10 ? ft.toFixed(1) + " ft" : Math.round(ft) + " ft";
+    }
+    return miles < 10 ? miles.toFixed(2) + " mi" : miles.toFixed(1) + " mi";
+  }
+
+  function fmtArea(sqMeters) {
+    var acres   = sqMeters * 0.000247105;
+    var sqMiles = sqMeters * 3.861e-7;
+    if (acres < 1)   return Math.round(sqMeters).toLocaleString() + " m\u00B2";
+    if (acres < 640) return acres.toFixed(1) + " acres";
+    return sqMiles.toFixed(2) + " mi\u00B2";
+  }
+
+  function buildReadOnlyValue(text) {
+    var span = document.createElement("span");
+    span.className = "fp-attr-unit";
+    span.textContent = text;
+    return span;
+  }
+
   /* ---- Floating popup singleton ---- */
 
   var _popupEl     = null;   // DOM element, created once
@@ -824,6 +847,25 @@
       var result = buildFieldInput(field, attrs, feature, featureType);
       body.appendChild(buildRow(field.label, result.el, result.unit));
     });
+
+    // Computed measurements (read-only)
+    if ((featureType === "route" || featureType === "line") &&
+        feature.geometry && feature.geometry.coordinates &&
+        feature.geometry.coordinates.length >= 2) {
+      var lenMi = turf.length(feature, { units: "miles" });
+      body.appendChild(buildRow("Length", buildReadOnlyValue(fmtLength(lenMi)), null));
+    }
+
+    if (featureType === "polygon" &&
+        feature.geometry && feature.geometry.coordinates &&
+        feature.geometry.coordinates[0] &&
+        feature.geometry.coordinates[0].length >= 3) {
+      var ring    = feature.geometry.coordinates[0];
+      var perimMi = turf.length(turf.lineString(ring), { units: "miles" });
+      var areaSqM = turf.area(feature);
+      body.appendChild(buildRow("Perimeter", buildReadOnlyValue(fmtLength(perimMi)), null));
+      body.appendChild(buildRow("Area",      buildReadOnlyValue(fmtArea(areaSqM)),   null));
+    }
 
     // Label-specific: sync attribute changes to marker appearance
     if (featureType === "label") {
