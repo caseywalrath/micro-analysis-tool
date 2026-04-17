@@ -748,6 +748,12 @@
     } else {
       map.getSource(TPI_SOURCE).setData(fc);
     }
+
+    // Show and reset the hide-choropleth toggle after every successful render
+    var toggleRow = document.getElementById("tpiChoroplethToggleRow");
+    var hideCb    = document.getElementById("tpiHideChoropleth");
+    if (toggleRow) toggleRow.style.display = "";
+    if (hideCb)    hideCb.checked = false;
   }
 
   function removeChoropleth() {
@@ -771,6 +777,10 @@
       var emptyEl   = document.getElementById("tpiEmptyState");
       if (emptyEl)   emptyEl.style.display   = "";
       updateExportButtons(false);
+      var toggleRow = document.getElementById("tpiChoroplethToggleRow");
+      if (toggleRow) toggleRow.style.display = "none";
+      var hideCb = document.getElementById("tpiHideChoropleth");
+      if (hideCb) hideCb.checked = false;
     }
     App.setStatus("TPI cleared");
   }
@@ -971,6 +981,19 @@
     var runBtn = document.getElementById("tpiRun");
     if (runBtn) runBtn.addEventListener("click", function () { runTPI(); });
 
+    // Hide Choropleth toggle
+    var hideCb = document.getElementById("tpiHideChoropleth");
+    if (hideCb) {
+      hideCb.addEventListener("change", function () {
+        var vis = hideCb.checked ? "none" : "visible";
+        var map = App.map;
+        if (map.getLayer(TPI_FILL_LAYER)) map.setLayoutProperty(TPI_FILL_LAYER, "visibility", vis);
+        if (map.getLayer(TPI_LINE_LAYER)) map.setLayoutProperty(TPI_LINE_LAYER, "visibility", vis);
+        if (hideCb.checked) App.popup.hideFloatingWidget("tpi-legend");
+        else                App.popup.showFloatingWidget("tpi-legend", "projects/tpi-legend.html", { position: "bottom-left", width: 160, title: "TPI Legend" });
+      });
+    }
+
     // Adjust Weights modal
     var adjustBtn = document.getElementById("tpiAdjustWeights");
     if (adjustBtn) adjustBtn.addEventListener("click", openWeightsModal);
@@ -1048,6 +1071,14 @@
       displayGeographyList(_lastResult, _selectedCorridor);
     }
     if (_stale) markStale();
+
+    // Sync hide-choropleth toggle with actual layer visibility
+    var toggleRow = document.getElementById("tpiChoroplethToggleRow");
+    var hideCb    = document.getElementById("tpiHideChoropleth");
+    if (toggleRow) toggleRow.style.display = _lastResult ? "" : "none";
+    if (hideCb && _lastResult && App.map.getLayer(TPI_FILL_LAYER)) {
+      hideCb.checked = App.map.getLayoutProperty(TPI_FILL_LAYER, "visibility") === "none";
+    }
 
     // LODES warning
     var lodesWarnBtn = document.getElementById("tpiLodesWarnBtn");
