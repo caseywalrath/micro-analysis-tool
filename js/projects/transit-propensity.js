@@ -987,8 +987,10 @@
       hideCb.addEventListener("change", function () {
         var vis = hideCb.checked ? "none" : "visible";
         var map = App.map;
-        if (map.getLayer(TPI_FILL_LAYER)) map.setLayoutProperty(TPI_FILL_LAYER, "visibility", vis);
-        if (map.getLayer(TPI_LINE_LAYER)) map.setLayoutProperty(TPI_LINE_LAYER, "visibility", vis);
+        if (map.getLayer(TPI_FILL_LAYER))      map.setLayoutProperty(TPI_FILL_LAYER,      "visibility", vis);
+        if (map.getLayer(TPI_LINE_LAYER))      map.setLayoutProperty(TPI_LINE_LAYER,      "visibility", vis);
+        if (map.getLayer("census-geos-fill"))  map.setLayoutProperty("census-geos-fill",  "visibility", vis);
+        if (map.getLayer("census-geos-line"))  map.setLayoutProperty("census-geos-line",  "visibility", vis);
         if (hideCb.checked) App.popup.hideFloatingWidget("tpi-legend");
         else                App.popup.showFloatingWidget("tpi-legend", "projects/tpi-legend.html", { position: "bottom-left", width: 160, title: "TPI Legend" });
       });
