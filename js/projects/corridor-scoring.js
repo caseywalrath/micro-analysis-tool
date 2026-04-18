@@ -117,6 +117,109 @@
     }
   }
 
+  // ---- Weight sliders (inside modal) ----
+
+  function buildWeightSliders() {
+    var container = document.getElementById("csWeightSliders");
+    if (!container || !TPI) return;
+    container.innerHTML = "";
+
+    var factors = TPI.FACTORS;
+    for (var i = 0; i < factors.length; i++) {
+      var f = factors[i];
+      var w = (_weights[f.id] != null) ? _weights[f.id] : (f.defaultWeight || 0);
+
+      var row = document.createElement("div");
+      row.className = "tpi-slider-row";
+      row.innerHTML =
+        '<label class="tpi-slider-label" title="' + (f.description || "") + '">' + f.label + '</label>' +
+        '<input type="range" class="tpi-slider cs-slider" min="0" max="100" step="5" value="' + w + '" data-factor="' + f.id + '">' +
+        '<input type="number" class="tpi-slider-value" id="csW_' + f.id + '" value="' + w + '" min="0" max="100" step="1" data-factor="' + f.id + '">';
+      container.appendChild(row);
+
+      var slider   = row.querySelector("input[type=range]");
+      var numInput = row.querySelector("input[type=number]");
+      slider.addEventListener("input",  onModalSliderChange);
+      numInput.addEventListener("change", onModalNumberChange);
+    }
+    updateModalWeightSum();
+  }
+
+  function syncSlidersToWeights(weights) {
+    if (!TPI) return;
+    var factors = TPI.FACTORS;
+    for (var i = 0; i < factors.length; i++) {
+      var f = factors[i];
+      var w = (weights[f.id] != null) ? weights[f.id] : 0;
+      var slider   = document.querySelector('.cs-slider[data-factor="' + f.id + '"]');
+      var numInput = document.getElementById("csW_" + f.id);
+      if (slider)   slider.value   = String(w);
+      if (numInput) numInput.value = String(w);
+    }
+    updateModalWeightSum();
+  }
+
+  function onModalSliderChange(e) {
+    if (!_pendingWeights) return;
+    var factorId = e.target.getAttribute("data-factor");
+    _pendingWeights[factorId] = parseInt(e.target.value, 10);
+    var numInput = document.getElementById("csW_" + factorId);
+    if (numInput) numInput.value = String(_pendingWeights[factorId]);
+    updateModalWeightSum();
+  }
+
+  function onModalNumberChange(e) {
+    if (!_pendingWeights) return;
+    var factorId = e.target.getAttribute("data-factor");
+    var raw      = parseInt(e.target.value, 10);
+    var clamped  = isNaN(raw) ? 0 : Math.max(0, Math.min(100, raw));
+    e.target.value = String(clamped);
+    _pendingWeights[factorId] = clamped;
+    var slider = document.querySelector('.cs-slider[data-factor="' + factorId + '"]');
+    if (slider) slider.value = String(clamped);
+    updateModalWeightSum();
+  }
+
+  function updateModalWeightSum() {
+    if (!TPI) return 0;
+    var weights = _pendingWeights || _weights;
+    var sum = 0;
+    var factors = TPI.FACTORS;
+    for (var i = 0; i < factors.length; i++) sum += (weights[factors[i].id] || 0);
+
+    var sumEl      = document.getElementById("csWeightSum");
+    var warnEl     = document.getElementById("csWeightWarn");
+    var confirmBtn = document.getElementById("csWeightsConfirm");
+    if (sumEl)      { sumEl.textContent = String(sum); sumEl.style.color = sum === 100 ? "" : "#e53e3e"; }
+    if (warnEl)     warnEl.style.visibility = sum === 100 ? "hidden" : "visible";
+    if (confirmBtn) confirmBtn.disabled = (sum !== 100);
+    return sum;
+  }
+
+  function openWeightsModal() {
+    _pendingWeights = Object.assign({}, _weights);
+    syncSlidersToWeights(_pendingWeights);
+    var modal = document.getElementById("csWeightsModal");
+    if (modal) modal.style.display = "";
+  }
+
+  function closeWeightsModal(confirm) {
+    var modal = document.getElementById("csWeightsModal");
+    if (modal) modal.style.display = "none";
+    if (confirm && _pendingWeights) {
+      var oldJSON = JSON.stringify(_weights);
+      _weights    = Object.assign({}, _pendingWeights);
+      if (JSON.stringify(_weights) !== oldJSON) markStale();
+    }
+    _pendingWeights = null;
+  }
+
+  function resetModalToDefaults() {
+    if (!TPI) return;
+    _pendingWeights = TPI.getDefaultWeights();
+    syncSlidersToWeights(_pendingWeights);
+  }
+
   // ---- LODES warning icon visibility ----
 
   function updateLodesWarnings() {
@@ -185,13 +288,18 @@
       });
     }
 
-    // Adjust Weights — wired fully in Step 2. Stub for now.
+    // Adjust Weights modal
     var weightsBtn = document.getElementById("csWeightsBtn");
-    if (weightsBtn) {
-      weightsBtn.addEventListener("click", function () {
-        setStatus("Adjust Weights modal — coming in Step 2.");
-      });
-    }
+    if (weightsBtn) weightsBtn.addEventListener("click", openWeightsModal);
+
+    var confirmBtn = document.getElementById("csWeightsConfirm");
+    if (confirmBtn) confirmBtn.addEventListener("click", function () { closeWeightsModal(true); });
+
+    var cancelBtn = document.getElementById("csWeightsCancel");
+    if (cancelBtn) cancelBtn.addEventListener("click", function () { closeWeightsModal(false); });
+
+    var resetBtn = document.getElementById("csResetWeights");
+    if (resetBtn) resetBtn.addEventListener("click", resetModalToDefaults);
 
     // Score Corridors — wired fully in Step 3. Stub for now.
     var scoreBtn = document.getElementById("csScoreBtn");
@@ -200,6 +308,9 @@
         setStatus("Scoring flow — coming in Step 3.");
       });
     }
+
+    // Populate weight sliders (in modal) with current _weights
+    buildWeightSliders();
   }
 
   function onOpen(core) {
