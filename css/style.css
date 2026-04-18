@@ -1192,7 +1192,7 @@ code { font-family: var(--font-mono); }
 .analysis-dropdown {
   position: absolute;
   top: 100%;
-  right: 0;
+  left: 0;
   margin-top: 4px;
   background: var(--panel);
   border: 1px solid var(--border);
