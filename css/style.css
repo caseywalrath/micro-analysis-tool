@@ -1573,6 +1573,13 @@ code { font-family: var(--font-mono); }
   max-height: 62vh;
 }
 
+/* ---- Corridor Scoring popup body (mirrors .tpi-body) ---- */
+.cs-body {
+  padding: 16px;
+  overflow-y: auto;
+  max-height: 62vh;
+}
+
 /* ---- FTA Small Starts popup ---- */
 .fta-tabs { display: flex; gap: 0; border-bottom: 2px solid var(--border); padding: 0 4px; flex-shrink: 0; }
 .fta-tab {

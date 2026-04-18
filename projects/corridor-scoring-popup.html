@@ -1,0 +1,84 @@
+<!-- Corridor Scoring — 2-column popup body (Settings | Results) -->
+<div class="cs-body">
+  <div class="rf-section-row" style="align-items:flex-start;min-height:400px;">
+
+    <!-- Left: settings column (240px) -->
+    <div class="rf-settings-col">
+
+      <div class="rf-section-title">Geography</div>
+
+      <label class="tiny">Level</label>
+      <select id="csGeoLevel" class="rf-select">
+        <option value="tract">Census Tracts</option>
+        <option value="bg" selected>Block Groups</option>
+      </select>
+
+      <label class="tiny" style="margin-top:10px;">
+        ACS Year&nbsp;<button id="csLodesWarnBtn" class="rf-info-btn" type="button"
+          title="LODES data not loaded — Employment factor will be excluded and its weight redistributed automatically."
+          style="color:#f59e0b;display:none;">&#9888;</button>
+      </label>
+      <select id="csYearSelect" class="rf-select">
+        <option value="2024">2024</option>
+        <option value="2023">2023</option>
+        <option value="2022">2022</option>
+        <option value="2021">2021</option>
+      </select>
+
+      <div class="tpi-toggle-row" style="margin-top:10px;">
+        <input type="checkbox" id="csApportionByArea">
+        <label for="csApportionByArea" class="tiny">Apportion by area</label>
+      </div>
+
+      <div class="rf-section-title" style="margin-top:16px;">Corridors to score</div>
+      <div class="rf-feature-select-actions" style="margin-bottom:4px;">
+        <a href="#" id="csSelectAll">Select all</a>&nbsp;<span style="color:var(--muted);">|</span>&nbsp;<a href="#" id="csSelectNone">Clear</a>
+      </div>
+      <div id="csFeatureList" class="rf-feature-checklist">
+        <div style="padding:6px;color:var(--muted);font-size:12px;">No features drawn.</div>
+      </div>
+
+      <button id="csWeightsBtn" type="button" class="rf-btn-sm" style="margin-top:12px;width:100%;">
+        Adjust Weights
+      </button>
+      <button id="csScoreBtn" type="button" class="rf-action-primary" style="margin-top:8px;">
+        Score Corridors
+      </button>
+
+    </div>
+
+    <!-- Right: results column (flex:1) -->
+    <div class="rf-results-col">
+
+      <div id="csStaleBanner" class="rf-stale-banner" style="display:none;">
+        Inputs changed &mdash; re-run to refresh scores.
+      </div>
+
+      <div id="csStatus" class="rf-status" style="display:none;">
+        <span id="csStatusText">Ready</span>
+      </div>
+
+      <!-- Results (shown after a successful run) -->
+      <div id="csResults" style="display:none;">
+        <div id="csResultsTable"></div>
+
+        <!-- Export buttons -->
+        <div style="display:flex;gap:8px;margin-top:14px;">
+          <button id="csExportGeoJSON" type="button" class="rf-btn-sm" disabled>Export GeoJSON</button>
+          <button id="csExportCSV" type="button" class="rf-btn-sm" disabled>Export CSV</button>
+        </div>
+
+        <p class="tiny" style="margin-top:8px;color:var(--muted);">
+          Scores are quintile-normalized within the selected corridor pool.
+        </p>
+      </div>
+
+      <!-- Pre-run empty state -->
+      <div id="csEmptyState" class="rf-info-box">
+        <p>Select corridors and click <strong>Score Corridors</strong> to produce a ranked composite score per corridor.</p>
+      </div>
+
+    </div>
+
+  </div>
+</div>
