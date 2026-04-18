@@ -607,7 +607,9 @@
 
     if (!rows.length) { container.innerHTML = ""; return; }
 
-    var systemAvgs = computeSystemFactorAverages(result.tpiResult);
+    var systemAvgs = (result.tpiResult && result.tpiResult.__restoredSystemAverages)
+      ? result.tpiResult.__restoredSystemAverages
+      : computeSystemFactorAverages(result.tpiResult);
     var effWeights = (result.tpiResult && result.tpiResult.effectiveWeights) || result.weights || _weights;
 
     var html = '<table class="cs-results-table">' +
@@ -813,6 +815,7 @@
     if (apportionCb) apportionCb.checked = _apportionByArea;
 
     buildFeatureChecklist();
+    if (_featureFilter) applyFeatureFilterToCheckboxes(_featureFilter);
     updateLodesWarnings();
 
     if (_lastResult) {
@@ -850,6 +853,126 @@
     updateLodesWarnings();
   }
 
+  // ---- Apply a saved feature filter to the DOM checklist ----
+
+  function applyFeatureFilterToCheckboxes(filter) {
+    var el = document.getElementById("csFeatureList");
+    if (!el || !filter) return;
+    var routeSet = new Set((filter.routeIndices || []).map(Number));
+    var lineSet  = new Set((filter.lineIndices  || []).map(Number));
+    var boxes = el.querySelectorAll("input[type=checkbox]");
+    for (var i = 0; i < boxes.length; i++) {
+      var cb = boxes[i];
+      var type = cb.getAttribute("data-type");
+      var idx  = parseInt(cb.getAttribute("data-idx"), 10);
+      if (type === "route") cb.checked = routeSet.has(idx);
+      if (type === "line")  cb.checked = lineSet.has(idx);
+    }
+  }
+
+  // ---- Session persistence ----
+
+  function saveCsState(mode) {
+    // Prefer the live checklist state if the popup is initialized.
+    var currentFilter = document.getElementById("csFeatureList") ? getFeatureFilter() : _featureFilter;
+    var data = {
+      version:         1,
+      weights:         Object.assign({}, _weights),
+      apportionByArea: _apportionByArea,
+      featureFilter:   currentFilter ? JSON.parse(JSON.stringify(currentFilter)) : null,
+      geoLevel:        null,
+      year:            null,
+      lastSummary:     null,
+      full:            null
+    };
+    var geoLevelEl = document.getElementById("csGeoLevel");
+    var yearEl     = document.getElementById("csYearSelect");
+    if (geoLevelEl) data.geoLevel = geoLevelEl.value;
+    if (yearEl)     data.year     = yearEl.value;
+
+    if (_lastResult) {
+      data.lastSummary = {
+        geoLevel:        _lastResult.geoLevel,
+        year:            _lastResult.year,
+        apportionByArea: _lastResult.apportionByArea,
+        weights:         Object.assign({}, _lastResult.weights || {}),
+        featureFilter:   _lastResult.featureFilter || null,
+        routeCDIs:       (_lastResult.routeCDIs || []).map(function (r) {
+          return {
+            name:            r.name,
+            featureType:     r.featureType,
+            featureIndex:    r.featureIndex,
+            cdi:             r.cdi,
+            classification:  r.classification,
+            geoCount:        r.geoCount,
+            lengthMiles:     r.lengthMiles,
+            factorBreakdown: r.factorBreakdown || {},
+            compositeRange:  r.compositeRange || null
+          };
+        })
+      };
+
+      // Full mode: include system factor averages so the comparison
+      // bars in factor breakdowns restore correctly after a file import.
+      if (mode === "full" && _lastResult.tpiResult) {
+        data.full = {
+          systemFactorAverages: computeSystemFactorAverages(_lastResult.tpiResult),
+          effectiveWeights:     _lastResult.tpiResult.effectiveWeights || null
+        };
+      }
+    }
+    return data;
+  }
+
+  function restoreCsState(data) {
+    if (!data) return;
+    if (data.weights)          _weights         = Object.assign({}, data.weights);
+    if (data.apportionByArea != null) _apportionByArea = !!data.apportionByArea;
+    if (data.featureFilter !== undefined) _featureFilter = data.featureFilter;
+
+    var geoLevelEl = document.getElementById("csGeoLevel");
+    var yearEl     = document.getElementById("csYearSelect");
+    if (geoLevelEl && data.geoLevel) geoLevelEl.value = data.geoLevel;
+    if (yearEl     && data.year)     yearEl.value     = data.year;
+
+    if (!data.lastSummary) return;
+    var s = data.lastSummary;
+    // Re-synthesize enough of _lastResult for the table and map layers.
+    var fakeTpi = null;
+    if (data.full && data.full.effectiveWeights) {
+      fakeTpi = { effectiveWeights: data.full.effectiveWeights };
+      if (data.full.systemFactorAverages) {
+        // Store pre-computed system averages so renderResultsTable can use them
+        // without re-deriving from a (missing) factorScores Map.
+        fakeTpi.__restoredSystemAverages = data.full.systemFactorAverages;
+      }
+    }
+    _lastResult = {
+      routeCDIs:       s.routeCDIs || [],
+      tpiResult:       fakeTpi,
+      systemCDI:       null,
+      geoLevel:        s.geoLevel,
+      year:            s.year,
+      apportionByArea: s.apportionByArea,
+      unionPolygon:    null,
+      featureFilter:   s.featureFilter || null,
+      weights:         Object.assign({}, s.weights || _weights)
+    };
+    _stale = false;
+
+    // Render table + map immediately (popup may or may not be open).
+    if (isPopupVisible()) {
+      renderResultsTable(_lastResult);
+      setExportButtonsEnabled(true);
+    }
+    renderMapChoropleth(_lastResult);
+    if (App.popup && App.popup.showFloatingWidget) {
+      App.popup.showFloatingWidget("cs-legend", "projects/corridor-scoring-legend.html", {
+        position: "bottom-left", width: 180, title: "Corridor Score"
+      });
+    }
+  }
+
   // ---- Register as analysis module ----
 
   App.registerModule({
@@ -865,5 +988,13 @@
     clear:   function ()     { clearAll(); },
     update:  async function (core) { await update(core); }
   });
+
+  // Register with session cache
+  if (App.cache && App.cache.registerModule) {
+    App.cache.registerModule("corridor-scoring", {
+      collect: saveCsState,
+      apply:   restoreCsState
+    });
+  }
 
 })();
