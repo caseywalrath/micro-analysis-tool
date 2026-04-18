@@ -276,10 +276,146 @@
 
   function markStale() {
     _stale = true;
+    setExportButtonsEnabled(false);
     if (!isPopupVisible()) return;
     if (_lastResult) {
       setStatus("Inputs changed — re-run to refresh scores.", "stale");
     }
+  }
+
+  // ---- Exports ----
+
+  function _dateStamp() {
+    var d = new Date();
+    return d.getFullYear() + "-" +
+      String(d.getMonth() + 1).padStart(2, "0") + "-" +
+      String(d.getDate()).padStart(2, "0");
+  }
+
+  function _triggerDownload(content, mimeType, filename) {
+    var blob = new Blob([content], { type: mimeType });
+    var url  = URL.createObjectURL(blob);
+    var a    = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+  }
+
+  function _csvField(val) {
+    if (val == null) return "";
+    var s = String(val);
+    if (s.indexOf(",") !== -1 || s.indexOf('"') !== -1 || s.indexOf("\n") !== -1) {
+      s = '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+  }
+
+  function _buildMetadata() {
+    return {
+      tool:            "Micro Analysis Tool",
+      module:          "Corridor Scoring",
+      exportedAt:      new Date().toISOString(),
+      geoLevel:        _lastResult ? _lastResult.geoLevel : null,
+      acsYear:         _lastResult ? _lastResult.year     : null,
+      apportionByArea: _lastResult ? _lastResult.apportionByArea : false,
+      weights:         _lastResult ? _lastResult.weights  : null
+    };
+  }
+
+  function exportCSV() {
+    if (!_lastResult) return;
+    var factors = TPI ? TPI.FACTORS : [];
+    var rows    = _lastResult.routeCDIs || [];
+    var meta    = _buildMetadata();
+
+    var header = [
+      "rank", "name", "feature_type", "feature_index",
+      "cdi_score", "classification", "length_mi", "geo_count",
+      "composite_min", "composite_max"
+    ];
+    for (var fi = 0; fi < factors.length; fi++) {
+      header.push(factors[fi].id + "_avg_quintile");
+    }
+
+    var lines = [];
+    lines.push("# Micro Analysis Tool — Corridor Scoring Export");
+    lines.push("# Exported: "        + meta.exportedAt);
+    lines.push("# Geography: "       + (meta.geoLevel || ""));
+    lines.push("# ACS Year: "        + (meta.acsYear  || ""));
+    lines.push("# Apportion by area: " + (meta.apportionByArea ? "yes" : "no"));
+    lines.push(header.join(","));
+
+    for (var i = 0; i < rows.length; i++) {
+      var r  = rows[i];
+      var cr = r.compositeRange || {};
+      var row = [
+        i + 1,
+        _csvField(r.name),
+        r.featureType || "",
+        r.featureIndex != null ? r.featureIndex : "",
+        Number.isFinite(r.cdi) ? r.cdi.toFixed(4) : "",
+        _csvField(r.classification || ""),
+        Number.isFinite(r.lengthMiles) ? r.lengthMiles.toFixed(4) : "",
+        r.geoCount != null ? r.geoCount : "",
+        Number.isFinite(cr.min) ? cr.min.toFixed(4) : "",
+        Number.isFinite(cr.max) ? cr.max.toFixed(4) : ""
+      ];
+      var fb = r.factorBreakdown || {};
+      for (var fj = 0; fj < factors.length; fj++) {
+        var v = fb[factors[fj].id];
+        row.push(Number.isFinite(v) ? v.toFixed(3) : "");
+      }
+      lines.push(row.join(","));
+    }
+
+    _triggerDownload(lines.join("\n"), "text/csv",
+      "corridor-scoring-" + _dateStamp() + ".csv");
+  }
+
+  function exportGeoJSON() {
+    if (!_lastResult) return;
+    var rows = _lastResult.routeCDIs || [];
+    var features = [];
+
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      var src = getFeatureSourceGeom(r.featureType, r.featureIndex);
+      if (!src || !src.geometry) continue;
+      features.push({
+        type: "Feature",
+        geometry: src.geometry,
+        properties: {
+          name:             r.name,
+          cdi:              Number.isFinite(r.cdi) ? parseFloat(r.cdi.toFixed(4)) : null,
+          classification:   r.classification || "N/A",
+          rank:             i + 1,
+          featureType:      r.featureType,
+          featureIndex:     r.featureIndex,
+          lengthMiles:      Number.isFinite(r.lengthMiles) ? parseFloat(r.lengthMiles.toFixed(4)) : null,
+          geoCount:         r.geoCount != null ? r.geoCount : null,
+          compositeRange:   r.compositeRange || null,
+          factorBreakdown:  r.factorBreakdown || {}
+        }
+      });
+    }
+
+    var geojson = {
+      type: "FeatureCollection",
+      metadata: _buildMetadata(),
+      features: features
+    };
+    _triggerDownload(
+      JSON.stringify(geojson, null, 2),
+      "application/geo+json",
+      "corridor-scoring-" + _dateStamp() + ".geojson"
+    );
+  }
+
+  function setExportButtonsEnabled(enabled) {
+    var csvBtn = document.getElementById("csExportCSV");
+    var gjBtn  = document.getElementById("csExportGeoJSON");
+    if (csvBtn) csvBtn.disabled = !enabled;
+    if (gjBtn)  gjBtn.disabled  = !enabled;
   }
 
   // ---- Map choropleth (scored corridors colored by composite CDI) ----
@@ -593,7 +729,7 @@
           title: "Corridor Score"
         });
       }
-      // Exports in Step 7.
+      setExportButtonsEnabled(true);
     } catch (err) {
       console.error("Corridor Scoring error:", err);
       setStatus("Error: " + (err.message || err), "stale");
@@ -662,6 +798,12 @@
     var scoreBtn = document.getElementById("csScoreBtn");
     if (scoreBtn) scoreBtn.addEventListener("click", runScoring);
 
+    // Exports
+    var csvBtn = document.getElementById("csExportCSV");
+    if (csvBtn) csvBtn.addEventListener("click", exportCSV);
+    var gjBtn = document.getElementById("csExportGeoJSON");
+    if (gjBtn) gjBtn.addEventListener("click", exportGeoJSON);
+
     // Populate weight sliders (in modal) with current _weights
     buildWeightSliders();
   }
@@ -673,7 +815,12 @@
     buildFeatureChecklist();
     updateLodesWarnings();
 
-    if (_lastResult) renderResultsTable(_lastResult);
+    if (_lastResult) {
+      renderResultsTable(_lastResult);
+      setExportButtonsEnabled(!_stale);
+    } else {
+      setExportButtonsEnabled(false);
+    }
     if (_stale) markStale();
   }
 
@@ -692,6 +839,7 @@
       var emptyEl = document.getElementById("csEmptyState");
       if (emptyEl) emptyEl.style.display = "";
       setStatus("");
+      setExportButtonsEnabled(false);
     }
   }
 
