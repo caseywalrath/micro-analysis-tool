@@ -30,6 +30,39 @@
 
   // ---- Feature filter helpers (routes + lines only per plan) ----
 
+  function buildUnionFromFilter(filter) {
+    // Delegate to RidershipModel.buildUnionFromFeatures, which already handles
+    // routes+lines unioning and null-filter fallback.
+    var RM = window.RidershipModel;
+    if (RM && typeof RM.buildUnionFromFeatures === "function") {
+      return RM.buildUnionFromFeatures(filter);
+    }
+    // Fallback: inline union from route/line buffers.
+    if (!filter) return App.bufferUnionPolygon ? App.bufferUnionPolygon() : null;
+    var polys = [];
+    var routeBuffers = App.routeBuffers || [];
+    var lineBuffers  = App.lineBuffers  || [];
+    var i, idx;
+    if (filter.routeIndices) {
+      for (i = 0; i < filter.routeIndices.length; i++) {
+        idx = filter.routeIndices[i];
+        if (routeBuffers[idx]) polys.push(routeBuffers[idx]);
+      }
+    }
+    if (filter.lineIndices) {
+      for (i = 0; i < filter.lineIndices.length; i++) {
+        idx = filter.lineIndices[i];
+        if (lineBuffers[idx]) polys.push(lineBuffers[idx]);
+      }
+    }
+    if (!polys.length) return null;
+    var union = polys[0];
+    for (i = 1; i < polys.length; i++) {
+      try { union = turf.union(union, polys[i]); } catch (e) { /* skip */ }
+    }
+    return union;
+  }
+
   function getFeatureFilter() {
     var el = document.getElementById("csFeatureList");
     if (!el) return null;
@@ -227,23 +260,97 @@
     if (warnBtn) warnBtn.style.display = App.lodesData ? "none" : "";
   }
 
-  // ---- Stale banner (wired in Step 3; stub here for checklist hooks) ----
+  // ---- Status + stale helpers ----
 
-  function markStale() {
-    _stale = true;
-    if (!isPopupVisible()) return;
-    var banner = document.getElementById("csStaleBanner");
-    if (banner && _lastResult) banner.style.display = "";
-  }
-
-  // ---- Status helper (filled out in Step 3) ----
-
-  function setStatus(msg) {
+  function setStatus(msg, kind) {
+    // kind: "" | "done" | "stale" | "running"
     var statusEl = document.getElementById("csStatus");
     var textEl   = document.getElementById("csStatusText");
     if (!statusEl || !textEl) return;
     statusEl.style.display = msg ? "" : "none";
     textEl.textContent = msg || "";
+    statusEl.className = "rf-status" +
+      (kind === "done"  ? " rf-status-done"  :
+       kind === "stale" ? " rf-status-stale" : "");
+  }
+
+  function markStale() {
+    _stale = true;
+    if (!isPopupVisible()) return;
+    if (_lastResult) {
+      setStatus("Inputs changed — re-run to refresh scores.", "stale");
+    }
+  }
+
+  // ---- Scoring flow ----
+
+  async function runScoring() {
+    if (_running) return;
+    var RM = window.RidershipModel;
+    if (!RM || typeof RM.computeSystemDemand !== "function") {
+      setStatus("RidershipModel not available.", "stale");
+      return;
+    }
+
+    _running = true;
+    var scoreBtn = document.getElementById("csScoreBtn");
+    if (scoreBtn) scoreBtn.disabled = true;
+    setStatus("Scoring…", "running");
+
+    try {
+      var geoLevel = document.getElementById("csGeoLevel").value;
+      var year     = document.getElementById("csYearSelect").value;
+
+      var featureFilter = getFeatureFilter();
+      var unionPolygon  = buildUnionFromFilter(featureFilter);
+
+      if (!unionPolygon) {
+        throw new Error("No corridors selected. Check at least one route or line.");
+      }
+
+      var result = await RM.computeSystemDemand({
+        geoLevel:        geoLevel,
+        year:            year,
+        weights:         _weights,
+        lodesData:       App.lodesData,
+        apportionByArea: _apportionByArea,
+        unionPolygon:    unionPolygon,
+        featureFilter:   featureFilter,
+        onProgress: function (msg) { setStatus(msg, "running"); }
+      });
+
+      // Sort ranked corridors by CDI descending
+      var ranked = (result.routeCDIs || []).slice().sort(function (a, b) {
+        var av = Number.isFinite(a.cdi) ? a.cdi : -Infinity;
+        var bv = Number.isFinite(b.cdi) ? b.cdi : -Infinity;
+        return bv - av;
+      });
+
+      _lastResult = {
+        routeCDIs:       ranked,
+        tpiResult:       result.tpiResult,
+        systemCDI:       result.systemCDI,
+        geoLevel:        geoLevel,
+        year:            year,
+        apportionByArea: _apportionByArea,
+        unionPolygon:    unionPolygon,
+        featureFilter:   featureFilter,
+        weights:         Object.assign({}, _weights)
+      };
+      _stale = false;
+
+      var geoCount = (result.tpiResult && result.tpiResult.geos) ? result.tpiResult.geos.length : 0;
+      setStatus("Scored " + ranked.length + " corridor" + (ranked.length === 1 ? "" : "s") +
+                " — " + geoCount + " geographies.", "done");
+
+      // Results table + choropleth are wired in later steps.
+    } catch (err) {
+      console.error("Corridor Scoring error:", err);
+      setStatus("Error: " + (err.message || err), "stale");
+    } finally {
+      _running = false;
+      if (scoreBtn) scoreBtn.disabled = false;
+    }
   }
 
   // ---- Popup lifecycle ----
@@ -301,13 +408,9 @@
     var resetBtn = document.getElementById("csResetWeights");
     if (resetBtn) resetBtn.addEventListener("click", resetModalToDefaults);
 
-    // Score Corridors — wired fully in Step 3. Stub for now.
+    // Score Corridors
     var scoreBtn = document.getElementById("csScoreBtn");
-    if (scoreBtn) {
-      scoreBtn.addEventListener("click", function () {
-        setStatus("Scoring flow — coming in Step 3.");
-      });
-    }
+    if (scoreBtn) scoreBtn.addEventListener("click", runScoring);
 
     // Populate weight sliders (in modal) with current _weights
     buildWeightSliders();
