@@ -2921,7 +2921,7 @@ body.dark-mode .cs-feature-badge { background: #2d3748; color: #cbd5e0; }
   border-color: #ccc !important;
 }
 
-/* ---- Type icon (replaces per-feature color swatch) ---- */
+/* ---- Type icon (doubles as quick color picker) ---- */
 .fp-type-icon {
   display: inline-flex;
   align-items: center;
@@ -2930,8 +2930,14 @@ body.dark-mode .cs-feature-badge { background: #2d3748; color: #cbd5e0; }
   height: 16px;
   flex-shrink: 0;
   margin-right: 4px;
-  color: #718096;
-  pointer-events: none;
+  padding: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  border-radius: 3px;
+}
+.fp-type-icon:hover {
+  background: rgba(0, 0, 0, 0.06);
 }
 .fp-type-icon svg {
   width: 11px;

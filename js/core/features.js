@@ -27,13 +27,13 @@
 
   var CHEVRON_SVG = '&#9662;';
 
-  // Dark grey type icon SVGs matching toolbar draw icons
+  // Type icon SVGs — use currentColor so the icon reflects feature.properties.color
   var TYPE_ICON_SVGS = {
-    point: '<svg width="11" height="11" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" fill="#718096"/></svg>',
-    line:    '<svg width="11" height="11" viewBox="0 0 24 24"><line x1="4" y1="19" x2="20" y2="5" stroke="#718096" stroke-width="3.5" stroke-linecap="round"/></svg>',
-    route:   '<svg width="11" height="11" viewBox="0 0 24 24"><path d="M4 18 Q8 6 14 10 Q20 14 20 6" stroke="#718096" stroke-width="2.5" fill="none" stroke-linecap="round"/><circle cx="4" cy="18" r="2.5" fill="#718096"/></svg>',
-    polygon: '<svg width="11" height="11" viewBox="0 0 24 24"><polygon points="12,4 21,10 18,20 6,20 3,10" fill="#718096"/></svg>',
-    label:   '<svg width="11" height="11" viewBox="0 0 24 24"><path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H8l-4 4z" fill="#718096"/></svg>'
+    point:   '<svg width="11" height="11" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>',
+    line:    '<svg width="11" height="11" viewBox="0 0 24 24"><line x1="4" y1="19" x2="20" y2="5" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/></svg>',
+    route:   '<svg width="11" height="11" viewBox="0 0 24 24"><path d="M4 18 Q8 6 14 10 Q20 14 20 6" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round"/><circle cx="4" cy="18" r="2.5" fill="currentColor"/></svg>',
+    polygon: '<svg width="11" height="11" viewBox="0 0 24 24"><polygon points="12,4 21,10 18,20 6,20 3,10" fill="currentColor"/></svg>',
+    label:   '<svg width="11" height="11" viewBox="0 0 24 24"><path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H8l-4 4z" fill="currentColor"/></svg>'
   };
 
   var GEAR_SVG =
@@ -421,11 +421,28 @@
       });
     })(eyeBtn, feature, featureType);
 
-    // Type icon (non-interactive, replaces old color swatch)
-    var typeIcon = document.createElement("span");
+    // Type icon — reflects feature color and opens the color picker on click
+    var typeIcon = document.createElement("button");
+    typeIcon.type = "button";
     typeIcon.className = "fp-type-icon";
     typeIcon.innerHTML = TYPE_ICON_SVGS[featureType] || "";
-    typeIcon.title = TYPE_LABELS_LOCAL[featureType] || featureType;
+    typeIcon.title = "Change " + (TYPE_LABELS_LOCAL[featureType] || featureType) + " color";
+    var _currentColor = feature.properties.color || getTypeDefaultColor(featureType);
+    typeIcon.style.color = _currentColor;
+    (function (btn, ft, fi) {
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        if (typeof App.openColorPicker !== "function") return;
+        var curColor = btn.style.color || getTypeDefaultColor(ft);
+        App.openColorPicker(btn, curColor, function (newColor) {
+          if (typeof App.updateFeatureColor === "function") {
+            App.updateFeatureColor(ft, fi, newColor);
+          }
+          btn.style.color = newColor;
+          if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+        });
+      });
+    })(typeIcon, featureType, featureIndex);
 
     var input = document.createElement("span");
     input.className = "fp-name";
