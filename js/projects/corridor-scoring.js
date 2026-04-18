@@ -870,7 +870,12 @@
   }
 
   async function update(core) {
-    // Fires on feature/LODES changes even when popup closed — guard DOM writes.
+    // If all drawn routes and lines are gone, tear down any choropleth and results.
+    // This handles the Clear button and individual feature deletions alike.
+    if (_lastResult && (App.routes || []).length === 0 && (App.lines || []).length === 0) {
+      clearAll();
+    }
+    // Guard all DOM writes — update fires even when the popup is closed.
     if (!isPopupVisible()) return;
     buildFeatureChecklist();
     updateLodesWarnings();
