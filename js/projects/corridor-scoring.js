@@ -282,6 +282,68 @@
     }
   }
 
+  // ---- Factor breakdown (per-corridor expansion) ----
+
+  // System-wide average quintile per factor — used as comparison baseline.
+  function computeSystemFactorAverages(tpiResult) {
+    var avgs = {};
+    if (!tpiResult || !tpiResult.factorScores) return avgs;
+    var iter = tpiResult.factorScores.entries();
+    var entry = iter.next();
+    while (!entry.done) {
+      var factorId = entry.value[0];
+      var scoreMap = entry.value[1];
+      var sum = 0, count = 0;
+      var valIter = scoreMap.values();
+      var v = valIter.next();
+      while (!v.done) {
+        if (Number.isFinite(v.value)) { sum += v.value; count++; }
+        v = valIter.next();
+      }
+      avgs[factorId] = count > 0 ? sum / count : NaN;
+      entry = iter.next();
+    }
+    return avgs;
+  }
+
+  function buildFactorBreakdownHTML(routeCDI, systemAvgs, effectiveWeights) {
+    if (!TPI) return "";
+    var factors = TPI.FACTORS;
+    var breakdown = (routeCDI && routeCDI.factorBreakdown) || {};
+    var html = '<div class="rf-route-factor-list">';
+
+    for (var i = 0; i < factors.length; i++) {
+      var f = factors[i];
+      var w = (effectiveWeights && effectiveWeights[f.id] != null) ? effectiveWeights[f.id] : 0;
+      if (w === 0) continue;
+
+      var routeAvg = breakdown[f.id];
+      var sysAvg   = systemAvgs ? systemAvgs[f.id] : NaN;
+      var rValid   = Number.isFinite(routeAvg);
+      var sValid   = Number.isFinite(sysAvg);
+
+      var routeBarPct  = rValid ? ((routeAvg - 1) / 4) * 100 : 0;
+      var sysMarkerPct = sValid ? ((sysAvg   - 1) / 4) * 100 : 0;
+
+      var diff = (rValid && sValid) ? routeAvg - sysAvg : 0;
+      var barColor = diff > 0.3 ? "#48bb78" : (diff < -0.3 ? "#f56565" : "#a0aec0");
+
+      html += '<div class="rf-route-factor-row">' +
+        '<span class="rf-route-factor-name" title="' + escapeHTML(f.description || f.label) + '">' + escapeHTML(f.label) + '</span>' +
+        '<span class="rf-route-factor-weight tiny">' + Math.round(w) + '%</span>' +
+        '<span class="rf-route-factor-bar-wrap">' +
+          '<span class="rf-route-factor-bar" style="width:' + routeBarPct.toFixed(0) + '%;background:' + barColor + ';" ' +
+            'title="Corridor: ' + (rValid ? routeAvg.toFixed(1) : 'N/A') + ' / System: ' + (sValid ? sysAvg.toFixed(1) : 'N/A') + '"></span>' +
+          (sValid ? '<span class="rf-route-factor-sys-marker" style="left:' + sysMarkerPct.toFixed(0) + '%;" title="System avg: ' + sysAvg.toFixed(1) + '"></span>' : '') +
+        '</span>' +
+        '<span class="rf-route-factor-score">' + (rValid ? routeAvg.toFixed(1) : 'N/A') + '</span>' +
+        '</div>';
+    }
+
+    html += '</div>';
+    return html;
+  }
+
   // ---- Results table ----
 
   function pillClassFor(label) {
@@ -317,6 +379,9 @@
 
     if (!rows.length) { container.innerHTML = ""; return; }
 
+    var systemAvgs = computeSystemFactorAverages(result.tpiResult);
+    var effWeights = (result.tpiResult && result.tpiResult.effectiveWeights) || result.weights || _weights;
+
     var html = '<table class="cs-results-table">' +
       '<thead><tr>' +
         '<th class="cs-col-rank">#</th>' +
@@ -341,7 +406,9 @@
         '</tr>' +
         '<tr class="cs-row-details" data-index="' + i + '" style="display:none;">' +
           '<td colspan="5">' +
-            '<div class="cs-details-body">Factor breakdown — coming in Step 5.</div>' +
+            '<div class="cs-details-body">' +
+              buildFactorBreakdownHTML(r, systemAvgs, effWeights) +
+            '</div>' +
           '</td>' +
         '</tr>';
     }
