@@ -282,6 +282,87 @@
     }
   }
 
+  // ---- Results table ----
+
+  function pillClassFor(label) {
+    switch (label) {
+      case "High":        return "pill high";
+      case "Medium":      return "pill med";
+      case "Low-Medium":  return "pill ml";
+      case "Low":         return "pill low";
+      default:            return "pill na";
+    }
+  }
+
+  function escapeHTML(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+
+  function formatScore(cdi) {
+    return Number.isFinite(cdi) ? cdi.toFixed(2) : "—";
+  }
+
+  function renderResultsTable(result) {
+    var container = document.getElementById("csResultsTable");
+    var resultsWrap = document.getElementById("csResults");
+    var emptyState  = document.getElementById("csEmptyState");
+    if (!container || !resultsWrap) return;
+
+    var rows = (result && result.routeCDIs) || [];
+
+    if (emptyState)  emptyState.style.display  = rows.length ? "none" : "";
+    resultsWrap.style.display = rows.length ? "" : "none";
+
+    if (!rows.length) { container.innerHTML = ""; return; }
+
+    var html = '<table class="cs-results-table">' +
+      '<thead><tr>' +
+        '<th class="cs-col-rank">#</th>' +
+        '<th class="cs-col-name">Corridor</th>' +
+        '<th class="cs-col-score">Score</th>' +
+        '<th class="cs-col-class">Classification</th>' +
+        '<th class="cs-col-toggle" aria-label="Expand"></th>' +
+      '</tr></thead><tbody>';
+
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      var rank = i + 1;
+      var pill = pillClassFor(r.classification);
+      html +=
+        '<tr class="cs-row" data-index="' + i + '">' +
+          '<td class="cs-rank">' + rank + '</td>' +
+          '<td class="cs-name">' + escapeHTML(r.name) +
+            ' <span class="cs-feature-badge">' + (r.featureType === "line" ? "L" : "R") + '</span></td>' +
+          '<td class="cs-score">' + formatScore(r.cdi) + '</td>' +
+          '<td class="cs-class"><span class="' + pill + '">' + escapeHTML(r.classification || "N/A") + '</span></td>' +
+          '<td class="cs-toggle"><span class="cs-caret">&#9656;</span></td>' +
+        '</tr>' +
+        '<tr class="cs-row-details" data-index="' + i + '" style="display:none;">' +
+          '<td colspan="5">' +
+            '<div class="cs-details-body">Factor breakdown — coming in Step 5.</div>' +
+          '</td>' +
+        '</tr>';
+    }
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+
+    // Wire row click → toggle details
+    var rowEls = container.querySelectorAll("tr.cs-row");
+    rowEls.forEach(function (rowEl) {
+      rowEl.addEventListener("click", function () {
+        var idx = rowEl.getAttribute("data-index");
+        var details = container.querySelector('tr.cs-row-details[data-index="' + idx + '"]');
+        if (!details) return;
+        var open = details.style.display !== "none";
+        details.style.display = open ? "none" : "";
+        rowEl.classList.toggle("cs-row-open", !open);
+      });
+    });
+  }
+
   // ---- Scoring flow ----
 
   async function runScoring() {
@@ -343,7 +424,8 @@
       setStatus("Scored " + ranked.length + " corridor" + (ranked.length === 1 ? "" : "s") +
                 " — " + geoCount + " geographies.", "done");
 
-      // Results table + choropleth are wired in later steps.
+      renderResultsTable(_lastResult);
+      // Choropleth + legend come in Step 6; exports in Step 7.
     } catch (err) {
       console.error("Corridor Scoring error:", err);
       setStatus("Error: " + (err.message || err), "stale");
@@ -423,6 +505,7 @@
     buildFeatureChecklist();
     updateLodesWarnings();
 
+    if (_lastResult) renderResultsTable(_lastResult);
     if (_stale) markStale();
   }
 
