@@ -80,6 +80,17 @@
     return union;
   }
 
+  function hasBufferIssue(filter) {
+    var routes = App.routes || [];
+    var lines  = App.lines  || [];
+    var rb = App.routeBuffers || [];
+    var lb = App.lineBuffers  || [];
+    var rIdxs = filter ? filter.routeIndices : routes.map(function(_,i){ return i; });
+    var lIdxs = filter ? filter.lineIndices  : lines.map(function(_,i){ return i; });
+    return (rIdxs.length > 0 && rIdxs.some(function(i){ return !rb[i]; })) ||
+           (lIdxs.length > 0 && lIdxs.some(function(i){ return !lb[i]; }));
+  }
+
   function getFeatureFilter() {
     var el = document.getElementById("tpiFeatureChecklist");
     if (!el) return null;
@@ -554,6 +565,10 @@
       var featureFilter = getFeatureFilter();
       var unionPolygon  = buildUnionFromFilter(featureFilter);
 
+      if (hasBufferIssue(featureFilter)) {
+        throw new Error("No buffers defined for selected features. Set a buffer radius in the Features panel.");
+      }
+
       if (!unionPolygon) {
         throw new Error("No features selected. Check at least one feature in the TPI Features list.");
       }
@@ -602,7 +617,7 @@
     } catch (err) {
       console.error("TPI error:", err);
       if (textEl) textEl.textContent = "Error: " + (err.message || err);
-      if (statusEl) statusEl.className = "rf-status rf-status-stale";
+      if (statusEl) statusEl.className = "rf-status rf-status-error";
       App.setStatus("TPI error");
     } finally {
       _running = false;

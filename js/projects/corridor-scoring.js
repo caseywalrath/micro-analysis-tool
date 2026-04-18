@@ -69,6 +69,17 @@
     return union;
   }
 
+  function hasBufferIssue(filter) {
+    var routes = App.routes || [];
+    var lines  = App.lines  || [];
+    var rb = App.routeBuffers || [];
+    var lb = App.lineBuffers  || [];
+    var rIdxs = filter ? filter.routeIndices : routes.map(function(_,i){ return i; });
+    var lIdxs = filter ? filter.lineIndices  : lines.map(function(_,i){ return i; });
+    return (rIdxs.length > 0 && rIdxs.some(function(i){ return !rb[i]; })) ||
+           (lIdxs.length > 0 && lIdxs.some(function(i){ return !lb[i]; }));
+  }
+
   function getFeatureFilter() {
     var el = document.getElementById("csFeatureList");
     if (!el) return null;
@@ -277,7 +288,8 @@
     textEl.textContent = msg || "";
     statusEl.className = "rf-status" +
       (kind === "done"  ? " rf-status-done"  :
-       kind === "stale" ? " rf-status-stale" : "");
+       kind === "stale" ? " rf-status-stale" :
+       kind === "error" ? " rf-status-error" : "");
   }
 
   function markStale() {
@@ -687,6 +699,11 @@
       var year     = document.getElementById("csYearSelect").value;
 
       var featureFilter = getFeatureFilter();
+
+      if (hasBufferIssue(featureFilter)) {
+        throw new Error("No buffers defined for selected features. Set a buffer radius in the Features panel.");
+      }
+
       var unionPolygon  = buildUnionFromFilter(featureFilter);
 
       if (!unionPolygon) {
@@ -740,7 +757,7 @@
       setExportButtonsEnabled(true);
     } catch (err) {
       console.error("Corridor Scoring error:", err);
-      setStatus("Error: " + (err.message || err), "stale");
+      setStatus("Error: " + (err.message || err), "error");
     } finally {
       _running = false;
       if (scoreBtn) scoreBtn.disabled = false;

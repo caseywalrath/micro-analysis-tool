@@ -491,6 +491,11 @@
         // Path B: Different system — run fresh TPI for demand features
         var demandFilter = readFeatureFilter("rfDemandFeatureList");
         _demandFeatureFilter = demandFilter;
+
+        if (hasBufferIssue(demandFilter)) {
+          throw new Error("No buffers defined for selected features. Set a buffer radius in the Features panel.");
+        }
+
         var customUnion = demandFilter ? RM.buildUnionFromFeatures(demandFilter) : null;
 
         if (textEl) textEl.textContent = "Running demand system analysis...";
@@ -999,6 +1004,17 @@
     }
   }
 
+  function hasBufferIssue(filter) {
+    var routes = App.routes || [];
+    var lines  = App.lines  || [];
+    var rb = App.routeBuffers || [];
+    var lb = App.lineBuffers  || [];
+    var rIdxs = filter ? filter.routeIndices : routes.map(function(_,i){ return i; });
+    var lIdxs = filter ? filter.lineIndices  : lines.map(function(_,i){ return i; });
+    return (rIdxs.length > 0 && rIdxs.some(function(i){ return !rb[i]; })) ||
+           (lIdxs.length > 0 && lIdxs.some(function(i){ return !lb[i]; }));
+  }
+
   // Read checkbox state from a feature checklist and return a featureFilter object.
   // Returns null if ALL are checked (equivalent to "no filter" for backward compat).
   function readFeatureFilter(containerId) {
@@ -1270,6 +1286,11 @@
       // Read calibration feature filter from checkboxes
       var featureFilter = readFeatureFilter("rfCalibFeatureList");
       _calibFeatureFilter = featureFilter;
+
+      if (hasBufferIssue(featureFilter)) {
+        throw new Error("No buffers defined for selected features. Set a buffer radius in the Features panel.");
+      }
+
       var customUnion = featureFilter ? RM.buildUnionFromFeatures(featureFilter) : null;
 
       var result = await RM.computeSystemDemand({
