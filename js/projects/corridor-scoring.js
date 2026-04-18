@@ -282,6 +282,98 @@
     }
   }
 
+  // ---- Map choropleth (scored corridors colored by composite CDI) ----
+
+  var CS_SOURCE      = "corridor-scoring-routes";
+  var CS_LINE_LAYER  = "corridor-scoring-routes-layer";
+
+  function getFeatureSourceGeom(featureType, idx) {
+    if (featureType === "route") return (App.routes && App.routes[idx]) || null;
+    if (featureType === "line")  return (App.lines  && App.lines[idx])  || null;
+    return null;
+  }
+
+  function buildScoredFeatureCollection(result) {
+    var features = [];
+    var rows = (result && result.routeCDIs) || [];
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      var src = getFeatureSourceGeom(r.featureType, r.featureIndex);
+      if (!src || !src.geometry) continue;
+      features.push({
+        type: "Feature",
+        geometry: src.geometry,
+        properties: {
+          name:           r.name,
+          cdi:            Number.isFinite(r.cdi) ? r.cdi : null,
+          classification: r.classification || "N/A",
+          rank:           i + 1,
+          featureType:    r.featureType,
+          featureIndex:   r.featureIndex
+        }
+      });
+    }
+    return { type: "FeatureCollection", features: features };
+  }
+
+  function renderMapChoropleth(result) {
+    var map = App.map;
+    if (!map || !result) return;
+    var fc = buildScoredFeatureCollection(result);
+
+    var colorExpr = [
+      "interpolate", ["linear"], ["coalesce", ["get", "cdi"], 0],
+      0, "rgba(200,200,200,0.6)",
+      1, "#eff3ff",
+      2, "#bdd7e7",
+      3, "#6baed6",
+      4, "#3182bd",
+      5, "#08519c"
+    ];
+
+    if (!map.getSource(CS_SOURCE)) {
+      map.addSource(CS_SOURCE, { type: "geojson", data: fc });
+      map.addLayer({
+        id: CS_LINE_LAYER,
+        type: "line",
+        source: CS_SOURCE,
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color":  colorExpr,
+          "line-width":  5,
+          "line-opacity": 0.9
+        }
+      });
+
+      // Hover tooltip
+      var hover = new maplibregl.Popup({ closeButton: false, closeOnClick: false });
+      map.on("mousemove", CS_LINE_LAYER, function (e) {
+        map.getCanvas().style.cursor = "pointer";
+        if (!e.features || !e.features.length) return;
+        var p = e.features[0].properties;
+        var cdi = p.cdi != null ? Number(p.cdi).toFixed(2) : "N/A";
+        var html = '<div style="font-size:12px;line-height:1.4;">' +
+          '<b>#' + p.rank + '</b> &mdash; ' + (p.name || "") + '<br>' +
+          '<b>Score:</b> ' + cdi + ' &mdash; ' + (p.classification || "N/A") +
+          '</div>';
+        hover.setLngLat(e.lngLat).setHTML(html).addTo(map);
+      });
+      map.on("mouseleave", CS_LINE_LAYER, function () {
+        map.getCanvas().style.cursor = App.drawMode ? "crosshair" : "grab";
+        hover.remove();
+      });
+    } else {
+      map.getSource(CS_SOURCE).setData(fc);
+    }
+  }
+
+  function clearMapChoropleth() {
+    var map = App.map;
+    if (!map) return;
+    if (map.getLayer(CS_LINE_LAYER)) map.removeLayer(CS_LINE_LAYER);
+    if (map.getSource(CS_SOURCE))    map.removeSource(CS_SOURCE);
+  }
+
   // ---- Factor breakdown (per-corridor expansion) ----
 
   // System-wide average quintile per factor — used as comparison baseline.
@@ -444,6 +536,7 @@
     var scoreBtn = document.getElementById("csScoreBtn");
     if (scoreBtn) scoreBtn.disabled = true;
     setStatus("Scoring…", "running");
+    clearMapChoropleth(); // wipe any prior run so selection changes are visible
 
     try {
       var geoLevel = document.getElementById("csGeoLevel").value;
@@ -492,7 +585,15 @@
                 " — " + geoCount + " geographies.", "done");
 
       renderResultsTable(_lastResult);
-      // Choropleth + legend come in Step 6; exports in Step 7.
+      renderMapChoropleth(_lastResult);
+      if (App.popup && App.popup.showFloatingWidget) {
+        App.popup.showFloatingWidget("cs-legend", "projects/corridor-scoring-legend.html", {
+          position: "bottom-left",
+          width: 180,
+          title: "Corridor Score"
+        });
+      }
+      // Exports in Step 7.
     } catch (err) {
       console.error("Corridor Scoring error:", err);
       setStatus("Error: " + (err.message || err), "stale");
@@ -580,6 +681,20 @@
     // State persists in closure
   }
 
+  function clearAll() {
+    clearMapChoropleth();
+    if (App.popup && App.popup.hideFloatingWidget) App.popup.hideFloatingWidget("cs-legend");
+    _lastResult = null;
+    _stale = false;
+    if (isPopupVisible()) {
+      var resultsEl = document.getElementById("csResults");
+      if (resultsEl) resultsEl.style.display = "none";
+      var emptyEl = document.getElementById("csEmptyState");
+      if (emptyEl) emptyEl.style.display = "";
+      setStatus("");
+    }
+  }
+
   async function update(core) {
     // Fires on feature/LODES changes even when popup closed — guard DOM writes.
     if (!isPopupVisible()) return;
@@ -599,6 +714,7 @@
     init:    function (core) { init(core); },
     onOpen:  function (core) { onOpen(core); },
     onClose: function (core) { onClose(core); },
+    clear:   function ()     { clearAll(); },
     update:  async function (core) { await update(core); }
   });
 
