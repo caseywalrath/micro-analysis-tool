@@ -31,30 +31,36 @@
   // ---- Feature filter helpers (routes + lines only per plan) ----
 
   function buildUnionFromFilter(filter) {
-    // Delegate to RidershipModel.buildUnionFromFeatures, which already handles
-    // routes+lines unioning and null-filter fallback.
-    var RM = window.RidershipModel;
-    if (RM && typeof RM.buildUnionFromFeatures === "function") {
-      return RM.buildUnionFromFeatures(filter);
-    }
-    // Fallback: inline union from route/line buffers.
-    if (!filter) return App.bufferUnionPolygon ? App.bufferUnionPolygon() : null;
+    // null filter means "all corridors selected" — build union from every
+    // route and line buffer.  We cannot pass null to RM.buildUnionFromFeatures
+    // because that function treats null as "no features" and returns null.
     var polys = [];
     var routeBuffers = App.routeBuffers || [];
     var lineBuffers  = App.lineBuffers  || [];
     var i, idx;
-    if (filter.routeIndices) {
-      for (i = 0; i < filter.routeIndices.length; i++) {
-        idx = filter.routeIndices[i];
-        if (routeBuffers[idx]) polys.push(routeBuffers[idx]);
+
+    if (!filter) {
+      for (i = 0; i < routeBuffers.length; i++) {
+        if (routeBuffers[i]) polys.push(routeBuffers[i]);
+      }
+      for (i = 0; i < lineBuffers.length; i++) {
+        if (lineBuffers[i]) polys.push(lineBuffers[i]);
+      }
+    } else {
+      if (filter.routeIndices) {
+        for (i = 0; i < filter.routeIndices.length; i++) {
+          idx = filter.routeIndices[i];
+          if (routeBuffers[idx]) polys.push(routeBuffers[idx]);
+        }
+      }
+      if (filter.lineIndices) {
+        for (i = 0; i < filter.lineIndices.length; i++) {
+          idx = filter.lineIndices[i];
+          if (lineBuffers[idx]) polys.push(lineBuffers[idx]);
+        }
       }
     }
-    if (filter.lineIndices) {
-      for (i = 0; i < filter.lineIndices.length; i++) {
-        idx = filter.lineIndices[i];
-        if (lineBuffers[idx]) polys.push(lineBuffers[idx]);
-      }
-    }
+
     if (!polys.length) return null;
     var union = polys[0];
     for (i = 1; i < polys.length; i++) {
