@@ -896,7 +896,7 @@ input.fp-attr-input[type="number"] {
 .fp-svc-header,
 .fp-svc-band {
   display: grid;
-  grid-template-columns: 1fr 1fr 52px auto 20px;
+  grid-template-columns: auto auto 46px auto 20px;
   gap: 4px;
   align-items: center;
 }
@@ -919,8 +919,12 @@ input.fp-attr-input[type="number"] {
   border: 1px solid var(--border);
   border-radius: 3px;
   padding: 2px 4px;
-  min-width: 0;
   box-sizing: border-box;
+}
+.fp-svc-time {
+  width: calc(5ch + 14px);
+}
+.fp-svc-every {
   width: 100%;
 }
 .fp-svc-time:focus,
