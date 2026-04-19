@@ -443,7 +443,7 @@
   /* ---- Service schedule (Weekday / Saturday / Sunday time bands) ---- */
 
   function _emptyBand() {
-    return { from: "", to: "", every: null };
+    return { from: "", to: "", frequency: null };
   }
 
   function _ensureService(attrs) {
@@ -482,7 +482,7 @@
 
       var header = document.createElement("div");
       header.className = "fp-svc-header";
-      ["FROM", "TO", "EVERY"].forEach(function (h) {
+      ["FROM", "TO", "FREQUENCY"].forEach(function (h) {
         var s = document.createElement("span");
         s.textContent = h;
         header.appendChild(s);
@@ -577,9 +577,9 @@
       everyInp.className = "fp-svc-every";
       everyInp.min = "1";
       everyInp.step = "1";
-      everyInp.value = (band.every != null) ? band.every : "";
+      everyInp.value = (band.frequency != null) ? band.frequency : "";
       everyInp.addEventListener("change", function () {
-        band.every = everyInp.value !== "" ? parseFloat(everyInp.value) : null;
+        band.frequency = everyInp.value !== "" ? parseFloat(everyInp.value) : null;
         if (dayId === "saturday") refreshSundayMirrorPreview();
         saveAttrCache();
       });
@@ -632,7 +632,7 @@
         row.className = "fp-svc-band fp-svc-band-readonly";
         var f = document.createElement("span"); f.className = "fp-svc-time-ro"; f.textContent = band.from || "—";
         var t = document.createElement("span"); t.className = "fp-svc-time-ro"; t.textContent = band.to || "—";
-        var e = document.createElement("span"); e.className = "fp-svc-every-ro"; e.textContent = (band.every != null) ? band.every : "—";
+        var e = document.createElement("span"); e.className = "fp-svc-every-ro"; e.textContent = (band.frequency != null) ? band.frequency : "—";
         var u = document.createElement("span"); u.className = "fp-svc-unit";   u.textContent = "min";
         row.appendChild(f); row.appendChild(t); row.appendChild(e); row.appendChild(u);
         preview.appendChild(row);
