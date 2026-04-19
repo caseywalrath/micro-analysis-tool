@@ -789,7 +789,7 @@
   // ---- Register analysis module ----
   App.registerModule({
     id:         "gtfs",
-    name:       "GTFS Feed",
+    name:       "GTFS Feed Attributes",
     enabled:    true,
     popupWidth: 960,
     popupHTML:  "projects/gtfs-popup.html",
