@@ -3297,11 +3297,13 @@ body.dark-mode .tool-btn.active {
 body.dark-mode #reset.reset-btn { border-color: #fc8181; }
 body.dark-mode #reset.reset-btn:hover { background: rgba(252,129,129,0.12); }
 
-/* ---- Export / Add Data dropdowns ---- */
+/* ---- Export / Add Data / Analysis dropdowns ---- */
 body.dark-mode #toolbar .export-dropdown button,
-body.dark-mode #toolbar .add-data-dropdown button { color: #e2e8f0; }
+body.dark-mode #toolbar .add-data-dropdown button,
+body.dark-mode #toolbar .analysis-dropdown button { color: #e2e8f0; }
 body.dark-mode #toolbar .export-dropdown button:hover,
-body.dark-mode #toolbar .add-data-dropdown button:hover { background: rgba(255,255,255,0.07); }
+body.dark-mode #toolbar .add-data-dropdown button:hover,
+body.dark-mode #toolbar .analysis-dropdown button:hover:not(:disabled) { background: rgba(255,255,255,0.07); }
 body.dark-mode #toolbar .add-data-dropdown button.add-data-active {
   color: #63b3ed; background: rgba(99,179,237,0.12);
 }
