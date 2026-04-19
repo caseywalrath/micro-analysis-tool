@@ -1481,6 +1481,7 @@ code { font-family: var(--font-mono); }
 .basemap-option {
   display: block;
   width: 100%;
+  white-space: nowrap;
   padding: 8px 12px;
   border: none;
   background: transparent;
