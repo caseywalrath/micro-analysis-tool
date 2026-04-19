@@ -537,21 +537,37 @@
       row.className = "fp-svc-band";
 
       var fromInp = document.createElement("input");
-      fromInp.type = "time";
+      fromInp.type = "text";
       fromInp.className = "fp-svc-time";
+      fromInp.placeholder = "HH:MM";
+      fromInp.maxLength = 5;
+      fromInp.pattern = "^([01][0-9]|2[0-3]):[0-5][0-9]$";
       fromInp.value = band.from || "";
-      fromInp.addEventListener("change", function () {
-        band.from = fromInp.value;
+      fromInp.addEventListener("input", function () {
+        var v = fromInp.value.replace(/[^0-9:]/g, "");
+        if (/^\d{2}$/.test(v)) v = v + ":";
+        fromInp.value = v;
+      });
+      fromInp.addEventListener("blur", function () {
+        band.from = /^\d{2}:\d{2}$/.test(fromInp.value) ? fromInp.value : "";
         if (dayId === "saturday") refreshSundayMirrorPreview();
         saveAttrCache();
       });
 
       var toInp = document.createElement("input");
-      toInp.type = "time";
+      toInp.type = "text";
       toInp.className = "fp-svc-time";
+      toInp.placeholder = "HH:MM";
+      toInp.maxLength = 5;
+      toInp.pattern = "^([01][0-9]|2[0-3]):[0-5][0-9]$";
       toInp.value = band.to || "";
-      toInp.addEventListener("change", function () {
-        band.to = toInp.value;
+      toInp.addEventListener("input", function () {
+        var v = toInp.value.replace(/[^0-9:]/g, "");
+        if (/^\d{2}$/.test(v)) v = v + ":";
+        toInp.value = v;
+      });
+      toInp.addEventListener("blur", function () {
+        band.to = /^\d{2}:\d{2}$/.test(toInp.value) ? toInp.value : "";
         if (dayId === "saturday") refreshSundayMirrorPreview();
         saveAttrCache();
       });
