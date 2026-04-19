@@ -10,12 +10,6 @@
 (function () {
   var App = window.App = window.App || {};
 
-  // 24-hour hours for span dropdowns
-  var HOURS_24 = [""];  // "0:00" … "23:00"
-  for (var _h = 0; _h < 24; _h++) { HOURS_24.push(_h + ":00"); }
-  var HOURS_24_SPAN_END = [""];  // "1:00" … "24:00" (shifted forward by one hour)
-  for (var _h = 1; _h <= 24; _h++) { HOURS_24_SPAN_END.push(_h + ":00"); }
-
   var TYPE_LABELS = {
     route:   "Route",
     line:    "Line",
@@ -24,25 +18,27 @@
     label:   "Label"
   };
 
+  // Service schedule day sections, rendered in this order
+  var SERVICE_DAYS = [
+    { id: "weekday",  label: "Weekday"  },
+    { id: "saturday", label: "Saturday" },
+    { id: "sunday",   label: "Sunday"   }
+  ];
+
+  // Shared route/line fields — line mirrors route exactly
+  var ROUTE_FIELDS = [
+    { key: "group",     label: "Group",     type: "text",   placeholder: "e.g. Corridor A", groupPicker: true },
+    { key: "direction", label: "Direction", type: "select", options: ["Both","NB","SB","EB","WB","Inbound","Outbound","Loop"] },
+    { key: "mode",      label: "Mode",      type: "select", options: ["Bus","BRT","Light Rail","Streetcar"] },
+    { key: "routeId",   label: "Route ID",  type: "text",   placeholder: "e.g. 7, Blue" },
+    { key: "avgSpeed",  label: "Avg speed", type: "number", unit: "mph" }
+  ];
+
   // Field definitions per feature type.
   // Supported types: "text", "number", "select", "checkboxes"
   var ATTR_FIELDS = {
-    route: [
-      { key: "group",         label: "Group",     type: "text",       placeholder: "e.g. Corridor A", groupPicker: true },
-      { key: "direction",     label: "Direction",   type: "select",     options: ["Both","NB","SB","EB","WB","Inbound","Outbound","Loop"] },
-      { key: "mode",          label: "Mode",        type: "select",     options: ["Bus","BRT","Light Rail","Streetcar"] },
-      { key: "routeId",       label: "Route ID",    type: "text",       placeholder: "e.g. 7, Blue" },
-      { key: "frequency",     label: "Frequency",   type: "number",     unit: "min" },
-      { key: "spanStart",     label: "Span start",  type: "select",     options: HOURS_24 },
-      { key: "spanEnd",       label: "Span end",    type: "select",     options: HOURS_24_SPAN_END },
-      { key: "daysOfService", label: "Days",        type: "checkboxes", options: ["M-F","Sat","Sun"] },
-      { key: "avgSpeed",      label: "Avg speed",   type: "number",     unit: "mph" }
-    ],
-    line: [
-      { key: "group",    label: "Group", type: "text", placeholder: "e.g. Corridor A", groupPicker: true },
-      { key: "lineMode",  label: "Mode",  type: "select", options: ["Light Rail","Commuter Rail","Streetcar","Bus","BRT"] },
-      { key: "notes",     label: "Notes", type: "text",   placeholder: "" }
-    ],
+    route: ROUTE_FIELDS,
+    line:  ROUTE_FIELDS,
     point: [
       { key: "group",            label: "Group",    type: "text", placeholder: "e.g. North Corridor", groupPicker: true },
       { key: "stopId",           label: "Stop ID",       type: "text", placeholder: "e.g. 1042" },
@@ -442,6 +438,211 @@
       if (e.key === "Enter") inp.blur();
     });
     return { el: inp, unit: null };
+  }
+
+  /* ---- Service schedule (Weekday / Saturday / Sunday time bands) ---- */
+
+  function _emptyBand() {
+    return { from: "", to: "", every: null };
+  }
+
+  function _ensureService(attrs) {
+    if (!attrs.service) {
+      attrs.service = {
+        weekday:  [_emptyBand()],
+        saturday: [],
+        sunday:   [],
+        sundayMirrorsSaturday: false
+      };
+    } else {
+      if (!Array.isArray(attrs.service.weekday))  attrs.service.weekday  = [];
+      if (!Array.isArray(attrs.service.saturday)) attrs.service.saturday = [];
+      if (!Array.isArray(attrs.service.sunday))   attrs.service.sunday   = [];
+    }
+    return attrs.service;
+  }
+
+  function buildServiceSchedule(attrs) {
+    var svc = _ensureService(attrs);
+
+    var container = document.createElement("div");
+    container.className = "fp-svc";
+
+    var sectionEls = {}; // id → { bandsEl, addBtn, mirrorWrap }
+
+    SERVICE_DAYS.forEach(function (day) {
+      var section = document.createElement("div");
+      section.className = "fp-svc-section";
+      section.dataset.day = day.id;
+
+      var title = document.createElement("div");
+      title.className = "fp-svc-section-title";
+      title.textContent = day.label;
+      section.appendChild(title);
+
+      var header = document.createElement("div");
+      header.className = "fp-svc-header";
+      ["FROM", "TO", "EVERY"].forEach(function (h) {
+        var s = document.createElement("span");
+        s.textContent = h;
+        header.appendChild(s);
+      });
+      section.appendChild(header);
+
+      var bandsEl = document.createElement("div");
+      bandsEl.className = "fp-svc-bands";
+      section.appendChild(bandsEl);
+
+      var addBtn = document.createElement("button");
+      addBtn.type = "button";
+      addBtn.className = "fp-svc-add";
+      addBtn.textContent = "+ Add time band";
+      addBtn.addEventListener("click", function () {
+        svc[day.id].push(_emptyBand());
+        renderBands(day.id);
+        saveAttrCache();
+      });
+      section.appendChild(addBtn);
+
+      sectionEls[day.id] = { bandsEl: bandsEl, addBtn: addBtn, section: section };
+      container.appendChild(section);
+    });
+
+    // Mirror Saturday toggle (inside the Sunday section)
+    var sundaySection = sectionEls.sunday.section;
+    var mirrorWrap = document.createElement("label");
+    mirrorWrap.className = "fp-svc-mirror";
+    var mirrorCb = document.createElement("input");
+    mirrorCb.type = "checkbox";
+    mirrorCb.checked = !!svc.sundayMirrorsSaturday;
+    mirrorWrap.appendChild(mirrorCb);
+    mirrorWrap.appendChild(document.createTextNode(" Mirror Saturday"));
+    sundaySection.appendChild(mirrorWrap);
+    sectionEls.sunday.mirrorCb = mirrorCb;
+
+    var mirrorPreview = document.createElement("div");
+    mirrorPreview.className = "fp-svc-mirror-preview";
+    sundaySection.insertBefore(mirrorPreview, sectionEls.sunday.addBtn);
+    sectionEls.sunday.mirrorPreview = mirrorPreview;
+
+    mirrorCb.addEventListener("change", function () {
+      svc.sundayMirrorsSaturday = mirrorCb.checked;
+      applySundayMirrorState();
+      saveAttrCache();
+    });
+
+    function renderBand(dayId, bandIdx) {
+      var band = svc[dayId][bandIdx];
+      var row = document.createElement("div");
+      row.className = "fp-svc-band";
+
+      var fromInp = document.createElement("input");
+      fromInp.type = "time";
+      fromInp.className = "fp-svc-time";
+      fromInp.value = band.from || "";
+      fromInp.addEventListener("change", function () {
+        band.from = fromInp.value;
+        if (dayId === "saturday") refreshSundayMirrorPreview();
+        saveAttrCache();
+      });
+
+      var toInp = document.createElement("input");
+      toInp.type = "time";
+      toInp.className = "fp-svc-time";
+      toInp.value = band.to || "";
+      toInp.addEventListener("change", function () {
+        band.to = toInp.value;
+        if (dayId === "saturday") refreshSundayMirrorPreview();
+        saveAttrCache();
+      });
+
+      var everyInp = document.createElement("input");
+      everyInp.type = "number";
+      everyInp.className = "fp-svc-every";
+      everyInp.min = "1";
+      everyInp.step = "1";
+      everyInp.value = (band.every != null) ? band.every : "";
+      everyInp.addEventListener("change", function () {
+        band.every = everyInp.value !== "" ? parseFloat(everyInp.value) : null;
+        if (dayId === "saturday") refreshSundayMirrorPreview();
+        saveAttrCache();
+      });
+
+      var unit = document.createElement("span");
+      unit.className = "fp-svc-unit";
+      unit.textContent = "min";
+
+      var delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "fp-svc-del";
+      delBtn.title = "Remove time band";
+      delBtn.innerHTML = "&times;";
+      delBtn.addEventListener("click", function () {
+        svc[dayId].splice(bandIdx, 1);
+        renderBands(dayId);
+        if (dayId === "saturday") refreshSundayMirrorPreview();
+        saveAttrCache();
+      });
+
+      row.appendChild(fromInp);
+      row.appendChild(toInp);
+      row.appendChild(everyInp);
+      row.appendChild(unit);
+      row.appendChild(delBtn);
+      return row;
+    }
+
+    function renderBands(dayId) {
+      var bandsEl = sectionEls[dayId].bandsEl;
+      bandsEl.innerHTML = "";
+      svc[dayId].forEach(function (_, i) {
+        bandsEl.appendChild(renderBand(dayId, i));
+      });
+    }
+
+    function refreshSundayMirrorPreview() {
+      if (!svc.sundayMirrorsSaturday) return;
+      var preview = sectionEls.sunday.mirrorPreview;
+      preview.innerHTML = "";
+      if (!svc.saturday.length) {
+        var empty = document.createElement("div");
+        empty.className = "fp-svc-mirror-empty";
+        empty.textContent = "Saturday has no service bands.";
+        preview.appendChild(empty);
+        return;
+      }
+      svc.saturday.forEach(function (band) {
+        var row = document.createElement("div");
+        row.className = "fp-svc-band fp-svc-band-readonly";
+        var f = document.createElement("span"); f.className = "fp-svc-time-ro"; f.textContent = band.from || "—";
+        var t = document.createElement("span"); t.className = "fp-svc-time-ro"; t.textContent = band.to || "—";
+        var e = document.createElement("span"); e.className = "fp-svc-every-ro"; e.textContent = (band.every != null) ? band.every : "—";
+        var u = document.createElement("span"); u.className = "fp-svc-unit";   u.textContent = "min";
+        row.appendChild(f); row.appendChild(t); row.appendChild(e); row.appendChild(u);
+        preview.appendChild(row);
+      });
+    }
+
+    function applySundayMirrorState() {
+      var s = sectionEls.sunday;
+      if (svc.sundayMirrorsSaturday) {
+        s.bandsEl.style.display = "none";
+        s.addBtn.style.display = "none";
+        s.mirrorPreview.style.display = "";
+        refreshSundayMirrorPreview();
+      } else {
+        s.bandsEl.style.display = "";
+        s.addBtn.style.display = "";
+        s.mirrorPreview.style.display = "none";
+        s.mirrorPreview.innerHTML = "";
+      }
+    }
+
+    // Initial render
+    SERVICE_DAYS.forEach(function (day) { renderBands(day.id); });
+    applySundayMirrorState();
+
+    return container;
   }
 
   function buildFieldInput(field, attrs, feature, featureType) {
@@ -847,6 +1048,11 @@
       var result = buildFieldInput(field, attrs, feature, featureType);
       body.appendChild(buildRow(field.label, result.el, result.unit));
     });
+
+    // Service schedule (routes and lines only) — full-width, below regular fields
+    if (featureType === "route" || featureType === "line") {
+      body.appendChild(buildServiceSchedule(attrs));
+    }
 
     // Computed measurements (read-only)
     if ((featureType === "route" || featureType === "line") &&

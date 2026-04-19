@@ -877,6 +877,115 @@ input.fp-attr-input[type="number"] {
   padding-top: 2px;
 }
 
+/* Service schedule (routes + lines): Weekday / Saturday / Sunday time bands */
+.fp-svc {
+  margin-top: 8px;
+  margin-bottom: 4px;
+}
+.fp-svc-section {
+  margin-bottom: 10px;
+}
+.fp-svc-section-title {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-md);
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.fp-svc-header,
+.fp-svc-band {
+  display: grid;
+  grid-template-columns: 1fr 1fr 52px auto 20px;
+  gap: 4px;
+  align-items: center;
+}
+.fp-svc-header {
+  font-size: var(--text-2xs);
+  color: var(--muted);
+  letter-spacing: var(--tracking-md);
+  text-transform: uppercase;
+  padding: 0 2px 2px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+.fp-svc-header span:nth-child(4),
+.fp-svc-header span:nth-child(5) { display: none; }
+.fp-svc-band { margin-bottom: 4px; }
+.fp-svc-time,
+.fp-svc-every {
+  font-size: var(--text-sm);
+  font-family: inherit;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 2px 4px;
+  min-width: 0;
+  box-sizing: border-box;
+  width: 100%;
+}
+.fp-svc-time:focus,
+.fp-svc-every:focus {
+  border-color: #2b6cb0;
+  outline: none;
+}
+.fp-svc-unit {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+.fp-svc-del {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: var(--text-lg);
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 3px;
+}
+.fp-svc-del:hover { color: #e53e3e; background: #f7f7f7; }
+.fp-svc-add {
+  font-size: var(--text-xs);
+  background: transparent;
+  border: 1px dashed var(--border);
+  border-radius: 3px;
+  color: var(--muted);
+  padding: 3px 8px;
+  cursor: pointer;
+  margin-top: 2px;
+}
+.fp-svc-add:hover { color: #2b6cb0; border-color: #2b6cb0; }
+.fp-svc-mirror {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-xs);
+  color: var(--muted);
+  margin-top: 6px;
+  cursor: pointer;
+}
+.fp-svc-mirror-preview { margin-bottom: 4px; }
+.fp-svc-band-readonly {
+  opacity: 0.65;
+}
+.fp-svc-time-ro,
+.fp-svc-every-ro {
+  font-size: var(--text-sm);
+  padding: 2px 4px;
+  background: #f7f7f7;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  text-align: center;
+  font-family: var(--font-mono);
+}
+.fp-svc-mirror-empty {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  font-style: italic;
+  padding: 4px 2px;
+}
+
 /* Route grouping */
 .fp-group { margin-bottom: 2px; }
 .fp-group-header {

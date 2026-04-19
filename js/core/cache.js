@@ -487,9 +487,8 @@
   // ---- Export: CSV ----
 
   var CSV_ATTR_COLS = [
-    "routeGroup", "direction", "mode", "routeId", "frequency",
-    "spanStart", "spanEnd", "daysOfService", "avgSpeed",
-    "lineMode", "notes", "stopId", "pointGroup", "lineGroup",
+    "group", "routeGroup", "direction", "mode", "routeId", "avgSpeed",
+    "service", "lineMode", "notes", "stopId", "pointGroup", "lineGroup",
     "polygonGroup", "labelGroup"
   ];
 
@@ -518,7 +517,13 @@
     for (var i = 0; i < CSV_ATTR_COLS.length; i++) {
       var key = CSV_ATTR_COLS[i];
       var val = attrs[key];
-      row[key] = (val != null) ? String(val) : "";
+      if (val == null) {
+        row[key] = "";
+      } else if (typeof val === "object") {
+        row[key] = JSON.stringify(val);
+      } else {
+        row[key] = String(val);
+      }
     }
     return row;
   }
