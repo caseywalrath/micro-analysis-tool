@@ -3362,6 +3362,24 @@ body.dark-mode .fp-attr-input {
 body.dark-mode .fp-attr-confirm-no { background: #374151; color: #e2e8f0; }
 body.dark-mode .fp-attr-confirm-no:hover { background: #4a5568; }
 body.dark-mode .fp-attr-confirm > span { color: #fca5a5; }
+body.dark-mode .fp-svc-section-title { color: #a0aec0; }
+body.dark-mode .fp-svc-header { color: #718096; border-bottom-color: #4a5568; }
+body.dark-mode .fp-svc-time,
+body.dark-mode .fp-svc-every {
+  background: #2a2a3d; color: #e2e8f0; border-color: #4a5568;
+}
+body.dark-mode .fp-svc-time:focus,
+body.dark-mode .fp-svc-every:focus { border-color: #63b3ed; }
+body.dark-mode .fp-svc-del { color: #718096; }
+body.dark-mode .fp-svc-del:hover { color: #fc8181; background: #2a2a3d; }
+body.dark-mode .fp-svc-add { color: #718096; border-color: #4a5568; }
+body.dark-mode .fp-svc-add:hover { color: #63b3ed; border-color: #63b3ed; }
+body.dark-mode .fp-svc-mirror { color: #718096; }
+body.dark-mode .fp-svc-time-ro,
+body.dark-mode .fp-svc-every-ro {
+  background: #1a1a2e; color: #a0aec0; border-color: #4a5568;
+}
+body.dark-mode .fp-svc-mirror-empty { color: #718096; }
 
 /* ---- Basemap switcher ---- */
 body.dark-mode .basemap-btn { background: #2a2a3d; color: #e2e8f0; }
