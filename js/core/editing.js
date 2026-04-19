@@ -210,6 +210,7 @@
     if (featureType === "line") {
       var line = App.lines[featureIndex];
       if (!line) return;
+      if (App.undo && !App.undo.isRestoring()) App.undo.push();
       var nearest = turf.nearestPointOnLine(line, clickPt);
       var idx = nearest.properties.index + 1;
       line.geometry.coordinates.splice(idx, 0, [lng, lat]);
@@ -222,6 +223,7 @@
     } else if (featureType === "route") {
       var route = App.routes[featureIndex];
       if (!route) return;
+      if (App.undo && !App.undo.isRestoring()) App.undo.push();
       var wps = route.properties.waypoints;
       var wpLine = turf.lineString(wps.length >= 2 ? wps : wps.concat(wps));
       var nearest2 = turf.nearestPointOnLine(wpLine, clickPt);
@@ -234,6 +236,7 @@
     } else if (featureType === "polygon") {
       var poly = App.polygons[featureIndex];
       if (!poly) return;
+      if (App.undo && !App.undo.isRestoring()) App.undo.push();
       var ring = poly.geometry.coordinates[0];
       // Build a closed line from the ring (including closing vertex) for nearest-point
       var ringLine = turf.lineString(ring.slice());
@@ -270,6 +273,7 @@
         App.setStatus("Cannot delete: line needs at least 2 points");
         return;
       }
+      if (App.undo && !App.undo.isRestoring()) App.undo.push();
       line.geometry.coordinates.splice(vertexIdx, 1);
       var r = parseFloat(document.getElementById("lineBufferRadius").value) || 0.5;
       App.rebuildLineBuffers(r);
@@ -283,6 +287,7 @@
         App.setStatus("Cannot delete: route needs at least 2 waypoints");
         return;
       }
+      if (App.undo && !App.undo.isRestoring()) App.undo.push();
       route.properties.waypoints.splice(vertexIdx, 1);
       // Re-route with updated waypoints
       if (typeof App.rerouteFeature === "function") {
@@ -302,6 +307,7 @@
         App.setStatus("Cannot delete: polygon needs at least 3 vertices");
         return;
       }
+      if (App.undo && !App.undo.isRestoring()) App.undo.push();
       ring.splice(vertexIdx, 1);
       // Re-sync closing vertex (ring[last] must equal ring[0])
       ring[ring.length - 1] = ring[0].slice();
