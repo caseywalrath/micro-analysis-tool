@@ -121,7 +121,13 @@
       }
     }
 
-    _gtfsData = data;
+    applyGtfsData(data);
+    App.setStatus("GTFS loaded: " + data.size + " file(s).");
+  }
+
+  // Post-parse step shared by file-upload and restore-from-session paths.
+  function applyGtfsData(dataMap) {
+    _gtfsData = dataMap;
     _selectedFile = null;
 
     addMapLayers();
@@ -131,8 +137,28 @@
       renderFileList();
       showSelectPrompt();
     }
+  }
 
-    App.setStatus("GTFS loaded: " + data.size + " file(s).");
+  // Restore GTFS feed from a previously serialized state-file payload.
+  // serialized: { "stops.txt": { headers: [...], rows: [...] }, ... }
+  function restoreGTFSFromData(serialized) {
+    if (!serialized || typeof serialized !== "object") return;
+    var dataMap = new Map();
+    Object.keys(serialized).forEach(function (k) {
+      dataMap.set(k, serialized[k]);
+    });
+    if (dataMap.size === 0) return;
+    applyGtfsData(dataMap);
+    App.setStatus("GTFS restored: " + dataMap.size + " file(s).");
+  }
+
+  // Serialize the current _gtfsData Map to a plain JSON-friendly object.
+  // Returns null when no feed is loaded.
+  function serializeGTFSData() {
+    if (!_gtfsData || _gtfsData.size === 0) return null;
+    var out = {};
+    _gtfsData.forEach(function (val, key) { out[key] = val; });
+    return out;
   }
 
   function clearGTFS() {
@@ -781,6 +807,8 @@
   App.gtfsData     = _gtfsData;   // null until loaded
   App.loadGTFSFile = loadGTFSFile;
   App.clearGTFS    = clearGTFS;
+  App.restoreGTFSFromData = restoreGTFSFromData;
+  App.serializeGTFSData   = serializeGTFSData;
   App.setGtfsLayersVisible = function (visible) {
     if (typeof setRouteLayerVisibility === "function") setRouteLayerVisibility(visible);
     if (typeof setStopLayerVisibility  === "function") setStopLayerVisibility(visible);

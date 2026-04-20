@@ -419,6 +419,39 @@ body.present-mode #present-exit { display: block; }
   color: #e53e3e;
 }
 
+/* ---- Save State dropdown ---- */
+.save-state-wrapper { position: relative; }
+.save-state-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  z-index: 1000;
+  min-width: 160px;
+  padding: 4px 0;
+}
+#toolbar .save-state-dropdown button {
+  display: block;
+  width: 100%;
+  height: auto;
+  padding: 8px 14px;
+  background: none;
+  border: none;
+  border-radius: 0;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  color: #333;
+  text-align: left;
+  white-space: nowrap;
+}
+#toolbar .save-state-dropdown button:hover {
+  background: rgba(0,0,0,0.05);
+}
+
 /* ---- LODES State Selector Popup ---- */
 #lodes-popup {
   position: absolute;
@@ -3301,10 +3334,12 @@ body.dark-mode #reset.reset-btn:hover { background: rgba(252,129,129,0.12); }
 /* ---- Export / Add Data / Analysis dropdowns ---- */
 body.dark-mode #toolbar .export-dropdown button,
 body.dark-mode #toolbar .add-data-dropdown button,
-body.dark-mode #toolbar .analysis-dropdown button { color: #e2e8f0; }
+body.dark-mode #toolbar .analysis-dropdown button,
+body.dark-mode #toolbar .save-state-dropdown button { color: #e2e8f0; }
 body.dark-mode #toolbar .export-dropdown button:hover,
 body.dark-mode #toolbar .add-data-dropdown button:hover,
-body.dark-mode #toolbar .analysis-dropdown button:hover:not(:disabled) { background: rgba(255,255,255,0.07); }
+body.dark-mode #toolbar .analysis-dropdown button:hover:not(:disabled),
+body.dark-mode #toolbar .save-state-dropdown button:hover { background: rgba(255,255,255,0.07); }
 body.dark-mode #toolbar .add-data-dropdown button.add-data-active {
   color: #63b3ed; background: rgba(99,179,237,0.12);
 }

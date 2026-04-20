@@ -10,7 +10,7 @@
   var App = window.App = window.App || {};
 
   var STORAGE_KEY = "mat-session";
-  var SCHEMA_VERSION = 2;
+  var SCHEMA_VERSION = 3;
 
   // ---- Schema migration ----
   function migrateV1toV2(state) {
@@ -25,6 +25,21 @@
       });
     }
     state.version = 2;
+    return state;
+  }
+
+  // v3 adds optional lodesData + gtfsData keys for full-session state files.
+  // v2 files are a strict subset: no structural change is required; bump the
+  // version marker and return.
+  function migrateV2toV3(state) {
+    state.version = 3;
+    return state;
+  }
+
+  function migrateToCurrent(state) {
+    if (!state) return state;
+    if (state.version === 1) state = migrateV1toV2(state);
+    if (state.version === 2) state = migrateV2toV3(state);
     return state;
   }
   var _saveTimer = null;
@@ -246,7 +261,7 @@
 
       var state = JSON.parse(raw);
       if (!state) return false;
-      if (state.version === 1) state = migrateV1toV2(state);
+      state = migrateToCurrent(state);
       if (state.version !== SCHEMA_VERSION) {
         console.warn("Cache: schema version mismatch, ignoring cached data.");
         return false;
@@ -341,7 +356,7 @@
     if (!state || typeof state !== "object") {
       return "File does not contain a valid JSON object.";
     }
-    if (state.version === 1) migrateV1toV2(state);
+    migrateToCurrent(state);
     if (state.version !== SCHEMA_VERSION) {
       return "Unsupported file version (expected " + SCHEMA_VERSION +
              ", got " + (state.version || "none") + ").";
@@ -388,6 +403,105 @@
       console.warn("Export failed:", e);
       App.setStatus("Export failed: " + (e.message || e));
     }
+  }
+
+  // ---- Export full session state (features + LODES + GTFS) ----
+  // Produces a self-contained JSON file so a refresh can restore all uploaded
+  // data in one step. Schema version 3 adds lodesData + gtfsData keys; v2
+  // sessions (features only) still import cleanly since those keys are guarded.
+
+  function exportFullState() {
+    try {
+      var state = collectState("full");
+      state.version = 3;
+      state.exportType = "full-state";
+      state.lodesData = (typeof App.serializeLodesData === "function")
+        ? App.serializeLodesData() : null;
+      state.gtfsData  = (typeof App.serializeGTFSData  === "function")
+        ? App.serializeGTFSData()  : null;
+
+      var json = JSON.stringify(state);
+      if (json.length > 50 * 1024 * 1024) {
+        var sizeMB = (json.length / 1024 / 1024).toFixed(1);
+        if (!confirm("Save file is " + sizeMB + " MB. Continue?")) return;
+      }
+
+      var defaultName = "session-state-" + _dateStamp();
+      var entered = window.prompt("Save state as:", defaultName);
+      if (entered === null) return;              // user cancelled
+      var base = (String(entered).trim() || defaultName).replace(/\.json$/i, "");
+      var filename = base + ".json";
+
+      var blob = new Blob([json], { type: "application/json" });
+      _triggerDownload(blob, filename);
+      App.setStatus("Saved state to " + filename);
+    } catch (e) {
+      console.warn("Save state failed:", e);
+      App.setStatus("Save state failed: " + (e.message || e));
+    }
+  }
+
+  // ---- Import full session state ----
+
+  function importFullState(file) {
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      try {
+        var state = JSON.parse(e.target.result);
+        var err = validateState(state);
+        if (err) {
+          App.setStatus("Load state failed");
+          alert("Load state failed: " + err);
+          return;
+        }
+
+        var hasExisting = (App.points.length > 0 || App.lines.length > 0 ||
+                           App.routes.length > 0 || App.polygons.length > 0);
+        if (hasExisting) {
+          if (!confirm("Load state will replace all current features, settings, and uploaded data. Continue?")) {
+            return;
+          }
+        }
+
+        if (typeof App.exitEditMode === "function") App.exitEditMode();
+
+        applyState(state);
+        save();
+
+        // v3 additions: LODES + GTFS payloads. Guarded so v2 files still load.
+        if (state.lodesData && typeof App.restoreLodesFromData === "function") {
+          try {
+            App.restoreLodesFromData(state.lodesData.entries, state.lodesData.meta);
+          } catch (lodesErr) {
+            console.warn("LODES restore failed:", lodesErr);
+          }
+        }
+        if (state.gtfsData && typeof App.restoreGTFSFromData === "function") {
+          try {
+            App.restoreGTFSFromData(state.gtfsData);
+          } catch (gtfsErr) {
+            console.warn("GTFS restore failed:", gtfsErr);
+          }
+        }
+
+        if (typeof App.notifyProject === "function") App.notifyProject();
+
+        var nFeatures = App.points.length + App.lines.length +
+          App.routes.length + App.polygons.length +
+          (App.labels ? App.labels.length : 0);
+        App.setStatus("Loaded state (" + nFeatures + " feature" + (nFeatures !== 1 ? "s" : "") + ")");
+      } catch (parseErr) {
+        App.setStatus("Load state failed");
+        alert("Load state failed: the file does not contain valid JSON.");
+      }
+    };
+
+    reader.onerror = function () {
+      App.setStatus("Load state failed");
+      alert("Load state failed: could not read file.");
+    };
+
+    reader.readAsText(file);
   }
 
   // ---- Import from JSON file ----
@@ -1565,6 +1679,8 @@
     importCSV: importCSV,
     importKML: importKML,
     importSHP: importSHP,
+    exportFullState: exportFullState,
+    importFullState: importFullState,
     collectState: collectState,
     applyState: applyState,
     STORAGE_KEY: STORAGE_KEY,

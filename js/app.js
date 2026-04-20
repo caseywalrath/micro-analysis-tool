@@ -1179,17 +1179,64 @@
       if (typeof App.osmToggleCategory === "function") App.osmToggleCategory(cat);
     });
 
+    // ---- Save / Load State dropdown ----
+    var saveStateBtn      = document.getElementById("save-state-btn");
+    var saveStateDropdown = document.getElementById("save-state-dropdown");
+    var saveStateFileInput = document.getElementById("save-state-file-input");
+
+    if (saveStateBtn && saveStateDropdown) {
+      saveStateBtn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        exportDropdown.style.display = "none";
+        addDataDropdown.style.display = "none";
+        if (analysisDropdown) analysisDropdown.style.display = "none";
+        var isOpen = saveStateDropdown.style.display !== "none";
+        saveStateDropdown.style.display = isOpen ? "none" : "block";
+      });
+
+      var saveBtn = document.getElementById("save-state-save");
+      if (saveBtn) {
+        saveBtn.addEventListener("click", function () {
+          saveStateDropdown.style.display = "none";
+          if (App.cache && typeof App.cache.exportFullState === "function") {
+            App.cache.exportFullState();
+          }
+        });
+      }
+
+      var loadBtn = document.getElementById("save-state-load");
+      if (loadBtn && saveStateFileInput) {
+        loadBtn.addEventListener("click", function () {
+          saveStateDropdown.style.display = "none";
+          saveStateFileInput.value = "";
+          saveStateFileInput.click();
+        });
+      }
+
+      if (saveStateFileInput) {
+        saveStateFileInput.addEventListener("change", function (e) {
+          var file = e.target.files && e.target.files[0];
+          if (!file) return;
+          if (App.cache && typeof App.cache.importFullState === "function") {
+            App.cache.importFullState(file);
+          }
+        });
+      }
+    }
+
     // Close dropdowns on outside click or Escape
     document.addEventListener("click", function () {
       exportDropdown.style.display = "none";
       addDataDropdown.style.display = "none";
       if (analysisDropdown) analysisDropdown.style.display = "none";
+      if (saveStateDropdown) saveStateDropdown.style.display = "none";
     });
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape") {
         exportDropdown.style.display = "none";
         addDataDropdown.style.display = "none";
         if (analysisDropdown) analysisDropdown.style.display = "none";
+        if (saveStateDropdown) saveStateDropdown.style.display = "none";
         if (typeof _closeFpSlider === "function") _closeFpSlider();
       }
     });
