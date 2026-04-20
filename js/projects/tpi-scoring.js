@@ -60,6 +60,7 @@
       label: "Zero-Vehicle Households",
       category: "Transit Dependence",
       acsVars: ["B08201_002E", "B11001_001E"],
+      tractOnly: true,
       source: "ACS",
       compute: function (vals) {
         var zeroCar = vals.get("B08201_002E");
@@ -76,6 +77,7 @@
       label: "Low-Income % (Poverty)",
       category: "Transit Dependence",
       acsVars: ["B17001_002E", "B01003_001E"],
+      tractOnly: true,
       source: "ACS",
       compute: function (vals) {
         var povPop = vals.get("B17001_002E");
@@ -124,6 +126,7 @@
         "B18101_023E","B18101_026E","B18101_029E","B18101_032E","B18101_035E","B18101_038E",
         "B18101_001E"
       ],
+      tractOnly: true,
       source: "ACS",
       compute: function (vals) {
         var denom = vals.get("B18101_001E");
