@@ -284,6 +284,7 @@
     App.clearLines();
     App.clearRoutes();
     App.clearPolygons();
+    if (typeof App.clearLabels === "function") App.clearLabels();
     if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
 
     // 3. Reset feature settings to defaults
