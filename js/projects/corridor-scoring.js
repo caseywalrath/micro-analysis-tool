@@ -434,6 +434,8 @@
     var gjBtn  = document.getElementById("csExportGeoJSON");
     if (csvBtn) csvBtn.disabled = !enabled;
     if (gjBtn)  gjBtn.disabled  = !enabled;
+    var toggleRow = document.getElementById("csChoroplethToggleRow");
+    if (toggleRow) toggleRow.style.display = enabled ? "" : "none";
   }
 
   // ---- Map choropleth (scored corridors colored by composite CDI) ----
@@ -476,13 +478,12 @@
     var fc = buildScoredFeatureCollection(result);
 
     var colorExpr = [
-      "interpolate", ["linear"], ["coalesce", ["get", "cdi"], 0],
-      0, "rgba(200,200,200,0.6)",
-      1, "#eff3ff",
-      2, "#bdd7e7",
-      3, "#6baed6",
-      4, "#3182bd",
-      5, "#08519c"
+      "step", ["coalesce", ["get", "cdi"], -1],
+      "rgba(180,180,180,0.7)",
+      0,   "#C53030",
+      2.0, "#C05621",
+      3.0, "#D69E2E",
+      4.0, "#276749"
     ];
 
     if (!map.getSource(CS_SOURCE)) {
@@ -829,6 +830,23 @@
     var gjBtn = document.getElementById("csExportGeoJSON");
     if (gjBtn) gjBtn.addEventListener("click", exportGeoJSON);
 
+    // Hide Route Coloring toggle
+    var hideCb = document.getElementById("csHideRouteColoring");
+    if (hideCb) {
+      hideCb.addEventListener("change", function () {
+        var vis = hideCb.checked ? "none" : "visible";
+        var map = App.map;
+        if (map.getLayer(CS_LINE_LAYER)) map.setLayoutProperty(CS_LINE_LAYER, "visibility", vis);
+        if (hideCb.checked) {
+          if (App.popup && App.popup.hideFloatingWidget) App.popup.hideFloatingWidget("cs-legend");
+        } else {
+          if (App.popup && App.popup.showFloatingWidget) {
+            App.popup.showFloatingWidget("cs-legend", "projects/corridor-scoring-legend.html", { position: "bottom-left", width: 180, title: "Corridor Score" });
+          }
+        }
+      });
+    }
+
     // Populate weight sliders (in modal) with current _weights
     buildWeightSliders();
   }
@@ -844,6 +862,11 @@
     if (_lastResult) {
       renderResultsTable(_lastResult);
       setExportButtonsEnabled(!_stale);
+      var hideCb = document.getElementById("csHideRouteColoring");
+      if (hideCb) {
+        var vis = (App.map.getLayer(CS_LINE_LAYER) && App.map.getLayoutProperty(CS_LINE_LAYER, "visibility")) || "visible";
+        hideCb.checked = (vis === "none");
+      }
     } else {
       setExportButtonsEnabled(false);
     }
@@ -866,6 +889,8 @@
       if (emptyEl) emptyEl.style.display = "";
       setStatus("");
       setExportButtonsEnabled(false);
+      var hideCb = document.getElementById("csHideRouteColoring");
+      if (hideCb) hideCb.checked = false;
     }
   }
 
