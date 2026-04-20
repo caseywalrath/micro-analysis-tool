@@ -469,9 +469,9 @@
         routes: App.routes.slice(),
         polygons: App.polygons.slice(),
         labels: App.labels ? App.labels.slice() : [],
-        bufferRadius: parseFloat(document.getElementById("bufferRadius").value) || 0.5,
-        lineBufferRadius: parseFloat(document.getElementById("lineBufferRadius").value) || 0.5,
-        routeBufferRadius: parseFloat(document.getElementById("routeBufferRadius").value) || 0.5
+        bufferRadius:      (App.featureSettings && App.featureSettings.bufferRadius      != null) ? App.featureSettings.bufferRadius      : 0.5,
+        lineBufferRadius:  (App.featureSettings && App.featureSettings.lineBufferRadius  != null) ? App.featureSettings.lineBufferRadius  : 0.5,
+        routeBufferRadius: (App.featureSettings && App.featureSettings.routeBufferRadius != null) ? App.featureSettings.routeBufferRadius : 0.5
       };
       var json = JSON.stringify(state, null, 2);
       var blob = new Blob([json], { type: "application/json" });
@@ -1049,9 +1049,9 @@
       routes: [],
       polygons: polygons || [],
       labels: labels || [],
-      bufferRadius: parseFloat(document.getElementById("bufferRadius").value) || 0.5,
-      lineBufferRadius: parseFloat(document.getElementById("lineBufferRadius").value) || 0.5,
-      routeBufferRadius: parseFloat(document.getElementById("routeBufferRadius").value) || 0.5
+      bufferRadius:      (App.featureSettings && App.featureSettings.bufferRadius      != null) ? App.featureSettings.bufferRadius      : 0.5,
+      lineBufferRadius:  (App.featureSettings && App.featureSettings.lineBufferRadius  != null) ? App.featureSettings.lineBufferRadius  : 0.5,
+      routeBufferRadius: (App.featureSettings && App.featureSettings.routeBufferRadius != null) ? App.featureSettings.routeBufferRadius : 0.5
     };
     applyState(state);
     save();
