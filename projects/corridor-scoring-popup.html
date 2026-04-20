@@ -73,6 +73,12 @@
         Score Corridors
       </button>
 
+      <!-- Hide Route Coloring toggle (shown after successful run) -->
+      <label id="csChoroplethToggleRow" class="tpi-toggle-row" style="display:none;margin-top:10px;">
+        <input type="checkbox" id="csHideRouteColoring">
+        <span class="tiny">Hide Route Coloring</span>
+      </label>
+
     </div>
 
     <!-- Right: results column (flex:1) -->
@@ -91,12 +97,6 @@
           <button id="csExportGeoJSON" type="button" class="rf-btn-sm" disabled>Export GeoJSON</button>
           <button id="csExportCSV" type="button" class="rf-btn-sm" disabled>Export CSV</button>
         </div>
-
-        <!-- Hide Route Coloring toggle (shown after successful run) -->
-        <label id="csChoroplethToggleRow" class="tpi-toggle-row" style="display:none;margin-top:8px;">
-          <input type="checkbox" id="csHideRouteColoring">
-          <span class="tiny">Hide Route Coloring</span>
-        </label>
 
         <p class="tiny" style="margin-top:8px;color:var(--muted);">
           Scores are quintile-normalized within the selected corridor pool.
