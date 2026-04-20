@@ -410,7 +410,7 @@
   // data in one step. Schema version 3 adds lodesData + gtfsData keys; v2
   // sessions (features only) still import cleanly since those keys are guarded.
 
-  function exportFullState() {
+  async function exportFullState() {
     try {
       var state = collectState("full");
       state.version = 3;
@@ -426,15 +426,34 @@
         if (!confirm("Save file is " + sizeMB + " MB. Continue?")) return;
       }
 
-      var defaultName = "session-state-" + _dateStamp();
-      var entered = window.prompt("Save state as:", defaultName);
-      if (entered === null) return;              // user cancelled
-      var base = (String(entered).trim() || defaultName).replace(/\.json$/i, "");
-      var filename = base + ".json";
-
+      var defaultName = "session-state-" + _dateStamp() + ".json";
       var blob = new Blob([json], { type: "application/json" });
-      _triggerDownload(blob, filename);
-      App.setStatus("Saved state to " + filename);
+
+      // Chrome / Edge: native OS Save As dialog (user picks directory + filename)
+      if (typeof window.showSaveFilePicker === "function") {
+        var handle;
+        try {
+          handle = await window.showSaveFilePicker({
+            suggestedName: defaultName,
+            types: [{ description: "JSON Session File", accept: { "application/json": [".json"] } }]
+          });
+        } catch (e) {
+          if (e.name === "AbortError") return;   // user hit Cancel
+          throw e;
+        }
+        var writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        App.setStatus("Saved state to " + handle.name);
+
+      } else {
+        // Firefox / Safari fallback: prompt for name, anchor-download to default folder
+        var entered = window.prompt("Save state as:", defaultName.replace(/\.json$/i, ""));
+        if (entered === null) return;
+        var filename = (String(entered).trim() || defaultName).replace(/\.json$/i, "") + ".json";
+        _triggerDownload(blob, filename);
+        App.setStatus("Saved state to " + filename);
+      }
     } catch (e) {
       console.warn("Save state failed:", e);
       App.setStatus("Save state failed: " + (e.message || e));
