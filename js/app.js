@@ -1115,6 +1115,7 @@
       e.stopPropagation();
       exportDropdown.style.display = "none";
       if (addDataDropdown) addDataDropdown.style.display = "none";
+      if (saveStateDropdown) saveStateDropdown.style.display = "none";
       var isOpen = analysisDropdown.style.display !== "none";
       analysisDropdown.style.display = isOpen ? "none" : "block";
     });
@@ -1124,6 +1125,7 @@
       e.stopPropagation();
       if (addDataDropdown) addDataDropdown.style.display = "none";
       if (analysisDropdown) analysisDropdown.style.display = "none";
+      if (saveStateDropdown) saveStateDropdown.style.display = "none";
       var isOpen = exportDropdown.style.display !== "none";
       exportDropdown.style.display = isOpen ? "none" : "block";
     });
@@ -1152,6 +1154,7 @@
       e.stopPropagation();
       exportDropdown.style.display = "none";
       if (analysisDropdown) analysisDropdown.style.display = "none";
+      if (saveStateDropdown) saveStateDropdown.style.display = "none";
       var isOpen = addDataDropdown.style.display !== "none";
       addDataDropdown.style.display = isOpen ? "none" : "block";
       // Highlight active category
