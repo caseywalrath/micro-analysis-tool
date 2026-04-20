@@ -405,6 +405,166 @@
     }
   }
 
+  // ---- Recent Projects (IndexedDB) ----
+  // Persists FileSystemFileHandle objects so users can re-open recently
+  // saved/loaded state files in one click on Chromium-based browsers.
+  // FileSystemFileHandle objects are structured-cloneable into IDB.
+  // Firefox/Safari don't support the File System Access API, so the recents
+  // store stays empty there and the UI section hides itself.
+
+  var IDB_NAME    = "mat-recents";
+  var IDB_VERSION = 1;
+  var IDB_STORE   = "projects";
+  var MAX_RECENTS = 8;
+
+  function _idbOpen() {
+    return new Promise(function (resolve, reject) {
+      if (!window.indexedDB) { reject(new Error("IndexedDB unavailable")); return; }
+      var req = indexedDB.open(IDB_NAME, IDB_VERSION);
+      req.onupgradeneeded = function () {
+        var db = req.result;
+        if (!db.objectStoreNames.contains(IDB_STORE)) {
+          db.createObjectStore(IDB_STORE, { keyPath: "id", autoIncrement: true });
+        }
+      };
+      req.onsuccess = function () { resolve(req.result); };
+      req.onerror   = function () { reject(req.error); };
+    });
+  }
+
+  function _idbTx(mode) {
+    return _idbOpen().then(function (db) {
+      return { db: db, store: db.transaction(IDB_STORE, mode).objectStore(IDB_STORE) };
+    });
+  }
+
+  function _idbRequest(req) {
+    return new Promise(function (resolve, reject) {
+      req.onsuccess = function () { resolve(req.result); };
+      req.onerror   = function () { reject(req.error); };
+    });
+  }
+
+  async function listRecents() {
+    try {
+      var ctx = await _idbTx("readonly");
+      var all = await _idbRequest(ctx.store.getAll());
+      ctx.db.close();
+      // Newest first
+      all.sort(function (a, b) { return (b.savedAt || 0) - (a.savedAt || 0); });
+      return all;
+    } catch (e) {
+      return [];
+    }
+  }
+
+  async function removeRecent(id) {
+    try {
+      var ctx = await _idbTx("readwrite");
+      await _idbRequest(ctx.store.delete(id));
+      ctx.db.close();
+    } catch (e) {
+      console.warn("Remove recent failed:", e);
+    }
+  }
+
+  async function clearRecents() {
+    try {
+      var ctx = await _idbTx("readwrite");
+      await _idbRequest(ctx.store.clear());
+      ctx.db.close();
+    } catch (e) {
+      console.warn("Clear recents failed:", e);
+    }
+  }
+
+  // Dedupe: if an existing entry points at the same file handle, remove it
+  // first so the newly-added entry becomes the most-recent one.
+  async function _dedupeByHandle(store, handle) {
+    var all = await _idbRequest(store.getAll());
+    for (var i = 0; i < all.length; i++) {
+      var entry = all[i];
+      if (!entry || !entry.handle) continue;
+      try {
+        if (typeof entry.handle.isSameEntry === "function" &&
+            await entry.handle.isSameEntry(handle)) {
+          await _idbRequest(store.delete(entry.id));
+        }
+      } catch (e) { /* ignore */ }
+    }
+  }
+
+  async function addRecent(handle, meta) {
+    if (!handle) return;
+    try {
+      var ctx = await _idbTx("readwrite");
+      await _dedupeByHandle(ctx.store, handle);
+      await _idbRequest(ctx.store.add({
+        handle:  handle,
+        name:    handle.name || (meta && meta.name) || "state.json",
+        savedAt: Date.now(),
+        source:  (meta && meta.source) || "save"
+      }));
+
+      // Evict oldest entries beyond MAX_RECENTS
+      var all = await _idbRequest(ctx.store.getAll());
+      all.sort(function (a, b) { return (a.savedAt || 0) - (b.savedAt || 0); }); // oldest first
+      while (all.length > MAX_RECENTS) {
+        var oldest = all.shift();
+        await _idbRequest(ctx.store.delete(oldest.id));
+      }
+      ctx.db.close();
+
+      if (typeof App.onRecentsChanged === "function") App.onRecentsChanged();
+    } catch (e) {
+      console.warn("Add recent failed:", e);
+    }
+  }
+
+  // Re-open a recent project: request permission, read the file, apply it.
+  // Removes the entry and surfaces a clear error if the file was moved or
+  // deleted, or if permission was denied.
+  async function openRecent(id) {
+    var entry = null;
+    try {
+      var ctx = await _idbTx("readonly");
+      entry = await _idbRequest(ctx.store.get(id));
+      ctx.db.close();
+    } catch (e) { /* ignore */ }
+    if (!entry || !entry.handle) {
+      alert("Could not open this recent project (missing handle).");
+      await removeRecent(id);
+      if (typeof App.onRecentsChanged === "function") App.onRecentsChanged();
+      return;
+    }
+
+    var handle = entry.handle;
+    try {
+      var perm = await handle.queryPermission({ mode: "read" });
+      if (perm !== "granted") {
+        perm = await handle.requestPermission({ mode: "read" });
+      }
+      if (perm !== "granted") {
+        alert("Permission to read '" + entry.name + "' was denied.");
+        return;
+      }
+      var file = await handle.getFile();
+      importFullState(file, handle);
+    } catch (e) {
+      console.warn("Open recent failed:", e);
+      var msg = "Could not open '" + entry.name + "'.";
+      if (e && (e.name === "NotFoundError" || /not found/i.test(String(e.message)))) {
+        msg += " The file may have been moved, renamed, or deleted.";
+      } else if (e && e.message) {
+        msg += " " + e.message;
+      }
+      if (confirm(msg + "\n\nRemove this entry from Recent Projects?")) {
+        await removeRecent(id);
+        if (typeof App.onRecentsChanged === "function") App.onRecentsChanged();
+      }
+    }
+  }
+
   // ---- Export full session state (features + LODES + GTFS) ----
   // Produces a self-contained JSON file so a refresh can restore all uploaded
   // data in one step. Schema version 3 adds lodesData + gtfsData keys; v2
@@ -445,6 +605,7 @@
         await writable.write(blob);
         await writable.close();
         App.setStatus("Saved state to " + handle.name);
+        addRecent(handle, { source: "save" });
 
       } else {
         // Firefox / Safari fallback: prompt for name, anchor-download to default folder
@@ -462,7 +623,7 @@
 
   // ---- Import full session state ----
 
-  function importFullState(file) {
+  function importFullState(file, handle) {
     var reader = new FileReader();
     reader.onload = function (e) {
       try {
@@ -509,6 +670,8 @@
           App.routes.length + App.polygons.length +
           (App.labels ? App.labels.length : 0);
         App.setStatus("Loaded state (" + nFeatures + " feature" + (nFeatures !== 1 ? "s" : "") + ")");
+
+        if (handle) addRecent(handle, { source: "load" });
       } catch (parseErr) {
         App.setStatus("Load state failed");
         alert("Load state failed: the file does not contain valid JSON.");
@@ -1700,6 +1863,10 @@
     importSHP: importSHP,
     exportFullState: exportFullState,
     importFullState: importFullState,
+    listRecents:     listRecents,
+    openRecent:      openRecent,
+    removeRecent:    removeRecent,
+    clearRecents:    clearRecents,
     collectState: collectState,
     applyState: applyState,
     STORAGE_KEY: STORAGE_KEY,

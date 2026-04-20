@@ -451,6 +451,65 @@ body.present-mode #present-exit { display: block; }
 #toolbar .save-state-dropdown button:hover {
   background: rgba(0,0,0,0.05);
 }
+.save-state-recents {
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+  padding-top: 4px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.save-state-recents-header {
+  padding: 6px 14px 4px;
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-md);
+  color: var(--muted);
+}
+.save-state-recent-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px 6px 14px;
+  cursor: pointer;
+  font-size: var(--text-sm);
+  color: #333;
+}
+.save-state-recent-item:hover {
+  background: rgba(0,0,0,0.05);
+}
+.save-state-recent-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.save-state-recent-date {
+  flex: 0 0 auto;
+  font-size: var(--text-2xs);
+  color: var(--muted);
+}
+#toolbar .save-state-dropdown button.save-state-recent-remove {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 50%;
+  color: #bbb;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+#toolbar .save-state-dropdown button.save-state-recent-remove:hover {
+  background: rgba(0,0,0,0.08);
+  color: #555;
+}
 
 /* ---- LODES State Selector Popup ---- */
 #lodes-popup {
@@ -3340,6 +3399,13 @@ body.dark-mode #toolbar .export-dropdown button:hover,
 body.dark-mode #toolbar .add-data-dropdown button:hover,
 body.dark-mode #toolbar .analysis-dropdown button:hover:not(:disabled),
 body.dark-mode #toolbar .save-state-dropdown button:hover { background: rgba(255,255,255,0.07); }
+body.dark-mode .save-state-recent-item { color: #e2e8f0; }
+body.dark-mode .save-state-recent-item:hover { background: rgba(255,255,255,0.07); }
+body.dark-mode #toolbar .save-state-dropdown button.save-state-recent-remove { color: #6b7280; }
+body.dark-mode #toolbar .save-state-dropdown button.save-state-recent-remove:hover {
+  background: rgba(255,255,255,0.1);
+  color: #cbd5e0;
+}
 body.dark-mode #toolbar .add-data-dropdown button.add-data-active {
   color: #63b3ed; background: rgba(99,179,237,0.12);
 }

@@ -1183,9 +1183,56 @@
     });
 
     // ---- Save / Load State dropdown ----
-    var saveStateBtn      = document.getElementById("save-state-btn");
-    var saveStateDropdown = document.getElementById("save-state-dropdown");
+    var saveStateBtn       = document.getElementById("save-state-btn");
+    var saveStateDropdown  = document.getElementById("save-state-dropdown");
     var saveStateFileInput = document.getElementById("save-state-file-input");
+    var saveStateRecents   = document.getElementById("save-state-recents");
+
+    var _hasFSA = typeof window.showOpenFilePicker === "function";
+
+    function _formatRecentDate(ts) {
+      if (!ts) return "";
+      var d = new Date(ts);
+      var now = Date.now();
+      var diffHours = (now - ts) / 3600000;
+      if (diffHours < 24) {
+        return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+      }
+      return d.toLocaleDateString([], { month: "short", day: "numeric" });
+    }
+
+    function renderRecents() {
+      if (!saveStateRecents) return;
+      if (!_hasFSA || !App.cache || typeof App.cache.listRecents !== "function") {
+        saveStateRecents.style.display = "none";
+        return;
+      }
+      App.cache.listRecents().then(function (entries) {
+        if (!entries || entries.length === 0) {
+          saveStateRecents.style.display = "none";
+          saveStateRecents.innerHTML = "";
+          return;
+        }
+        var html = '<div class="save-state-recents-header">RECENT PROJECTS</div>';
+        for (var i = 0; i < entries.length; i++) {
+          var e = entries[i];
+          var nameEsc = String(e.name).replace(/[&<>"']/g, function (c) {
+            return { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c];
+          });
+          html +=
+            '<div class="save-state-recent-item" data-id="' + e.id + '" title="' + nameEsc + '">' +
+              '<span class="save-state-recent-name">' + nameEsc + '</span>' +
+              '<span class="save-state-recent-date">' + _formatRecentDate(e.savedAt) + '</span>' +
+              '<button class="save-state-recent-remove" data-id="' + e.id + '" title="Remove from list" aria-label="Remove">&times;</button>' +
+            '</div>';
+        }
+        saveStateRecents.innerHTML = html;
+        saveStateRecents.style.display = "block";
+      });
+    }
+
+    // Let cache.js notify us when recents change (after add/remove from elsewhere)
+    App.onRecentsChanged = renderRecents;
 
     if (saveStateBtn && saveStateDropdown) {
       saveStateBtn.addEventListener("click", function (e) {
@@ -1195,6 +1242,7 @@
         if (analysisDropdown) analysisDropdown.style.display = "none";
         var isOpen = saveStateDropdown.style.display !== "none";
         saveStateDropdown.style.display = isOpen ? "none" : "block";
+        if (!isOpen) renderRecents();
       });
 
       var saveBtn = document.getElementById("save-state-save");
@@ -1208,20 +1256,61 @@
       }
 
       var loadBtn = document.getElementById("save-state-load");
-      if (loadBtn && saveStateFileInput) {
-        loadBtn.addEventListener("click", function () {
+      if (loadBtn) {
+        loadBtn.addEventListener("click", async function () {
           saveStateDropdown.style.display = "none";
-          saveStateFileInput.value = "";
-          saveStateFileInput.click();
+          if (_hasFSA) {
+            try {
+              var handles = await window.showOpenFilePicker({
+                types: [{ description: "JSON Session File", accept: { "application/json": [".json"] } }],
+                multiple: false
+              });
+              var handle = handles && handles[0];
+              if (!handle) return;
+              var file = await handle.getFile();
+              App.cache.importFullState(file, handle);
+            } catch (err) {
+              if (err && err.name === "AbortError") return;
+              console.warn("Load state failed:", err);
+              App.setStatus("Load state failed: " + (err.message || err));
+            }
+          } else if (saveStateFileInput) {
+            saveStateFileInput.value = "";
+            saveStateFileInput.click();
+          }
         });
       }
 
+      // Fallback hidden input (used on Firefox/Safari only)
       if (saveStateFileInput) {
         saveStateFileInput.addEventListener("change", function (e) {
           var file = e.target.files && e.target.files[0];
           if (!file) return;
           if (App.cache && typeof App.cache.importFullState === "function") {
             App.cache.importFullState(file);
+          }
+        });
+      }
+
+      // Recent Projects: open / remove handlers (event delegation)
+      if (saveStateRecents) {
+        saveStateRecents.addEventListener("click", function (e) {
+          e.stopPropagation();
+          var removeBtn = e.target.closest(".save-state-recent-remove");
+          if (removeBtn) {
+            var rid = parseInt(removeBtn.getAttribute("data-id"), 10);
+            if (!isNaN(rid) && App.cache && typeof App.cache.removeRecent === "function") {
+              App.cache.removeRecent(rid).then(renderRecents);
+            }
+            return;
+          }
+          var item = e.target.closest(".save-state-recent-item");
+          if (item) {
+            var id = parseInt(item.getAttribute("data-id"), 10);
+            if (!isNaN(id) && App.cache && typeof App.cache.openRecent === "function") {
+              saveStateDropdown.style.display = "none";
+              App.cache.openRecent(id);
+            }
           }
         });
       }
