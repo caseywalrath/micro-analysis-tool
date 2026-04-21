@@ -497,9 +497,33 @@
   async function addRecent(handle, meta) {
     if (!handle) return;
     try {
-      var ctx = await _idbTx("readwrite");
-      await _dedupeByHandle(ctx.store, handle);
-      await _idbRequest(ctx.store.add({
+      // Step 1: Read all entries in a short readonly tx, close immediately.
+      var ctx = await _idbTx("readonly");
+      var existing = await _idbRequest(ctx.store.getAll());
+      ctx.db.close();
+
+      // Step 2: isSameEntry() checks outside any IDB transaction.
+      // IDB transactions auto-commit when no IDB requests are pending, so
+      // mixing a File System Access API await (isSameEntry) inside a tx
+      // invalidates it — all subsequent IDB calls would throw TransactionInactiveError.
+      var toDelete = [];
+      for (var i = 0; i < existing.length; i++) {
+        var entry = existing[i];
+        if (!entry || !entry.handle) continue;
+        try {
+          if (typeof entry.handle.isSameEntry === "function" &&
+              await entry.handle.isSameEntry(handle)) {
+            toDelete.push(entry.id);
+          }
+        } catch (e) { /* ignore */ }
+      }
+
+      // Step 3: Fresh readwrite tx for all writes (no non-IDB awaits inside).
+      var wctx = await _idbTx("readwrite");
+      for (var j = 0; j < toDelete.length; j++) {
+        await _idbRequest(wctx.store.delete(toDelete[j]));
+      }
+      await _idbRequest(wctx.store.add({
         handle:  handle,
         name:    handle.name || (meta && meta.name) || "state.json",
         savedAt: Date.now(),
@@ -507,13 +531,13 @@
       }));
 
       // Evict oldest entries beyond MAX_RECENTS
-      var all = await _idbRequest(ctx.store.getAll());
+      var all = await _idbRequest(wctx.store.getAll());
       all.sort(function (a, b) { return (a.savedAt || 0) - (b.savedAt || 0); }); // oldest first
       while (all.length > MAX_RECENTS) {
         var oldest = all.shift();
-        await _idbRequest(ctx.store.delete(oldest.id));
+        await _idbRequest(wctx.store.delete(oldest.id));
       }
-      ctx.db.close();
+      wctx.db.close();
 
       if (typeof App.onRecentsChanged === "function") App.onRecentsChanged();
     } catch (e) {
