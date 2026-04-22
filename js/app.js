@@ -764,7 +764,8 @@
       App.clearLines();
       App.clearRoutes();
       App.clearPolygons();
-      if (typeof App.clearLabels === "function") App.clearLabels();
+      if (typeof App.clearLabels    === "function") App.clearLabels();
+      if (typeof App.clearTextBoxes === "function") App.clearTextBoxes();
       if (typeof App.clearRoadNetwork === "function") App.clearRoadNetwork();
       if (typeof App.osmClearLayers === "function") App.osmClearLayers();
       if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();

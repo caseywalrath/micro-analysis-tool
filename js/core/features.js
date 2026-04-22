@@ -276,6 +276,8 @@
       if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
     } else if (ft === "label") {
       if (typeof App.renderLabelMarkers === "function") App.renderLabelMarkers();
+    } else if (ft === "textbox") {
+      if (typeof App.renderTextBoxMarkers === "function") App.renderTextBoxMarkers();
     }
   }
 
@@ -561,7 +563,7 @@
 
     var headers = document.querySelectorAll(".fp-section-header");
     for (var i = 0; i < headers.length; i++) {
-      if (headers[i].textContent.trim() !== "Labels") continue;
+      if (headers[i].textContent.trim() !== "Labels and Text") continue;
       var header = headers[i];
 
       var sw = document.createElement("button");
@@ -591,11 +593,11 @@
       });
       header.insertBefore(sw, header.firstChild);
 
-      // Collapse toggle for Labels section
+      // Collapse toggle for Labels and Text section
       var stog = document.createElement("button");
       stog.className = "fp-section-toggle open";
       stog.innerHTML = CHEVRON_SVG;
-      stog.title = "Collapse Labels";
+      stog.title = "Collapse Labels and Text";
       header.appendChild(stog);
 
       (function (hdr, tog, swBtn) {
@@ -603,14 +605,17 @@
           if (e.target === swBtn || swBtn.contains(e.target)) return;
           e.stopPropagation();
           var listEl = document.getElementById("fp-labels");
+          var tbEl   = document.getElementById("fp-textboxes");
           var isOpen = !_collapsedSections.label;
           if (isOpen) {
             _collapsedSections.label = true;
             if (listEl) listEl.style.display = "none";
+            if (tbEl)   tbEl.style.display   = "none";
             tog.classList.remove("open");
           } else {
             delete _collapsedSections.label;
             if (listEl) listEl.style.display = "";
+            if (tbEl)   tbEl.style.display   = "";
             tog.classList.add("open");
           }
         }
@@ -770,11 +775,12 @@
 
   function getRemoveFnForType(type) {
     var map = {
-      point: App.removePoint,
+      point:   App.removePoint,
       line:    App.removeLine,
       route:   App.removeRoute,
       polygon: App.removePolygon,
-      label:   App.removeLabel
+      label:   App.removeLabel,
+      textbox: App.removeTextBox
     };
     return map[type] || function () {};
   }
@@ -982,10 +988,22 @@
     ungrouped.forEach(function (it) { el.appendChild(buildItemWrapperUnified(it, false)); });
   }
 
+  function populateTextBoxList() {
+    var el = document.getElementById("fp-textboxes");
+    if (!el) return;
+    el.innerHTML = "";
+    var tbs = App.textBoxes || [];
+    for (var i = 0; i < tbs.length; i++) {
+      el.appendChild(buildItemWrapperUnified({ feature: tbs[i], type: "textbox", index: i }, false));
+    }
+  }
+
   function applySectionCollapse() {
     if (_collapsedSections.label) {
       var el = document.getElementById("fp-labels");
       if (el) el.style.display = "none";
+      var tbEl = document.getElementById("fp-textboxes");
+      if (tbEl) tbEl.style.display = "none";
     }
   }
 
@@ -994,6 +1012,7 @@
     initSettingsCollapse();    // no-op after first call
     populateUnifiedList();
     populateLabelGroupedList();
+    populateTextBoxList();
     applySectionCollapse();
     if (typeof App.applyPanelHighlight === "function") App.applyPanelHighlight();
   }

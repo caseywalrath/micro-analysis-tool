@@ -13,9 +13,10 @@
   var TYPE_LABELS = {
     route:   "Route",
     line:    "Line",
-    point: "Point",
+    point:   "Point",
     polygon: "Polygon",
-    label:   "Label"
+    label:   "Label",
+    textbox: "Text Box"
   };
 
   // Service schedule day sections, rendered in this order
@@ -50,6 +51,11 @@
     ],
     label: [
       { key: "labelGroup", label: "Label Group", type: "text",   placeholder: "e.g. Route Numbers", hidden: true },
+      { key: "fontSize",   label: "Size",        type: "select", options: ["Small","Medium","Large","XL"] },
+      { key: "bgColor",    label: "Background",  type: "color" },
+      { key: "textColor",  label: "Text Color",  type: "color" }
+    ],
+    textbox: [
       { key: "fontSize",   label: "Size",        type: "select", options: ["Small","Medium","Large","XL"] },
       { key: "bgColor",    label: "Background",  type: "color" },
       { key: "textColor",  label: "Text Color",  type: "color" }
@@ -1092,15 +1098,14 @@
       body.appendChild(buildRow("Area",      buildReadOnlyValue(fmtArea(areaSqM)),   null));
     }
 
-    // Label-specific: sync attribute changes to marker appearance
-    if (featureType === "label") {
+    // Label/textbox: sync attribute changes to marker appearance
+    if (featureType === "label" || featureType === "textbox") {
       body.addEventListener("change", function () {
         if (attrs.fontSize  !== undefined) feature.properties.fontSize  = attrs.fontSize;
         if (attrs.bgColor   !== undefined) { feature.properties.bgColor = attrs.bgColor; feature.properties.color = attrs.bgColor; }
         if (attrs.textColor !== undefined) feature.properties.textColor = attrs.textColor;
-        if (typeof App.updateLabelAppearance === "function") {
-          App.updateLabelAppearance(featureIndex);
-        }
+        var updFn = featureType === "label" ? App.updateLabelAppearance : App.updateTextBoxAppearance;
+        if (typeof updFn === "function") updFn(featureIndex);
       });
     }
 

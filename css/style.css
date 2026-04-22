@@ -282,6 +282,57 @@ button { cursor: pointer; }
 }
 .map-label:active { cursor: grabbing; }
 
+/* ---- Text Box map overlay ---- */
+.map-textbox {
+  border: 1px solid #cbd5e0;
+  border-radius: 4px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+  resize: both;
+  overflow: hidden;
+  min-width: 60px;
+  min-height: 40px;
+  display: flex;
+  flex-direction: column;
+}
+.map-textbox-handle {
+  height: 12px;
+  background: #e2e8f0;
+  cursor: grab;
+  flex-shrink: 0;
+  border-bottom: 1px solid #cbd5e0;
+}
+.map-textbox-handle:active { cursor: grabbing; }
+.map-textbox-content {
+  flex: 1;
+  border: none;
+  outline: none;
+  resize: none;
+  padding: 6px;
+  background: transparent;
+  color: inherit;
+  font-family: var(--font-sans);
+  line-height: var(--leading-snug);
+  overflow-y: auto;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+.map-textbox-preview {
+  position: fixed;
+  border: 2px dashed #888;
+  background: rgba(200,200,200,0.12);
+  pointer-events: none;
+  z-index: 600;
+}
+body.dark-mode .map-textbox {
+  background: #2d3748;
+  border-color: #4a5568;
+  color: #e2e8f0;
+}
+body.dark-mode .map-textbox-handle {
+  background: #3d4a5c;
+  border-color: #4a5568;
+}
+
 /* ---- Measure tool ---- */
 .tool-btn[data-mode="measure"] { margin-left: 0; }
 .msr-label {

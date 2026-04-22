@@ -64,8 +64,9 @@
       points: App.points.slice(),
       lines: App.lines.slice(),
       routes: App.routes.slice(),
-      polygons: App.polygons.slice(),
-      labels: App.labels ? App.labels.slice() : [],
+      polygons:  App.polygons.slice(),
+      labels:    App.labels    ? App.labels.slice()    : [],
+      textBoxes: App.textBoxes ? App.textBoxes.slice() : [],
       bufferRadius:      (App.featureSettings && App.featureSettings.bufferRadius      != null) ? App.featureSettings.bufferRadius      : 0,
       lineBufferRadius:  (App.featureSettings && App.featureSettings.lineBufferRadius  != null) ? App.featureSettings.lineBufferRadius  : 0,
       routeBufferRadius: (App.featureSettings && App.featureSettings.routeBufferRadius != null) ? App.featureSettings.routeBufferRadius : 0,
@@ -115,7 +116,8 @@
     App.lines.length = 0;
     App.routes.length = 0;
     App.polygons.length = 0;
-    if (App.labels) App.labels.length = 0;
+    if (App.labels)    App.labels.length    = 0;
+    if (App.textBoxes) App.textBoxes.length = 0;
 
     // 2. Push features
     if (Array.isArray(state.points)) {
@@ -132,6 +134,9 @@
     }
     if (App.labels && Array.isArray(state.labels)) {
       for (var li = 0; li < state.labels.length; li++) App.labels.push(state.labels[li]);
+    }
+    if (App.textBoxes && Array.isArray(state.textBoxes)) {
+      for (var ti = 0; ti < state.textBoxes.length; ti++) App.textBoxes.push(state.textBoxes[ti]);
     }
 
     // 3. Restore feature settings into App.featureSettings
@@ -172,7 +177,8 @@
     if (typeof App.applyLineWidth        === "function") App.applyLineWidth("all");
     if (typeof App.applyBufferLineWidth  === "function") App.applyBufferLineWidth();
     if (typeof App.applyFeatureOpacity   === "function") App.applyFeatureOpacity("all");
-    if (typeof App.renderLabelMarkers === "function") App.renderLabelMarkers();
+    if (typeof App.renderLabelMarkers    === "function") App.renderLabelMarkers();
+    if (typeof App.renderTextBoxMarkers  === "function") App.renderTextBoxMarkers();
 
     // 4b. Restore map position (if saved)
     if (state.mapCenter && state.mapZoom != null && App.map) {
