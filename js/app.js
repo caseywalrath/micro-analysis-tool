@@ -769,6 +769,7 @@
       document.getElementById("nGeos").textContent = "0";
       document.getElementById("summaryStatus").style.display = "none";
       App.setStatus("Cleared");
+      if (typeof App.clearPresentOverlays === "function") App.clearPresentOverlays();
       clearModules();
       notifyProject();
       if (typeof App.cache !== "undefined") App.cache.save();
@@ -902,6 +903,7 @@
         if (typeof App.cache !== "undefined") App.cache.reset();
         if (typeof App.clearRoadNetwork === "function") App.clearRoadNetwork();
         if (typeof App.clearCensusOverlay === "function") App.clearCensusOverlay();
+        if (typeof App.clearPresentOverlays === "function") App.clearPresentOverlays();
         clearModules();
         notifyProject();
       });

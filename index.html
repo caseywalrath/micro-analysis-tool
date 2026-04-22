@@ -36,7 +36,17 @@
 
   <body>
     <div id="app">
-      <button id="present-exit" title="Exit presentation">&#x2715; Exit</button>
+      <div id="pm-controls">
+        <div class="pm-elements-wrap">
+          <button id="pm-elements-btn" title="Toggle map overlay elements">Map Elements &#x25BE;</button>
+          <div id="pm-elements-dropdown" style="display:none;">
+            <button id="pm-toggle-legend"><span class="pm-toggle-check">&#x2713;</span>Legend</button>
+            <button id="pm-toggle-north"><span class="pm-toggle-check">&#x2713;</span>North Arrow</button>
+            <button id="pm-toggle-title"><span class="pm-toggle-check">&#x2713;</span>Title</button>
+          </div>
+        </div>
+        <button id="present-exit" title="Exit presentation">&#x2715; Exit</button>
+      </div>
       <div id="view-only-banner" style="display:none;">
         <strong>Viewing shared session</strong> &mdash; drawn features are read-only.
         <a href="#" id="view-only-start-fresh">Start fresh</a>
@@ -293,6 +303,25 @@
           <div class="module-popup-body"></div>
         </div>
       </div>
+
+      <!-- Present Mode Overlays (hidden until toggled on inside Present mode) -->
+      <div id="pm-legend" class="pm-overlay" data-pm="legend" style="display:none;">
+        <div class="pm-drag-handle">LEGEND</div>
+        <div class="pm-legend-body"></div>
+      </div>
+
+      <div id="pm-north" class="pm-overlay" data-pm="north" style="display:none;">
+        <svg class="pm-north-svg" viewBox="0 0 60 90" xmlns="http://www.w3.org/2000/svg">
+          <text x="30" y="18" text-anchor="middle" font-size="22" font-weight="900" font-family="Georgia, serif" fill="currentColor">N</text>
+          <polygon class="pm-north-left"  points="30,24 14,82 30,62"/>
+          <polygon class="pm-north-right" points="30,24 46,82 30,62"/>
+        </svg>
+      </div>
+
+      <div id="pm-title" class="pm-overlay" data-pm="title" style="display:none;">
+        <div class="pm-title-text" contenteditable="true" spellcheck="false">Title</div>
+      </div>
+
     </div>
 
     <!-- Core modules (order matters) -->
@@ -331,5 +360,6 @@
     <script src="js/projects/title-vi-engine.js"></script>
     <script src="js/projects/title-vi.js"></script>
     <script src="js/projects/gtfs.js"></script>
+    <script src="js/core/present-overlays.js"></script>
   </body>
 </html>
