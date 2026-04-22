@@ -878,7 +878,7 @@
     var overrides = document.createElement("div");
     overrides.className = "fp-attr-overrides";
 
-    if (featureType !== "label") {
+    if (featureType !== "label" && featureType !== "textbox") {
       // Per-type key mappings
       var TYPE_KEYS = {
         point:   { opacityKey: "pointOpacity",   widthKey: "pointLineWidth",   bufferKey: "bufferRadius" },
