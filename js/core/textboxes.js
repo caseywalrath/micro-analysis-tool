@@ -56,8 +56,12 @@
       if (e.key === "Escape") { ta.blur(); }
     });
 
+    var resizeHandle = document.createElement("div");
+    resizeHandle.className = "map-textbox-resize";
+
     outer.appendChild(handle);
     outer.appendChild(ta);
+    outer.appendChild(resizeHandle);
     return outer;
   }
 
@@ -137,16 +141,38 @@
     });
   }
 
-  /* ---- Resize observer — persists width/height on user-resize ---- */
+  /* ---- Custom resize via the bottom-right handle ---- */
 
-  function _watchResize(el, feature) {
-    if (typeof ResizeObserver === "undefined") return;
-    var ro = new ResizeObserver(function () {
-      feature.properties.width  = el.offsetWidth;
-      feature.properties.height = el.offsetHeight;
-      if (App.cache && typeof App.cache.save === "function") App.cache.save();
+  function _wireResize(outer, feature) {
+    var rh = outer.querySelector(".map-textbox-resize");
+    if (!rh) return;
+
+    rh.addEventListener("pointerdown", function (e) {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      var startX = e.clientX;
+      var startY = e.clientY;
+      var startW = outer.offsetWidth;
+      var startH = outer.offsetHeight;
+
+      function onMove(me) {
+        outer.style.width  = Math.max(60, startW + (me.clientX - startX)) + "px";
+        outer.style.height = Math.max(40, startH + (me.clientY - startY)) + "px";
+      }
+
+      function onUp() {
+        document.removeEventListener("pointermove", onMove);
+        document.removeEventListener("pointerup",   onUp);
+        feature.properties.width  = outer.offsetWidth;
+        feature.properties.height = outer.offsetHeight;
+        if (App.cache && typeof App.cache.save === "function") App.cache.save();
+      }
+
+      document.addEventListener("pointermove", onMove);
+      document.addEventListener("pointerup",   onUp);
     });
-    ro.observe(el);
   }
 
   /* ---- Marker creation ---- */
@@ -160,7 +186,7 @@
       .addTo(App.map);
 
     _wireDrag(marker, feature);
-    _watchResize(el, feature);
+    _wireResize(el, feature);
     return marker;
   }
 
@@ -281,7 +307,7 @@
         marker = new maplibregl.Marker({ element: el, draggable: false, anchor: "top-left" })
           .setLngLat(textBoxes[k].geometry.coordinates);
         _wireDrag(marker, textBoxes[k]);
-        _watchResize(el, textBoxes[k]);
+        _wireResize(el, textBoxes[k]);
       } else {
         marker = _createMarker(textBoxes[k]);
       }

@@ -284,15 +284,26 @@ button { cursor: pointer; }
 
 /* ---- Text Box map overlay ---- */
 .map-textbox {
+  position: relative;
   border: 1px solid #cbd5e0;
   border-radius: 4px;
   box-shadow: 0 1px 4px rgba(0,0,0,0.18);
-  resize: both;
   overflow: hidden;
   min-width: 60px;
   min-height: 40px;
   display: flex;
   flex-direction: column;
+}
+.map-textbox-resize {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+  border-right: 2px solid rgba(0,0,0,0.22);
+  border-bottom: 2px solid rgba(0,0,0,0.22);
+  border-radius: 0 0 3px 0;
 }
 .map-textbox-handle {
   height: 12px;
@@ -331,6 +342,9 @@ body.dark-mode .map-textbox {
 body.dark-mode .map-textbox-handle {
   background: #3d4a5c;
   border-color: #4a5568;
+}
+body.dark-mode .map-textbox-resize {
+  border-color: rgba(255,255,255,0.22);
 }
 
 /* ---- Measure tool ---- */
