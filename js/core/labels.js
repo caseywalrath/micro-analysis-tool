@@ -22,15 +22,52 @@
     var p = feature.properties;
     var div = document.createElement("div");
     div.className = "map-label";
-    div.textContent = p.text || "";
+    div.textContent = p.name || "";
     div.style.background = p.bgColor || DEFAULT_BG;
     div.style.color = p.textColor || DEFAULT_TEXT_COLOR;
     div.style.fontSize = (FONT_SIZES[p.fontSize] || FONT_SIZES[DEFAULT_FONT_SIZE]) + "px";
     return div;
   }
 
+  function _wireContextMenu(el, feature) {
+    el.addEventListener("contextmenu", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var idx = App.labels.indexOf(feature);
+      if (idx < 0 || typeof App.showContextMenu !== "function") return;
+      var isHidden = !!feature.properties.hidden;
+      App.showContextMenu(e.clientX, e.clientY, [
+        {
+          label: "Attributes",
+          action: function () { App.openAttrPopup("label", idx, feature); }
+        },
+        {
+          label: "Duplicate",
+          action: function () {
+            if (App.undo && !App.undo.isRestoring()) App.undo.push();
+            App.duplicateLabel(idx);
+          }
+        },
+        {
+          label: isHidden ? "Show" : "Hide",
+          action: function () {
+            feature.properties.hidden = !feature.properties.hidden;
+            App.renderLabelMarkers();
+            if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+            if (App.cache && typeof App.cache.save === "function") App.cache.save();
+          }
+        },
+        {
+          label: "Delete",
+          action: function () { App.removeLabel(idx); }
+        }
+      ]);
+    });
+  }
+
   function _createMarker(feature, index) {
     var el = _buildMarkerEl(feature);
+    _wireContextMenu(el, feature);
     var coords = feature.geometry.coordinates;
     var marker = new maplibregl.Marker({ element: el, draggable: true })
       .setLngLat(coords)
@@ -57,14 +94,12 @@
       properties: {
         name: "Label " + _labelCounter,
         labelIdx: _labelCounter,
-        text: String(_labelCounter),
         fontSize: DEFAULT_FONT_SIZE,
         bgColor: DEFAULT_BG,
         textColor: DEFAULT_TEXT_COLOR,
         color: DEFAULT_BG,
         hidden: false,
         attributes: {
-          text: String(_labelCounter),
           fontSize: DEFAULT_FONT_SIZE,
           bgColor: DEFAULT_BG,
           textColor: DEFAULT_TEXT_COLOR
@@ -120,14 +155,12 @@
       properties: {
         name: "Label " + _labelCounter,
         labelIdx: _labelCounter,
-        text: src.properties.text,
         fontSize: src.properties.fontSize,
         bgColor: src.properties.bgColor,
         textColor: src.properties.textColor,
         color: src.properties.color,
         hidden: false,
         attributes: {
-          text: src.properties.text,
           fontSize: src.properties.fontSize,
           bgColor: src.properties.bgColor,
           textColor: src.properties.textColor
@@ -176,6 +209,7 @@
       if (labels[k].properties.hidden) {
         // Create marker but don't add to map
         var el = _buildMarkerEl(labels[k]);
+        _wireContextMenu(el, labels[k]);
         marker = new maplibregl.Marker({ element: el, draggable: true })
           .setLngLat(labels[k].geometry.coordinates);
         // Wire dragend even for hidden markers (in case they become visible later)
@@ -205,7 +239,7 @@
     var el = marker.getElement();
     if (!el) return;
     var labelEl = el.querySelector(".map-label") || el;
-    labelEl.textContent = p.text || "";
+    labelEl.textContent = p.name || "";
     labelEl.style.background = p.bgColor || DEFAULT_BG;
     labelEl.style.color = p.textColor || DEFAULT_TEXT_COLOR;
     labelEl.style.fontSize = (FONT_SIZES[p.fontSize] || FONT_SIZES[DEFAULT_FONT_SIZE]) + "px";

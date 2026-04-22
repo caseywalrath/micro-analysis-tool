@@ -732,6 +732,9 @@
         if (typeof App.cache !== "undefined") App.cache.save();
       } else if (App.drawMode === "label") {
         App.addLabel(e.lngLat.lng, e.lngLat.lat);
+        App.drawMode = null;
+        var _lb = document.querySelector('[data-mode="label"]');
+        if (_lb) _lb.classList.remove("active");
         notifyProject();
         if (typeof App.cache !== "undefined") App.cache.save();
       } else if (App.drawMode === "measure") {

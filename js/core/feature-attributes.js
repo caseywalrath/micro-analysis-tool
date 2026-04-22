@@ -50,7 +50,6 @@
     ],
     label: [
       { key: "labelGroup", label: "Label Group", type: "text",   placeholder: "e.g. Route Numbers", hidden: true },
-      { key: "text",       label: "Text",        type: "text",   placeholder: "Map text" },
       { key: "fontSize",   label: "Size",        type: "select", options: ["Small","Medium","Large","XL"] },
       { key: "bgColor",    label: "Background",  type: "color" },
       { key: "textColor",  label: "Text Color",  type: "color" }
@@ -1050,6 +1049,10 @@
           break;
         }
       }
+      // For labels, name IS the displayed map text — update the marker
+      if (featureType === "label" && typeof App.updateLabelAppearance === "function") {
+        App.updateLabelAppearance(featureIndex);
+      }
       saveAttrCache();
     });
     nameInput.addEventListener("keydown", function (e) {
@@ -1092,7 +1095,6 @@
     // Label-specific: sync attribute changes to marker appearance
     if (featureType === "label") {
       body.addEventListener("change", function () {
-        if (attrs.text      !== undefined) feature.properties.text      = attrs.text;
         if (attrs.fontSize  !== undefined) feature.properties.fontSize  = attrs.fontSize;
         if (attrs.bgColor   !== undefined) { feature.properties.bgColor = attrs.bgColor; feature.properties.color = attrs.bgColor; }
         if (attrs.textColor !== undefined) feature.properties.textColor = attrs.textColor;
