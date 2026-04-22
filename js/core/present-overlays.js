@@ -15,7 +15,7 @@
     title:  { width: 280, height: null }
   };
   var _titleText   = "Title";
-  var _legendNames = {};  // { "point": "...", "line": "...", ... } user overrides
+  var _legendNames = {};  // { "route:0": "...", "line:1": "...", ... } keyed by type:index
 
   var _els   = {};
   var _inited = false;
@@ -64,56 +64,75 @@
       var key = el.getAttribute("data-pm");
       if (!key) return;
       _size[key] = { width: el.offsetWidth, height: el.offsetHeight };
+      if (key === "legend") _applyLegendFontSize();
       _saveState();
     });
     ro.observe(el);
   }
 
   // ── legend content ─────────────────────────────────────────────────────────
-  function _legendGroups() {
+  function _legendItems() {
+    var items = [];
     var types = [
-      { key: "point",   label: "Points",   arr: App.points,   shape: "circle" },
-      { key: "line",    label: "Lines",    arr: App.lines,    shape: "line"   },
-      { key: "route",   label: "Routes",   arr: App.routes,   shape: "line"   },
-      { key: "polygon", label: "Polygons", arr: App.polygons, shape: "rect"   }
+      { key: "point",   arr: App.points,   shape: "circle" },
+      { key: "line",    arr: App.lines,    shape: "line"   },
+      { key: "route",   arr: App.routes,   shape: "line"   },
+      { key: "polygon", arr: App.polygons, shape: "rect"   }
     ];
-    return types
-      .filter(function (t) { return t.arr && t.arr.length > 0; })
-      .map(function (t) {
-        var color = (t.arr[0].properties && t.arr[0].properties.color) ||
+    types.forEach(function (t) {
+      if (!t.arr) return;
+      t.arr.forEach(function (feat, idx) {
+        if (feat.properties && feat.properties.hidden) return;
+        var color = (feat.properties && feat.properties.color) ||
                     (typeof App.getTypeDefaultColor === "function"
                       ? App.getTypeDefaultColor(t.key) : "#999");
-        return { key: t.key, defaultLabel: t.label, color: color, shape: t.shape };
+        var fallback = t.key.charAt(0).toUpperCase() + t.key.slice(1) + " " + (idx + 1);
+        var name = (feat.properties && feat.properties.name) || fallback;
+        items.push({ id: t.key + ":" + idx, color: color, shape: t.shape, defaultName: name });
       });
+    });
+    return items;
   }
 
   function _swatchSVG(shape, color) {
     var c = _esc(color);
     if (shape === "circle") {
-      return '<svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="' + c + '"/></svg>';
+      return '<svg width="1em" height="1em" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="' + c + '"/></svg>';
     }
     if (shape === "line") {
-      return '<svg width="20" height="16" viewBox="0 0 20 16"><line x1="2" y1="8" x2="18" y2="8" stroke="' + c + '" stroke-width="3.5" stroke-linecap="round"/></svg>';
+      return '<svg width="1.4em" height="1em" viewBox="0 0 20 16"><line x1="2" y1="8" x2="18" y2="8" stroke="' + c + '" stroke-width="3.5" stroke-linecap="round"/></svg>';
     }
     // rect (polygon)
-    return '<svg width="16" height="16" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1" fill="' + c + '" opacity="0.75" stroke="' + c + '" stroke-width="1.5"/></svg>';
+    return '<svg width="1em" height="1em" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1" fill="' + c + '" opacity="0.75" stroke="' + c + '" stroke-width="1.5"/></svg>';
+  }
+
+  function _applyLegendFontSize() {
+    var el = _els.legend;
+    if (!el) return;
+    var body = el.querySelector(".pm-legend-body");
+    if (!body) return;
+    // Scale: 190px wide → 13px; clamped 9–22px
+    var fs = Math.max(9, Math.min(22, Math.round(el.offsetWidth / 190 * 13)));
+    body.style.fontSize = fs + "px";
   }
 
   function _refreshLegend() {
     var body = _els.legend && _els.legend.querySelector(".pm-legend-body");
     if (!body) return;
-    var groups = _legendGroups();
-    if (groups.length === 0) {
+    var items = _legendItems();
+    if (items.length === 0) {
       body.innerHTML = '<div class="pm-legend-empty">No features on map</div>';
+      _applyLegendFontSize();
       return;
     }
-    body.innerHTML = groups.map(function (g) {
-      var name = (_legendNames[g.key] !== undefined) ? _legendNames[g.key] : g.defaultLabel;
+    body.innerHTML = items.map(function (item) {
+      var name = (_legendNames[item.id] !== undefined) ? _legendNames[item.id] : item.defaultName;
       return '<div class="pm-legend-row">' +
-        '<span class="pm-legend-swatch">' + _swatchSVG(g.shape, g.color) + '</span>' +
-        '<input class="pm-legend-name" data-key="' + g.key + '" value="' + _esc(name) + '" />' +
+        '<span class="pm-legend-swatch">' + _swatchSVG(item.shape, item.color) + '</span>' +
+        '<input class="pm-legend-name" data-key="' + item.id + '" value="' + _esc(name) + '" />' +
         '</div>';
     }).join("");
+    _applyLegendFontSize();
   }
 
   // ── visibility ─────────────────────────────────────────────────────────────

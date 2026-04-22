@@ -440,7 +440,7 @@ body.dark-mode .pm-drag-handle { border-bottom-color: rgba(255,255,255,0.1); }
   flex: 1;
   border: none;
   background: transparent;
-  font-size: var(--text-sm);
+  font-size: inherit;
   color: inherit;
   padding: 1px 4px;
   min-width: 0;
