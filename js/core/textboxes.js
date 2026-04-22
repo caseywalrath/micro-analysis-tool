@@ -36,6 +36,10 @@
     ta.style.fontSize = (FONT_SIZES[p.fontSize] || FONT_SIZES[DEFAULT_FONT_SIZE]) + "px";
     ta.style.color = p.textColor || DEFAULT_TEXT;
 
+    // Prevent map pan/drag when interacting with the text box (including the resize handle)
+    outer.addEventListener("pointerdown", function (e) { e.stopPropagation(); });
+    outer.addEventListener("mousedown",   function (e) { e.stopPropagation(); });
+
     // Prevent map interactions while the user types or clicks inside the textarea
     ta.addEventListener("pointerdown", function (e) { e.stopPropagation(); });
     ta.addEventListener("mousedown",   function (e) { e.stopPropagation(); });
