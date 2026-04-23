@@ -1,7 +1,7 @@
 // js/projects/fta-small-starts.js
 // FTA Small Starts (Land Use): breakpoint classification, CRE / ESS / LBAR upload + computation.
 // Popup-based UI with 2 tabs (Ratings | Data Inputs).
-// Depends on: App namespace (utils, map, stations, census, lodes), turf (CDN).
+// Depends on: App namespace (utils, map, points, census, lodes), turf (CDN).
 // Exports: none (self-registers via App.registerModule)
 
 (function () {
@@ -239,21 +239,21 @@
   }
 
   function computeEssentialServicesAvg() {
-    var stations = App.stations;
-    if (!ESS_POINTS || ESS_POINTS.length === 0 || stations.length === 0)
-      return { avg: NaN, perStation: [] };
-    var perStation = [];
-    for (var si = 0; si < stations.length; si++) {
-      var coords = stations[si].geometry.coordinates;
+    var pts = App.points;
+    if (!ESS_POINTS || ESS_POINTS.length === 0 || pts.length === 0)
+      return { avg: NaN, perPoint: [] };
+    var perPoint = [];
+    for (var si = 0; si < pts.length; si++) {
+      var coords = pts[si].geometry.coordinates;
       var buf    = turf.circle(turf.point([coords[0], coords[1]]), 1.0, { units: "miles", steps: 64 });
       var count  = 0;
       for (var qi = 0; qi < ESS_POINTS.length; qi++) {
         if (turf.booleanPointInPolygon(turf.point(ESS_POINTS[qi]), buf)) count++;
       }
-      perStation.push(count);
+      perPoint.push(count);
     }
-    var avg = perStation.reduce(function (a, b) { return a + b; }, 0) / perStation.length;
-    return { avg: avg, perStation: perStation };
+    var avg = perPoint.reduce(function (a, b) { return a + b; }, 0) / perPoint.length;
+    return { avg: avg, perPoint: perPoint };
   }
 
   // ---- LBAR ----
@@ -316,33 +316,33 @@
   async function computeLbarRatio() {
     var unionFeat = App.bufferUnionPolygon();
     if (!unionFeat || !LBAR_SITES || LBAR_SITES.length === 0) {
-      return { ratio: NaN, shareStation: NaN, shareCounty: NaN, note: "LBAR inventory not loaded." };
+      return { ratio: NaN, sharePoint: NaN, shareCounty: NaN, note: "LBAR inventory not loaded." };
     }
 
     var year     = document.getElementById("ftaYearSelect").value;
     var geoLevel = document.getElementById("ftaGeoLevel").value;
 
-    // LBAR units in station union
-    var lbarStation = 0;
+    // LBAR units in point union
+    var lbarPoint = 0;
     for (var i = 0; i < LBAR_SITES.length; i++) {
       var s = LBAR_SITES[i];
-      if (turf.booleanPointInPolygon(turf.point([s.lon, s.lat]), unionFeat)) lbarStation += s.units;
+      if (turf.booleanPointInPolygon(turf.point([s.lon, s.lat]), unionFeat)) lbarPoint += s.units;
     }
 
-    // Total housing units in station union
-    var huStationRes  = await App.computeAcsValueOnly("B25001_001E", year, geoLevel);
-    var huStation     = huStationRes.value;
-    var shareStation  = (Number.isFinite(huStation) && huStation > 0) ? (lbarStation / huStation) : NaN;
+    // Total housing units in point union
+    var huPointRes  = await App.computeAcsValueOnly("B25001_001E", year, geoLevel);
+    var huPoint     = huPointRes.value;
+    var sharePoint  = (Number.isFinite(huPoint) && huPoint > 0) ? (lbarPoint / huPoint) : NaN;
 
     // County share
     var counties = parseCountyListInput();
     if (counties.length === 0)
-      return { ratio: NaN, shareStation: shareStation, shareCounty: NaN,
+      return { ratio: NaN, sharePoint: sharePoint, shareCounty: NaN,
                note: "Enter project counties (5-digit FIPS) to compute county share." };
 
     var sitesWithCounty = LBAR_SITES.filter(function (s) { return s.county5 && s.county5.length === 5; });
     if (sitesWithCounty.length === 0)
-      return { ratio: NaN, shareStation: shareStation, shareCounty: NaN,
+      return { ratio: NaN, sharePoint: sharePoint, shareCounty: NaN,
                note: "LBAR inventory missing county FIPS per site; cannot compute county share." };
 
     var lbarCounty = 0;
@@ -358,12 +358,12 @@
     }
 
     var shareCounty = (huFound > 0 && huCounty > 0) ? (lbarCounty / huCounty) : NaN;
-    var ratio = (Number.isFinite(shareStation) && Number.isFinite(shareCounty) && shareCounty > 0)
-      ? (shareStation / shareCounty) : NaN;
+    var ratio = (Number.isFinite(sharePoint) && Number.isFinite(shareCounty) && shareCounty > 0)
+      ? (sharePoint / shareCounty) : NaN;
     var note = Number.isFinite(shareCounty)
       ? "LBAR county share=" + (shareCounty * 100).toFixed(2) + "% (" + huFound + "/" + counties.length + " counties found)"
       : "County share unavailable.";
-    return { ratio: ratio, shareStation: shareStation, shareCounty: shareCounty, note: note };
+    return { ratio: ratio, sharePoint: sharePoint, shareCounty: shareCounty, note: note };
   }
 
   // ---- Breakpoint ratings updater (concurrency guard) ----
@@ -410,7 +410,7 @@
     setVal("bpEssValue",  "\u2014");
     setVal("bpLbarNote",  "Requires LBAR inventory + counties");
     setVal("bpCreNote",   "Requires CRE upload");
-    setVal("bpEssNote",   "Requires ESS upload + stations");
+    setVal("bpEssNote",   "Requires ESS upload + points");
 
     _lastRatings = null;
 
@@ -433,7 +433,7 @@
       employment: { value: NaN, label: "N/A", pill: "na", formatted: "\u2014", source: "LODES WAC C000" },
       lbar:       { value: NaN, label: "N/A", pill: "na", formatted: "\u2014", note: "Requires LBAR inventory + counties" },
       cre:        { value: NaN, label: "N/A", pill: "na", formatted: "\u2014", note: "Requires CRE upload" },
-      ess:        { value: NaN, label: "N/A", pill: "na", formatted: "\u2014", note: "Requires ESS upload + stations" }
+      ess:        { value: NaN, label: "N/A", pill: "na", formatted: "\u2014", note: "Requires ESS upload + points" }
     };
 
     try {
@@ -476,13 +476,13 @@
       }
 
       // 4. Essential services
-      if (ESS_POINTS && ESS_POINTS.length > 0 && App.stations.length > 0) {
+      if (ESS_POINTS && ESS_POINTS.length > 0 && App.points.length > 0) {
         var ess    = computeEssentialServicesAvg();
         var essFmt = Number.isFinite(ess.avg) ? ess.avg.toFixed(2) : "\u2014";
         setVal("bpEssValue", essFmt);
         var essClass = classify(ess.avg, BP.essentialAvg);
         setPill("bpEssPill", essClass.label, essClass.pill);
-        var essNote = "1-mi buffers; " + App.stations.length + " stations; " + ESS_POINTS.length + " service points.";
+        var essNote = "1-mi buffers; " + App.points.length + " points; " + ESS_POINTS.length + " service points.";
         setVal("bpEssNote", essNote);
         ratings.ess = { value: ess.avg, label: essClass.label, pill: essClass.pill, formatted: essFmt, note: essNote };
       }
@@ -493,8 +493,8 @@
         setVal("bpLbarNote", lbar.note || "");
 
         if (Number.isFinite(lbar.ratio)) {
-          var lbarFmt = lbar.ratio.toFixed(2) + " (station " +
-            (lbar.shareStation * 100).toFixed(2) + "% / county " +
+          var lbarFmt = lbar.ratio.toFixed(2) + " (point " +
+            (lbar.sharePoint * 100).toFixed(2) + "% / county " +
             (lbar.shareCounty * 100).toFixed(2) + "%)";
           setVal("bpLbarValue", lbarFmt);
 

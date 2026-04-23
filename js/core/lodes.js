@@ -1,7 +1,7 @@
 // js/core/lodes.js
 // LODES file download/upload/parse and block-level employment computation.
-// Depends on: App.map (map.js), App.bboxStringFromFeature (stations.js),
-//             App.bufferUnionPolygon (stations.js), pako (CDN), turf (CDN).
+// Depends on: App.map (map.js), App.bboxStringFromFeature (points.js),
+//             App.bufferUnionPolygon (points.js), pako (CDN), turf (CDN).
 // Exports: STATE_FIPS_TO_ABBR, getStateFromMapCenter, startDownload, lodesData,
 //          lodesFileName, setLodesLoadedUI, parseLodesFromUploadedFile,
 //          fetchBlocksInternalPointsInUnion, computeEmploymentServedOnly
@@ -102,6 +102,38 @@
     setLodesLoadedUI();
   }
 
+  // Restore LODES from a previously serialized state-file payload.
+  // entries: array of [w_geocode, jobs] pairs (or a plain object).
+  // meta: { name, files: [{ name, stateAbbr, nRows }] }
+  function restoreLodesFromData(entries, meta) {
+    if (!entries) return;
+    if (Array.isArray(entries)) {
+      LODES_UPLOADED = new Map(entries);
+    } else if (typeof entries === "object") {
+      LODES_UPLOADED = new Map(Object.keys(entries).map(function (k) {
+        return [k, entries[k]];
+      }));
+    } else {
+      return;
+    }
+    meta = meta || {};
+    LODES_UPLOADED_NAME = meta.name || "";
+    LODES_LOADED_FILES  = Array.isArray(meta.files) ? meta.files.slice() : [];
+    setLodesLoadedUI();
+  }
+
+  // Serialize current LODES state for state-file export. Returns null when empty.
+  function serializeLodesData() {
+    if (!LODES_UPLOADED || LODES_UPLOADED.size === 0) return null;
+    return {
+      entries: Array.from(LODES_UPLOADED.entries()),
+      meta: {
+        name:  LODES_UPLOADED_NAME,
+        files: LODES_LOADED_FILES.slice()
+      }
+    };
+  }
+
   async function parseLodesFromUploadedFile(file) {
     App.setStatus("Reading LODES file\u2026");
     var buf = await file.arrayBuffer();
@@ -198,6 +230,8 @@
   App.setLodesLoadedUI = setLodesLoadedUI;
   App.mergeLodesFile = mergeLodesFile;
   App.clearLodesData = clearLodesData;
+  App.restoreLodesFromData = restoreLodesFromData;
+  App.serializeLodesData   = serializeLodesData;
   App.parseLodesFromUploadedFile = parseLodesFromUploadedFile;
   App.fetchBlocksInternalPointsInUnion = fetchBlocksInternalPointsInUnion;
   App.computeEmploymentServedOnly = computeEmploymentServedOnly;

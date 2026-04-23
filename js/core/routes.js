@@ -9,7 +9,11 @@
 (function () {
   var App = window.App = window.App || {};
 
-  var OSRM_URL = "https://router.project-osrm.org/route/v1/driving/";
+  var OSRM_URLS = [
+    "https://router.project-osrm.org/route/v1/driving/",
+    "https://routing.openstreetmap.de/routed-car/route/v1/driving/"
+  ];
+  var OSRM_TIMEOUT_MS = 5000;
   var ROUTE_COLOR = "#319795"; // teal
   var SNAP_PIXELS = 15;
 
@@ -31,22 +35,52 @@
   // Generation counter to discard stale async fetch results
   var _fetchGen = 0;
 
-  /* ---- OSRM fetch ---- */
+  /* ---- OSRM fetch with cascading fallback ---- */
 
-  async function fetchRoute(waypoints) {
-    if (waypoints.length < 2) return null;
+  // Try a single OSRM server with a timeout
+  async function fetchRouteSingle(waypoints, serverUrl) {
     var coords = waypoints.map(function (wp) { return wp[0] + "," + wp[1]; }).join(";");
-    var url = OSRM_URL + coords + "?overview=full&geometries=geojson";
+    var url = serverUrl + coords + "?overview=full&geometries=geojson";
+    var controller = new AbortController();
+    var timer = setTimeout(function () { controller.abort(); }, OSRM_TIMEOUT_MS);
     try {
-      var res = await fetch(url);
+      var res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timer);
       if (!res.ok) throw new Error("OSRM HTTP " + res.status);
       var data = await res.json();
       if (data.code !== "Ok" || !data.routes || data.routes.length === 0) return null;
       return data.routes[0].geometry.coordinates;
     } catch (e) {
-      console.warn("Route fetch failed:", e);
-      return null;
+      clearTimeout(timer);
+      throw e; // let caller try next server
     }
+  }
+
+  // Main route fetch: local routing first, then cascade through OSRM servers
+  async function fetchRoute(waypoints) {
+    if (waypoints.length < 2) return null;
+
+    // Priority 1: local road network
+    if (typeof App.findLocalRoute === "function" && App.roadNetworkLoaded && App.roadNetworkLoaded()) {
+      var local = App.findLocalRoute(waypoints);
+      if (local) return local;
+      // Fall through to servers if local routing failed (e.g. outside coverage)
+    }
+
+    // Priority 2: cascade through OSRM servers
+    for (var i = 0; i < OSRM_URLS.length; i++) {
+      try {
+        var result = await fetchRouteSingle(waypoints, OSRM_URLS[i]);
+        if (result) return result;
+      } catch (e) {
+        console.warn("OSRM server " + (i + 1) + " failed:", e.message || e);
+        // Continue to next server
+      }
+    }
+
+    // Priority 3: all failed
+    App.setStatus("Server routing unavailable \u2014 using straight line");
+    return null;
   }
 
   /* ---- Buffer functions ---- */
@@ -55,10 +89,14 @@
     if (typeof App.clearCensusOverlay === "function") App.clearCensusOverlay();
     routeBufferRadiusMiles = radiusMiles;
     routeBuffers.splice(0);
-    if (radiusMiles > 0) {
-      for (var i = 0; i < routes.length; i++) {
-        var buf = turf.buffer(routes[i], radiusMiles, { units: "miles", steps: 64 });
-        routeBuffers.push(buf);
+    for (var i = 0; i < routes.length; i++) {
+      if (routes[i].properties.hidden) continue;
+      var r = (routes[i].properties._bufferRadius != null)
+        ? routes[i].properties._bufferRadius
+        : radiusMiles;
+      if (r > 0) {
+        var buf = turf.buffer(routes[i], r, { units: "miles", steps: 64 });
+        routeBuffers.push({ type: buf.type, geometry: buf.geometry, properties: { routeIdx: routes[i].properties.routeIdx, color: routes[i].properties.color } });
       }
     }
     renderRouteLayers();
@@ -78,7 +116,7 @@
   /* ---- GeoJSON helpers ---- */
 
   function routesGeoJSON() {
-    return { type: "FeatureCollection", features: routes };
+    return { type: "FeatureCollection", features: routes.filter(function (r) { return !r.properties.hidden; }) };
   }
 
   // In-progress drawing: resolved route coords + preview segment to cursor.
@@ -135,11 +173,14 @@
   // Saved-route waypoints (small dots on the map).
   function savedWaypointsGeoJSON() {
     var features = [];
-    routes.forEach(function (route) {
+    var sel = App._selected;
+    routes.forEach(function (route, arrayIndex) {
+      if (route.properties.hidden) return;
+      if (!sel || sel.type !== "route" || sel.index !== arrayIndex) return;
       (route.properties.waypoints || []).forEach(function (wp, i) {
         features.push({
           type: "Feature",
-          properties: { routeIdx: route.properties.routeIdx, waypointIdx: i + 1 },
+          properties: { routeIdx: route.properties.routeIdx, waypointIdx: i + 1, color: route.properties.color },
           geometry: { type: "Point", coordinates: wp }
         });
       });
@@ -159,13 +200,13 @@
         id: "route-buffers-fill",
         type: "fill",
         source: "route-buffers",
-        paint: { "fill-color": "#319795", "fill-opacity": 0.2 }
+        paint: { "fill-color": ["coalesce", ["get", "color"], "#319795"], "fill-opacity": 0.08 }
       });
       map.addLayer({
         id: "route-buffers-line",
         type: "line",
         source: "route-buffers",
-        paint: { "line-color": "#319795", "line-width": 2, "line-opacity": 0.6 }
+        paint: { "line-color": ["coalesce", ["get", "color"], "#319795"], "line-width": 2, "line-opacity": 0.4 }
       });
     } else {
       map.getSource("route-buffers").setData(routeBuffersGeoJSON());
@@ -178,7 +219,7 @@
         id: "routes-layer",
         type: "line",
         source: "routes",
-        paint: { "line-color": ROUTE_COLOR, "line-width": 3, "line-opacity": 0.8 }
+        paint: { "line-color": ["coalesce", ["get", "color"], ROUTE_COLOR], "line-width": 3, "line-opacity": 0.8, "line-offset": ["coalesce", ["get", "_offset"], 0] }
       });
     } else {
       map.getSource("routes").setData(routesGeoJSON());
@@ -193,7 +234,7 @@
         source: "routes-waypoints-saved",
         paint: {
           "circle-radius": 3,
-          "circle-color": ROUTE_COLOR,
+          "circle-color": ["coalesce", ["get", "color"], ROUTE_COLOR],
           "circle-stroke-width": 1,
           "circle-stroke-color": "#ffffff"
         }
@@ -239,6 +280,12 @@
     }
 
     if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+
+    // Auto-recompute overlap offsets if toggle is on
+    var oCb = document.getElementById("offsetOverlap");
+    if (oCb && oCb.checked && typeof App.computeOverlapOffsets === "function") {
+      App.computeOverlapOffsets();
+    }
   }
 
   /* ---- Preview state cleanup ---- */
@@ -261,6 +308,19 @@
     var to = previewCoord;
     if (!from || !to) return;
 
+    // Priority 1: local road network — instant, no server needed
+    if (typeof App.findLocalRoute === "function" && App.roadNetworkLoaded && App.roadNetworkLoaded()) {
+      var local = App.findLocalRoute([from, to]);
+      if (local) {
+        previewSnappedCoords = local;
+        var drawSrc = App.map.getSource("routes-drawing");
+        if (drawSrc) drawSrc.setData(currentDrawingGeoJSON());
+        return;
+      }
+      // Fall through to server if outside local coverage
+    }
+
+    // Priority 2: first available OSRM server (don't cascade for preview — too slow)
     if (_previewController) {
       _previewController.abort();
       _previewController = null;
@@ -270,24 +330,33 @@
     var controller = new AbortController();
     _previewController = controller;
 
-    var coordStr = from[0] + "," + from[1] + ";" + to[0] + "," + to[1];
-    fetch(OSRM_URL + coordStr + "?overview=full&geometries=geojson", { signal: controller.signal })
-      .then(function (res) {
-        if (!res.ok) throw new Error("OSRM HTTP " + res.status);
-        return res.json();
-      })
-      .then(function (data) {
+    // Try each server sequentially until one works
+    (async function () {
+      for (var i = 0; i < OSRM_URLS.length; i++) {
         if (gen !== _previewGen) return; // stale
-        _previewController = null;
-        if (data.code !== "Ok" || !data.routes || data.routes.length === 0) return;
-        previewSnappedCoords = data.routes[0].geometry.coordinates;
-        var drawSrc = App.map.getSource("routes-drawing");
-        if (drawSrc) drawSrc.setData(currentDrawingGeoJSON());
-      })
-      .catch(function (e) {
-        if (e.name !== "AbortError") _previewController = null;
-        // On network error: straight-line preview remains
-      });
+        var coordStr = from[0] + "," + from[1] + ";" + to[0] + "," + to[1];
+        var timer = setTimeout(function () { controller.abort(); }, OSRM_TIMEOUT_MS);
+        try {
+          var res = await fetch(OSRM_URLS[i] + coordStr + "?overview=full&geometries=geojson", { signal: controller.signal });
+          clearTimeout(timer);
+          if (!res.ok) throw new Error("OSRM HTTP " + res.status);
+          var data = await res.json();
+          if (gen !== _previewGen) return;
+          _previewController = null;
+          if (data.code === "Ok" && data.routes && data.routes.length > 0) {
+            previewSnappedCoords = data.routes[0].geometry.coordinates;
+            var src = App.map.getSource("routes-drawing");
+            if (src) src.setData(currentDrawingGeoJSON());
+          }
+          return; // success — stop trying
+        } catch (e) {
+          clearTimeout(timer);
+          if (e.name === "AbortError") return; // user-initiated cancel
+          // Try next server
+        }
+      }
+      _previewController = null;
+    })();
   }
 
   function setRoutePreview(lngLat) {
@@ -313,7 +382,13 @@
       return;
     }
 
-    // Throttle: start a timer only if one isn't already running.
+    // Local road network: snap immediately (Dijkstra is fast), no throttle needed
+    if (typeof App.roadNetworkLoaded === "function" && App.roadNetworkLoaded()) {
+      doPreviewFetch();
+      return;
+    }
+
+    // Server routing: throttle to 1 fetch/sec max.
     // When it fires it reads the CURRENT previewCoord, not a stale capture.
     if (!_previewTimer) {
       _previewTimer = setTimeout(function () {
@@ -388,13 +463,18 @@
       coords = fetched || currentWaypoints.slice();
     }
 
+    if (App.undo && !App.undo.isRestoring()) App.undo.push();
     var idx = routes.length + 1;
+    var colorIdx = (App.lines ? App.lines.length : 0) + routes.length;
+    var color = (App.sectionColors && App.sectionColors.route) ||
+                App.FEATURE_COLORS[colorIdx % App.FEATURE_COLORS.length];
     routes.push({
       type: "Feature",
       properties: {
         name: "Route " + idx,
         routeIdx: idx,
-        waypoints: currentWaypoints.slice()
+        waypoints: currentWaypoints.slice(),
+        color: color
       },
       geometry: { type: "LineString", coordinates: coords }
     });
@@ -405,6 +485,7 @@
     clearPreviewState();
     rebuildRouteBuffers(routeBufferRadiusMiles);
     App.setStatus("Route " + idx + " saved (" + nWp + " waypoints)");
+    if (typeof App.exitDrawMode === "function") App.exitDrawMode();
   }
 
   /* ---- Cancel / remove / clear / undo ---- */
@@ -419,6 +500,7 @@
 
   function removeRoute(index) {
     if (index < 0 || index >= routes.length) return;
+    if (App.undo && !App.undo.isRestoring()) App.undo.push();
     routes.splice(index, 1);
     rebuildRouteBuffers(routeBufferRadiusMiles);
   }
@@ -434,33 +516,28 @@
   }
 
   function undoLastRoute() {
-    if (currentWaypoints.length > 0) {
-      currentWaypoints.pop();
-      if (currentWaypoints.length >= 2) {
-        var gen = ++_fetchGen;
-        var snapshot = currentWaypoints.slice();
-        App.setStatus("Routing\u2026");
-        fetchRoute(snapshot).then(function (coords) {
-          if (gen !== _fetchGen) return;
-          currentRouteCoords = coords || snapshot;
-          renderRouteLayers();
-          App.setStatus(currentWaypoints.length + " waypoints \u2014 click last point to save");
-        });
-      } else {
-        currentRouteCoords = [];
+    if (currentWaypoints.length === 0) return;
+    currentWaypoints.pop();
+    if (currentWaypoints.length >= 2) {
+      var gen = ++_fetchGen;
+      var snapshot = currentWaypoints.slice();
+      App.setStatus("Routing\u2026");
+      fetchRoute(snapshot).then(function (coords) {
+        if (gen !== _fetchGen) return;
+        currentRouteCoords = coords || snapshot;
         renderRouteLayers();
-        if (currentWaypoints.length === 0) {
-          App.setStatus("Route drawing cancelled");
-        } else {
-          App.setStatus("Route started \u2014 click to add waypoints, click last point to save");
-        }
+        App.setStatus(currentWaypoints.length + " waypoints \u2014 click last point to save");
+      });
+    } else {
+      currentRouteCoords = [];
+      renderRouteLayers();
+      if (currentWaypoints.length === 0) {
+        App.setStatus("Route drawing cancelled");
+      } else {
+        App.setStatus("Route started \u2014 click to add waypoints, click last point to save");
       }
-      return;
     }
-    if (routes.length > 0) {
-      routes.pop();
-      rebuildRouteBuffers(routeBufferRadiusMiles);
-    }
+    if (App.undo) App.undo.updateButtons();
   }
 
   /* ---- Vertex editing support ---- */
@@ -472,6 +549,7 @@
     var route = routes[routeIdx];
     var waypoints = route.properties.waypoints;
     if (wpIdx < 0 || wpIdx >= waypoints.length) return;
+    if (App.undo && !App.undo.isRestoring()) App.undo.push();
 
     waypoints[wpIdx] = [lng, lat];
 
@@ -487,6 +565,80 @@
     App.setStatus("Route updated");
   }
 
+  /* ---- Insert a new waypoint into an existing route ---- */
+
+  async function insertRouteWaypoint(routeIdx, insertIdx, lng, lat) {
+    if (routeIdx < 0 || routeIdx >= routes.length) return;
+    var route = routes[routeIdx];
+    route.properties.waypoints.splice(insertIdx, 0, [lng, lat]);
+
+    if (route.properties.waypoints.length >= 2) {
+      App.setStatus("Re-routing\u2026");
+      var coords = await fetchRoute(route.properties.waypoints);
+      route.geometry.coordinates = coords || route.properties.waypoints.slice();
+    } else {
+      route.geometry.coordinates = route.properties.waypoints.slice();
+    }
+
+    rebuildRouteBuffers(routeBufferRadiusMiles);
+    renderRouteLayers();
+    if (typeof App.showEditVertices === "function") App.showEditVertices("route", routeIdx);
+    if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+    if (typeof App.cache !== "undefined") App.cache.save();
+    App.setStatus("Route updated");
+  }
+
+  /* ---- Re-route an existing route with its current waypoints ---- */
+
+  async function rerouteFeature(routeIdx) {
+    if (routeIdx < 0 || routeIdx >= routes.length) return;
+    var route = routes[routeIdx];
+    var waypoints = route.properties.waypoints;
+
+    if (waypoints.length >= 2) {
+      App.setStatus("Re-routing\u2026");
+      var coords = await fetchRoute(waypoints);
+      route.geometry.coordinates = coords || waypoints.slice();
+    } else {
+      route.geometry.coordinates = waypoints.slice();
+    }
+
+    rebuildRouteBuffers(routeBufferRadiusMiles);
+    renderRouteLayers();
+    App.setStatus("Route updated");
+  }
+
+  function duplicateRoute(index) {
+    if (index < 0 || index >= routes.length) return;
+    if (App.undo && !App.undo.isRestoring()) App.undo.push();
+    var src = routes[index];
+    var idx = routes.length + 1;
+    var offsetCoords = src.geometry.coordinates.map(function (c) {
+      return [c[0] + 0.002, c[1]];
+    });
+    var offsetWaypoints = (src.properties.waypoints || []).map(function (w) {
+      return [w[0] + 0.002, w[1]];
+    });
+    var copy = {
+      type: "Feature",
+      properties: {
+        name: "Route " + idx,
+        routeIdx: idx,
+        waypoints: offsetWaypoints,
+        color: src.properties.color || "",
+        hidden: false
+      },
+      geometry: { type: "LineString", coordinates: offsetCoords }
+    };
+    if (src.properties.attributes) {
+      copy.properties.attributes = JSON.parse(JSON.stringify(src.properties.attributes));
+    }
+    routes.push(copy);
+    rebuildRouteBuffers(routeBufferRadiusMiles);
+    if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+    if (App.cache && typeof App.cache.save === "function") App.cache.save();
+  }
+
   /* ---- Expose on App namespace ---- */
 
   App.routes = routes;
@@ -495,10 +647,18 @@
   App.routeBufferUnionPolygon = routeBufferUnionPolygon;
   App.handleRouteClick = handleRouteClick;
   App.setRoutePreview = setRoutePreview;
+  App.duplicateRoute = duplicateRoute;
   App.removeRoute = removeRoute;
   App.clearRoutes = clearRoutes;
   App.undoLastRoute = undoLastRoute;
   App.cancelRouteDrawing = cancelRouteDrawing;
   App.renderRouteLayers = renderRouteLayers;
   App.updateRouteWaypoint = updateRouteWaypoint;
+  App._routeDrawingInProgress = function () { return currentWaypoints.length > 0; };
+  App.insertRouteWaypoint = insertRouteWaypoint;
+  App.rerouteFeature = rerouteFeature;
+  App.refreshSavedWaypoints = function () {
+    var src = App.map && App.map.getSource("routes-waypoints-saved");
+    if (src) src.setData(savedWaypointsGeoJSON());
+  };
 })();

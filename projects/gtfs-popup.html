@@ -1,0 +1,52 @@
+<!-- projects/gtfs-popup.html
+     GTFS Feed Viewer popup body.
+     Two-column layout: left = file directory, right = CSV table view. -->
+
+<div class="gtfs-popup-layout">
+  <div class="rf-section-row" style="align-items: flex-start; min-height: 380px;">
+
+    <!-- Left: file directory + map controls -->
+    <div class="rf-settings-col">
+
+      <div class="rf-section-title">Feed Files</div>
+      <div id="gtfsFileList" class="gtfs-file-list">
+        <div class="gtfs-empty-state">No GTFS feed loaded.<br>Use Add Data&nbsp;(+) &rarr; GTFS to load a feed.</div>
+      </div>
+
+      <div id="gtfsMapControls" class="gtfs-map-controls" style="display:none;">
+        <div class="rf-section-title" style="margin-top:0;">Map Layers</div>
+        <label class="var-check">
+          <input type="checkbox" id="gtfsShowRoutes" checked> Show routes
+        </label>
+        <label class="var-check">
+          <input type="checkbox" id="gtfsShowStops" checked> Show stops
+        </label>
+        <button id="gtfsClearBtn" class="rf-action-secondary" style="margin-top:10px; width:100%;">
+          Clear GTFS Feed
+        </button>
+      </div>
+
+    </div>
+
+    <!-- Right: CSV table view -->
+    <div class="rf-results-col">
+
+      <div id="gtfsTableTitle" class="rf-section-title" style="display:none; font-family:monospace;"></div>
+
+      <div id="gtfsTableWrapper" class="gtfs-table-wrapper" style="display:none;">
+        <table class="gtfs-table">
+          <thead id="gtfsTableHead"></thead>
+          <tbody id="gtfsTableBody"></tbody>
+        </table>
+      </div>
+
+      <div id="gtfsTableMeta" class="gtfs-table-meta" style="display:none;"></div>
+
+      <div id="gtfsSelectPrompt" class="gtfs-empty-state">
+        Select a file from the list to view its contents.
+      </div>
+
+    </div>
+
+  </div>
+</div>

@@ -41,7 +41,7 @@ Browser-based geospatial analysis tool. Pure front-end (no build step, no backen
 ```
 index.html                  App shell: toolbar, sidebar, map, feature panel, module popup container, script tags
 css/
-  style.css                 Core layout, toolbar, feature panel, module popup, floating widgets, basemap switcher, BAS styles (.bas- prefix), TPI styles, RF styles (.rf- prefix)
+  style.css                 Core layout, toolbar, feature panel, module popup, floating widgets, basemap switcher, BAS styles (.bas- prefix), TPI styles, RF styles (.rf- prefix), FTA styles (.fta- prefix), TVI styles (.tvi- prefix), pill rating colors
   sidebar-v2.css            Sidebar panel system styles (scoped under #sidebar), variable checkbox list, section labels
 js/
   app.js                    Startup, module registry, sidebar panel HTML (Data Inputs), event wiring. Note: CHECKBOX_GROUPS, DENOM_MAP, and runSummary() have moved to buffer-summary.js.
@@ -49,32 +49,42 @@ js/
     utils.js                CSV parsing, number formatting, GEOID normalization, VAR_META (with label/category), getSelectedVars
     sidebar.js              Sidebar panel manager: addPanel, removePanel, toggle, render
     map.js                  MapLibre GL map instance, basemap registry + switcher control, cursor management
-    stations.js             Station points, user-defined buffers (default 0.5 mi), union polygon, station drag support
+    points.js               Points, user-defined buffers (default 0.5 mi), union polygon, point drag support
     lines.js                Line drawing (polylines with snap-to-close), line buffers (default 0.5 mi), rubber-band preview, vertex editing
     routes.js               Route drawing (OSRM street-snapped), route buffers (default 0.5 mi), throttled snapped preview, waypoint-only vertex editing
     polygons.js             Polygon drawing (vertex-by-vertex with snap-to-close), rubber-band preview, vertex editing
-    editing.js              Feature editing: station click-drag, line/polygon/route vertex editing with orange handles
-    features.js             Right-side feature panel: lists features, editable names, delete buttons
+    editing.js              Feature editing: point click-drag, line/polygon/route vertex editing with orange handles
+    features.js             Right-side feature panel: lists features, editable names, per-item color swatches, gear icon (⚙) per row to open the floating attributes popup, right-click context menu with Attributes option. Row click selects/highlights feature on map only. Delete (trash icon) stays in the row with an inline confirm strip. Exports refreshFeaturePanel, openColorPicker, updateFeatureColor.
+    feature-attributes.js   Floating draggable attribute popup (singleton, #fp-attr-popup): ATTR_FIELDS config per type, openAttrPopup(featureType, featureIndex, feature), closeAttrPopup(), isAttrPopupOpen(), getAttrPopupFeature(). Popup is 320px wide, position: fixed, draggable by header, clamped within viewport, closes on Escape or X button. Auto-updates when a different feature is selected while open. Attributes stored in feature.properties.attributes (lazy-init). Route fields: routeGroup, direction, mode, routeId, frequency, spanStart, spanEnd, daysOfService, avgSpeed. Line fields: lineMode, notes. Polygon fields: notes. Point: name only.
     census.js               TIGERweb geometry queries, ACS data fetch, area-weighted aggregation
     lodes.js                LODES .csv.gz download/upload/parse, block-level employment
     cache.js                Session cache: save/restore/reset via localStorage; JSON import/export
     popup.js                Analysis popup manager: open/close module popups, floating map widgets (legend)
   projects/
     buffer-summary.js       Buffer-Area Summary module: CHECKBOX_GROUPS, MANDATORY_VARS, DENOM_MAP, expandGroups, runSummary (moved from app.js). Registered as popup-based module.
-    fta-small-starts.js     FTA Small Starts: breakpoint classification, CRE/ESS/LBAR (registered as disabled module)
+    fta-small-starts.js     FTA Small Starts: breakpoint classification, CRE/ESS/LBAR, popup-based 2-tab UI (Ratings | Data Inputs), session persistence, CSV export
     tpi-scoring.js          TPI scoring engine: 9-factor definitions, batch ACS fetch, LODES aggregation, quintile normalization, composite scoring
-    transit-propensity.js   TPI module: popup-based UI with weight sliders, choropleth rendering, hover tooltips, floating legend, GeoJSON/CSV export, stale detection
+    transit-propensity.js   TPI module: popup-based 2-column UI (Settings | Results), weights modal overlay, feature checklist (normalization pool), analysis corridor dropdown, scrollable geography list with expandable factor breakdowns, choropleth rendering, hover tooltips, floating legend (auto-shown on run), GeoJSON/CSV export, stale detection
     ridership-scoring.js    Ridership scoring engine: corridor CDI computation, per-route CDI extraction, system-wide demand orchestration, CSV route matching, segment analysis, service type presets, elasticity formulas, scenario builder, ratio/OLS calibration (window.RidershipModel namespace)
     ridership-forecasting.js  Ridership Forecasting module: 4-tab popup (Calibrate | Demand | Elasticity | Scenarios), 3-step calibration workflow, corridor dropdown, choropleth + segment map, scenario comparison table, GeoJSON/CSV/JSON export; shared-pool normalization mode for cross-system calibration
+    corridor-scoring.js     Corridor Scoring module: 2-column popup (Settings | Results) that surfaces the per-route CDI engine as a first-class endpoint for ranked, defensible corridor scoring. Ranked table with classification pills + expandable per-factor breakdowns, map line layer colored by composite CDI (5-class Blues), floating legend, Adjust Weights modal, selected-corridors-only normalization pool, CSV/GeoJSON export, session persistence (weights + selection + last summary; full-mode includes system factor averages for breakdown restore).
+    title-vi-engine.js      Title VI engine: policy profiles, major-change rules, geometric divergence detection (turf.nearestPointOnLine), service change area computation (turf.difference), alteration metrics orchestration, demographic fetching, finding evaluation, scenario comparison (window.TitleVI namespace)
+    title-vi.js             Title VI Service Equity module: 3-tab popup (Policies & Inputs | Analysis | Scenarios), route alteration pairing UI (before/after feature dropdowns), auto-computed route miles and % altered, service loss/gain map overlay, system baseline vs impacted area demographic comparison, CSV/GeoJSON/JSON export, session persistence
+    gtfs.js                 GTFS Feed Viewer: loads a GTFS ZIP (JSZip + PapaParse), renders shapes.txt as dashed reference lines (gtfs-shapes-layer) and stops.txt as hollow circles (gtfs-stops-layer) below user-drawn features, hover tooltip + click detail popup on both layers (route name/mode for shapes; stop name/ID for stops), shape_id → route info pre-joined from trips.txt + routes.txt at load time, two-column analysis popup (file directory with REQ/OPT badges | scrollable CSV table, capped at 500 rows), layer visibility toggles, clear-feed button. No session persistence (feed must be re-uploaded per session). Wires Add Data dropdown buttons directly (no app.js changes needed).
 projects/
   buffer-summary-popup.html   Buffer-Area Summary popup body: settings (geography, year, apportion) + results table
-  fta-small-starts.html     FTA sidebar HTML fragment (legacy, kept for future popup migration)
-  transit-propensity-popup.html  TPI popup body: 3-column layout (Weights | Results | Actions); LODES warning icon (⚠) next to ACS Year selector in Actions column (shows tooltip when LODES not loaded)
+  fta-small-starts-popup.html  FTA popup body: 2-tab layout (Ratings | Data Inputs); Ratings tab has 2-column layout (settings + 5 rating cards); Data Inputs tab has CRE/ESS/LBAR file uploads with column mapping selects
+  fta-small-starts.html     FTA sidebar HTML fragment (legacy, replaced by popup version)
+  transit-propensity-popup.html  TPI popup body: 2-column layout (Settings | Results); Settings column has geography/year selectors, apportion toggle, feature checklist (normalization pool), analysis corridor dropdown, Adjust Weights button (opens modal overlay with 9 factor sliders + Confirm/Cancel/Reset), Analyze System button; Results column has scrollable geography list with expandable per-geo factor breakdowns, summary stats, export buttons; LODES warning icon (⚠) next to ACS Year selector
   transit-propensity.html   TPI sidebar panel (legacy, replaced by popup version)
   tpi-weights.html          TPI weight sliders (legacy, merged into popup)
   tpi-legend.html           TPI legend: 5-class Blues color swatches (reused by floating widget)
   ridership-forecasting-popup.html  RF popup body: 4-tab layout (Calibrate first), 3-step calibration workflow UI (system analysis → CSV upload → match/calibrate); "Adjust Weights" button above "Analyze System" opens an in-popup modal overlay with 9 factor weight sliders (Confirm / Cancel / Reset to Defaults / Copy From TPI); expandable per-route factor breakdowns with quintile bars; headway normalization note (`rfCalibHeadwayNote`); shared-pool refit note (`rfCalibSharedPoolNote`); LODES warning icons (⚠) next to ACS Year in Calibrate and Demand tabs (shows tooltip when LODES not loaded); corridor dropdown in Demand tab, CDI info button (ⓘ toggle), segment breakdown, "Shared pool normalization" checkbox (`rfSharedPoolMode`) with info tooltip (`rfSharedPoolTooltip`) in Demand tab feature section, elasticity sliders — frequency elasticity (`rfFreqElastSlider`/`rfFreqElastValue`, 0.1–1.0, default 0.50) and service span elasticity (`rfSpanElastSlider`/`rfSpanElastValue`, 0.1–1.0, default 0.70, typical range 0.5–0.9) — in Elasticity tab left column; service type premium sliders (`rfServicePremLow`/`rfServicePremLowVal` and `rfServicePremHigh`/`rfServicePremHighVal`, 0–150% range) in Elasticity tab right column (replaces static Frequency/Speed/Mode breakdown), baseline uncertainty slider (`rfBaseUncertSlider`/`rfBaseUncertValue`, 0–60% range, default 25%) in Elasticity tab with "Baseline Projection" result card (`rfBaselineBand`) showing pre-service uncertainty band, 4-column scenario grid (A|B|C|D), comparison table
   ridership-legend.html     RF demand legend: 5-class Blues swatches for CDI score (High → Low)
+  corridor-scoring-popup.html   Corridor Scoring popup body: 2-column layout (Settings | Results). Settings column has geography/year selectors, LODES warning icon, apportion toggle, corridor checklist (routes + lines only — normalization pool), Adjust Weights button (opens modal overlay with 9 factor sliders + Confirm/Cancel/Reset), Score Corridors button. Results column has ranked corridor table (rank, name, score, classification pill, expand caret) with hidden .cs-row-details rows holding factor breakdown bars; CSV + GeoJSON export buttons.
+  corridor-scoring-legend.html  Corridor Scoring legend: 5-class Blues swatches keyed to composite CDI buckets (≥4 High, 3–4, 2–3 Medium, 1–2, <1 Low).
+  title-vi-popup.html       Title VI popup body: 3-tab layout (Policies & Inputs | Analysis | Scenarios); Policies tab has 2-column layout (policy settings left, route alteration cards + impact method right); Analysis tab has baseline computation + equity findings; Scenarios tab has scenario manager + comparison table
+  gtfs-popup.html           GTFS Feed popup body: two-column layout (left: scrollable file directory with REQ/OPT badges + layer visibility checkboxes + Clear button; right: scrollable CSV table for the selected file with row/column count)
 docs/
   ridership-forecasting-plan.md  Strategic evaluation and implementation plan for the ridership forecasting tool
 Ridership_Forecast_Readme.md    User-facing documentation for the Ridership Forecasting module (plain-language, transit professional audience)
@@ -87,10 +97,12 @@ Ridership_Forecast_Readme.md    User-facing documentation for the Ridership Fore
 - **Module-local state stays private.** Variables like `CRE_MAP`, `ESS_POINTS`, `LBAR_SITES` (FTA) and `_lastResult`, `_stale`, `_running` (TPI, RF) are declared inside the module IIFE closure, not on `App`. Scoring engines use separate window namespaces: `window.TPI` (TPI scoring), `window.RidershipModel` (ridership scoring).
 - **Panel-based sidebar.** Sidebar content is registered via `App.sidebar.addPanel()` and rendered on map load. Panel HTML is defined as strings in `app.js`, not hardcoded in `index.html`. Call `render()` once after all panels are registered (avoids destroying event listeners).
 - **Analysis popups.** Analysis modules open in popup windows (not the sidebar). The popup system (`App.popup`) handles HTML loading, init/open/close lifecycle, and Escape key. Floating widgets (like the TPI and RF legends) persist on the map independently of the popup.
-- **Tabbed popup layout.** Multi-step analysis modules (e.g., Ridership Forecasting) use a tab bar (`<div class="rf-tabs">` with `[data-tab]` buttons) and tab content panels (`<div class="rf-tab-content" data-tab="...">`) toggled via a `switchTab(id)` function in the module JS. State is saved to closure variables on tab switch; the form is not reset.
+- **Tabbed popup layout.** Multi-step analysis modules (e.g., Ridership Forecasting, FTA Small Starts, Title VI) use a tab bar (`<div class="rf-tabs">` / `<div class="fta-tabs">` / `<div class="tvi-tabs">` with `[data-tab]` buttons) and tab content panels toggled via a `switchTab(id)` function in the module JS. State is saved to closure variables on tab switch; the form is not reset.
 - **Inline info buttons.** Contextual help uses a small `<button class="rf-info-btn">ⓘ</button>` element adjacent to the label, wired in `init()` to toggle a sibling explanation `<div>` via `style.display`. No tooltip libraries needed.
-- **CSS namespacing.** TPI styles use `.tpi-` prefix. Ridership Forecasting styles use `.rf-` prefix. Both live in `css/style.css`.
-- **External libraries via CDN:** MapLibre GL JS, Turf.js, pako (gzip), PapaParse (CSV).
+- **CSS namespacing.** TPI styles use `.tpi-` prefix. Ridership Forecasting styles use `.rf-` prefix. FTA Small Starts styles use `.fta-` prefix. Title VI styles use `.tvi-` prefix. Rating pill colors use `.pill.high` through `.pill.low`. All live in `css/style.css`.
+- **Typography variables.** All font sizes, weights, line heights, letter spacing, and font families are defined as CSS custom properties in `:root` (top of `css/style.css`). Use the variables (`var(--text-sm)`, `var(--weight-semibold)`, etc.) — never hardcode `px` values for typography. Scale: `--text-2xs` (10px) through `--text-3xl` (28px). Weights: `--weight-normal` (400), `--weight-medium` (500), `--weight-semibold` (600), `--weight-bold` (700). Line heights: `--leading-none` (1) through `--leading-relaxed` (1.5). Letter spacing: `--tracking-normal` (0) through `--tracking-lg` (0.06em).
+- **Typography hierarchy.** Structural labels follow a unified hierarchy across both sidebar and feature panels. Panel titles (DATA INPUTS, FEATURES): 11px semibold uppercase, 0.04em tracking, muted (#555). Section headers (STATIONS, CENSUS): 11px semibold uppercase, 0.04em tracking, muted. Group labels (DEMOGRAPHICS, EQUITY): 11px semibold uppercase, 0.03em tracking, muted. Attribute panel titles (ROUTE ATTRIBUTES): 10px semibold uppercase, 0.04em tracking, muted. Body text and labels: 13px normal weight, #333. Secondary labels (attr labels, units): 11–12px, #555. Text colors: #333 for primary content, var(--muted) (#555) for structural labels and secondary text.
+- **External libraries via CDN:** MapLibre GL JS, Turf.js, pako (gzip), PapaParse (CSV), JSZip (GTFS ZIP parsing).
 
 ## Script Load Order
 
@@ -100,27 +112,32 @@ Order matters because modules depend on earlier ones:
 utils.js    (no deps)
 sidebar.js  (needs App namespace from utils.js)
 map.js      (creates App.map, basemap switcher, cursor handlers)
-stations.js (needs App.map, turf)
+points.js (needs App.map, turf)
 lines.js    (needs App.map, turf)
 routes.js   (needs App.map, turf, fetch/AbortController)
 polygons.js (needs App.map)
-editing.js  (needs App.map, App.stations, App.lines, App.routes, App.polygons, move/update functions)
-features.js (needs App.stations, App.lines, App.routes, App.polygons, App.removeStation, etc.)
-census.js   (needs App.map, App.bboxStringFromFeature, App.getMeta, turf)
+editing.js  (needs App.map, App.points, App.lines, App.routes, App.polygons, move/update functions)
+features.js           (needs App.points, App.lines, App.routes, App.polygons, App.removePoint, etc.)
+feature-attributes.js (needs App namespace; defines App.openAttrPopup, App.closeAttrPopup, App.isAttrPopupOpen, App.getAttrPopupFeature)
+census.js             (needs App.map, App.bboxStringFromFeature, App.getMeta, turf)
 lodes.js    (needs App.map, App.bboxStringFromFeature, App.bufferUnionPolygon, pako, turf)
-cache.js    (needs App.stations, App.lines, App.routes, App.polygons, render/rebuild functions)
+cache.js    (needs App.points, App.lines, App.routes, App.polygons, render/rebuild functions)
 popup.js    (needs App namespace; defines App.popup)
 app.js              (wires everything; registers sidebar panels; defines App.registerModule; calls cache.restore)
 <modules>           (call App.registerModule)
   buffer-summary.js     (needs App namespace, App.cache; registers Buffer-Area Summary module; contains CHECKBOX_GROUPS, DENOM_MAP, runSummary)
-  fta-small-starts.js   (needs App namespace; registers as disabled module)
+  fta-small-starts.js   (needs App namespace, App.cache; registers FTA Small Starts module; popup-based 2-tab UI)
   tpi-scoring.js        (needs App namespace, turf; defines window.TPI)
   transit-propensity.js (needs TPI, App.registerModule, App.popup, App.map, App.renderCensusOverlay)
   ridership-scoring.js  (needs window.TPI, App namespace, turf; defines window.RidershipModel)
   ridership-forecasting.js (needs RidershipModel, TPI, App.registerModule, App.popup, App.map, App.renderCensusOverlay)
+  corridor-scoring.js   (needs TPI, RidershipModel, App.registerModule, App.popup, App.map, App.cache; registers Corridor Scoring module)
+  title-vi-engine.js    (needs App namespace, turf; defines window.TitleVI)
+  title-vi.js           (needs TitleVI, App.registerModule, App.popup, App.map, App.cache)
+  gtfs.js               (needs JSZip, PapaParse, maplibregl, App.registerModule, App.popup, App.map; no scoring engine deps)
 ```
 
-**Active modules:** Buffer-Area Summary is enabled (popup-based, settings + results table). TPI is enabled (popup-based). Ridership Forecasting is enabled (popup-based, 4-tab). FTA Small Starts is registered but disabled (button shown grayed out).
+**Active modules:** Buffer-Area Summary is enabled (popup-based, settings + results table). TPI is enabled (popup-based, 2-column). FTA Small Starts is enabled (popup-based, 2-tab). Ridership Forecasting is enabled (popup-based, 4-tab). Corridor Scoring is enabled (popup-based, 2-column). Title VI Service Equity is enabled (popup-based, 3-tab). GTFS Feed Viewer is enabled (popup-based, 2-column file browser + map layers).
 
 ## App Namespace (Public API)
 
@@ -137,8 +154,8 @@ Panel config: `{ id, title, html, collapsed (default false), order (default 100)
 
 Basemap IDs: `"carto-light"` (default), `"carto-dark"`, `"osm"`, `"satellite"`
 
-### stations.js
-`stations` (Point array), `buffers` (Polygon array), `addStationPoint(lon, lat)`, `rebuildBuffers(radiusMiles)`, `moveStation(index, lng, lat)`, `removeStation(index)`, `clearStations()`, `undoLastStation()`, `renderStationLayers()`, `bufferUnionPolygon()`, `getUnion()` (alias), `bboxStringFromFeature(feat)`
+### points.js
+`points` (Point array), `buffers` (Polygon array), `addPoint(lon, lat)`, `addPointWithOpts(lon, lat, opts)`, `rebuildBuffers(radiusMiles)`, `movePoint(index, lng, lat)`, `removePoint(index)`, `clearPoints()`, `undoLastPoint()`, `duplicatePoint(index)`, `renderPointLayers()`, `bufferUnionPolygon()`, `getUnion()` (alias), `bboxStringFromFeature(feat)`
 
 ### lines.js
 `lines` (LineString array), `lineBuffers` (Polygon array), `handleLineClick(lngLat)`, `rebuildLineBuffers(radiusMiles)`, `lineBufferUnionPolygon()`, `removeLine(index)`, `clearLines()`, `undoLastLine()`, `cancelLineDrawing()`, `renderLineLayers()`, `setLinePreview(lngLat)`, `updateLineVertex(lineIndex, vertexIndex, lng, lat)`
@@ -157,6 +174,23 @@ Route features store `properties.waypoints` (user click points) separately from 
 ### features.js
 `refreshFeaturePanel()`
 
+### feature-attributes.js
+`openAttrPopup(featureType, featureIndex, feature)` — opens the floating attributes popup for the given feature. If the same feature is already shown, closes it (toggle). If a different feature was shown, replaces content in place (preserves dragged position). On first open, positions the popup at left: 320px, top: 60px (just right of sidebar, below toolbar).
+
+`closeAttrPopup()` — hides the popup and clears current feature tracking.
+
+`isAttrPopupOpen()` — returns boolean.
+
+`getAttrPopupFeature()` — returns `{ featureType, featureIndex }` or null.
+
+**Popup DOM:** `#fp-attr-popup` (position: fixed, z-index: 9000, width: 320px). Header (`.fp-attr-popup-header`) is draggable; drag state uses `initLeft/initTop` + mouse delta, clamped to keep ≥40px visible on all edges. Window resize re-clamps. Escape key closes. X button (`.fp-attr-popup-close`) closes. Body (`.fp-attr-popup-body`) contains Name row + type-specific field rows using existing `.fp-attr-row` / `.fp-attr-label` / `.fp-attr-input` classes.
+
+**Auto-update on selection:** `selection.js selectFeature()` calls `openAttrPopup` if the popup is already open, so clicking a different feature row or map feature automatically switches the popup content.
+
+**Feature attribute storage:** All feature types (routes, lines, points, polygons) can carry a `properties.attributes` object. Preserved automatically by session cache serialization. Lazy-init means old sessions without the field restore cleanly.
+
+**Route grouping (future-ready):** The `routeGroup` field stored on route attributes seeds future pattern grouping. Routes sharing the same `routeGroup` string are intended to be treated as directional patterns of one logical route. No grouping logic is implemented yet — `computePerRouteCDI`, `matchRoutesToCSV`, and the corridor dropdown will need updating when that feature is built. The `direction` field (NB/SB/EB/WB/Inbound/Outbound/Loop) labels each pattern within its group.
+
 ### census.js
 `renderCensusOverlay(geos)`, `fetchAllTigerwebFeatures(layerUrl, params)`, `fetchTigerwebGeos(geoLevel, unionFeat)`, `parseGEOID(geoLevel, geoid)`, `fetchACSValues(geoLevel, year, varCode, geoids)`, `fetchACSCountyValues(year, varCode, counties)`, `aggregateWithinUnion(unionFeat, geos, valueMap, aggMode)`, `computeAcsValueOnly(varCode, year, geoLevel)`
 
@@ -166,9 +200,9 @@ Route features store `properties.waypoints` (user click points) separately from 
 ### cache.js
 `cache.save()`, `cache.restore()`, `cache.reset()`, `cache.exportToFile()`, `cache.importFromFile(file)`, `cache.registerModule(id, handlers)`, `cache.STORAGE_KEY`
 
-Saves session state (stations, lines, routes, polygons, buffer radii, form selections, LODES filename) to `localStorage` under key `"mat-session"`. Routes store full geometry + waypoints; no re-routing needed on restore. Restore runs automatically at end of map load. Save is debounced (500ms) and called after every state mutation. Reset clears localStorage and all app state. LODES data is NOT cached (too large); only the filename is stored as a re-upload hint.
+Saves session state (points, lines, routes, polygons, buffer radii, form selections, LODES filename) to `localStorage` under key `"mat-session"`. Routes store full geometry + waypoints; no re-routing needed on restore. Restore runs automatically at end of map load. Save is debounced (500ms) and called after every state mutation. Reset clears localStorage and all app state. LODES data is NOT cached (too large); only the filename is stored as a re-upload hint.
 
-`exportToFile()` serializes current state to a timestamped `.json` file and triggers a browser download. `importFromFile(file)` reads a JSON file (from a hidden `<input type="file">`), validates it, and applies the state — replacing all current features. Both use the same schema as localStorage (`version: 1`).
+`exportToFile()` serializes current state to a timestamped `.json` file and triggers a browser download. `importFromFile(file)` reads a JSON file (from a hidden `<input type="file">`), validates it, and applies the state — replacing all current features. Both use the same schema as localStorage (`version: 2`). Schema v1 sessions (with `stations` key) are automatically migrated to v2 (`points` key) on restore.
 
 `registerModule(id, { collect(mode), apply(data) })` — analysis modules call this at load time to opt into session persistence. `collect(mode)` returns a serializable object; `mode` is `"light"` (localStorage, skip heavy geometry) or `"full"` (file export, includes geos for choropleth restore). `apply(data)` restores state from a previously collected object. Module state is stored under `state.moduleState[moduleId]` in the JSON schema. The RF module registers as `"rf"` and persists weights, scenario forms, calibration metadata, per-route CDI, system demand result, shared-pool mode flag, and baseline uncertainty percentage (TPI geographies included in full export only). RF session schema is at **v3** (v1/v2 restored with backward-compat migration; v3 adds `sharedPoolMode`; `baselineUncertaintyPct` added gracefully — defaults to 0.25 when absent, no schema version bump needed).
 
@@ -183,14 +217,35 @@ Floating widget options: `{ position: "bottom-left"|"bottom-right"|"top-left"|"t
 ### tpi-scoring.js (window.TPI namespace, not on App)
 `TPI.FACTORS` (9-factor array with id, label, weight, acsCodes, compute functions), `TPI.batchFetchACS(geoLevel, year, geoids)`, `TPI.aggregateLodesToGeo(lodesData, geoLevel, geoids)`, `TPI.computeQuintiles(values)`, `TPI.computeComposite(factorScores, weights)`, `TPI.computeTPI(options)` (full pipeline: fetch → normalize → score; accepts optional `options.unionPolygon` to restrict the study area instead of using `App.bufferUnionPolygon()`), `TPI.rescoreFromRaw(rawValues, weights, geoids)` (instant re-score from cached data)
 
-**Default factor weights** (sum = 100): Population Density 35, Employment Density 35, Zero-Vehicle HH 5, Low-Income % 5, Senior 65+ % 5, Disability % 5, People of Color % 5, Youth <18% 0, LEP % 5. These are shared defaults for both TPI and RF modules (each module stores its own independent copy in `_weights`).
+**Default factor weights** (sum = 100): Population Density 35, Employment Density 35, Zero-Vehicle HH 5, Low-Income % 5, Senior 65+ % 5, Disability % 5, Minority % 5, Youth <18% 0, LEP % 5. These are shared defaults for both TPI and RF modules (each module stores its own independent copy in `_weights`).
 
 **Tract-level fallbacks** (within `TPI.computeTPI()`): When `geoLevel === "bg"` and `apportionByArea` is false, TPI runs two fallback passes: (1) *static* — factors flagged `tractOnly: true` (currently only LEP / C16001) are always fetched at tract level and mapped down to block groups via parent-tract GEOID slicing; (2) *dynamic* — after computing raw values, any ACS factor that produced zero finite values at BG level is automatically re-fetched at tract level and remapped. Both fallbacks are skipped when `apportionByArea: true`. All downstream modules (RF included) benefit automatically since they delegate to `TPI.computeTPI()`.
 
 ### transit-propensity.js (analysis module)
-Registers module `"transit-propensity"` as a popup-based analysis. Opens in a 3-column popup (Weights | Results | Actions) with its own geography/year selectors. Internal functions: `runTPI()`, `runInstantRescore()`, `renderChoropleth(result)`, `clearChoropleth()`, `displayResults(result)`, `exportGeoJSON()`, `exportCSV()`, `markStale()`. All state is private to the IIFE closure. DOM writes are guarded with `isPopupVisible()` so `update()` can safely fire when the popup is closed. LODES warning icon (`#tpiLodesWarnBtn`, ⚠ button) shows/hides next to the ACS Year selector in the Actions column: shown when `App.lodesData` is null (Employment factor excluded), hidden when LODES is loaded. Visibility updated in `onOpen()` (every popup open) and `update()` (when LODES uploaded/cleared while popup open).
+Registers module `"transit-propensity"` as a popup-based analysis. Opens in a 2-column popup (960px wide): left Settings column (240px fixed) and right Results column (flex). All state is private to the IIFE closure. DOM writes are guarded with `isPopupVisible()` so `update()` can safely fire when the popup is closed. LODES warning icon (`#tpiLodesWarnBtn`, ⚠ button) shows/hides next to the ACS Year selector: shown when `App.lodesData` is null (Employment factor excluded), hidden when LODES is loaded. Visibility updated in `onOpen()` and `update()`.
+
+**Settings column (left):** Geography level dropdown, ACS Year selector (with LODES warning), apportion-by-area toggle, **TPI Features checklist** (checkboxes to select which routes/lines define the normalization pool — only selected features' union polygon is used for quintile computation), **Analysis Corridor dropdown** (filters the geography list display to a specific route/line without re-running the computation), **"Adjust Weights" button** (opens a modal overlay with 9 factor weight sliders; Confirm copies `_pendingWeights` → `_weights` and triggers instant rescore, Cancel discards, Reset to Defaults restores default weights), and "Analyze System" button.
+
+**Results column (right):** Status indicator, scrollable geography list (each row shows geo GEOID + composite TPI score; click to expand and see per-factor quintile bars), aggregate TPI Score for the selected corridor, summary stats (geographies scored, factors included), footnotes (LODES status, apportion mode), GeoJSON and CSV export buttons. Legend auto-shows on the map when analysis runs (no manual "Show Legend" button).
+
+**Internal functions:** `runTPI()`, `runInstantRescore()`, `renderChoropleth(result)`, `clearChoropleth()`, `displayGeographyList(result)`, `updateSummaryStats()`, `updateFootnotes()`, `updateExportButtons()`, `exportGeoJSON()`, `exportCSV()`, `markStale()`, `buildFeatureChecklist()`, `buildCorridorDropdown()`, `getFeatureFilter()`, `buildUnionFromFilter()`, `getGeosInCorridor()`, `openWeightsModal()`, `closeWeightsModal()`, `resetModalToDefaults()`, `syncSlidersToWeights()`, `onModalSliderChange()`, `onModalNumberChange()`, `updateModalWeightSum()`.
+
+**Module-local state:** `_tpiFeatureFilter` (which features selected for normalization pool), `_selectedCorridor` ("all" or "route:N"/"line:N"), `_pendingWeights` (temporary copy while weights modal is open), `_weights`, `_lastResult`, `_stale`, `_running`, `_initialized`, `_apportionByArea`.
 
 **Public API (on `App`):** `App.getTpiWeights()` — returns a shallow copy of TPI's current `_weights` object. Used by the RF module's "Copy From TPI" button to read TPI's live weight settings without tight coupling.
+
+### fta-small-starts.js (analysis module, no public API)
+Registers module `"fta-small-starts"` as a popup-based analysis. Opens in a 2-tab popup (960px wide). All state is private to the IIFE closure. DOM writes are guarded with `isPopupVisible()`. All DOM element IDs use `fta` prefix (e.g., `ftaGeoLevel`, `ftaYearSelect`, `ftaCreFile`) to avoid collisions with other modules.
+
+**Tab 1 – Ratings**: 2-column layout. Left column: geography level dropdown, ACS Year selector, "Compute Breakpoints" button, loaded-data indicators (CRE/ESS/LBAR status). Right column: 5 rating cards (`bpItem` class) for Cost Effectiveness (CRE), Existing Ridership (ESS), Transit-Supportive Land Use (LBAR), Mobility Improvement, and Congestion Relief — each showing a color-coded pill (High/Medium-High/Medium/Medium-Low/Low) with numeric value and classification range. CSV export button below ratings.
+
+**Tab 2 – Data Inputs**: 2-column layout. Left column: CRE file upload (3 column selects: route name, annualized cost, new annual riders) and ESS file upload (2 column selects: route name, avg weekday boardings). Right column: LBAR file upload (4 column selects: block GEOID, residential density, employment density, CBD dummy) with county FIPS input and map layer toggle.
+
+**Pill color coding:** `.pill.high` (green), `.pill.mh` (blue), `.pill.med` (yellow), `.pill.ml` (orange), `.pill.low` (red) — defined in `css/style.css`.
+
+**Internal functions:** `_doUpdateBreakpointRatings()` (async, computes all 5 ratings from uploaded data + ACS), `computeCRE()`, `computeESS()`, `computeLbarRatio()`, `switchTab()`, `updateDataIndicators()`, `exportRatingsCSV()`, `restoreRatingsDisplay()`, `saveFtaState()`, `restoreFtaState()`.
+
+**Module-local state:** `CRE_MAP`, `ESS_POINTS`, `LBAR_SITES` (uploaded data), `_lastRatings` (computed rating results for session persistence), `_initialized`, `_activeTab`, `_bpRunning`, `_bpQueued` (concurrency guard). Session persistence via `App.cache.registerModule("fta", ...)` — persists computed ratings only, not raw uploaded file data.
 
 ### ridership-scoring.js (window.RidershipModel namespace, not on App)
 Scoring engine for the Ridership Forecasting module. Depends on `window.TPI` for demand computation.
@@ -248,6 +303,96 @@ Registers module `"ridership-forecasting"` as a popup-based analysis. Opens in a
 
 **Internal helpers** (ridership-forecasting.js, not on RidershipModel): `combineFeatureFilters(a, b)` — unions two feature filters (null = all features; either null → result is null); `filterRouteCDIs(allRouteCDIs, filter)` — filters a routeCDIs array to entries matching a feature filter; `refitCalibrationFromCDI(calibPerRouteCDI)` — re-runs the calibration fit from `_matchResult` data using updated CDI values from the shared pool, returns a new calibration object with `sharedPoolMode: true`, or null if insufficient data; `runSharedPoolAnalysis(geoLevel, year, textEl)` — orchestrates the shared-pool path: combines filters, builds union, calls `computeSystemDemand` once, partitions results, auto-refits calibration; `updateLodesWarnings()` — shows/hides LODES warning icons (⚠) based on `App.lodesData` state (called from `onOpen()` and `update()`).
 
+### corridor-scoring.js (analysis module, no public API)
+Registers module `"corridor-scoring"` as a popup-based analysis. Opens in a 2-column popup (960px wide). All state is private to the IIFE closure. DOM writes are guarded with `isPopupVisible()`. All DOM element IDs use the `cs` prefix (e.g., `csGeoLevel`, `csYearSelect`, `csFeatureList`, `csWeightsModal`, `csScoreBtn`). CSS classes use the `.cs-` prefix for module-specific styles; visual classes from TPI/RF (`.tpi-slider`, `.rf-route-factor-*`, `.rf-settings-col`, `.rf-results-col`, `.rf-status`, `.pill.*`) are reused where purely presentational.
+
+**Purpose:** Surfaces the per-route CDI engine as a first-class endpoint — a ranked, objective composite score per draft/hypothetical corridor. Distinct from TPI (geography-focused) and Ridership Forecasting (ridership-focused), which both use per-route CDI as an intermediate step rather than the final product. Normalization pool is the union of only the selected routes/lines, producing apples-to-apples comparison within the user's working set.
+
+**Settings column (left):** Geography level dropdown (block group / tract), ACS Year selector (with LODES warning icon), apportion-by-area toggle, corridor checklist (routes + lines only — points/polygons are not applicable to corridor scoring), Select all / Clear links, Adjust Weights button (opens modal overlay with 9 factor sliders + Confirm / Cancel / Reset to Defaults), Score Corridors button.
+
+**Results column (right):** Status indicator (with stale / done states), ranked corridor table (columns: Rank, Corridor with R/L badge, Score, Classification pill, expand caret) — each row toggles open a hidden `.cs-row-details` row containing a factor breakdown (one row per active TPI factor with colored quintile bar, system-avg marker, raw quintile score; green when corridor > system, red when <, neutral when close). CSV + GeoJSON export buttons enable on successful run and disable on stale/clear.
+
+**Map rendering:** A line source/layer (`corridor-scoring-routes` / `corridor-scoring-routes-layer`) renders the scored corridors using their source geometry from `App.routes[i]` / `App.lines[i]`, colored by composite CDI via a 5-class Blues interpolation. Hover popup shows rank, name, score, and classification. Floating legend (`projects/corridor-scoring-legend.html`) auto-shows at bottom-left on a successful score and is hidden on Clear / Reset Session via the module's `clear` lifecycle hook.
+
+**Internal functions:** `runScoring()` (wraps `RidershipModel.buildUnionFromFeatures` + `RidershipModel.computeSystemDemand`, sorts result by CDI desc, stores `_lastResult`), `buildFeatureChecklist()` (routes + lines only), `getFeatureFilter()`, `buildUnionFromFilter(filter)` (delegates to `RidershipModel.buildUnionFromFeatures`), `applyFeatureFilterToCheckboxes(filter)` (used on session restore to re-check boxes), `renderResultsTable(result)`, `buildFactorBreakdownHTML(routeCDI, systemAvgs, effectiveWeights)`, `computeSystemFactorAverages(tpiResult)`, `renderMapChoropleth(result)`, `clearMapChoropleth()`, `exportCSV()`, `exportGeoJSON()`, `setExportButtonsEnabled(bool)`, `markStale()`, `setStatus(msg, kind)`, `clearAll()` (wired to the registered `clear` hook), plus the weights modal handlers `buildWeightSliders`, `syncSlidersToWeights`, `onModalSliderChange`, `onModalNumberChange`, `updateModalWeightSum`, `openWeightsModal`, `closeWeightsModal(confirm)`, `resetModalToDefaults`.
+
+**Module-local state:** `_weights` (independent factor weights; defaults to `TPI.getDefaultWeights()`), `_pendingWeights` (temporary copy while weights modal is open), `_featureFilter` (`{ routeIndices, lineIndices }` or null; captured at last scoring run), `_lastResult` (`{ routeCDIs, tpiResult, systemCDI, geoLevel, year, apportionByArea, unionPolygon, featureFilter, weights }`), `_stale`, `_running`, `_initialized`, `_apportionByArea`.
+
+**Session persistence** via `App.cache.registerModule("corridor-scoring", { collect, apply })` — persists `weights`, `featureFilter`, `apportionByArea`, `geoLevel`, `year`, and `lastSummary` (the ranked `routeCDIs` array plus run metadata) to localStorage. Full-mode export (JSON file) additionally includes a pre-computed `systemFactorAverages` map and `effectiveWeights` so the factor breakdown comparison bars restore correctly on file import without needing the raw TPI `factorScores` Map. On restore, the map choropleth + legend are re-rendered from `routeCDIs` + source geometries (no Census API calls required). Schema version: **1**.
+
+### title-vi-engine.js (window.TitleVI namespace, not on App)
+Pure calculation engine for the Title VI Service Equity module. No DOM access. Depends on `turf` (CDN) and `window.App` (for feature resolution).
+
+`TitleVI.defaultPolicy()` — returns a fresh policy profile object with major-change rules (route miles %, revenue hours %, span %, route elimination, fare %), equity thresholds (disparate impact and disproportionate burden in percentage points), geography level, ACS year, and buffer distance.
+
+`TitleVI.createScenario(name)` — returns a new scenario object with `alterations: []` array and `impactMethod: "service_loss_area"`.
+
+`TitleVI.createAlteration(name)` — returns a new alteration object: `{ name, changeType ("alteration"|"elimination"|"new_route"), before (feature ref or null), after (feature ref or null), computed (filled by computeAlterationMetrics), manual: { revenueHours, spanHours, fare } }`. Feature refs are `{ featureType: "route"|"line", featureIndex, featureName }`.
+
+`TitleVI.computeDivergence(beforeFeature, afterFeature, divergenceThresholdMiles, sampleIntervalMiles)` — samples points every ~0.05 mi along the "before" route and measures distance to the nearest point on the "after" route via `turf.nearestPointOnLine()`. Points farther than the threshold (default 0.1 mi / 528 ft) are flagged as divergent. Returns `{ alteredPct, alteredMiles, totalMiles, divergentSegments: [{ startMile, endMile, maxDivergenceFt }] }`.
+
+`TitleVI.computeServiceChangeArea(beforeFeature, afterFeature, bufferMiles)` — buffers both routes at `bufferMiles`, then uses `turf.difference()` to compute service loss area (before minus after) and service gain area (after minus before). Returns `{ serviceLossArea, serviceGainArea, beforeBuffer, afterBuffer }`.
+
+`TitleVI.computeAlterationMetrics(alteration, bufferMiles, divergenceThresholdMiles)` — orchestrates all metric computation for a single alteration. Resolves feature references, computes route miles, divergence (% altered), service change areas, and manual metric % changes. Handles all three change types: `alteration` (both before and after), `elimination` (before only, 100% altered, entire buffer is loss), `new_route` (after only, entire buffer is gain). Returns computed metrics object stored on `alteration.computed`.
+
+`TitleVI.computeRouteMetrics(route)` — legacy CSV-based route metrics (kept for backward compat).
+
+`TitleVI.evaluateMajorChange(policy, scenario)` — evaluates all enabled major-change rules against each alteration's computed metrics. Returns `{ triggered, ruleResults: [...], altMetrics: [...] }`.
+
+`TitleVI.buildImpactedArea(scenario)` — constructs the impacted area geometry based on `scenario.impactMethod`. Methods: `service_loss_area` (default — union of service loss polygons from all alterations), `service_change_area` (union of both loss and gain areas), `full_route_buffer` (all App route/line buffers), `user_polygon` (drawn polygons). Falls back to before-route buffers if no service change areas are computed.
+
+`TitleVI.fetchDemographics(core, unionGeom, geoLevel, year)` — fetches ACS race/ethnicity (B03002) and poverty (B17001) data for census geographies intersecting the union polygon. Includes tract-level fallback for poverty at block-group level. Returns `{ totalPop, minorityPop, minorityShare, lowIncomePop, lowIncomeShare, geoCount, geos }`.
+
+`TitleVI.evaluateFindings(impactedDemographics, baseline, policy)` — compares impacted area demographics against the system baseline. Returns findings for both minority (Disparate Impact) and low-income (Disproportionate Burden) with `diffPpt`, `exceedsThreshold`, and `finding` string.
+
+`TitleVI.compareScenarios(scenarioResults)` — builds a comparison array from multiple analyzed scenarios for the comparison table.
+
+### title-vi.js (analysis module, no public API)
+Registers module `"title-vi"` as a popup-based analysis. Opens in a 3-tab popup (960px wide). All state is private to the IIFE closure. DOM writes guarded with `isPopupVisible()`. All DOM element IDs use `tvi` prefix. CSS classes use `.tvi-` prefix.
+
+**Tab 1 – Policies & Inputs**: 2-column layout. Left column: policy name, major service change rules (checkboxes + threshold inputs), equity thresholds (DI and DB in ppt), geography level and ACS year. Right column: route alteration card system ("+&nbsp;Add Alteration" button, cards with name input, change-type dropdown, before/after feature dropdowns, auto-computed metrics display, manual inputs for revenue hours/span/fare), and impacted area method radio group (service loss area, all affected area, full route buffer, drawn polygons).
+
+**Tab 2 – Analysis**: 2-column layout. Left: system baseline section (feature checklist for baseline union, "Compute Baseline" button, baseline results box showing minority/low-income shares), equity analysis section ("Run Equity Analysis" button, stale warning banner, status text). Right: results display (Major Service Change verdict pill + per-rule breakdown, Minority/Disparate Impact card with impacted vs baseline shares and threshold comparison, Low-Income/Disproportionate Burden card, summary stats, export buttons for CSV and GeoJSON).
+
+**Tab 3 – Scenarios**: Scenario manager (dropdown, Duplicate/Rename/Delete buttons), comparison table (all analyzed scenarios side-by-side), export buttons (Comparison CSV, Session JSON), session import file picker.
+
+**Map overlay**: Red semi-transparent fill for service loss / impacted area (`tvi-impacted-*` layers), green semi-transparent fill for service gain area (`tvi-gain-*` layers). Both cleared on popup close or new analysis.
+
+**Alteration data model**: Each scenario has an `alterations[]` array. Each alteration has `{ name, changeType, before, after, computed, manual }`. `before`/`after` are feature references `{ featureType, featureIndex, featureName }` pointing to drawn routes/lines on the map. `computed` is filled by `TitleVI.computeAlterationMetrics()` and contains `{ beforeMiles, afterMiles, routeMilesPct, alteredPct, alteredMiles, serviceLossArea, serviceGainArea, divergentSegments, revenueHoursPct, spanHoursPct, farePct }`.
+
+**Internal functions**: `addAlteration()`, `removeAlteration(idx)`, `onAlterationChanged(idx)`, `renderAlterationCards()`, `buildAlterationCard(idx, alt)`, `displayComputedMetrics(card, alt)`, `buildFeatureSelect(selectedRef)`, `parseFeatureRef(selectEl)`, `readManualInputs(card)`, `runBaseline(core)`, `runAnalysis(core)`, `runInstantReevaluation()`, `displayResults(result)`, `displayFinding(prefix, finding)`, `renderImpactedArea(geometry)`, `renderServiceGainOverlay()`, `clearOverlay()`, `switchScenario(idx)`, `duplicateScenario()`, `renameScenario()`, `deleteScenario()`, `exportFindingsCSV()`, `exportImpactedGeoJSON()`, `exportSessionJSON()`, `exportComparisonCSV()`, `importSessionJSON(file)`.
+
+**Module-local state**: `_policy` (current policy profile), `_scenarios` (array of scenario objects), `_activeScenarioIdx`, `_baseline` (system-wide demographics), `_results` (scenarioId → analysis result), `_cachedDemographics` (for instant threshold re-evaluation), `_cachedImpactedGeom`, `_baselineFeatureFilter`, `_stale`, `_running`, `_initialized`, `_activeTab`. Session persistence via `App.cache.registerModule("title-vi", ...)` at schema **v2** (v1 backward-compat migration adds empty `alterations[]` and maps `selected_routes` impact method to `full_route_buffer`).
+
+### gtfs.js (GTFS Feed Viewer, limited public API)
+Registers module `"gtfs"` as a popup-based analysis. Opens in a 2-column popup (960px wide). All state is private to the IIFE closure. No session persistence — the feed must be re-uploaded each session.
+
+**Entry point:** Add Data (+) dropdown → "GTFS" section → "Load GTFS Feed" triggers a hidden `<input id="gtfs-file-input" type="file" accept=".zip">`. The button wiring is done inside `gtfs.js`, not `app.js`.
+
+**Feed loading:** `loadGTFSFile(file)` uses JSZip to unzip the file, then PapaParse to parse each `.txt` entry. Files inside a top-level subfolder are handled (folder prefix is stripped). All parsed files are stored in `_gtfsData` (Map of filename → `{ headers, rows }`).
+
+**Map layers:** Two non-editable reference layers added below user-drawn features:
+- Source `gtfs-shapes` / Layer `gtfs-shapes-layer`: dashed gray lines (color #718096, width 2, opacity 0.65, dash [4,2]) built from `shapes.txt`.
+- Source `gtfs-stops` / Layer `gtfs-stops-layer`: hollow white circles with gray stroke (radius 4, stroke 1.5) built from `stops.txt` (location_type 0 or absent only).
+- Both layers support `mouseenter`/`mousemove`/`mouseleave`/`click` events (identical pattern to `js/core/osm.js`).
+
+**Hover tooltip** (`.gtfs-hover`): Route shapes → route short name + mode label. Stops → stop name + stop_id.
+
+**Click detail popup** (`.gtfs-detail`): Route shapes → colored swatch in title + route_id, long name, mode, agency, shape_id. Stops → stop_id, code, desc, location type, wheelchair status, parent_station, zone_id.
+
+**Route-info join:** `buildRouteLookup(data)` joins `trips.txt → routes.txt` at load time to build a `shape_id → { route_id, route_short_name, route_long_name, route_type, route_color, route_text_color, agency_id }` Map. These fields are merged directly into each `shapes.txt` GeoJSON feature's properties by `buildShapesGeoJSON(rows, routeLookup)`, so hover requires no runtime join. Feeds without `trips.txt` or `routes.txt` fall back to displaying `shape_id` only.
+
+**Analysis popup:** Left column — scrollable file directory listing all `.txt` files found in the ZIP with REQ/OPT badges (required files per GTFS spec: agency, stops, routes, trips, stop_times, calendar, calendar_dates). Clicking a file populates the right column. Right column — scrollable CSV table with sticky header, capped at 500 rendered rows with a count note (important for `stop_times.txt` which can have millions of rows). Layer visibility checkboxes and a Clear button appear below the file list once a feed is loaded.
+
+**CSS:** `.gtfs-*` prefix. All styles in `css/style.css` inside the `/* GTFS Feed Viewer module */` block. Includes dark mode overrides.
+
+**Constants:** `ROUTE_TYPE_LABELS` (GTFS route_type integers → readable strings), `LOCATION_TYPE_LABELS` (stop location types), `WHEELCHAIR_LABELS`, `FILE_ORDER` (preferred display order), `REQUIRED` (required-file lookup).
+
+**Public API (on `App`):**
+`App.loadGTFSFile(file)` — loads a File object as a GTFS ZIP (same as the file picker flow).
+`App.clearGTFS()` — clears the feed, removes map layers, resets UI.
+`App.gtfsData` — set at module load time to `null`; note this is a static snapshot, not a live reference to the Map — check `_gtfsData` is not exported live. Future modules needing feed data should call `App.loadGTFSFile` and observe the map layers, or the approach may need revision.
+
 ## Analysis Module System
 
 Analysis modules are optional domain-specific analyses that plug into the core. Each module registers itself at load time and appears as a button in the "Analysis" sidebar panel. Multiple modules can be registered simultaneously. Clicking a module button opens its popup window.
@@ -293,7 +438,7 @@ Passed to `init()`, `onOpen()`, `onClose()`, and `update()`. Provides the module
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `stations` | Array | Current station Point features |
+| `points` | Array | Current Point features |
 | `buffers` | Array | Current buffer Polygon features |
 | `routes` | Array | Current route LineString features (with `properties.waypoints`) |
 | `routeBuffers` | Array | Current route buffer Polygon features |
@@ -310,7 +455,7 @@ Passed to `init()`, `onOpen()`, `onClose()`, and `update()`. Provides the module
 | `fetchBlocksInternalPointsInUnion(union)` | Function | TIGERweb block internal points |
 | `utils.*` | Object | Shared helpers: `setStatus`, `parseCSV`, `toNumberSafe`, `normalizeTractGEOID`, `guessHeader`, `fillSelect`, `enableSelect`, `formatValue`, `getMeta`, `setAggUI` |
 
-The existing FTA module still accesses `App.*` directly in its internal functions. New modules should prefer `core.*` for cleaner dependency boundaries.
+The FTA module still accesses `App.*` directly in its internal computation functions. New modules should prefer `core.*` for cleaner dependency boundaries.
 
 ### How to add a new analysis module
 
@@ -323,14 +468,14 @@ Multiple modules can be active simultaneously. No core code needs to change.
 
 ### How to run with no modules
 
-Remove all module `<script>` tags from `index.html`. The Analysis sidebar panel will not appear. The core app (map, stations, ACS summaries, LODES) works independently.
+Remove all module `<script>` tags from `index.html`. The Analysis sidebar panel will not appear. The core app (map, points, ACS summaries, LODES) works independently.
 
 ## Layout
 
 ```
 +---------------------------------------------------------------+
 |  Toolbar                                                      |
-|  [Station] [Line] [Route] [Polygon]   [Delete Last] [Clear] [Reset Session] |
+|  [Point] [Line] [Route] [Polygon]   [Delete Last] [Clear] [Reset Session] |
 +------------------+------------------------+-------------------+
 |  Sidebar (left)  |        Map (center)    | Feature Panel (R) |
 |  310px           |        flex            | 240px             |
@@ -353,35 +498,40 @@ The sidebar is an empty `<div id="sidebar">` populated at runtime by `App.sideba
 +-----------------------------+
 |  ▾ Analysis                 |  Collapsible panel (order 30)
 |  [Buffer-Area Summary]      |  Button: opens BAS popup (settings + results table)
-|  [Transit Propensity Index] |  Button: opens TPI popup (3-column layout)
+|  [Transit Propensity Index] |  Button: opens TPI popup (2-column layout)
+|  [FTA Small Starts]         |  Button: opens FTA popup (2-tab layout)
 |  [Ridership Forecasting]    |  Button: opens RF popup (4-tab layout)
-|  [FTA Small Starts] (gray)  |  Button: disabled (coming soon)
+|  [Title VI Service Equity]  |  Button: opens TVI popup (3-tab layout)
 +-----------------------------+
 ```
 
-Clicking an analysis module button opens a popup window over the map. The Buffer-Area Summary popup contains geography/year settings and a results table. The TPI popup has a 3-column layout (Weights | Results | Actions). The Ridership Forecasting popup has a 4-tab layout (Calibrate | Demand | Elasticity | Scenarios). Each active choropleth shows a floating legend widget at bottom-left of the map.
+Clicking an analysis module button opens a popup window over the map. The Buffer-Area Summary popup contains geography/year settings and a results table. The TPI popup has a 2-column layout (Settings | Results) with an Adjust Weights modal overlay. The FTA Small Starts popup has a 2-tab layout (Ratings | Data Inputs). The Ridership Forecasting popup has a 4-tab layout (Calibrate | Demand | Elasticity | Scenarios). The Title VI Service Equity popup has a 3-tab layout (Policies & Inputs | Analysis | Scenarios). Each active choropleth shows a floating legend widget at bottom-left of the map.
 
 ### Feature Panel (right)
 
 ```
 +-----------------------------+
 |  Features                   |
-|  STATIONS                   |  Per-station rows with editable
-|    Station 1         [DEL]  |  names and delete buttons.
-|    Station 2         [DEL]  |  Stations can be dragged on the map.
-|  LINES                      |  Per-line rows. Click on map to
-|    Line 1            [DEL]  |  enter vertex editing mode.
-|  ROUTES                     |  Per-route rows. Click on map to
-|    Route 1           [DEL]  |  enter waypoint editing mode.
-|  POLYGONS                   |  Per-polygon rows. Click on map to
-|    Polygon 1         [DEL]  |  enter vertex editing mode.
+|  POINTS                     |  Per-point rows: editable name +
+|    Point 1          [⚙][🗑]|  gear (⚙) opens floating attr popup.
+|    Point 2          [⚙][🗑]|  Row click selects on map only.
+|  LINES                      |  Points can be dragged on the map.
+|    Line 1           [⚙][🗑]|  Per-line: name, mode, notes.
+|  ROUTES                     |  Per-route: name, route group,
+|    Route 1          [⚙][🗑]|  direction, mode, route ID,
+|                             |  frequency, span, days, avg speed.
+|                             |  🗑 = trash + inline confirm strip.
+|  POLYGONS                   |  Per-polygon: name, notes.
+|    Polygon 1          [▸]  |
 |  BUFFERS                    |
-|    Stations [_0.5_] mi      |  Radius input: default 0.5 mi.
+|    Points   [_0.5_] mi      |  Radius input: default 0.5 mi.
 |    Lines    [_0.5_] mi      |  Separate buffer for line features.
 |    Routes   [_0.5_] mi      |  Separate buffer for route features.
 |  [Import] [Export]          |  Anchored to bottom (flex footer).
 +-----------------------------+
 ```
+
+Each feature row is wrapped in a `div.fp-item-wrapper` containing the `div.fp-item` row and a sibling `div.fp-delete-confirm` strip (hidden by default, shown on trash click). Clicking a row selects the feature on the map (highlights it). The gear icon (`.fp-gear-btn`) opens the floating attributes popup (`#fp-attr-popup`); right-clicking the row also offers "Attributes" in the context menu. No inline attribute panel exists in the DOM.
 
 ## Known Issues
 

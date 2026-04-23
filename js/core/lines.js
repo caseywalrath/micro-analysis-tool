@@ -20,10 +20,14 @@
     if (typeof App.clearCensusOverlay === "function") App.clearCensusOverlay();
     lineBufferRadiusMiles = radiusMiles;
     lineBuffers.splice(0);
-    if (radiusMiles > 0) {
-      for (var i = 0; i < lines.length; i++) {
-        var buf = turf.buffer(lines[i], radiusMiles, { units: "miles", steps: 64 });
-        lineBuffers.push(buf);
+    for (var i = 0; i < lines.length; i++) {
+      if (lines[i].properties.hidden) continue;
+      var r = (lines[i].properties._bufferRadius != null)
+        ? lines[i].properties._bufferRadius
+        : radiusMiles;
+      if (r > 0) {
+        var buf = turf.buffer(lines[i], r, { units: "miles", steps: 64 });
+        lineBuffers.push({ type: buf.type, geometry: buf.geometry, properties: { lineIdx: lines[i].properties.lineIdx, color: lines[i].properties.color } });
       }
     }
     renderLineLayers();
@@ -43,7 +47,7 @@
   /* ---- GeoJSON helpers ---- */
 
   function linesGeoJSON() {
-    return { type: "FeatureCollection", features: lines };
+    return { type: "FeatureCollection", features: lines.filter(function (l) { return !l.properties.hidden; }) };
   }
 
   function currentLineGeoJSON() {
@@ -77,11 +81,14 @@
 
   function savedVerticesGeoJSON() {
     var features = [];
-    lines.forEach(function (line) {
+    var sel = App._selected;
+    lines.forEach(function (line, arrayIndex) {
+      if (line.properties.hidden) return;
+      if (!sel || sel.type !== "line" || sel.index !== arrayIndex) return;
       line.geometry.coordinates.forEach(function (c, i) {
         features.push({
           type: "Feature",
-          properties: { lineIdx: line.properties.lineIdx, waypointIdx: i + 1 },
+          properties: { lineIdx: line.properties.lineIdx, waypointIdx: i + 1, color: line.properties.color },
           geometry: { type: "Point", coordinates: c }
         });
       });
@@ -117,13 +124,13 @@
         id: "line-buffers-fill",
         type: "fill",
         source: "line-buffers",
-        paint: { "fill-color": "#2b6cb0", "fill-opacity": 0.2 }
+        paint: { "fill-color": ["coalesce", ["get", "color"], "#e53e3e"], "fill-opacity": 0.08 }
       });
       map.addLayer({
         id: "line-buffers-line",
         type: "line",
         source: "line-buffers",
-        paint: { "line-color": "#2b6cb0", "line-width": 2, "line-opacity": 0.6 }
+        paint: { "line-color": ["coalesce", ["get", "color"], "#e53e3e"], "line-width": 2, "line-opacity": 0.4 }
       });
     } else {
       map.getSource("line-buffers").setData(lineBuffersGeoJSON());
@@ -136,7 +143,7 @@
         id: "lines-layer",
         type: "line",
         source: "lines",
-        paint: { "line-color": "#e53e3e", "line-width": 3, "line-opacity": 0.8 }
+        paint: { "line-color": ["coalesce", ["get", "color"], "#e53e3e"], "line-width": 3, "line-opacity": 0.8, "line-offset": ["coalesce", ["get", "_offset"], 0] }
       });
     } else {
       map.getSource("lines").setData(linesGeoJSON());
@@ -151,7 +158,7 @@
         source: "lines-vertices",
         paint: {
           "circle-radius": 3,
-          "circle-color": "#e53e3e",
+          "circle-color": ["coalesce", ["get", "color"], "#e53e3e"],
           "circle-stroke-width": 1,
           "circle-stroke-color": "#ffffff"
         }
@@ -192,6 +199,12 @@
     }
 
     updateLinesPanel();
+
+    // Auto-recompute overlap offsets if toggle is on
+    var oCb = document.getElementById("offsetOverlap");
+    if (oCb && oCb.checked && typeof App.computeOverlapOffsets === "function") {
+      App.computeOverlapOffsets();
+    }
   }
 
   /* ---- Rubber-band preview (updates drawing source only) ---- */
@@ -240,11 +253,15 @@
       return;
     }
 
+    if (App.undo && !App.undo.isRestoring()) App.undo.push();
     var idx = lines.length + 1;
     var nWaypoints = currentCoords.length;
+    var colorIdx = lines.length + (App.routes ? App.routes.length : 0);
+    var color = (App.sectionColors && App.sectionColors.line) ||
+                App.FEATURE_COLORS[colorIdx % App.FEATURE_COLORS.length];
     lines.push({
       type: "Feature",
-      properties: { name: "Line " + idx, lineIdx: idx, waypoints: nWaypoints },
+      properties: { name: "Line " + idx, lineIdx: idx, waypoints: nWaypoints, color: color },
       geometry: { type: "LineString", coordinates: currentCoords.slice() }
     });
 
@@ -252,6 +269,36 @@
     previewCoord = null;
     rebuildLineBuffers(lineBufferRadiusMiles);
     App.setStatus("Line " + idx + " saved (" + nWaypoints + " waypoints)");
+    if (typeof App.exitDrawMode === "function") App.exitDrawMode();
+  }
+
+  function addLineFromCoords(coords, opts) {
+    if (!coords || coords.length < 2) return;
+    opts = opts || {};
+    if (App.undo && !App.undo.isRestoring()) App.undo.push();
+    var idx = lines.length + 1;
+    var colorIdx = lines.length + (App.routes ? App.routes.length : 0);
+    var color = opts.color ||
+                (App.sectionColors && App.sectionColors.line) ||
+                App.FEATURE_COLORS[colorIdx % App.FEATURE_COLORS.length];
+    var feature = {
+      type: "Feature",
+      properties: {
+        name: opts.name || ("Line " + idx),
+        lineIdx: idx,
+        waypoints: coords.length,
+        color: color
+      },
+      geometry: { type: "LineString", coordinates: coords.slice() }
+    };
+    if (opts.attributes) {
+      feature.properties.attributes = opts.attributes;
+    }
+    lines.push(feature);
+    rebuildLineBuffers(lineBufferRadiusMiles);
+    if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+    if (App.cache && typeof App.cache.save === "function") App.cache.save();
+    App.setStatus(feature.properties.name + " added (" + coords.length + " waypoints)");
   }
 
   function cancelLineDrawing() {
@@ -263,6 +310,7 @@
 
   function removeLine(index) {
     if (index < 0 || index >= lines.length) return;
+    if (App.undo && !App.undo.isRestoring()) App.undo.push();
     lines.splice(index, 1);
     rebuildLineBuffers(lineBufferRadiusMiles);
   }
@@ -277,22 +325,15 @@
   }
 
   function undoLastLine() {
-    // If currently drawing, remove the last waypoint
-    if (currentCoords.length > 0) {
-      currentCoords.pop();
-      renderLineLayers();
-      if (currentCoords.length === 0) {
-        App.setStatus("Line drawing cancelled");
-      } else {
-        App.setStatus(currentCoords.length + " waypoints — click last point to save");
-      }
-      return;
+    if (currentCoords.length === 0) return;
+    currentCoords.pop();
+    renderLineLayers();
+    if (currentCoords.length === 0) {
+      App.setStatus("Line drawing cancelled");
+    } else {
+      App.setStatus(currentCoords.length + " waypoints — click last point to save");
     }
-    // Otherwise remove the last saved line
-    if (lines.length > 0) {
-      lines.pop();
-      rebuildLineBuffers(lineBufferRadiusMiles);
-    }
+    if (App.undo) App.undo.updateButtons();
   }
 
   /* ---- Vertex editing support ---- */
@@ -301,8 +342,37 @@
     if (lineIndex < 0 || lineIndex >= lines.length) return;
     var coords = lines[lineIndex].geometry.coordinates;
     if (vertexIndex < 0 || vertexIndex >= coords.length) return;
+    if (App.undo && !App.undo.isRestoring()) App.undo.push();
     coords[vertexIndex] = [lng, lat];
     rebuildLineBuffers(lineBufferRadiusMiles);
+  }
+
+  function duplicateLine(index) {
+    if (index < 0 || index >= lines.length) return;
+    if (App.undo && !App.undo.isRestoring()) App.undo.push();
+    var src = lines[index];
+    var idx = lines.length + 1;
+    var offsetCoords = src.geometry.coordinates.map(function (c) {
+      return [c[0] + 0.002, c[1]];
+    });
+    var copy = {
+      type: "Feature",
+      properties: {
+        name: "Line " + idx,
+        lineIdx: idx,
+        waypoints: src.properties.waypoints,
+        color: src.properties.color || "",
+        hidden: false
+      },
+      geometry: { type: "LineString", coordinates: offsetCoords }
+    };
+    if (src.properties.attributes) {
+      copy.properties.attributes = JSON.parse(JSON.stringify(src.properties.attributes));
+    }
+    lines.push(copy);
+    rebuildLineBuffers(lineBufferRadiusMiles);
+    if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+    if (App.cache && typeof App.cache.save === "function") App.cache.save();
   }
 
   /* ---- Expose on App namespace ---- */
@@ -312,6 +382,8 @@
   App.rebuildLineBuffers = rebuildLineBuffers;
   App.lineBufferUnionPolygon = lineBufferUnionPolygon;
   App.handleLineClick = handleLineClick;
+  App.addLineFromCoords = addLineFromCoords;
+  App.duplicateLine = duplicateLine;
   App.removeLine = removeLine;
   App.clearLines = clearLines;
   App.undoLastLine = undoLastLine;
@@ -319,4 +391,9 @@
   App.renderLineLayers = renderLineLayers;
   App.setLinePreview = setLinePreview;
   App.updateLineVertex = updateLineVertex;
+  App._lineDrawingInProgress = function () { return currentCoords.length > 0; };
+  App.refreshSavedVertices = function () {
+    var src = App.map && App.map.getSource("lines-vertices");
+    if (src) src.setData(savedVerticesGeoJSON());
+  };
 })();

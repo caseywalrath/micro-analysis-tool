@@ -1,6 +1,6 @@
 // js/projects/buffer-summary.js
-// Buffer-Area Summary analysis module.
-// Moved from app.js: group definitions, DENOM_MAP, expandGroups, runSummary.
+// Feature Area Analysis module (formerly Buffer-Area Summary).
+// Census variable checkboxes live inside this module's popup.
 // Registers as a popup-based module via App.registerModule().
 // Depends on: App namespace (utils, census, lodes), App.popup, App.cache.
 
@@ -13,7 +13,8 @@
   var _state = {
     geoLevel: "bg",
     year: "2024",
-    apportionByArea: true
+    apportionByArea: true,
+    checkedVars: []  // persisted checkbox values (restored before DOM exists)
   };
   var _initialized = false;
   var _hasResults = false; // true once a summary has been computed this session
@@ -197,7 +198,7 @@
     // Check for buffer union
     var unionFeat = App.bufferUnionPolygon();
     if (!unionFeat) {
-      var errMsg = (App.stations.length === 0 && App.lines.length === 0 &&
+      var errMsg = (App.points.length === 0 && App.lines.length === 0 &&
                     App.routes.length === 0 && App.polygons.length === 0)
         ? "No features placed" : "No buffers set";
       for (var k = 0; k < displayVars.length; k++) {
@@ -263,7 +264,25 @@
       App.setStatus("Querying TIGERweb\u2026");
       progressEl.textContent = "Fetching census geometries\u2026";
       geos = await App.fetchTigerwebGeos(geoLevel, unionFeat);
-      App.renderCensusOverlay(geos);
+
+      // When apportioning by area, clip each geo to the union so the map
+      // display matches the math (same pattern as TPI's computeAreaFractions).
+      if (apportionByArea) {
+        var clippedForDisplay = [];
+        geos.forEach(function (f) {
+          try {
+            var inter = turf.intersect(f, unionFeat);
+            if (inter) clippedForDisplay.push({
+              type: "Feature",
+              properties: f.properties,
+              geometry: inter.geometry
+            });
+          } catch (_) {}
+        });
+        App.renderCensusOverlay(clippedForDisplay.length ? clippedForDisplay : geos);
+      } else {
+        App.renderCensusOverlay(geos);
+      }
 
       if (geos.length === 0) {
         for (var gi = 0; gi < acsVarsUniq.length; gi++) {
@@ -416,13 +435,32 @@
     if (yearEl) yearEl.value = _state.year;
     var apportionEl = document.getElementById("basApportionByArea");
     if (apportionEl) apportionEl.checked = _state.apportionByArea;
+
+    // Restore checkbox selections
+    if (_state.checkedVars && _state.checkedVars.length > 0) {
+      var checkedSet = {};
+      for (var i = 0; i < _state.checkedVars.length; i++) checkedSet[_state.checkedVars[i]] = true;
+      var boxes = document.querySelectorAll('#varSelect input[type="checkbox"]');
+      for (var j = 0; j < boxes.length; j++) boxes[j].checked = !!checkedSet[boxes[j].value];
+      var lodesCb = document.getElementById("lodesCheckbox");
+      if (lodesCb) lodesCb.checked = !!checkedSet["LODES_WAC_C000"];
+    }
+  }
+
+  function collectCheckedVars() {
+    var boxes = document.querySelectorAll('#varSelect input[type="checkbox"]:checked');
+    var codes = [];
+    for (var i = 0; i < boxes.length; i++) codes.push(boxes[i].value);
+    var lodesCb = document.getElementById("lodesCheckbox");
+    if (lodesCb && lodesCb.checked) codes.push(lodesCb.value);
+    return codes;
   }
 
   // ---- Module registration ----
 
   App.registerModule({
     id: "buffer-summary",
-    name: "Buffer-Area Summary",
+    name: "Feature Area Analysis",
     enabled: true,
     popupWidth: 720,
     popupHTML: "projects/buffer-summary-popup.html",
@@ -439,6 +477,39 @@
         }
       });
 
+      // Wire Select All / Clear All buttons (moved from app.js sidebar)
+      document.getElementById("varSelectAll").addEventListener("click", function () {
+        var boxes = document.querySelectorAll('#varSelect input[type="checkbox"]');
+        for (var i = 0; i < boxes.length; i++) boxes[i].checked = true;
+        var lodesCb = document.getElementById("lodesCheckbox");
+        if (lodesCb) lodesCb.checked = true;
+        _state.checkedVars = collectCheckedVars();
+        if (typeof App.cache !== "undefined") App.cache.save();
+      });
+      document.getElementById("varClearAll").addEventListener("click", function () {
+        var boxes = document.querySelectorAll('#varSelect input[type="checkbox"]');
+        for (var i = 0; i < boxes.length; i++) boxes[i].checked = false;
+        var lodesCb = document.getElementById("lodesCheckbox");
+        if (lodesCb) lodesCb.checked = false;
+        _state.checkedVars = [];
+        if (typeof App.cache !== "undefined") App.cache.save();
+      });
+
+      // Auto-save on checkbox change
+      document.querySelectorAll('#varSelect input[type="checkbox"]').forEach(function (cb) {
+        cb.addEventListener("change", function () {
+          _state.checkedVars = collectCheckedVars();
+          if (typeof App.cache !== "undefined") App.cache.save();
+        });
+      });
+      var lodesCbEl = document.getElementById("lodesCheckbox");
+      if (lodesCbEl) {
+        lodesCbEl.addEventListener("change", function () {
+          _state.checkedVars = collectCheckedVars();
+          if (typeof App.cache !== "undefined") App.cache.save();
+        });
+      }
+
       // Apply cached state to DOM
       applyStateToDOM();
     },
@@ -452,7 +523,10 @@
     },
 
     onClose: function (core) {
-      // no-op — state persists in closure
+      // Capture current checkbox state on close
+      if (document.getElementById("varSelect")) {
+        _state.checkedVars = collectCheckedVars();
+      }
     },
 
     update: function (core) {
@@ -465,16 +539,20 @@
   if (typeof App.cache !== "undefined" && typeof App.cache.registerModule === "function") {
     App.cache.registerModule("buffer-summary", {
       collect: function (mode) {
+        // If popup is open, read checkboxes from DOM; otherwise use stored state
+        var vars = document.getElementById("varSelect") ? collectCheckedVars() : (_state.checkedVars || []);
         return {
           geoLevel: _state.geoLevel,
           year: _state.year,
-          apportionByArea: _state.apportionByArea
+          apportionByArea: _state.apportionByArea,
+          checkedVars: vars
         };
       },
       apply: function (data) {
         if (data.geoLevel) _state.geoLevel = data.geoLevel;
         if (data.year) _state.year = data.year;
         if (typeof data.apportionByArea === "boolean") _state.apportionByArea = data.apportionByArea;
+        if (Array.isArray(data.checkedVars)) _state.checkedVars = data.checkedVars;
         // DOM may not exist yet; applyStateToDOM() is called in onOpen()
       }
     });

@@ -48,7 +48,7 @@ The CDI builds on the Transit Propensity Index (TPI), which scores every census 
 | Low-Income (Poverty) | % of people below poverty level | Higher transit reliance |
 | Seniors (65+) | % of population age 65 and over | Often transit-dependent |
 | Disability | % of population with a disability | Often transit-dependent |
-| People of Color | % of population who are people of color | Equity consideration; historically underserved |
+| Minority | % of minority population | Equity consideration; historically underserved |
 | Youth (under 18) | % of population under 18 | Cannot drive; transit-dependent |
 | Limited English Proficiency | % who speak English less than very well | Often transit-dependent |
 

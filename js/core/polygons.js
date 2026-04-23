@@ -15,13 +15,13 @@
   /* ---- GeoJSON helpers ---- */
 
   function polygonsGeoJSON() {
-    return { type: "FeatureCollection", features: polygons };
+    return { type: "FeatureCollection", features: polygons.filter(function (p) { return !p.properties.hidden; }) };
   }
 
   function polygonOutlinesGeoJSON() {
     return {
       type: "FeatureCollection",
-      features: polygons.map(function (f) {
+      features: polygons.filter(function (p) { return !p.properties.hidden; }).map(function (f) {
         return {
           type: "Feature",
           properties: f.properties,
@@ -37,12 +37,13 @@
   function savedVerticesGeoJSON() {
     var features = [];
     polygons.forEach(function (poly) {
+      if (poly.properties.hidden) return;
       // Skip the closing coordinate (last === first)
       var ring = poly.geometry.coordinates[0];
       for (var i = 0; i < ring.length - 1; i++) {
         features.push({
           type: "Feature",
-          properties: { polyIdx: poly.properties.polyIdx, vertexIdx: i + 1 },
+          properties: { polyIdx: poly.properties.polyIdx, vertexIdx: i + 1, color: poly.properties.color },
           geometry: { type: "Point", coordinates: ring[i] }
         });
       }
@@ -104,7 +105,7 @@
         id: "polygons-fill",
         type: "fill",
         source: "polygons",
-        paint: { "fill-color": COLOR, "fill-opacity": 0.15 }
+        paint: { "fill-color": ["coalesce", ["get", "color"], COLOR], "fill-opacity": 0.15 }
       });
     } else {
       map.getSource("polygons").setData(polygonsGeoJSON());
@@ -117,7 +118,7 @@
         id: "polygons-outlines-layer",
         type: "line",
         source: "polygons-outlines",
-        paint: { "line-color": COLOR, "line-width": 3, "line-opacity": 0.8 }
+        paint: { "line-color": ["coalesce", ["get", "color"], COLOR], "line-width": 3, "line-opacity": 0.8 }
       });
     } else {
       map.getSource("polygons-outlines").setData(polygonOutlinesGeoJSON());
@@ -132,7 +133,7 @@
         source: "polygons-vertices",
         paint: {
           "circle-radius": 3,
-          "circle-color": COLOR,
+          "circle-color": ["coalesce", ["get", "color"], COLOR],
           "circle-stroke-width": 1,
           "circle-stroke-color": "#ffffff"
         }
@@ -148,7 +149,7 @@
         id: "polygons-drawing-layer",
         type: "line",
         source: "polygons-drawing",
-        paint: { "line-color": COLOR, "line-width": 2, "line-opacity": 0.6, "line-dasharray": [3, 2] }
+        paint: { "line-color": COLOR, "line-width": 2, "line-opacity": 0.5, "line-dasharray": [3, 2] }
       });
     } else {
       map.getSource("polygons-drawing").setData(currentDrawingGeoJSON());
@@ -222,14 +223,16 @@
       return;
     }
 
+    if (App.undo && !App.undo.isRestoring()) App.undo.push();
     var idx = polygons.length + 1;
     var nVertices = currentCoords.length;
     var ring = currentCoords.slice();
     ring.push(ring[0]); // close the ring
 
+    var polyColor = (App.sectionColors && App.sectionColors.polygon) || App.POLYGON_DEFAULT_COLOR || "#b0c4de";
     polygons.push({
       type: "Feature",
-      properties: { name: "Polygon " + idx, polyIdx: idx, vertices: nVertices },
+      properties: { name: "Polygon " + idx, polyIdx: idx, vertices: nVertices, color: polyColor },
       geometry: { type: "Polygon", coordinates: [ring] }
     });
 
@@ -237,6 +240,7 @@
     previewCoord = null;
     renderPolygonLayers();
     App.setStatus("Polygon " + idx + " saved (" + nVertices + " vertices)");
+    if (typeof App.exitDrawMode === "function") App.exitDrawMode();
   }
 
   function cancelPolygonDrawing() {
@@ -248,6 +252,7 @@
 
   function removePolygon(index) {
     if (index < 0 || index >= polygons.length) return;
+    if (App.undo && !App.undo.isRestoring()) App.undo.push();
     polygons.splice(index, 1);
     renderPolygonLayers();
   }
@@ -260,22 +265,17 @@
   }
 
   function undoLastPolygon() {
-    if (currentCoords.length > 0) {
-      currentCoords.pop();
-      renderPolygonLayers();
-      if (currentCoords.length === 0) {
-        App.setStatus("Polygon drawing cancelled");
-      } else if (currentCoords.length < 3) {
-        App.setStatus(currentCoords.length + " vertices — need at least 3 to close polygon");
-      } else {
-        App.setStatus(currentCoords.length + " vertices — click last point to save");
-      }
-      return;
+    if (currentCoords.length === 0) return;
+    currentCoords.pop();
+    renderPolygonLayers();
+    if (currentCoords.length === 0) {
+      App.setStatus("Polygon drawing cancelled");
+    } else if (currentCoords.length < 3) {
+      App.setStatus(currentCoords.length + " vertices — need at least 3 to close polygon");
+    } else {
+      App.setStatus(currentCoords.length + " vertices — click last point to save");
     }
-    if (polygons.length > 0) {
-      polygons.pop();
-      renderPolygonLayers();
-    }
+    if (App.undo) App.undo.updateButtons();
   }
 
   /* ---- Vertex editing support ---- */
@@ -284,6 +284,7 @@
     if (polyIndex < 0 || polyIndex >= polygons.length) return;
     var ring = polygons[polyIndex].geometry.coordinates[0];
     if (vertexIndex < 0 || vertexIndex >= ring.length - 1) return;
+    if (App.undo && !App.undo.isRestoring()) App.undo.push();
     ring[vertexIndex] = [lng, lat];
     // If editing vertex 0, also update the closing vertex
     if (vertexIndex === 0) {
@@ -301,11 +302,40 @@
     return u;
   }
 
+  function duplicatePolygon(index) {
+    if (index < 0 || index >= polygons.length) return;
+    if (App.undo && !App.undo.isRestoring()) App.undo.push();
+    var src = polygons[index];
+    var idx = polygons.length + 1;
+    var offsetRing = src.geometry.coordinates[0].map(function (c) {
+      return [c[0] + 0.002, c[1]];
+    });
+    var copy = {
+      type: "Feature",
+      properties: {
+        name: "Polygon " + idx,
+        polyIdx: idx,
+        vertices: src.properties.vertices,
+        color: src.properties.color || "",
+        hidden: false
+      },
+      geometry: { type: "Polygon", coordinates: [offsetRing] }
+    };
+    if (src.properties.attributes) {
+      copy.properties.attributes = JSON.parse(JSON.stringify(src.properties.attributes));
+    }
+    polygons.push(copy);
+    renderPolygonLayers();
+    if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+    if (App.cache && typeof App.cache.save === "function") App.cache.save();
+  }
+
   /* ---- Expose on App namespace ---- */
 
   App.polygons = polygons;
   App.polygonUnionPolygon = polygonUnionPolygon;
   App.handlePolygonClick = handlePolygonClick;
+  App.duplicatePolygon = duplicatePolygon;
   App.removePolygon = removePolygon;
   App.clearPolygons = clearPolygons;
   App.undoLastPolygon = undoLastPolygon;
@@ -313,4 +343,5 @@
   App.renderPolygonLayers = renderPolygonLayers;
   App.setPolygonPreview = setPolygonPreview;
   App.updatePolygonVertex = updatePolygonVertex;
+  App._polygonDrawingInProgress = function () { return currentCoords.length > 0; };
 })();

@@ -60,6 +60,7 @@
       label: "Zero-Vehicle Households",
       category: "Transit Dependence",
       acsVars: ["B08201_002E", "B11001_001E"],
+      tractOnly: true,
       source: "ACS",
       compute: function (vals) {
         var zeroCar = vals.get("B08201_002E");
@@ -76,6 +77,7 @@
       label: "Low-Income % (Poverty)",
       category: "Transit Dependence",
       acsVars: ["B17001_002E", "B01003_001E"],
+      tractOnly: true,
       source: "ACS",
       compute: function (vals) {
         var povPop = vals.get("B17001_002E");
@@ -124,6 +126,7 @@
         "B18101_023E","B18101_026E","B18101_029E","B18101_032E","B18101_035E","B18101_038E",
         "B18101_001E"
       ],
+      tractOnly: true,
       source: "ACS",
       compute: function (vals) {
         var denom = vals.get("B18101_001E");
@@ -145,7 +148,7 @@
     },
     {
       id: "poc",
-      label: "People of Color %",
+      label: "Minority %",
       category: "Equity",
       acsVars: ["B03002_001E", "B03002_003E"],
       source: "ACS",
@@ -161,31 +164,31 @@
     },
     {
       id: "youth",
-      label: "Youth <18 %",
+      label: "Young Adults 18\u201324 %",
       category: "Equity",
       acsVars: [
-        "B01001_003E","B01001_004E","B01001_005E","B01001_006E",
-        "B01001_027E","B01001_028E","B01001_029E","B01001_030E",
+        "B01001_007E","B01001_008E","B01001_009E","B01001_010E",
+        "B01001_031E","B01001_032E","B01001_033E","B01001_034E",
         "B01003_001E"
       ],
       source: "ACS",
       compute: function (vals) {
         var totalPop = vals.get("B01003_001E");
         if (!Number.isFinite(totalPop) || totalPop <= 0) return NaN;
-        var youthCodes = [
-          "B01001_003E","B01001_004E","B01001_005E","B01001_006E",
-          "B01001_027E","B01001_028E","B01001_029E","B01001_030E"
+        var codes = [
+          "B01001_007E","B01001_008E","B01001_009E","B01001_010E",
+          "B01001_031E","B01001_032E","B01001_033E","B01001_034E"
         ];
-        var youthSum = 0;
-        for (var yi = 0; yi < youthCodes.length; yi++) {
-          var yv = vals.get(youthCodes[yi]);
-          if (Number.isFinite(yv)) youthSum += yv;
+        var sum = 0;
+        for (var i = 0; i < codes.length; i++) {
+          var v = vals.get(codes[i]);
+          if (Number.isFinite(v)) sum += v;
         }
-        return (youthSum / totalPop) * 100;
+        return (sum / totalPop) * 100;
       },
       higherIsBetter: true,
       defaultWeight: 0,
-      description: "Percent of population under 18 years old (ACS B01001 males + females under 18 / B01003_001E)"
+      description: "Percent of population aged 18\u201324 (ACS B01001 males + females 18\u201324 / B01003_001E)"
     },
     {
       id: "lep",
@@ -585,7 +588,7 @@
     // 1. Get buffer union (use custom polygon if provided, else global union)
     onProgress("Getting buffer union...");
     var unionFeat = options.unionPolygon || App.bufferUnionPolygon();
-    if (!unionFeat) throw new Error("No buffers set. Place stations, lines, or routes first.");
+    if (!unionFeat) throw new Error("No buffers set. Place points, lines, or routes first.");
 
     // 2. Fetch census geographies
     onProgress("Fetching census geographies...");

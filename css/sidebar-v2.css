@@ -5,15 +5,28 @@
    ============================================================ */
 
 /* ---- Container ---- */
-#sidebar {
-  width: 310px;
+#sidebar-wrap {
+  width: 248px;
+  min-width: 24px;
   border-right: 1px solid var(--border);
+  background: var(--bg);
+  flex-shrink: 0;
+  position: relative;
+  transition: width 0.2s ease;
+}
+#sidebar {
+  width: 100%;
+  height: 100%;
   padding: 0;
   overflow-y: auto;
   overflow-x: hidden;
   box-sizing: border-box;
-  background: var(--bg);
-  flex-shrink: 0;
+}
+#sidebar-wrap.sb-collapsed {
+  width: 24px;
+}
+#sidebar-wrap.sb-collapsed #sidebar {
+  display: none;
 }
 /* ---- Panel system ---- */
 #sidebar .sb2-panel {
@@ -24,22 +37,22 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
+  padding: 8px 14px;
   cursor: pointer;
   user-select: none;
-  background: var(--panel);
+  background: transparent;
   transition: background 0.12s;
 }
 #sidebar .sb2-panel-header:hover {
-  background: #eef1f5;
+  background: #f0f2f5;
 }
 
 #sidebar .sb2-panel-title {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
   text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: #1a1a1a;
+  letter-spacing: var(--tracking-md);
+  color: var(--muted);
 }
 
 #sidebar .sb2-panel-toggle {
@@ -49,9 +62,9 @@
   background: transparent;
   border: none;
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--text-md);
   color: var(--muted);
-  line-height: 1;
+  line-height: var(--leading-none);
   transition: transform 0.15s;
 }
 #sidebar .sb2-panel.sb2-collapsed .sb2-panel-toggle {
@@ -68,20 +81,24 @@
 /* ---- Typography ---- */
 #sidebar h3 {
   margin: 0 0 8px;
-  font-size: 15px;
-  font-weight: 600;
-  color: #1a1a1a;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-md);
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
 }
 
 #sidebar .sb2-muted {
   color: var(--muted);
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
   margin: 0 0 8px;
 }
 
 #sidebar .sb2-tiny {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--muted);
 }
 
@@ -89,7 +106,7 @@
 #sidebar label {
   display: block;
   margin: 8px 0;
-  font-size: 13px;
+  font-size: var(--text-base);
   color: #333;
 }
 
@@ -102,7 +119,7 @@
   margin-top: 4px;
   box-sizing: border-box;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--text-base);
   border: 1px solid var(--border);
   border-radius: 6px;
   background: #fff;
@@ -121,7 +138,7 @@
   margin-top: 6px;
   box-sizing: border-box;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--text-base);
   cursor: pointer;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -171,7 +188,7 @@
 }
 
 #sidebar .sb2-kv {
-  font-size: 13px;
+  font-size: var(--text-base);
   margin-bottom: 2px;
 }
 #sidebar .sb2-kv b {
@@ -185,8 +202,8 @@
   border-radius: 8px;
   padding: 8px 10px;
   margin-top: 8px;
-  font-size: 12px;
-  line-height: 1.35;
+  font-size: var(--text-sm);
+  line-height: var(--leading-tight);
 }
 
 /* ---- Empty state ---- */
@@ -194,7 +211,7 @@
   padding: 32px 14px;
   text-align: center;
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--text-base);
 }
 
 /* ---- Variable checkbox list ---- */
@@ -208,30 +225,30 @@
   background: #fff;
 }
 #sidebar .var-checklist legend {
-  font-size: 13px;
+  font-size: var(--text-base);
   color: #333;
   padding: 0 4px;
 }
 #sidebar .sb2-section-label {
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
   color: #333;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--tracking-md);
   margin: 12px 0 6px;
   padding: 6px 0 4px;
-  border-top: 2px solid var(--border);
+  border-top: 1px solid var(--border);
 }
 #sidebar .sb2-section-label:first-child {
   border-top: none;
   margin-top: 0;
 }
 #sidebar .var-group-label {
-  font-size: 11px;
-  font-weight: 600;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
   color: var(--muted);
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: var(--tracking-sm);
   margin: 8px 0 4px;
   padding-top: 4px;
   border-top: 1px solid var(--border);
@@ -245,8 +262,8 @@
   align-items: flex-start;
   gap: 6px;
   margin: 3px 0;
-  font-size: 12px;
-  line-height: 1.35;
+  font-size: var(--text-sm);
+  line-height: var(--leading-tight);
   cursor: pointer;
 }
 #sidebar .var-check input[type="checkbox"] {
@@ -263,10 +280,34 @@
   width: auto;
   padding: 3px 8px;
   margin-top: 0;
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: #2b6cb0;
   background: transparent;
   border: none;
   cursor: pointer;
   text-decoration: underline;
 }
+
+/* ---- Dark mode ---- */
+body.dark-mode #sidebar-wrap.sb-collapsed #sb-collapse-btn { background: #252535; }
+body.dark-mode #sidebar .sb2-panel-header:hover { background: rgba(255,255,255,0.06); }
+body.dark-mode #sidebar select,
+body.dark-mode #sidebar input[type="text"],
+body.dark-mode #sidebar input[type="number"],
+body.dark-mode #sidebar input[type="file"] {
+  background: #2a2a3d; color: #e2e8f0; border-color: #4a5568;
+}
+body.dark-mode #sidebar select:focus,
+body.dark-mode #sidebar input[type="text"]:focus,
+body.dark-mode #sidebar input[type="number"]:focus {
+  border-color: #63b3ed; box-shadow: 0 0 0 2px rgba(99,179,237,0.2);
+}
+body.dark-mode #sidebar button { background: #2a2a3d; color: #e2e8f0; }
+body.dark-mode #sidebar button:hover { background: rgba(255,255,255,0.07); }
+body.dark-mode #sidebar .var-checklist { background: #2a2a3d; }
+body.dark-mode #sidebar .var-checklist legend { color: #e2e8f0; }
+body.dark-mode #sidebar .sb2-section-label { color: #e2e8f0; }
+body.dark-mode #sidebar .var-group-label { color: #9ca3af; }
+body.dark-mode #sidebar .var-action-btn { color: #63b3ed; }
+body.dark-mode #sidebar label { color: #e2e8f0; }
+body.dark-mode #sidebar h3 { color: #e2e8f0; }

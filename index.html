@@ -18,29 +18,208 @@
     <!-- PapaParse for robust CSV parsing (handles quoted commas) -->
     <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
 
+    <!-- JSZip for zip file handling (SHP import/export, KMZ) -->
+    <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
+
+    <!-- Shapefile reading (SHP import) -->
+    <script src="https://unpkg.com/shapefile@0.6.6/dist/shapefile.js"></script>
+
     <!-- App styles -->
     <link rel="stylesheet" href="css/style.css" />
     <link rel="stylesheet" href="css/sidebar-v2.css" />
+
+    <!-- Open Sans for map labels -->
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet" />
+    <!-- No-flash dark mode: apply class before first paint -->
+    <script>if(localStorage.getItem("mat-dark-mode")==="1")document.body.classList.add("dark-mode");</script>
   </head>
 
   <body>
     <div id="app">
+      <div id="pm-controls">
+        <div class="pm-elements-wrap">
+          <button id="pm-elements-btn" title="Toggle map overlay elements">Map Elements &#x25BE;</button>
+          <div id="pm-elements-dropdown" style="display:none;">
+            <button id="pm-toggle-legend"><span class="pm-toggle-check">&#x2713;</span>Legend</button>
+            <button id="pm-toggle-north"><span class="pm-toggle-check">&#x2713;</span>North Arrow</button>
+            <button id="pm-toggle-title"><span class="pm-toggle-check">&#x2713;</span>Title</button>
+          </div>
+        </div>
+        <button id="present-exit" title="Exit presentation">&#x2715; Exit</button>
+      </div>
+      <div id="view-only-banner" style="display:none;">
+        <strong>Viewing shared session</strong> &mdash; drawn features are read-only.
+        <a href="#" id="view-only-start-fresh">Start fresh</a>
+      </div>
       <div id="toolbar">
+        <div id="file-actions">
+          <button id="darkmode-btn" title="Toggle dark mode" aria-label="Toggle dark mode">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="12" cy="12" r="9" stroke="#2d3748"/>
+              <path d="M12 3a9 9 0 0 1 0 18z" fill="#2d3748" stroke="none"/>
+            </svg>
+          </button>
+          <button id="present-btn" title="Present (hide panels)">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2d3748" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="15,3 21,3 21,9"/>
+              <polyline points="9,21 3,21 3,15"/>
+              <polyline points="21,15 21,21 15,21"/>
+              <polyline points="3,9 3,3 9,3"/>
+            </svg>
+          </button>
+          <div class="save-state-wrapper">
+            <button id="save-state-btn" title="Save / Load State">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2d3748" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M5 4h11l4 4v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/>
+                <polyline points="8,4 8,9 15,9 15,4"/>
+                <rect x="7" y="13" width="10" height="7"/>
+              </svg>
+            </button>
+            <div id="save-state-dropdown" class="save-state-dropdown" style="display:none;">
+              <button id="save-state-save">Save State</button>
+              <button id="save-state-load">Load State</button>
+              <div id="save-state-recents" class="save-state-recents" style="display:none;"></div>
+            </div>
+          </div>
+          <input id="save-state-file-input" type="file" accept=".json" style="display:none;" />
+          <div class="add-data-wrapper">
+            <button id="add-data-btn" title="Add Data">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2d3748" stroke-width="2.5" stroke-linecap="round">
+                <line x1="12" y1="5" x2="12" y2="19"/>
+                <line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+            </button>
+            <div id="add-data-dropdown" class="add-data-dropdown" style="display:none;">
+              <div class="add-data-heading">LOCAL</div>
+              <button id="import-file-btn">Spatial Data</button>
+              <button id="gtfs-load-btn">GTFS Feed</button>
+              <button id="lodes-employment-btn">LODES Employment</button>
+              <div class="add-data-divider"></div>
+              <div class="add-data-heading">ONLINE</div>
+              <button data-osm="bus_stops">Bus Stops (Open Street Maps)</button>
+              <button data-osm="transit_routes">Transit Routes (Open Street Maps)</button>
+              <button id="osm-poi-btn">Points of Interest (OSM)</button>
+              <button id="road-net-download">Area Roads for Street Routing</button>
+              <button id="muni-boundaries-btn">Municipal Boundaries</button>
+            </div>
+            <div id="osm-poi-popup" style="display:none;">
+              <div class="lodes-popup-header">
+                <span>OSM Points of Interest</span>
+                <button id="osm-poi-popup-close" class="lodes-popup-x">&#10005;</button>
+              </div>
+              <div class="lodes-popup-body" id="osm-poi-category-list">
+                <!-- checkboxes built dynamically by osm-pois.js -->
+              </div>
+              <div class="lodes-popup-footer">
+                <button id="osm-poi-fetch-btn">Fetch POIs</button>
+              </div>
+            </div>
+            <div id="lodes-popup" style="display:none;">
+              <div class="lodes-popup-header">
+                <span>LODES Employment Data</span>
+                <button id="lodes-popup-close" class="lodes-popup-x">&#10005;</button>
+              </div>
+              <div class="lodes-popup-body">
+                <div class="lodes-popup-label">Select states to download:</div>
+                <div id="lodes-state-list" class="lodes-state-list"></div>
+                <div id="lodesInfo" class="lodes-loaded-info"></div>
+              </div>
+              <div class="lodes-popup-footer">
+                <button id="lodes-popup-download">Download</button>
+                <button id="lodes-popup-add">Add to Map</button>
+              </div>
+            </div>
+            <input id="lodesFile" type="file" accept=".gz,.csv.gz" style="display:none" />
+            <input id="fp-import-file" type="file" accept=".json,.csv,.kml,.kmz,.shp,.zip,.geojson" style="display:none" />
+            <input id="gtfs-file-input" type="file" accept=".zip" style="display:none" />
+          </div>
+          <div class="export-wrapper">
+            <button id="export-btn" title="Export">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2d3748" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 15V3"/><polyline points="16,7 12,3 8,7"/>
+                <path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/>
+              </svg>
+            </button>
+            <div id="export-dropdown" class="export-dropdown" style="display:none;">
+              <button data-format="json-features">JSON (Features only)</button>
+              <button data-format="json-all">JSON (All data)</button>
+              <button data-format="csv">CSV</button>
+              <button data-format="kml">KML</button>
+              <button data-format="shp">Shapefile (SHP)</button>
+              <button data-format="share-link">Share Link</button>
+              <button data-format="road-network" style="display:none;" id="export-road-net">Local Map Data</button>
+            </div>
+          </div>
+          <div class="analysis-wrapper">
+            <button id="analysis-btn" title="Analysis">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2d3748" stroke-width="2" stroke-linecap="round">
+                <rect x="4" y="14" width="4" height="6" rx="1"/>
+                <rect x="10" y="8" width="4" height="12" rx="1"/>
+                <rect x="16" y="4" width="4" height="16" rx="1"/>
+              </svg>
+            </button>
+            <div id="analysis-dropdown" class="analysis-dropdown" style="display:none;"></div>
+          </div>
+        </div>
         <div id="draw-tools">
-          <button class="tool-btn" data-mode="station">Station</button>
-          <button class="tool-btn" data-mode="line">Line</button>
-          <button class="tool-btn" data-mode="route">Route</button>
-          <button class="tool-btn" data-mode="polygon">Polygon</button>
+          <button class="tool-btn" data-mode="point" title="Point">
+            <svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" fill="#3182ce"/></svg>
+          </button>
+          <button class="tool-btn" data-mode="line" title="Line">
+            <svg width="22" height="22" viewBox="0 0 24 24"><line x1="4" y1="19" x2="20" y2="5" stroke="#eab308" stroke-width="3.5" stroke-linecap="round"/></svg>
+          </button>
+          <button class="tool-btn" data-mode="route" title="Route">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M6 18c0-3 2-4 5-4s5-1 5-4" stroke="#22a352" stroke-width="2.5" stroke-linecap="round"/><circle cx="6" cy="18" r="2.5" fill="#22a352"/><rect x="14" y="4" width="6" height="5" rx="1" fill="#22a352"/><circle cx="16" cy="6.5" r="1" fill="white"/><circle cx="18.5" cy="6.5" r="1" fill="white"/></svg>
+          </button>
+          <button class="tool-btn" data-mode="polygon" title="Polygon">
+            <svg width="22" height="22" viewBox="0 0 24 24"><polygon points="12,4 21,10 18,20 6,20 3,10" fill="#f97316"/></svg>
+          </button>
+          <button class="tool-btn" data-mode="label" title="Label">
+            <svg width="22" height="22" viewBox="0 0 24 24"><path d="M4 5h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9l-4 3.5V16H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" fill="#e53e3e"/></svg>
+          </button>
+          <button class="tool-btn" data-mode="textbox" title="Text Box">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+              <rect x="3" y="3" width="18" height="18" rx="2" stroke="#888" stroke-width="1.8"/>
+              <text x="12" y="17" text-anchor="middle" font-size="14" font-weight="700" fill="#888" font-family="serif">T</text>
+            </svg>
+          </button>
+          <button class="tool-btn" data-mode="measure" title="Measure">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+              <rect x="2" y="6" width="20" height="12" rx="2" stroke="#6b46c1" stroke-width="1.8"/>
+              <line x1="6" y1="6" x2="6" y2="11" stroke="#6b46c1" stroke-width="1.5"/>
+              <line x1="10" y1="6" x2="10" y2="13" stroke="#6b46c1" stroke-width="1.5"/>
+              <line x1="14" y1="6" x2="14" y2="11" stroke="#6b46c1" stroke-width="1.5"/>
+              <line x1="18" y1="6" x2="18" y2="13" stroke="#6b46c1" stroke-width="1.5"/>
+            </svg>
+          </button>
         </div>
         <div id="draw-actions">
-          <button id="undo">Delete Last Feature</button>
-          <button id="clear">Clear</button>
-          <button id="reset" class="reset-btn">Reset Session</button>
+          <button id="undo-btn" title="Undo (Ctrl+Z)" disabled>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 9h11a4 4 0 0 1 0 8H11" stroke="#2d3748" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><polyline points="7,5 4,9 7,13" stroke="#2d3748" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <button id="redo-btn" title="Redo (Ctrl+Shift+Z)" disabled>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M20 9H9a4 4 0 0 0 0 8h4" stroke="#2d3748" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><polyline points="17,5 20,9 17,13" stroke="#2d3748" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <button id="clear" title="Clear">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2d3748" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>
+          </button>
+          <button id="reset" class="reset-btn" title="Reset Session">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4.5 12a7.5 7.5 0 0 1 13-5.1l1.5-1.5" stroke="#e53e3e" stroke-width="2.5" stroke-linecap="round"/><path d="M19.5 12a7.5 7.5 0 0 1-13 5.1l-1.5 1.5" stroke="#e53e3e" stroke-width="2.5" stroke-linecap="round"/><polygon points="19,2 22,5.5 18,6" fill="#e53e3e"/><polygon points="5,22 2,18.5 6,18" fill="#e53e3e"/><line x1="12" y1="9" x2="12" y2="13" stroke="#e53e3e" stroke-width="2.5" stroke-linecap="round"/><circle cx="12" cy="16" r="1.3" fill="#e53e3e"/></svg>
+          </button>
         </div>
       </div>
 
       <div id="main-content">
-      <div id="sidebar"></div>
+      <div id="sidebar-wrap" style="display:none;">
+        <div id="sidebar"></div>
+        <button id="sb-collapse-btn" title="Hide sidebar" aria-label="Toggle sidebar">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2.5"
+               stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </button>
+      </div>
 
       <div id="map"></div>
 
@@ -57,53 +236,68 @@
         </div>
         <div class="fp-content">
 
-          <div class="fp-section">
-            <div class="fp-section-header">Stations</div>
-            <div id="fp-stations" class="fp-list"></div>
-          </div>
+          <div id="fp-features" class="fp-list"></div>
 
           <div class="fp-section">
-            <div class="fp-section-header">Lines</div>
-            <div id="fp-lines" class="fp-list"></div>
+            <div class="fp-section-header">Labels and Text</div>
+            <div id="fp-labels" class="fp-list"></div>
+            <div id="fp-textboxes" class="fp-list"></div>
           </div>
 
-          <div class="fp-section">
-            <div class="fp-section-header">Routes</div>
-            <div id="fp-routes" class="fp-list"></div>
-          </div>
-
-          <div class="fp-section">
-            <div class="fp-section-header">Polygons</div>
-            <div id="fp-polygons" class="fp-list"></div>
-          </div>
-
-          <div class="fp-section">
-            <div class="fp-section-header">Buffers</div>
-            <div class="fp-buffer-row">
-              <span class="fp-buffer-label">Stations</span>
-              <input id="bufferRadius" type="number" min="0" step="0.1" value="0.5" class="fp-radius-input" />
-              <span class="fp-radius-unit">mi</span>
+          <div class="fp-section" id="fp-settings-section">
+            <div class="fp-section-header fp-settings-header">Feature Settings</div>
+            <div class="fp-settings-body" style="display:none">
+              <div class="fp-settings-grid">
+                <!-- Column headers -->
+                <div class="fp-sg-label"></div>
+                <div class="fp-sg-col-hdr">Opacity</div>
+                <div class="fp-sg-col-hdr">Buffer</div>
+                <div class="fp-sg-col-hdr">Width</div>
+                <!-- Points -->
+                <div class="fp-sg-label">Points</div>
+                <div class="fp-sg-cell"><button id="fp-set-pointOpacity"      class="fp-sib" title="Point opacity"></button></div>
+                <div class="fp-sg-cell"><button id="fp-set-bufferRadius"      class="fp-sib" title="Point buffer radius (mi)"></button></div>
+                <div class="fp-sg-cell"><button id="fp-set-pointLineWidth"    class="fp-sib" title="Point size"></button></div>
+                <!-- Lines -->
+                <div class="fp-sg-label">Lines</div>
+                <div class="fp-sg-cell"><button id="fp-set-lineOpacity"       class="fp-sib" title="Line opacity"></button></div>
+                <div class="fp-sg-cell"><button id="fp-set-lineBufferRadius"  class="fp-sib" title="Line buffer radius (mi)"></button></div>
+                <div class="fp-sg-cell"><button id="fp-set-lineLineWidth"     class="fp-sib" title="Line width"></button></div>
+                <!-- Routes -->
+                <div class="fp-sg-label">Routes</div>
+                <div class="fp-sg-cell"><button id="fp-set-routeOpacity"      class="fp-sib" title="Route opacity"></button></div>
+                <div class="fp-sg-cell"><button id="fp-set-routeBufferRadius" class="fp-sib" title="Route buffer radius (mi)"></button></div>
+                <div class="fp-sg-cell"><button id="fp-set-routeLineWidth"    class="fp-sib" title="Route width"></button></div>
+                <!-- Polygons -->
+                <div class="fp-sg-label">Polygons</div>
+                <div class="fp-sg-cell"><button id="fp-set-polygonOpacity"    class="fp-sib" title="Polygon opacity"></button></div>
+                <div class="fp-sg-cell"></div>
+                <div class="fp-sg-cell"><button id="fp-set-polygonLineWidth"  class="fp-sib" title="Polygon border width"></button></div>
+                <!-- Buffers -->
+                <div class="fp-sg-label">Buffers</div>
+                <div class="fp-sg-cell"><button id="fp-set-bufferOpacity"     class="fp-sib" title="Buffer opacity"></button></div>
+                <div class="fp-sg-cell"></div>
+                <div class="fp-sg-cell"><button id="fp-set-bufferLineWidth"   class="fp-sib" title="Buffer border width"></button></div>
+              </div>
+              <div class="fp-buffer-row">
+                <label class="fp-buffer-label" for="offsetOverlap">
+                  <input type="checkbox" id="offsetOverlap" /> Offset overlapping Lines/Routes
+                </label>
+              </div>
             </div>
-            <div class="fp-buffer-row">
-              <span class="fp-buffer-label">Lines</span>
-              <input id="lineBufferRadius" type="number" min="0" step="0.1" value="0.5" class="fp-radius-input" />
-              <span class="fp-radius-unit">mi</span>
-            </div>
-            <div class="fp-buffer-row">
-              <span class="fp-buffer-label">Routes</span>
-              <input id="routeBufferRadius" type="number" min="0" step="0.1" value="0.5" class="fp-radius-input" />
-              <span class="fp-radius-unit">mi</span>
-            </div>
+          </div>
+
+          <!-- Shared vertical slider popover for Feature Settings -->
+          <div id="fp-slider-popover" style="display:none">
+            <span id="fp-slider-value" class="fp-slider-val"></span>
+            <input id="fp-slider-input" type="range" class="fp-slider-vert" />
+            <span id="fp-slider-unit" class="fp-slider-unit"></span>
           </div>
         </div>
 
-        <div class="fp-actions">
-          <button id="fp-import">Import</button>
-          <button id="fp-export">Export</button>
-        </div>
-        <input type="file" id="fp-import-file" accept=".json" style="display:none" />
       </div>
       </div><!-- #main-content -->
+      <div id="status"></div>
 
       <!-- Analysis module popup (generic container, reused per-module) -->
       <div id="module-popup" class="module-popup" style="display:none;">
@@ -116,22 +310,50 @@
           <div class="module-popup-body"></div>
         </div>
       </div>
+
+      <!-- Present Mode Overlays (hidden until toggled on inside Present mode) -->
+      <div id="pm-legend" class="pm-overlay" data-pm="legend" style="display:none;">
+        <div class="pm-drag-handle">LEGEND</div>
+        <div class="pm-legend-body"></div>
+      </div>
+
+      <div id="pm-north" class="pm-overlay" data-pm="north" style="display:none;">
+        <svg class="pm-north-svg" viewBox="0 0 60 90" xmlns="http://www.w3.org/2000/svg">
+          <text x="30" y="18" text-anchor="middle" font-size="22" font-weight="900" font-family="Georgia, serif" fill="currentColor">N</text>
+          <polygon class="pm-north-left"  points="30,24 14,82 30,62"/>
+          <polygon class="pm-north-right" points="30,24 46,82 30,62"/>
+        </svg>
+      </div>
+
+      <div id="pm-title" class="pm-overlay" data-pm="title" style="display:none;">
+        <div class="pm-title-text" contenteditable="true" spellcheck="false">Title</div>
+      </div>
+
     </div>
 
     <!-- Core modules (order matters) -->
     <script src="js/core/utils.js"></script>
     <script src="js/core/sidebar.js"></script>
     <script src="js/core/map.js"></script>
-    <script src="js/core/stations.js"></script>
+    <script src="js/core/road-network.js"></script>
+    <script src="js/core/points.js"></script>
     <script src="js/core/lines.js"></script>
     <script src="js/core/routes.js"></script>
     <script src="js/core/polygons.js"></script>
+    <script src="js/core/labels.js"></script>
+    <script src="js/core/textboxes.js"></script>
+    <script src="js/core/measure.js"></script>
+    <script src="js/core/osm.js"></script>
+    <script src="js/core/osm-pois.js"></script>
     <script src="js/core/editing.js"></script>
+    <script src="js/core/selection.js"></script>
     <script src="js/core/features.js"></script>
+    <script src="js/core/feature-attributes.js"></script>
     <script src="js/core/census.js"></script>
     <script src="js/core/lodes.js"></script>
     <script src="js/core/projections.js"></script>
     <script src="js/core/cache.js"></script>
+    <script src="js/core/undo.js"></script>
     <script src="js/core/popup.js"></script>
     <script src="js/app.js"></script>
 
@@ -142,5 +364,10 @@
     <script src="js/projects/transit-propensity.js"></script>
     <script src="js/projects/ridership-scoring.js"></script>
     <script src="js/projects/ridership-forecasting.js"></script>
+    <script src="js/projects/corridor-scoring.js"></script>
+    <script src="js/projects/title-vi-engine.js"></script>
+    <script src="js/projects/title-vi.js"></script>
+    <script src="js/projects/gtfs.js"></script>
+    <script src="js/core/present-overlays.js"></script>
   </body>
 </html>

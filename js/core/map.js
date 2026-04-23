@@ -101,8 +101,7 @@
     center: [-104.9903, 39.7392],
     zoom: 10
   });
-  map.addControl(new maplibregl.NavigationControl(), "top-right");
-
+  map.scrollZoom.setWheelZoomRate(1 / 900); // half the default (1/450) for finer zoom granularity
   // ---- Default cursor: grab hand ----
   map.on("load", function () {
     map.getCanvas().style.cursor = "grab";
@@ -228,6 +227,44 @@
     map.on("moveend", _muniMoveHandler);
   }
 
+  // ---- North arrow control (bottom-left) ----
+
+  var NORTH_ARROW_SVG =
+    '<svg width="22" height="22" viewBox="0 0 22 22" xmlns="http://www.w3.org/2000/svg">' +
+    '<polygon points="11,2 7,11 11,9 15,11" fill="#333"/>' +
+    '<polygon points="11,20 7,11 11,13 15,11" fill="#bbb"/>' +
+    '</svg>';
+
+  function NorthArrowControl() {}
+
+  NorthArrowControl.prototype.onAdd = function (mapInstance) {
+    this._map = mapInstance;
+    this._container = document.createElement("div");
+    this._container.className = "maplibregl-ctrl maplibregl-ctrl-group";
+
+    this._btn = document.createElement("button");
+    this._btn.type = "button";
+    this._btn.className = "north-arrow-btn";
+    this._btn.title = "Reset north";
+    this._btn.innerHTML = NORTH_ARROW_SVG;
+    this._btn.addEventListener("click", function () { mapInstance.resetNorth(); });
+
+    this._onRotate = function () {
+      var b = mapInstance.getBearing();
+      this._btn.style.transform = "rotate(" + (-b) + "deg)";
+    }.bind(this);
+    mapInstance.on("rotate", this._onRotate);
+
+    this._container.appendChild(this._btn);
+    return this._container;
+  };
+
+  NorthArrowControl.prototype.onRemove = function () {
+    this._map.off("rotate", this._onRotate);
+    this._container.parentNode.removeChild(this._container);
+    this._map = undefined;
+  };
+
   // ---- Basemap switcher control (bottom-right) ----
 
   var LAYERS_SVG =
@@ -274,25 +311,6 @@
       dropdown.appendChild(opt);
     }
 
-    // Divider + municipal boundaries toggle
-    var divider = document.createElement("div");
-    divider.className = "basemap-divider";
-    dropdown.appendChild(divider);
-
-    var toggleRow = document.createElement("label");
-    toggleRow.className = "basemap-toggle-row";
-
-    var cb = document.createElement("input");
-    cb.type = "checkbox";
-    cb.checked = _muniBoundariesVisible;
-    cb.addEventListener("change", function () {
-      toggleMuniBoundaries(cb.checked);
-    });
-
-    toggleRow.appendChild(cb);
-    toggleRow.appendChild(document.createTextNode(" Municipal boundaries"));
-    dropdown.appendChild(toggleRow);
-
     btn.addEventListener("click", function (e) {
       e.stopPropagation();
       dropdown.style.display = dropdown.style.display === "none" ? "block" : "none";
@@ -318,10 +336,28 @@
     this._map = undefined;
   };
 
+  map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
   map.addControl(new BasemapControl(), "bottom-right");
+  map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: "imperial" }), "bottom-left");
+  map.addControl(new NorthArrowControl(), "bottom-left");
 
   // ---- Expose on App namespace ----
 
   App.map = map;
   App.switchBasemap = switchBasemap;
+  App.toggleMuniBoundaries = toggleMuniBoundaries;
+  App.setMuniBoundariesLayerVisible = function (visible) {
+    var LAYER = "muni-boundaries-line";
+    if (visible) {
+      if (map.getLayer(LAYER)) {
+        map.setLayoutProperty(LAYER, "visibility", "visible");
+      } else {
+        toggleMuniBoundaries(true);
+      }
+    } else {
+      if (map.getLayer(LAYER)) {
+        map.setLayoutProperty(LAYER, "visibility", "none");
+      }
+    }
+  };
 })();
