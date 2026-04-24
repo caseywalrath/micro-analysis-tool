@@ -759,6 +759,112 @@
     if (btn) btn.disabled = !enabled;
   }
 
+  // ---- CSV export ----
+
+  function csvCell(v) {
+    if (v == null) return "";
+    var s = String(v);
+    if (/[",\n\r]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  }
+  function csvRow(arr) { return arr.map(csvCell).join(","); }
+
+  function round1(v) { return isFinite(v) ? Math.round(v * 10) / 10 : ""; }
+  function round2(v) { return isFinite(v) ? Math.round(v * 100) / 100 : ""; }
+  function roundI(v) { return isFinite(v) ? Math.round(v) : ""; }
+
+  function exportCSV() {
+    if (!_lastResult) return;
+    var settings = _lastResult.settings;
+    var services = _lastResult.services;
+    var summary  = _lastResult.summary;
+
+    var now = new Date();
+    var stamp = now.getFullYear() + "-" +
+                String(now.getMonth() + 1).padStart(2, "0") + "-" +
+                String(now.getDate()).padStart(2, "0") + "_" +
+                String(now.getHours()).padStart(2, "0") +
+                String(now.getMinutes()).padStart(2, "0");
+
+    var lines = [];
+    lines.push("# Route Costing Export");
+    lines.push("# Generated: " + now.toISOString());
+    if (settings.costBasisYear) lines.push("# Cost basis: " + settings.costBasisYear);
+    lines.push("# Cost per platform hour ($): " + settings.costPerHour);
+    lines.push("# Deadhead %: " + settings.deadheadPct);
+    lines.push("# Layover: " + settings.layoverValue +
+               (settings.layoverMode === "percent" ? "% of round-trip" : " min"));
+    lines.push("# Days/year Wk/Sa/Su: " +
+               settings.daysWeekday + "/" + settings.daysSaturday + "/" + settings.daysSunday);
+    lines.push("# Spare ratio %: " + settings.spareRatio);
+    lines.push("");
+
+    // Per-Service rows
+    lines.push(csvRow([
+      "Service","Type","Patterns","Direction",
+      "RT mi","Cycle (min)","Peak headway (min)",
+      "Daily trips (Wk)","Daily trips (Sa)","Daily trips (Su)",
+      "Daily rev-hr (Wk)","Daily rev-hr (Sa)","Daily rev-hr (Su)",
+      "Daily plat-hr (Wk)","Daily plat-hr (Sa)","Daily plat-hr (Su)",
+      "Annual rev-hr","Annual plat-hr","Annual miles","Annual trips","Annual cost ($)",
+      "Peak veh raw","Peak veh rounded","Fleet w/spares",
+      "Skipped","Warnings"
+    ]));
+
+    services.forEach(function (r) {
+      if (r.skipped) {
+        var warnStr = (r.warnings || []).map(function (w) { return w.msg; }).join(" | ");
+        lines.push(csvRow([
+          r.name, r.isGroup ? "Group" : "Solo", r.patternCount, r.directionSummary,
+          "","","","","","","","","","","","","","","","","","","","",
+          "YES", warnStr
+        ]));
+        return;
+      }
+      lines.push(csvRow([
+        r.name, r.isGroup ? "Group" : "Solo", r.patternCount, r.directionSummary,
+        round2(r.rtMiles), roundI(r.cycleMin), roundI(r.peakHeadwayMin),
+        roundI(r.daily.weekday.trips),  roundI(r.daily.saturday.trips),  roundI(r.daily.sunday.trips),
+        round1(r.daily.weekday.revHrs), round1(r.daily.saturday.revHrs), round1(r.daily.sunday.revHrs),
+        round1(r.daily.weekday.platHrs),round1(r.daily.saturday.platHrs),round1(r.daily.sunday.platHrs),
+        roundI(r.annual.revHrs), roundI(r.annual.platHrs), roundI(r.annual.miles),
+        roundI(r.annual.trips),  roundI(r.annual.cost),
+        round1(r.peakVehiclesRaw), roundI(r.peakVehiclesRounded), roundI(r.fleetWithSpares),
+        "", ""
+      ]));
+    });
+
+    lines.push("");
+    lines.push("# System Summary");
+    lines.push(csvRow(["Metric","Value"]));
+    lines.push(csvRow(["Services scored", summary.servicesScored]));
+    lines.push(csvRow(["Services skipped", summary.servicesSkipped]));
+    lines.push(csvRow(["Annual operating cost ($)", roundI(summary.annualCost)]));
+    lines.push(csvRow(["Annual platform hours", roundI(summary.annualPlatHrs)]));
+    lines.push(csvRow(["Annual revenue hours",  roundI(summary.annualRevHrs)]));
+    lines.push(csvRow(["Annual revenue miles",  roundI(summary.annualMiles)]));
+    lines.push(csvRow(["Annual trips",          roundI(summary.annualTrips)]));
+    lines.push(csvRow(["Daily trips (Wk)", roundI(summary.dailyTripsWk)]));
+    lines.push(csvRow(["Daily trips (Sa)", roundI(summary.dailyTripsSa)]));
+    lines.push(csvRow(["Daily trips (Su)", roundI(summary.dailyTripsSu)]));
+    lines.push(csvRow(["Fleet — sum of Service needs (standalone)", summary.fleetSumRounded]));
+    lines.push(csvRow(["Fleet — theoretical minimum (interlined)",  summary.fleetSumRaw]));
+    lines.push(csvRow(["Interline opportunity (gap)", summary.interlineGap]));
+    if (settings.costBasisYear) lines.push(csvRow(["Cost basis", settings.costBasisYear]));
+
+    var blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    var url  = URL.createObjectURL(blob);
+    var a    = document.createElement("a");
+    a.href = url;
+    a.download = "route-costing_" + stamp + ".csv";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 0);
+  }
+
   // ---- Small escapers (no external dep) ----
 
   function escapeHTML(s) {
@@ -842,6 +948,11 @@
     // Cost Services button
     if (byId("rcCostBtn")) {
       byId("rcCostBtn").addEventListener("click", runCosting);
+    }
+
+    // CSV export
+    if (byId("rcExportCSV")) {
+      byId("rcExportCSV").addEventListener("click", exportCSV);
     }
 
     // Select all / Clear checklist helpers (checkboxes populated in Step 3)
