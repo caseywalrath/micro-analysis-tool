@@ -4088,3 +4088,37 @@ body.dark-mode .gtfs-detail-title { border-color: #3a3a50; }
   cursor: help;
 }
 
+.rc-service-row {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  padding: 5px 6px;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
+  line-height: 1.25;
+}
+.rc-service-row:last-child { border-bottom: none; }
+.rc-service-row input[type=checkbox] { margin-top: 2px; flex: 0 0 auto; }
+.rc-service-main { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.rc-service-name { font-size: 12px; color: #333; font-weight: var(--weight-medium, 500); }
+.rc-service-meta { font-size: 11px; color: var(--muted); margin-top: 1px; }
+.rc-service-blocked .rc-service-name { color: #c0392b; }
+
+.rc-pill {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: var(--weight-semibold, 600);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  vertical-align: middle;
+}
+.rc-pill-group { background: #e0ecff; color: #2b4d80; }
+.rc-pill-solo  { background: #eee; color: #555; }
+
+body.dark-mode .rc-service-row { border-color: #2d2d3d; }
+body.dark-mode .rc-service-name { color: #ddd; }
+body.dark-mode .rc-pill-group { background: #1e2d50; color: #b8cef5; }
+body.dark-mode .rc-pill-solo  { background: #2d2d3d; color: #aaa; }
+

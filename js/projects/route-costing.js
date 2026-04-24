@@ -30,6 +30,7 @@
 
   var _settings        = Object.assign({}, DEFAULT_SETTINGS);
   var _pendingSettings = null;    // temp copy while Settings modal is open
+  var _lastServices    = null;    // last-assembled Service[] from buildServicesFromFeatures()
   var _lastResult      = null;    // { services:[...], summary:{...}, settings } (Step 5)
   var _stale           = false;
   var _running         = false;
@@ -143,21 +144,218 @@
     if (wrap) wrap.style.color = (sum > 366) ? "#c0392b" : "";
   }
 
-  // ---- Placeholders for later steps ----
+  // ---- Service assembly ----
+
+  // Valid direction opposites for 2-pattern Services (sorted, "|"-joined key).
+  var VALID_PAIR_KEYS = {
+    "NB|SB": true,
+    "EB|WB": true,
+    "Inbound|Outbound": true,
+    "CCW|CW": true
+  };
+
+  // Single-pattern directions that represent a complete cycle.
+  var SOLO_OK_DIRECTIONS = { "Both": true, "Loop": true, "CW": true, "CCW": true };
+
+  function collectPattern(feature, type, idx) {
+    var attrs = (feature.properties && feature.properties.attributes) || {};
+    var name  = (feature.properties && feature.properties.name) ||
+                (type.charAt(0).toUpperCase() + type.slice(1) + " " + (idx + 1));
+    var lengthMi = 0;
+    try { lengthMi = (typeof turf !== "undefined") ? turf.length(feature, { units: "miles" }) : 0; }
+    catch (e) { lengthMi = 0; }
+    var group = attrs.group ? String(attrs.group).trim() : "";
+    return {
+      featureType:  type,
+      featureIndex: idx,
+      name:         name,
+      direction:    attrs.direction || "Both",
+      avgSpeed:     parseFloat(attrs.avgSpeed) || 0,
+      group:        group || null,
+      lengthMiles:  lengthMi,
+      service:      attrs.service || null
+    };
+  }
+
+  function buildServicesFromFeatures() {
+    var services = [];
+    var buckets  = {};  // group name -> { name, patterns:[] }
+
+    function add(feature, type, idx) {
+      var p = collectPattern(feature, type, idx);
+      if (p.group) {
+        if (!buckets[p.group]) buckets[p.group] = { name: p.group, patterns: [] };
+        buckets[p.group].patterns.push(p);
+      } else {
+        services.push({
+          key:      "solo-" + type + "-" + idx,
+          name:     p.name,
+          isGroup:  false,
+          patterns: [p],
+          warnings: []
+        });
+      }
+    }
+
+    (App.routes || []).forEach(function (f, i) { add(f, "route", i); });
+    (App.lines  || []).forEach(function (f, i) { add(f, "line",  i); });
+
+    Object.keys(buckets).sort().forEach(function (k) {
+      var b = buckets[k];
+      services.push({
+        key:      "group-" + k,
+        name:     b.name,
+        isGroup:  true,
+        patterns: b.patterns,
+        warnings: []
+      });
+    });
+
+    services.forEach(validateService);
+    return services;
+  }
+
+  function validateService(svc) {
+    var ps = svc.patterns;
+
+    // Hard error: 3+ patterns in a group
+    if (ps.length >= 3) {
+      svc.warnings.push({
+        level: "error",
+        msg: ps.length + " patterns in group — v1 supports max 2. Split into separate groups."
+      });
+      return; // stop; other validations don't matter when the group is invalid
+    }
+
+    // 2-pattern: must be valid opposites
+    if (ps.length === 2) {
+      var key = [ps[0].direction, ps[1].direction].sort().join("|");
+      if (!VALID_PAIR_KEYS[key]) {
+        svc.warnings.push({
+          level: "error",
+          msg: "Directions not valid opposites (" + ps[0].direction + " + " + ps[1].direction +
+               "). Valid pairs: NB+SB, EB+WB, Inbound+Outbound, CW+CCW."
+        });
+      }
+    }
+
+    // 1-pattern: direction must represent a full cycle
+    if (ps.length === 1 && !SOLO_OK_DIRECTIONS[ps[0].direction]) {
+      svc.warnings.push({
+        level: "error",
+        msg: "Single-direction pattern (" + ps[0].direction + ") has no pair. " +
+             "Set direction to Both, Loop, CW, or CCW, or group with its opposite."
+      });
+    }
+
+    // Missing avgSpeed
+    ps.forEach(function (p) {
+      if (!(p.avgSpeed > 0)) {
+        svc.warnings.push({
+          level: "error",
+          msg: "\"" + p.name + "\" is missing Avg speed."
+        });
+      }
+    });
+
+    // No service bands defined on any pattern
+    var hasAnyBand = ps.some(function (p) {
+      var s = p.service || {};
+      var hasBandWithHeadway = function (arr) {
+        return Array.isArray(arr) && arr.some(function (b) {
+          var f = parseFloat(b && b.frequency);
+          return isFinite(f) && f > 0;
+        });
+      };
+      return hasBandWithHeadway(s.weekday) || hasBandWithHeadway(s.saturday) || hasBandWithHeadway(s.sunday);
+    });
+    if (!hasAnyBand) {
+      svc.warnings.push({
+        level: "error",
+        msg: "No service bands with a headway defined. Add bands via the Attributes popup."
+      });
+    }
+  }
+
+  function directionSummary(svc) {
+    return svc.patterns.map(function (p) { return p.direction; }).join(" + ");
+  }
+
+  function hasBlockingWarnings(svc) {
+    return svc.warnings.some(function (w) { return w.level === "error"; });
+  }
+
+  // ---- Checklist rendering ----
 
   function buildServiceChecklist() {
-    // Step 3 will populate this; for now show static empty message.
     var el = document.getElementById("rcServiceList");
     if (!el) return;
-    var routes = App.routes || [];
-    var lines  = App.lines  || [];
-    if (!routes.length && !lines.length) {
-      el.innerHTML = '<div style="padding:6px;color:var(--muted);font-size:12px;">No routes or lines drawn.</div>';
+
+    // Capture existing check state so a rebuild from update() preserves user choices
+    var prev = {};
+    var prevBoxes = el.querySelectorAll("input[type=checkbox]");
+    for (var i = 0; i < prevBoxes.length; i++) {
+      prev[prevBoxes[i].getAttribute("data-key")] = prevBoxes[i].checked;
+    }
+
+    var services = buildServicesFromFeatures();
+    _lastServices = services;
+
+    if (!services.length) {
+      el.innerHTML = '<div style="padding:6px;color:var(--muted);font-size:12px;">' +
+        'No routes or lines drawn. Draw features and set their attributes (direction, speed, service bands) to cost.</div>';
       return;
     }
-    el.innerHTML = '<div style="padding:6px;color:var(--muted);font-size:12px;">' +
-      routes.length + ' route(s) + ' + lines.length + ' line(s) detected. ' +
-      'Service assembly coming in Step 3.</div>';
+
+    var html = "";
+    services.forEach(function (svc) {
+      var blocked = hasBlockingWarnings(svc);
+      var checkedAttr = (prev[svc.key] === false) ? "" : "checked";
+      var warnIcon = "";
+      if (svc.warnings.length) {
+        var tip = svc.warnings.map(function (w) { return w.msg; }).join(" \n");
+        warnIcon = ' <span class="rc-warn-badge" title="' + escapeAttr(tip) + '">&#9888;</span>';
+      }
+      var typeBadge = svc.isGroup
+        ? '<span class="rc-pill rc-pill-group">Group</span>'
+        : '<span class="rc-pill rc-pill-solo">Solo</span>';
+
+      html +=
+        '<label class="rc-service-row' + (blocked ? ' rc-service-blocked' : '') + '">' +
+          '<input type="checkbox" data-key="' + escapeAttr(svc.key) + '" ' + checkedAttr + '>' +
+          '<span class="rc-service-main">' +
+            '<span class="rc-service-name">' + escapeHTML(svc.name) + warnIcon + '</span>' +
+            '<span class="rc-service-meta">' +
+              typeBadge + ' ' +
+              escapeHTML(directionSummary(svc)) + ' &middot; ' +
+              svc.patterns.length + ' pattern' + (svc.patterns.length === 1 ? '' : 's') +
+            '</span>' +
+          '</span>' +
+        '</label>';
+    });
+    el.innerHTML = html;
+  }
+
+  function getSelectedServices() {
+    if (!_lastServices) return [];
+    var el = document.getElementById("rcServiceList");
+    if (!el) return [];
+    var checks = {};
+    var boxes = el.querySelectorAll("input[type=checkbox]");
+    for (var i = 0; i < boxes.length; i++) {
+      checks[boxes[i].getAttribute("data-key")] = boxes[i].checked;
+    }
+    return _lastServices.filter(function (s) { return checks[s.key]; });
+  }
+
+  // ---- Small escapers (no external dep) ----
+
+  function escapeHTML(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  function escapeAttr(s) {
+    return escapeHTML(s).replace(/"/g, "&quot;").replace(/\n/g, "&#10;");
   }
 
   function runCosting() {
