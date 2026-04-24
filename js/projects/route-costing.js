@@ -900,6 +900,7 @@
     showResultsSection(true);
     setExportEnabled(scored > 0);
 
+    if (App.cache) App.cache.save();
     _running = false;
   }
 
@@ -961,6 +962,7 @@
         e.preventDefault();
         var boxes = document.querySelectorAll("#rcServiceList input[type=checkbox]");
         for (var j = 0; j < boxes.length; j++) boxes[j].checked = true;
+        if (App.cache) App.cache.save();
       });
     }
     if (byId("rcSelectNone")) {
@@ -968,6 +970,14 @@
         e.preventDefault();
         var boxes = document.querySelectorAll("#rcServiceList input[type=checkbox]");
         for (var j = 0; j < boxes.length; j++) boxes[j].checked = false;
+        if (App.cache) App.cache.save();
+      });
+    }
+
+    // Persist selection changes (event-delegation survives checklist rebuilds)
+    if (byId("rcServiceList")) {
+      byId("rcServiceList").addEventListener("change", function (e) {
+        if (e.target && e.target.type === "checkbox" && App.cache) App.cache.save();
       });
     }
   }
@@ -1012,6 +1022,95 @@
     setStatus(null);
   }
 
+  // ---- Session persistence ----
+
+  function getSelectedServiceKeys() {
+    var el = document.getElementById("rcServiceList");
+    if (!el) return null;
+    var boxes = el.querySelectorAll("input[type=checkbox]");
+    if (!boxes.length) return null;
+    var keys = [];
+    for (var i = 0; i < boxes.length; i++) {
+      if (boxes[i].checked) keys.push(boxes[i].getAttribute("data-key"));
+    }
+    return keys;
+  }
+
+  var _restoredSelectedKeys = null;  // set by apply(); consumed by buildServiceChecklist
+
+  function saveRcState(/* mode */) {
+    var data = {
+      version:       1,
+      settings:      Object.assign({}, _settings),
+      selectedKeys:  getSelectedServiceKeys(),
+      lastSummary:   null
+    };
+    if (_lastResult) {
+      // Strip bandBreakdown (large + reconstructible) in light mode; keep per-service totals.
+      data.lastSummary = {
+        settings: Object.assign({}, _lastResult.settings),
+        summary:  Object.assign({}, _lastResult.summary),
+        services: _lastResult.services.map(function (r) {
+          if (r.skipped) {
+            return {
+              name: r.name, key: r.key, isGroup: r.isGroup,
+              skipped: true, warnings: r.warnings,
+              patternCount: r.patternCount, directionSummary: r.directionSummary
+            };
+          }
+          return {
+            name: r.name, key: r.key, isGroup: r.isGroup,
+            skipped: false, patternCount: r.patternCount,
+            directionSummary: r.directionSummary,
+            rtMiles: r.rtMiles, cycleMin: r.cycleMin,
+            peakHeadwayMin: r.peakHeadwayMin,
+            daily: r.daily, annual: r.annual,
+            peakVehiclesRaw: r.peakVehiclesRaw,
+            peakVehiclesRounded: r.peakVehiclesRounded,
+            fleetWithSpares: r.fleetWithSpares,
+            bandBreakdown: []  // dropped from persistence; re-run to recompute
+          };
+        })
+      };
+    }
+    return data;
+  }
+
+  function restoreRcState(data) {
+    if (!data) return;
+    if (data.settings) {
+      _settings = Object.assign({}, DEFAULT_SETTINGS, data.settings);
+    }
+    if (Array.isArray(data.selectedKeys)) {
+      _restoredSelectedKeys = data.selectedKeys.slice();
+    }
+    if (data.lastSummary && Array.isArray(data.lastSummary.services)) {
+      _lastResult = {
+        settings: Object.assign({}, data.lastSummary.settings || _settings),
+        summary:  data.lastSummary.summary || {},
+        services: data.lastSummary.services
+      };
+    }
+  }
+
+  // Hook restored selection into buildServiceChecklist.
+  var _origBuildServiceChecklist = buildServiceChecklist;
+  buildServiceChecklist = function () {
+    _origBuildServiceChecklist();
+    if (_restoredSelectedKeys) {
+      var el = document.getElementById("rcServiceList");
+      if (el) {
+        var boxes = el.querySelectorAll("input[type=checkbox]");
+        var lookup = {};
+        _restoredSelectedKeys.forEach(function (k) { lookup[k] = true; });
+        for (var i = 0; i < boxes.length; i++) {
+          boxes[i].checked = !!lookup[boxes[i].getAttribute("data-key")];
+        }
+      }
+      _restoredSelectedKeys = null;  // consume once
+    }
+  };
+
   // ---- Register module ----
 
   App.registerModule({
@@ -1027,5 +1126,12 @@
     clear:   function ()     { clearAll(); },
     update:  async function (core) { await update(core); }
   });
+
+  if (App.cache && App.cache.registerModule) {
+    App.cache.registerModule("route-costing", {
+      collect: saveRcState,
+      apply:   restoreRcState
+    });
+  }
 
 })();
