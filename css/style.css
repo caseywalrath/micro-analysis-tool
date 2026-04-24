@@ -4057,3 +4057,34 @@ body.dark-mode .gtfs-table-wrapper { border-color: #3a3a50; }
 body.dark-mode .gtfs-map-controls { border-color: #3a3a50; }
 body.dark-mode .gtfs-detail-val { color: #ccc; }
 body.dark-mode .gtfs-detail-title { border-color: #3a3a50; }
+
+/* ================================================================
+   Route Costing module
+================================================================ */
+
+.rc-body { display: flex; flex-direction: column; gap: 10px; }
+
+.rc-settings-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 12px;
+  align-items: center;
+}
+
+.rc-section-label {
+  font-size: var(--text-xs, 11px);
+  font-weight: var(--weight-semibold, 600);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 2px 0 6px;
+}
+
+.rc-warn-badge {
+  display: inline-block;
+  margin-left: 4px;
+  color: #c0392b;
+  font-size: 12px;
+  cursor: help;
+}
+
