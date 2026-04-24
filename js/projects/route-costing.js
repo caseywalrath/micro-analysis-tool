@@ -348,6 +348,213 @@
     return _lastServices.filter(function (s) { return checks[s.key]; });
   }
 
+  // ---- Cost math (pure functions) ----
+
+  function parseBandTime(s) {
+    if (typeof s !== "string") return NaN;
+    var m = /^(\d{1,2}):(\d{2})$/.exec(s.trim());
+    if (!m) return NaN;
+    var h = parseInt(m[1], 10);
+    var min = parseInt(m[2], 10);
+    if (h < 0 || h > 24 || min < 0 || min >= 60) return NaN;
+    return h + min / 60;
+  }
+
+  function emptyDay() {
+    return { trips: 0, revHrs: 0, miles: 0, platHrs: 0, cost: 0 };
+  }
+
+  // One-way runtime per pattern, in hours. Requires avgSpeed > 0 (validated upstream).
+  function oneWayRuntimeHrs(pattern) {
+    if (!(pattern.avgSpeed > 0)) return 0;
+    return pattern.lengthMiles / pattern.avgSpeed;
+  }
+
+  // Compute round-trip runtime and round-trip miles for a Service.
+  // - 2-pattern: sum both one-ways / sum both lengths.
+  // - 1-pattern "Both": double one-way / double length.
+  // - 1-pattern Loop/CW/CCW: one-way is already the full cycle; length is unchanged.
+  function computeRoundTrip(svc) {
+    var ps = svc.patterns;
+    var oneWays = ps.map(oneWayRuntimeHrs);
+    var lenSum  = ps.reduce(function (s, p) { return s + p.lengthMiles; }, 0);
+    var oneWaySum = oneWays.reduce(function (s, v) { return s + v; }, 0);
+
+    if (ps.length === 2) {
+      return { rtHrs: oneWaySum, rtMiles: lenSum, oneWays: oneWays };
+    }
+    // Single pattern
+    var d = ps[0].direction;
+    if (d === "Both") {
+      return { rtHrs: 2 * oneWays[0], rtMiles: 2 * ps[0].lengthMiles, oneWays: oneWays };
+    }
+    // Loop / CW / CCW — one-way IS the full cycle
+    return { rtHrs: oneWays[0], rtMiles: ps[0].lengthMiles, oneWays: oneWays };
+  }
+
+  function computeLayoverHrs(rtHrs, settings) {
+    if (settings.layoverMode === "percent") {
+      return rtHrs * (settings.layoverValue / 100);
+    }
+    return settings.layoverValue / 60;  // minutes → hours
+  }
+
+  // Compute one Service's full cost picture. Returns a result object.
+  // If the Service has blocking warnings, returns { skipped:true, warnings, name }.
+  function computeService(svc, settings) {
+    if (hasBlockingWarnings(svc)) {
+      return {
+        name: svc.name,
+        key: svc.key,
+        isGroup: svc.isGroup,
+        skipped: true,
+        warnings: svc.warnings,
+        directionSummary: directionSummary(svc),
+        patternCount: svc.patterns.length
+      };
+    }
+
+    var rt = computeRoundTrip(svc);
+    var layHrs = computeLayoverHrs(rt.rtHrs, settings);
+    var cycleHrs = rt.rtHrs + layHrs;
+
+    var daily = { weekday: emptyDay(), saturday: emptyDay(), sunday: emptyDay() };
+    var minHeadway = Infinity;
+    var bandRows = [];
+
+    ["weekday", "saturday", "sunday"].forEach(function (day) {
+      svc.patterns.forEach(function (p, pi) {
+        var bands = (p.service && Array.isArray(p.service[day])) ? p.service[day] : [];
+        bands.forEach(function (b) {
+          var headway = parseFloat(b && b.frequency);
+          if (!(headway > 0)) return;  // skip blank/0 headways (= "no service in this band")
+
+          var from = parseBandTime(b && b.from);
+          var to   = parseBandTime(b && b.to);
+          if (!isFinite(from) || !isFinite(to)) return;
+
+          var hrs = to - from;
+          if (hrs <= 0) hrs += 24;  // handle midnight wrap (e.g. 22:00 → 02:00)
+          if (!(hrs > 0)) return;
+
+          var trips     = Math.ceil(hrs * 60 / headway);
+          var oneWayHr  = rt.oneWays[pi];
+          var bandRevHr = trips * oneWayHr;
+          var bandMiles = trips * p.lengthMiles;
+
+          daily[day].trips   += trips;
+          daily[day].revHrs  += bandRevHr;
+          daily[day].miles   += bandMiles;
+
+          if (headway < minHeadway) minHeadway = headway;
+
+          bandRows.push({
+            day:         day,
+            patternName: p.name,
+            patternIdx:  pi,
+            from:        b.from,
+            to:          b.to,
+            hours:       hrs,
+            headwayMin:  headway,
+            trips:       trips,
+            revHrs:      bandRevHr
+          });
+        });
+      });
+    });
+
+    var dh = settings.deadheadPct / 100;
+    ["weekday", "saturday", "sunday"].forEach(function (day) {
+      daily[day].platHrs = daily[day].revHrs * (1 + dh);
+      daily[day].cost    = daily[day].platHrs * settings.costPerHour;
+    });
+
+    var daysMap = {
+      weekday:  settings.daysWeekday,
+      saturday: settings.daysSaturday,
+      sunday:   settings.daysSunday
+    };
+
+    var annual = { revHrs: 0, platHrs: 0, cost: 0, trips: 0, miles: 0 };
+    ["weekday", "saturday", "sunday"].forEach(function (day) {
+      var dd = daysMap[day] || 0;
+      annual.revHrs  += daily[day].revHrs  * dd;
+      annual.platHrs += daily[day].platHrs * dd;
+      annual.cost    += daily[day].cost    * dd;
+      annual.trips   += daily[day].trips   * dd;
+      annual.miles   += daily[day].miles   * dd;
+    });
+
+    // Peak vehicles: cycle / min-headway, across all bands/patterns.
+    var peakRaw = 0, peakRounded = 0, fleet = 0;
+    if (isFinite(minHeadway) && minHeadway > 0) {
+      peakRaw     = (cycleHrs * 60) / minHeadway;
+      peakRounded = Math.ceil(peakRaw);
+      fleet       = Math.ceil(peakRounded * (1 + settings.spareRatio / 100));
+    }
+
+    return {
+      name:             svc.name,
+      key:              svc.key,
+      isGroup:          svc.isGroup,
+      skipped:          false,
+      warnings:         svc.warnings,   // non-blocking warnings if any future soft warnings exist
+      patternCount:     svc.patterns.length,
+      directionSummary: directionSummary(svc),
+
+      rtMiles:          rt.rtMiles,
+      oneWayHrs:        rt.oneWays,     // per-pattern one-way runtimes (hours)
+      cycleMin:         cycleHrs * 60,
+      layoverMin:       layHrs * 60,
+      peakHeadwayMin:   isFinite(minHeadway) ? minHeadway : null,
+
+      daily:  daily,
+      annual: annual,
+
+      peakVehiclesRaw:      peakRaw,
+      peakVehiclesRounded:  peakRounded,
+      fleetWithSpares:      fleet,
+
+      bandBreakdown: bandRows
+    };
+  }
+
+  function computeSystemSummary(serviceResults, settings) {
+    var out = {
+      servicesScored:   0,
+      servicesSkipped:  0,
+      annualCost:       0,
+      annualPlatHrs:    0,
+      annualRevHrs:     0,
+      annualTrips:      0,
+      annualMiles:      0,
+      dailyTripsWk:     0,
+      dailyTripsSa:     0,
+      dailyTripsSu:     0,
+      fleetSumRounded:  0,   // Σ of each Service's rounded fleet need (standalone)
+      fleetSumRaw:      0    // ceil of Σ raw → theoretical floor if perfectly interlined
+    };
+    var rawSum = 0;
+    serviceResults.forEach(function (r) {
+      if (r.skipped) { out.servicesSkipped++; return; }
+      out.servicesScored++;
+      out.annualCost     += r.annual.cost;
+      out.annualPlatHrs  += r.annual.platHrs;
+      out.annualRevHrs   += r.annual.revHrs;
+      out.annualTrips    += r.annual.trips;
+      out.annualMiles    += r.annual.miles;
+      out.dailyTripsWk   += r.daily.weekday.trips;
+      out.dailyTripsSa   += r.daily.saturday.trips;
+      out.dailyTripsSu   += r.daily.sunday.trips;
+      out.fleetSumRounded += r.peakVehiclesRounded;
+      rawSum              += r.peakVehiclesRaw;
+    });
+    out.fleetSumRaw = Math.ceil(rawSum);
+    out.interlineGap = out.fleetSumRounded - out.fleetSumRaw;
+    out.costBasisYear = settings.costBasisYear || "";
+    return out;
+  }
+
   // ---- Small escapers (no external dep) ----
 
   function escapeHTML(s) {
@@ -359,7 +566,30 @@
   }
 
   function runCosting() {
-    setStatus("Costing engine not yet implemented (Step 4).", "warn");
+    if (_running) return;
+    _running = true;
+    var selected = getSelectedServices();
+    if (!selected.length) {
+      setStatus("Select at least one Service.", "warn");
+      _running = false;
+      return;
+    }
+    var results = selected.map(function (svc) { return computeService(svc, _settings); });
+    var summary = computeSystemSummary(results, _settings);
+    _lastResult = { services: results, summary: summary, settings: Object.assign({}, _settings) };
+    _stale = false;
+
+    var scored  = summary.servicesScored;
+    var skipped = summary.servicesSkipped;
+    var msg = "Costed " + scored + " service" + (scored === 1 ? "" : "s");
+    if (skipped > 0) msg += " (" + skipped + " skipped — see warnings)";
+    msg += ". Full tables in Step 5.";
+    setStatus(msg, "ok");
+
+    if (typeof console !== "undefined" && console.table) {
+      console.log("[Route Costing] result:", _lastResult);
+    }
+    _running = false;
   }
 
   function markStale() {
