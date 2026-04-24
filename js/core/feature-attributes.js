@@ -29,7 +29,7 @@
   // Shared route/line fields — line mirrors route exactly
   var ROUTE_FIELDS = [
     { key: "group",     label: "Group",     type: "text",   placeholder: "e.g. Corridor A", groupPicker: true },
-    { key: "direction", label: "Direction", type: "select", options: ["Both","NB","SB","EB","WB","Inbound","Outbound","Loop"] },
+    { key: "direction", label: "Direction", type: "select", options: ["Both","NB","SB","EB","WB","Inbound","Outbound","Loop","CW","CCW"] },
     { key: "mode",      label: "Mode",      type: "select", options: ["Bus","BRT","Light Rail","Streetcar"] },
     { key: "routeId",   label: "Route ID",  type: "text",   placeholder: "e.g. 7, Blue" },
     { key: "avgSpeed",  label: "Avg speed", type: "number", unit: "mph", defaultValue: 14 }
