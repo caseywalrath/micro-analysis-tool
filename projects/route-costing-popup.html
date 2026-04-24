@@ -1,0 +1,124 @@
+<!-- Costing Settings modal overlay (covers entire popup) -->
+<div id="rcSettingsModal" class="rf-weights-modal-overlay" style="display:none;" role="dialog" aria-modal="true">
+  <div class="rf-weights-modal-box" style="width:420px;">
+    <div class="rf-weights-modal-title">Costing Settings</div>
+    <div class="tiny" style="margin-bottom:10px;color:var(--muted);">
+      Defaults apply to every Service. Individual route attributes (speed, service bands) still drive the per-service math.
+    </div>
+
+    <div class="rc-settings-grid">
+
+      <label class="tiny">Cost per platform hour ($)</label>
+      <input type="number" id="rcCostPerHour" class="rf-select" min="0" step="1" value="150">
+
+      <label class="tiny">Deadhead %</label>
+      <input type="number" id="rcDeadheadPct" class="rf-select" min="0" max="100" step="1" value="15">
+
+      <label class="tiny">Layover mode</label>
+      <div style="display:flex;gap:12px;align-items:center;">
+        <label class="tiny" style="display:flex;gap:4px;align-items:center;">
+          <input type="radio" name="rcLayoverMode" value="minutes" checked> Minutes
+        </label>
+        <label class="tiny" style="display:flex;gap:4px;align-items:center;">
+          <input type="radio" name="rcLayoverMode" value="percent"> % of round-trip
+        </label>
+      </div>
+
+      <label class="tiny" id="rcLayoverValueLabel">Layover (min)</label>
+      <input type="number" id="rcLayoverValue" class="rf-select" min="0" step="0.5" value="10">
+
+      <label class="tiny">Weekday days/year</label>
+      <input type="number" id="rcDaysWeekday" class="rf-select" min="0" max="366" step="1" value="255">
+
+      <label class="tiny">Saturday days/year</label>
+      <input type="number" id="rcDaysSaturday" class="rf-select" min="0" max="366" step="1" value="52">
+
+      <label class="tiny">Sunday/Holiday days/year</label>
+      <input type="number" id="rcDaysSunday" class="rf-select" min="0" max="366" step="1" value="58">
+
+      <label class="tiny">Fleet spare ratio %</label>
+      <input type="number" id="rcSpareRatio" class="rf-select" min="0" max="100" step="1" value="15">
+
+      <label class="tiny">Cost basis year (label)</label>
+      <input type="text" id="rcCostBasisYear" class="rf-select" placeholder="e.g. 2024 NTD">
+
+    </div>
+
+    <div class="tiny" id="rcDaysSumWarn" style="margin-top:6px;color:var(--muted);">
+      Total service days: <span id="rcDaysSum">365</span>
+    </div>
+
+    <div class="rf-weights-modal-actions">
+      <button id="rcResetSettings" class="rf-btn-sm" type="button">Reset to Defaults</button>
+      <span style="flex:1;"></span>
+      <button id="rcSettingsCancel" class="rf-btn-sm" type="button">Cancel</button>
+      <button id="rcSettingsConfirm" class="rf-action-primary" type="button" style="width:auto;padding:5px 16px;">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Route Costing — 2-column popup body (Settings | Results) -->
+<div class="rc-body">
+  <div class="rf-section-row" style="align-items:flex-start;min-height:400px;">
+
+    <!-- Left: settings column (240px) -->
+    <div class="rf-settings-col">
+
+      <div class="rf-section-title">Services to cost</div>
+      <div class="tiny" style="color:var(--muted);margin-bottom:4px;">
+        Route features sharing a <b>Group</b> attribute are paired into a Service.
+      </div>
+      <div class="rf-feature-select-actions" style="margin-bottom:4px;">
+        <a href="#" id="rcSelectAll">Select all</a>&nbsp;<span style="color:var(--muted);">|</span>&nbsp;<a href="#" id="rcSelectNone">Clear</a>
+      </div>
+      <div id="rcServiceList" class="rf-feature-checklist">
+        <div style="padding:6px;color:var(--muted);font-size:12px;">No routes or lines drawn.</div>
+      </div>
+
+      <button id="rcSettingsBtn" type="button" class="rf-btn-sm" style="margin-top:12px;width:100%;">
+        Costing Settings
+      </button>
+      <button id="rcCostBtn" type="button" class="rf-action-primary" style="margin-top:8px;">
+        Cost Services
+      </button>
+
+    </div>
+
+    <!-- Right: results column (flex:1) -->
+    <div class="rf-results-col">
+
+      <div id="rcStatus" class="rf-status" style="display:none;">
+        <span id="rcStatusText">Ready</span>
+      </div>
+
+      <!-- Results (shown after a successful run) -->
+      <div id="rcResults" style="display:none;">
+
+        <div class="rc-section-label">By Service</div>
+        <div id="rcResultsTable"></div>
+
+        <div class="rc-section-label" style="margin-top:18px;">System Summary</div>
+        <div id="rcSummaryTable"></div>
+
+        <!-- Export -->
+        <div style="display:flex;gap:8px;margin-top:14px;">
+          <button id="rcExportCSV" type="button" class="rf-btn-sm" disabled>Export CSV</button>
+        </div>
+
+        <p class="tiny" id="rcFootnote" style="margin-top:8px;color:var(--muted);">
+          Trips per time band are rounded up. Warnings mark services with missing or inconsistent inputs.
+        </p>
+      </div>
+
+      <!-- Pre-run empty state -->
+      <div id="rcEmptyState" class="rf-info-box">
+        <p>Select Services and click <strong>Cost Services</strong> to estimate daily and annual operating costs.</p>
+        <p class="tiny" style="color:var(--muted);">
+          Each Service reads <b>length</b>, <b>avg speed</b>, <b>direction</b>, and <b>service bands</b> from its underlying route/line attributes. Use <b>Costing Settings</b> to set cost per hour, deadhead, layover, and days per year.
+        </p>
+      </div>
+
+    </div>
+
+  </div>
+</div>
