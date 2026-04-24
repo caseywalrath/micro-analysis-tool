@@ -555,6 +555,210 @@
     return out;
   }
 
+  // ---- Rendering ----
+
+  function fmtInt(v) {
+    if (!isFinite(v)) return "—";
+    return Math.round(v).toLocaleString();
+  }
+  function fmtDec(v, digits) {
+    if (!isFinite(v)) return "—";
+    return v.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  }
+  function fmtMoney(v) {
+    if (!isFinite(v)) return "—";
+    return "$" + Math.round(v).toLocaleString();
+  }
+  function fmtHeadway(v) {
+    if (v == null || !isFinite(v)) return "—";
+    return Math.round(v) + " min";
+  }
+  var DAY_LABELS = { weekday: "Weekday", saturday: "Saturday", sunday: "Sunday" };
+
+  function renderResultsTable(serviceResults) {
+    var wrap = document.getElementById("rcResultsTable");
+    if (!wrap) return;
+
+    if (!serviceResults.length) {
+      wrap.innerHTML = '<div class="tiny" style="color:var(--muted);">No services selected.</div>';
+      return;
+    }
+
+    var head = [
+      '<tr>',
+        '<th style="width:18px;"></th>',
+        '<th>Service</th>',
+        '<th class="rc-num">RT mi</th>',
+        '<th class="rc-num">Cycle (min)</th>',
+        '<th class="rc-num">Peak headway</th>',
+        '<th class="rc-num" title="Weekday / Saturday / Sunday">Daily trips</th>',
+        '<th class="rc-num">Daily rev-hr</th>',
+        '<th class="rc-num">Daily plat-hr</th>',
+        '<th class="rc-num">Annual plat-hr</th>',
+        '<th class="rc-num">Annual cost</th>',
+        '<th class="rc-num" title="raw / rounded / with spares">Peak veh</th>',
+      '</tr>'
+    ].join("");
+
+    var rows = "";
+    serviceResults.forEach(function (r, idx) {
+      if (r.skipped) {
+        var tip = (r.warnings || []).map(function (w) { return w.msg; }).join(" \n");
+        rows +=
+          '<tr class="rc-row rc-row-skipped" data-idx="' + idx + '">' +
+            '<td></td>' +
+            '<td>' +
+              '<span class="rc-warn-badge" title="' + escapeAttr(tip) + '">&#9888;</span> ' +
+              escapeHTML(r.name) +
+              ' <span class="rc-service-meta">(skipped)</span>' +
+            '</td>' +
+            '<td colspan="9" class="rc-skip-note">' + escapeHTML((r.warnings[0] && r.warnings[0].msg) || "Skipped") + '</td>' +
+          '</tr>';
+        return;
+      }
+
+      var tripsCell = fmtInt(r.daily.weekday.trips) + " / " +
+                      fmtInt(r.daily.saturday.trips) + " / " +
+                      fmtInt(r.daily.sunday.trips);
+      var vehCell   = fmtDec(r.peakVehiclesRaw, 1) + " / " +
+                      fmtInt(r.peakVehiclesRounded) + " / " +
+                      fmtInt(r.fleetWithSpares);
+
+      rows +=
+        '<tr class="rc-row rc-row-main" data-idx="' + idx + '">' +
+          '<td class="rc-caret">&#9656;</td>' +
+          '<td>' +
+            '<span class="rc-service-name">' + escapeHTML(r.name) + '</span>' +
+            '<div class="rc-service-meta">' + escapeHTML(r.directionSummary) + ' &middot; ' +
+              r.patternCount + ' pattern' + (r.patternCount === 1 ? '' : 's') + '</div>' +
+          '</td>' +
+          '<td class="rc-num">' + fmtDec(r.rtMiles, 2) + '</td>' +
+          '<td class="rc-num">' + fmtInt(r.cycleMin) + '</td>' +
+          '<td class="rc-num">' + fmtHeadway(r.peakHeadwayMin) + '</td>' +
+          '<td class="rc-num">' + tripsCell + '</td>' +
+          '<td class="rc-num">' + fmtDec(r.daily.weekday.revHrs + r.daily.saturday.revHrs + r.daily.sunday.revHrs, 1) + '</td>' +
+          // Note: "Daily plat-hr" shown is weekday-only by convention — the most useful single
+          // daily number. Saturday/Sunday totals live in the expand row + annual aggregate.
+          '<td class="rc-num">' + fmtDec(r.daily.weekday.platHrs, 1) + '</td>' +
+          '<td class="rc-num">' + fmtInt(r.annual.platHrs) + '</td>' +
+          '<td class="rc-num rc-cost">' + fmtMoney(r.annual.cost) + '</td>' +
+          '<td class="rc-num">' + vehCell + '</td>' +
+        '</tr>' +
+        '<tr class="rc-row-details" data-idx="' + idx + '" style="display:none;">' +
+          '<td></td>' +
+          '<td colspan="10">' + buildBandBreakdownHTML(r) + '</td>' +
+        '</tr>';
+    });
+
+    wrap.innerHTML = '<table class="rc-table"><thead>' + head + '</thead><tbody>' + rows + '</tbody></table>';
+
+    // Wire expand toggling
+    var mainRows = wrap.querySelectorAll("tr.rc-row-main");
+    for (var i = 0; i < mainRows.length; i++) {
+      mainRows[i].addEventListener("click", function () {
+        var idx = this.getAttribute("data-idx");
+        var details = wrap.querySelector('tr.rc-row-details[data-idx="' + idx + '"]');
+        if (!details) return;
+        var isOpen = details.style.display !== "none";
+        details.style.display = isOpen ? "none" : "";
+        var caret = this.querySelector(".rc-caret");
+        if (caret) caret.innerHTML = isOpen ? "&#9656;" : "&#9662;";
+      });
+    }
+  }
+
+  function buildBandBreakdownHTML(r) {
+    if (!r.bandBreakdown || !r.bandBreakdown.length) {
+      return '<div class="tiny" style="color:var(--muted);">No service bands.</div>';
+    }
+    // Group rows by day for readability
+    var byDay = { weekday: [], saturday: [], sunday: [] };
+    r.bandBreakdown.forEach(function (row) { byDay[row.day].push(row); });
+
+    var html = '<table class="rc-band-table"><thead><tr>' +
+      '<th>Day</th><th>Pattern</th><th>Band</th><th class="rc-num">Headway</th>' +
+      '<th class="rc-num">Hours</th><th class="rc-num">Trips</th>' +
+      '<th class="rc-num">Rev-hr</th><th class="rc-num">Peak veh</th>' +
+      '</tr></thead><tbody>';
+
+    ["weekday", "saturday", "sunday"].forEach(function (day) {
+      byDay[day].forEach(function (b, i) {
+        var peakVeh = Math.ceil((r.cycleMin) / b.headwayMin);
+        html +=
+          '<tr>' +
+            '<td>' + (i === 0 ? DAY_LABELS[day] : '') + '</td>' +
+            '<td>' + escapeHTML(b.patternName) + '</td>' +
+            '<td>' + escapeHTML(b.from) + '&ndash;' + escapeHTML(b.to) + '</td>' +
+            '<td class="rc-num">' + fmtHeadway(b.headwayMin) + '</td>' +
+            '<td class="rc-num">' + fmtDec(b.hours, 1) + '</td>' +
+            '<td class="rc-num">' + fmtInt(b.trips) + '</td>' +
+            '<td class="rc-num">' + fmtDec(b.revHrs, 1) + '</td>' +
+            '<td class="rc-num">' + fmtInt(peakVeh) + '</td>' +
+          '</tr>';
+      });
+    });
+
+    html += '</tbody></table>';
+
+    // Show per-day totals line
+    var wk = r.daily.weekday, sa = r.daily.saturday, su = r.daily.sunday;
+    html += '<div class="rc-day-totals tiny">' +
+      'Daily totals — ' +
+      'Wk: ' + fmtInt(wk.trips) + ' trips, ' + fmtDec(wk.revHrs, 1) + ' rev-hr, ' + fmtMoney(wk.cost) + ' &middot; ' +
+      'Sa: ' + fmtInt(sa.trips) + ' trips, ' + fmtDec(sa.revHrs, 1) + ' rev-hr, ' + fmtMoney(sa.cost) + ' &middot; ' +
+      'Su: ' + fmtInt(su.trips) + ' trips, ' + fmtDec(su.revHrs, 1) + ' rev-hr, ' + fmtMoney(su.cost) +
+      '</div>';
+    return html;
+  }
+
+  function renderSummaryTable(summary) {
+    var wrap = document.getElementById("rcSummaryTable");
+    if (!wrap) return;
+    if (!summary) { wrap.innerHTML = ""; return; }
+
+    var rows = [
+      ["Services scored",
+        fmtInt(summary.servicesScored) +
+        (summary.servicesSkipped ? ' <span class="tiny" style="color:var(--muted);">(' + summary.servicesSkipped + ' skipped)</span>' : '')
+      ],
+      ["Annual operating cost", fmtMoney(summary.annualCost)],
+      ["Annual platform hours", fmtInt(summary.annualPlatHrs)],
+      ["Annual revenue hours",  fmtInt(summary.annualRevHrs)],
+      ["Annual revenue miles",  fmtInt(summary.annualMiles)],
+      ["Annual trips",          fmtInt(summary.annualTrips)],
+      ["Daily trips (Wk / Sa / Su)",
+        fmtInt(summary.dailyTripsWk) + " / " + fmtInt(summary.dailyTripsSa) + " / " + fmtInt(summary.dailyTripsSu)
+      ],
+      ["Fleet — sum of Service needs (standalone)", fmtInt(summary.fleetSumRounded)],
+      ["Fleet — theoretical minimum (interlined)",  fmtInt(summary.fleetSumRaw)],
+      ["Interline opportunity (gap)",
+        fmtInt(summary.interlineGap) + ' <span class="tiny" style="color:var(--muted);">vehicles potentially savable</span>'
+      ]
+    ];
+    if (summary.costBasisYear) {
+      rows.push(["Cost basis",  escapeHTML(summary.costBasisYear)]);
+    }
+
+    var html = '<table class="rc-summary-table"><tbody>';
+    rows.forEach(function (r) {
+      html += '<tr><th>' + escapeHTML(r[0]) + '</th><td>' + r[1] + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+  }
+
+  function showResultsSection(show) {
+    var results = document.getElementById("rcResults");
+    var empty   = document.getElementById("rcEmptyState");
+    if (results) results.style.display = show ? "" : "none";
+    if (empty)   empty.style.display   = show ? "none" : "";
+  }
+
+  function setExportEnabled(enabled) {
+    var btn = document.getElementById("rcExportCSV");
+    if (btn) btn.disabled = !enabled;
+  }
+
   // ---- Small escapers (no external dep) ----
 
   function escapeHTML(s) {
@@ -583,12 +787,13 @@
     var skipped = summary.servicesSkipped;
     var msg = "Costed " + scored + " service" + (scored === 1 ? "" : "s");
     if (skipped > 0) msg += " (" + skipped + " skipped — see warnings)";
-    msg += ". Full tables in Step 5.";
-    setStatus(msg, "ok");
+    setStatus(msg, scored > 0 ? "ok" : "warn");
 
-    if (typeof console !== "undefined" && console.table) {
-      console.log("[Route Costing] result:", _lastResult);
-    }
+    renderResultsTable(results);
+    renderSummaryTable(summary);
+    showResultsSection(true);
+    setExportEnabled(scored > 0);
+
     _running = false;
   }
 
@@ -661,6 +866,17 @@
     // Refresh settings inputs (in case they haven't been touched yet)
     syncSettingsToInputs(_settings);
     setStatus(null);
+
+    if (_lastResult) {
+      renderResultsTable(_lastResult.services);
+      renderSummaryTable(_lastResult.summary);
+      showResultsSection(true);
+      setExportEnabled(_lastResult.summary.servicesScored > 0);
+      if (_stale) setStatus("Settings or features changed — re-run to refresh.", "warn");
+    } else {
+      showResultsSection(false);
+      setExportEnabled(false);
+    }
   }
 
   function onClose(/* core */) {
@@ -676,10 +892,12 @@
     _lastResult = null;
     _stale = false;
     if (!isPopupVisible()) return;
-    var res = document.getElementById("rcResults");
-    var empty = document.getElementById("rcEmptyState");
-    if (res) res.style.display = "none";
-    if (empty) empty.style.display = "";
+    showResultsSection(false);
+    setExportEnabled(false);
+    var rt = document.getElementById("rcResultsTable");
+    var st = document.getElementById("rcSummaryTable");
+    if (rt) rt.innerHTML = "";
+    if (st) st.innerHTML = "";
     setStatus(null);
   }
 
