@@ -32,7 +32,7 @@
     { key: "direction", label: "Direction", type: "select", options: ["Both","NB","SB","EB","WB","Inbound","Outbound","Loop"] },
     { key: "mode",      label: "Mode",      type: "select", options: ["Bus","BRT","Light Rail","Streetcar"] },
     { key: "routeId",   label: "Route ID",  type: "text",   placeholder: "e.g. 7, Blue" },
-    { key: "avgSpeed",  label: "Avg speed", type: "number", unit: "mph" }
+    { key: "avgSpeed",  label: "Avg speed", type: "number", unit: "mph", defaultValue: 14 }
   ];
 
   // Field definitions per feature type.
@@ -1036,6 +1036,17 @@
     // Lazy-init attributes
     if (!feature.properties.attributes) feature.properties.attributes = {};
     var attrs = feature.properties.attributes;
+
+    // Seed field defaults for any missing values (e.g. avgSpeed = 14 mph)
+    var typeFields = ATTR_FIELDS[featureType] || [];
+    var seededDefault = false;
+    typeFields.forEach(function (f) {
+      if (f.defaultValue !== undefined && (attrs[f.key] === undefined || attrs[f.key] === null || attrs[f.key] === "")) {
+        attrs[f.key] = f.defaultValue;
+        seededDefault = true;
+      }
+    });
+    if (seededDefault) saveAttrCache();
 
     // Name row (always present)
     var nameInput = document.createElement("input");
