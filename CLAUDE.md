@@ -55,7 +55,7 @@ js/
     polygons.js             Polygon drawing (vertex-by-vertex with snap-to-close), rubber-band preview, vertex editing
     editing.js              Feature editing: point click-drag, line/polygon/route vertex editing with orange handles
     features.js             Right-side feature panel: lists features, editable names, per-item color swatches, gear icon (⚙) per row to open the floating attributes popup, right-click context menu with Attributes option. Row click selects/highlights feature on map only. Delete (trash icon) stays in the row with an inline confirm strip. Exports refreshFeaturePanel, openColorPicker, updateFeatureColor.
-    feature-attributes.js   Floating draggable attribute popup (singleton, #fp-attr-popup): ATTR_FIELDS config per type, openAttrPopup(featureType, featureIndex, feature), closeAttrPopup(), isAttrPopupOpen(), getAttrPopupFeature(). Popup is 320px wide, position: fixed, draggable by header, clamped within viewport, closes on Escape or X button. Auto-updates when a different feature is selected while open. Attributes stored in feature.properties.attributes (lazy-init). Route fields: routeGroup, direction, mode, routeId, frequency, spanStart, spanEnd, daysOfService, avgSpeed. Line fields: lineMode, notes. Polygon fields: notes. Point: name only.
+    feature-attributes.js   Floating draggable attribute popup (singleton, #fp-attr-popup): ATTR_FIELDS config per type, openAttrPopup(featureType, featureIndex, feature), closeAttrPopup(), isAttrPopupOpen(), getAttrPopupFeature(). Popup is 320px wide, position: fixed, draggable by header, clamped within viewport, closes on Escape or X button. Auto-updates when a different feature is selected while open. Attributes stored in feature.properties.attributes (lazy-init). Route/line fields: group (universal grouping key with autocomplete datalist), direction (Both/NB/SB/EB/WB/Inbound/Outbound/Loop/CW/CCW), mode, routeId, avgSpeed (default 14 mph, seeded on lazy-init), service bands per day (weekday/saturday/sunday), notes. Polygon fields: group, notes. Point fields: group, stopId, associatedRoutes.
     census.js               TIGERweb geometry queries, ACS data fetch, area-weighted aggregation
     lodes.js                LODES .csv.gz download/upload/parse, block-level employment
     cache.js                Session cache: save/restore/reset via localStorage; JSON import/export
@@ -68,6 +68,7 @@ js/
     ridership-scoring.js    Ridership scoring engine: corridor CDI computation, per-route CDI extraction, system-wide demand orchestration, CSV route matching, segment analysis, service type presets, elasticity formulas, scenario builder, ratio/OLS calibration (window.RidershipModel namespace)
     ridership-forecasting.js  Ridership Forecasting module: 4-tab popup (Calibrate | Demand | Elasticity | Scenarios), 3-step calibration workflow, corridor dropdown, choropleth + segment map, scenario comparison table, GeoJSON/CSV/JSON export; shared-pool normalization mode for cross-system calibration
     corridor-scoring.js     Corridor Scoring module: 2-column popup (Settings | Results) that surfaces the per-route CDI engine as a first-class endpoint for ranked, defensible corridor scoring. Ranked table with classification pills + expandable per-factor breakdowns, map line layer colored by composite CDI (5-class Blues), floating legend, Adjust Weights modal, selected-corridors-only normalization pool, CSV/GeoJSON export, session persistence (weights + selection + last summary; full-mode includes system factor averages for breakdown restore).
+    route-costing.js        Route Costing module: 2-column popup (Settings | Results) that estimates daily and annual operating cost for transit services assembled from drawn Route/Line features. Service assembly buckets features by `attributes.group` (1-2 patterns per Service; standalone features become 1-pattern Services). Validates direction pairings (NB+SB, EB+WB, Inbound+Outbound, CW+CCW); warns and skips 3+-pattern groups, mismatched pairs, missing avg speed, or empty service bands. Costing Settings modal configures cost/hr, deadhead %, layover (minutes or % of round-trip), Weekday/Saturday/Sunday days per year, fleet spare ratio, and cost basis label. Per-Service table with expandable per-band breakdown + system summary (annual cost, fleet Σ rounded vs Σ raw showing interline opportunity gap). CSV export, session persistence.
     title-vi-engine.js      Title VI engine: policy profiles, major-change rules, geometric divergence detection (turf.nearestPointOnLine), service change area computation (turf.difference), alteration metrics orchestration, demographic fetching, finding evaluation, scenario comparison (window.TitleVI namespace)
     title-vi.js             Title VI Service Equity module: 3-tab popup (Policies & Inputs | Analysis | Scenarios), route alteration pairing UI (before/after feature dropdowns), auto-computed route miles and % altered, service loss/gain map overlay, system baseline vs impacted area demographic comparison, CSV/GeoJSON/JSON export, session persistence
     gtfs.js                 GTFS Feed Viewer: loads a GTFS ZIP (JSZip + PapaParse), renders shapes.txt as dashed reference lines (gtfs-shapes-layer) and stops.txt as hollow circles (gtfs-stops-layer) below user-drawn features, hover tooltip + click detail popup on both layers (route name/mode for shapes; stop name/ID for stops), shape_id → route info pre-joined from trips.txt + routes.txt at load time, two-column analysis popup (file directory with REQ/OPT badges | scrollable CSV table, capped at 500 rows), layer visibility toggles, clear-feed button. No session persistence (feed must be re-uploaded per session). Wires Add Data dropdown buttons directly (no app.js changes needed).
@@ -83,10 +84,12 @@ projects/
   ridership-legend.html     RF demand legend: 5-class Blues swatches for CDI score (High → Low)
   corridor-scoring-popup.html   Corridor Scoring popup body: 2-column layout (Settings | Results). Settings column has geography/year selectors, LODES warning icon, apportion toggle, corridor checklist (routes + lines only — normalization pool), Adjust Weights button (opens modal overlay with 9 factor sliders + Confirm/Cancel/Reset), Score Corridors button. Results column has ranked corridor table (rank, name, score, classification pill, expand caret) with hidden .cs-row-details rows holding factor breakdown bars; CSV + GeoJSON export buttons.
   corridor-scoring-legend.html  Corridor Scoring legend: 5-class Blues swatches keyed to composite CDI buckets (≥4 High, 3–4, 2–3 Medium, 1–2, <1 Low).
+  route-costing-popup.html  Route Costing popup body: Costing Settings modal overlay (cost/hr, deadhead %, layover mode+value, days/year Wk/Sa/Su with live sum, fleet spare ratio, cost basis label) + 2-column layout. Settings column has Service checklist with Select all / Clear, Costing Settings button, Cost Services button. Results column has per-Service table (expandable band breakdown), system summary table, CSV export.
   title-vi-popup.html       Title VI popup body: 3-tab layout (Policies & Inputs | Analysis | Scenarios); Policies tab has 2-column layout (policy settings left, route alteration cards + impact method right); Analysis tab has baseline computation + equity findings; Scenarios tab has scenario manager + comparison table
   gtfs-popup.html           GTFS Feed popup body: two-column layout (left: scrollable file directory with REQ/OPT badges + layer visibility checkboxes + Clear button; right: scrollable CSV table for the selected file with row/column count)
 docs/
   ridership-forecasting-plan.md  Strategic evaluation and implementation plan for the ridership forecasting tool
+  route-costing-plan.md          Sequenced resume plan for the Route Costing module (design decisions + 9-step build order)
 Ridership_Forecast_Readme.md    User-facing documentation for the Ridership Forecasting module (plain-language, transit professional audience)
 ```
 
@@ -132,12 +135,13 @@ app.js              (wires everything; registers sidebar panels; defines App.reg
   ridership-scoring.js  (needs window.TPI, App namespace, turf; defines window.RidershipModel)
   ridership-forecasting.js (needs RidershipModel, TPI, App.registerModule, App.popup, App.map, App.renderCensusOverlay)
   corridor-scoring.js   (needs TPI, RidershipModel, App.registerModule, App.popup, App.map, App.cache; registers Corridor Scoring module)
+  route-costing.js      (needs App.registerModule, App.popup, App.cache, turf; registers Route Costing module — no TPI/Census dependency)
   title-vi-engine.js    (needs App namespace, turf; defines window.TitleVI)
   title-vi.js           (needs TitleVI, App.registerModule, App.popup, App.map, App.cache)
   gtfs.js               (needs JSZip, PapaParse, maplibregl, App.registerModule, App.popup, App.map; no scoring engine deps)
 ```
 
-**Active modules:** Buffer-Area Summary is enabled (popup-based, settings + results table). TPI is enabled (popup-based, 2-column). FTA Small Starts is enabled (popup-based, 2-tab). Ridership Forecasting is enabled (popup-based, 4-tab). Corridor Scoring is enabled (popup-based, 2-column). Title VI Service Equity is enabled (popup-based, 3-tab). GTFS Feed Viewer is enabled (popup-based, 2-column file browser + map layers).
+**Active modules:** Buffer-Area Summary is enabled (popup-based, settings + results table). TPI is enabled (popup-based, 2-column). FTA Small Starts is enabled (popup-based, 2-tab). Ridership Forecasting is enabled (popup-based, 4-tab). Corridor Scoring is enabled (popup-based, 2-column). Route Costing is enabled (popup-based, 2-column). Title VI Service Equity is enabled (popup-based, 3-tab). GTFS Feed Viewer is enabled (popup-based, 2-column file browser + map layers).
 
 ## App Namespace (Public API)
 
@@ -189,7 +193,7 @@ Route features store `properties.waypoints` (user click points) separately from 
 
 **Feature attribute storage:** All feature types (routes, lines, points, polygons) can carry a `properties.attributes` object. Preserved automatically by session cache serialization. Lazy-init means old sessions without the field restore cleanly.
 
-**Route grouping (future-ready):** The `routeGroup` field stored on route attributes seeds future pattern grouping. Routes sharing the same `routeGroup` string are intended to be treated as directional patterns of one logical route. No grouping logic is implemented yet — `computePerRouteCDI`, `matchRoutesToCSV`, and the corridor dropdown will need updating when that feature is built. The `direction` field (NB/SB/EB/WB/Inbound/Outbound/Loop) labels each pattern within its group.
+**Route grouping:** The `group` field on feature attributes (universal — routes, lines, points, polygons all share the same datalist) doubles as the pattern-grouping key for the Route Costing module. Features sharing a `group` string are paired into one Service (1-2 patterns in v1). The `direction` field (`Both`, `NB`, `SB`, `EB`, `WB`, `Inbound`, `Outbound`, `Loop`, `CW`, `CCW`) labels each pattern; Route Costing validates that 2-pattern groups use valid opposites (NB+SB, EB+WB, Inbound+Outbound, CW+CCW). Older prose in CLAUDE.md and ridership-scoring.js called this field `routeGroup`; the stored key is `attributes.group`. `computePerRouteCDI`, `matchRoutesToCSV`, and the RF corridor dropdown still treat each feature as its own route — group-aware logic is only implemented by Route Costing so far.
 
 ### census.js
 `renderCensusOverlay(geos)`, `fetchAllTigerwebFeatures(layerUrl, params)`, `fetchTigerwebGeos(geoLevel, unionFeat)`, `parseGEOID(geoLevel, geoid)`, `fetchACSValues(geoLevel, year, varCode, geoids)`, `fetchACSCountyValues(year, varCode, counties)`, `aggregateWithinUnion(unionFeat, geos, valueMap, aggMode)`, `computeAcsValueOnly(varCode, year, geoLevel)`
@@ -319,6 +323,36 @@ Registers module `"corridor-scoring"` as a popup-based analysis. Opens in a 2-co
 **Module-local state:** `_weights` (independent factor weights; defaults to `TPI.getDefaultWeights()`), `_pendingWeights` (temporary copy while weights modal is open), `_featureFilter` (`{ routeIndices, lineIndices }` or null; captured at last scoring run), `_lastResult` (`{ routeCDIs, tpiResult, systemCDI, geoLevel, year, apportionByArea, unionPolygon, featureFilter, weights }`), `_stale`, `_running`, `_initialized`, `_apportionByArea`.
 
 **Session persistence** via `App.cache.registerModule("corridor-scoring", { collect, apply })` — persists `weights`, `featureFilter`, `apportionByArea`, `geoLevel`, `year`, and `lastSummary` (the ranked `routeCDIs` array plus run metadata) to localStorage. Full-mode export (JSON file) additionally includes a pre-computed `systemFactorAverages` map and `effectiveWeights` so the factor breakdown comparison bars restore correctly on file import without needing the raw TPI `factorScores` Map. On restore, the map choropleth + legend are re-rendered from `routeCDIs` + source geometries (no Census API calls required). Schema version: **1**.
+
+### route-costing.js (analysis module, no public API)
+Registers module `"route-costing"` as a popup-based analysis. Opens in a 2-column popup (960px wide). All state is private to the IIFE closure. DOM writes are guarded with `isPopupVisible()`. All DOM element IDs use the `rc` prefix (e.g., `rcServiceList`, `rcSettingsModal`, `rcCostBtn`, `rcResultsTable`, `rcSummaryTable`). CSS classes use the `.rc-` prefix; visual classes from `.rf-` (settings column, results column, status pill, section title, weights modal) are reused for layout consistency.
+
+**Purpose:** High-level transit service costing based on user-entered attributes (length via turf, avgSpeed, direction, service bands). No Census, LODES, or TPI dependency — purely attribute-driven. Produces daily/annual platform hours, revenue hours, trips, and operating cost per Service plus a system summary.
+
+**Service assembly:** `buildServicesFromFeatures()` walks `App.routes` + `App.lines`. Features with a non-empty `attributes.group` are bucketed together (max 2 per group in v1); ungrouped features become standalone 1-pattern Services. `validateService(svc)` attaches blocking warnings for: 3+ patterns in a group, 2-pattern groups without valid opposite directions (valid pairs: NB+SB, EB+WB, Inbound+Outbound, CW+CCW), 1-pattern Services whose direction is a cardinal (NB/SB/etc.) rather than Both/Loop/CW/CCW, missing `avgSpeed`, or no service bands with a headway on any pattern. Blocked services render red in the checklist with a ⚠ tooltip.
+
+**Cost math** (pure functions):
+- `oneWayRuntimeHrs(pattern) = lengthMiles / avgSpeed`.
+- `computeRoundTrip(svc)` → `{ rtHrs, rtMiles, oneWays[] }`. 2-pattern Services sum both one-ways. 1-pattern "Both" doubles the one-way. 1-pattern Loop/CW/CCW keeps one-way as a complete cycle.
+- `computeLayoverHrs(rtHrs, settings)` — minutes mode adds `layoverValue / 60`; percent mode adds `rtHrs × layoverValue / 100`.
+- `cycleHrs = rtHrs + layoverHrs`.
+- Per band: `trips = ceil(hours × 60 / headwayMin)`; bands with blank/zero headway are treated as "no service in that band" and skipped. Midnight-wrap bands (e.g. 22:00 → 02:00) are supported. Band `revHrs = trips × oneWayHrs(pattern)`; band `miles = trips × lengthMiles`.
+- Daily `platHrs = revHrs × (1 + deadheadPct/100)`; daily `cost = platHrs × costPerHour`.
+- Annual aggregates weight daily by `daysWeekday` / `daysSaturday` / `daysSunday`.
+- Peak vehicles: `raw = cycleMin / minHeadwayMin` across all bands/patterns; `rounded = ceil(raw)`; `fleet = ceil(rounded × (1 + spareRatio/100))`.
+- `computeSystemSummary(serviceResults, settings)` totals all scored Services and surfaces `fleetSumRounded` (Σ each Service's standalone rounded need), `fleetSumRaw` (ceil of Σ raw — theoretical minimum if perfectly interlined), and `interlineGap = fleetSumRounded - fleetSumRaw`.
+
+**Rendering:** `renderResultsTable(serviceResults)` builds a table with rows for each scored Service (RT mi, cycle min, peak headway, daily trips Wk/Sa/Su, daily rev-hr summed across days, weekday daily plat-hr, annual plat-hr, annual cost, peak veh raw/rounded/with-spares). Clicking a main row toggles a hidden `tr.rc-row-details` containing `buildBandBreakdownHTML(r)` — a per-band table (day, pattern, band span, headway, hours, trips, rev-hr, peak-veh-in-band) plus a daily totals line for each day. Skipped Services collapse to a single red row with the blocking warning inline. `renderSummaryTable(summary)` writes the system summary as a label+value table.
+
+**Costing Settings modal** (`rcSettingsModal`): cost per platform hour, deadhead %, layover mode radio (`minutes` / `percent`) with a dynamic unit label (`rcLayoverValueLabel`), layover value, days per year Wk/Sa/Su with a live sum that turns red over 366, fleet spare ratio %, cost basis year free-text label. Confirm / Cancel / Reset to Defaults. Confirm marks `_lastResult` stale so the user knows a re-run is needed.
+
+**Internal functions:** `buildServicesFromFeatures`, `validateService`, `directionSummary`, `hasBlockingWarnings`, `buildServiceChecklist` (wrapped post-registration to consume `_restoredSelectedKeys`), `getSelectedServices`, `getSelectedServiceKeys`, `oneWayRuntimeHrs`, `computeRoundTrip`, `computeLayoverHrs`, `parseBandTime`, `computeService`, `computeSystemSummary`, `renderResultsTable`, `buildBandBreakdownHTML`, `renderSummaryTable`, `showResultsSection`, `setExportEnabled`, `exportCSV`, `openSettingsModal`, `closeSettingsModal(confirm)`, `resetSettingsToDefaults`, `syncSettingsToInputs`, `readSettingsFromInputs`, `updateLayoverUnitLabel`, `updateDaysSum`, `runCosting`, `markStale`, `clearAll`, `setStatus`.
+
+**Module-local state:** `_settings` (object matching `DEFAULT_SETTINGS`), `_pendingSettings` (temp while modal is open), `_lastServices` (last-assembled Service[]), `_lastResult` (`{ services, summary, settings }`), `_restoredSelectedKeys` (applied once on first checklist build after restore), `_stale`, `_running`, `_initialized`.
+
+**Session persistence** via `App.cache.registerModule("route-costing", { collect, apply })` — persists `settings`, `selectedKeys` (the checked Service keys like `"solo-route-0"` or `"group-Blue Line"`), and `lastSummary` (per-Service totals minus band breakdown — recomputable on re-run — plus system summary). Schema version: **1**. Saves trigger on Settings modal confirm, checkbox change (via delegation on `#rcServiceList`), Select all / Clear, and successful Cost Services runs.
+
+**Not in v1:** Interline optimization (only exposes the raw-vs-rounded gap), 3+ patterns per Service, fare/revenue modeling, per-Service overrides for cost/deadhead/layover, inflation. See `docs/route-costing-plan.md` for the full design history.
 
 ### title-vi-engine.js (window.TitleVI namespace, not on App)
 Pure calculation engine for the Title VI Service Equity module. No DOM access. Depends on `turf` (CDN) and `window.App` (for feature resolution).
@@ -501,11 +535,14 @@ The sidebar is an empty `<div id="sidebar">` populated at runtime by `App.sideba
 |  [Transit Propensity Index] |  Button: opens TPI popup (2-column layout)
 |  [FTA Small Starts]         |  Button: opens FTA popup (2-tab layout)
 |  [Ridership Forecasting]    |  Button: opens RF popup (4-tab layout)
+|  [Corridor Scoring]         |  Button: opens CS popup (2-column layout)
+|  [Route Costing]            |  Button: opens RC popup (2-column layout)
 |  [Title VI Service Equity]  |  Button: opens TVI popup (3-tab layout)
+|  [GTFS Feed Viewer]         |  Button: opens GTFS popup (2-column file browser)
 +-----------------------------+
 ```
 
-Clicking an analysis module button opens a popup window over the map. The Buffer-Area Summary popup contains geography/year settings and a results table. The TPI popup has a 2-column layout (Settings | Results) with an Adjust Weights modal overlay. The FTA Small Starts popup has a 2-tab layout (Ratings | Data Inputs). The Ridership Forecasting popup has a 4-tab layout (Calibrate | Demand | Elasticity | Scenarios). The Title VI Service Equity popup has a 3-tab layout (Policies & Inputs | Analysis | Scenarios). Each active choropleth shows a floating legend widget at bottom-left of the map.
+Clicking an analysis module button opens a popup window over the map. The Buffer-Area Summary popup contains geography/year settings and a results table. The TPI popup has a 2-column layout (Settings | Results) with an Adjust Weights modal overlay. The FTA Small Starts popup has a 2-tab layout (Ratings | Data Inputs). The Ridership Forecasting popup has a 4-tab layout (Calibrate | Demand | Elasticity | Scenarios). The Corridor Scoring popup has a 2-column layout (Settings | Results). The Route Costing popup has a 2-column layout (Service checklist | per-Service and system summary tables) with a Costing Settings modal overlay. The Title VI Service Equity popup has a 3-tab layout (Policies & Inputs | Analysis | Scenarios). Each active choropleth shows a floating legend widget at bottom-left of the map.
 
 ### Feature Panel (right)
 
