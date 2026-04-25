@@ -28,7 +28,7 @@
 
   // Shared route/line fields — line mirrors route exactly
   var ROUTE_FIELDS = [
-    { key: "group",     label: "Group",     type: "text",   placeholder: "e.g. Corridor A", groupPicker: true },
+    { key: "group",     label: "Group",     type: "text",   placeholder: "e.g. Corridor A", groupPicker: true, hidden: true },
     { key: "direction", label: "Direction", type: "select", options: ["Both","NB","SB","EB","WB","Inbound","Outbound","Loop","CW","CCW"] },
     { key: "mode",      label: "Mode",      type: "select", options: ["Bus","BRT","Light Rail","Streetcar"] },
     { key: "serviceId", label: "Service",   type: "text",   placeholder: "e.g. Blue Line", servicePicker: true },
@@ -41,12 +41,12 @@
     route: ROUTE_FIELDS,
     line:  ROUTE_FIELDS,
     point: [
-      { key: "group",            label: "Group",    type: "text", placeholder: "e.g. North Corridor", groupPicker: true },
+      { key: "group",            label: "Group",    type: "text", placeholder: "e.g. North Corridor", groupPicker: true, hidden: true },
       { key: "stopId",           label: "Stop ID",       type: "text", placeholder: "e.g. 1042" },
       { key: "associatedRoutes", label: "Routes"                                                 }
     ],
     polygon: [
-      { key: "group",  label: "Group",  type: "text", placeholder: "e.g. Study Area", groupPicker: true },
+      { key: "group",  label: "Group",  type: "text", placeholder: "e.g. Study Area", groupPicker: true, hidden: true },
       { key: "notes",  label: "Notes",  type: "text", placeholder: "" }
     ],
     label: [
