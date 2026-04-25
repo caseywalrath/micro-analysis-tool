@@ -589,6 +589,7 @@
         '<th style="width:18px;"></th>',
         '<th>Service</th>',
         '<th class="rc-num">RT mi</th>',
+        '<th class="rc-num">Run time (min)</th>',
         '<th class="rc-num">Cycle (min)</th>',
         '<th class="rc-num">Peak headway</th>',
         '<th class="rc-num" title="Weekday / Saturday / Sunday">Daily trips</th>',
@@ -612,7 +613,7 @@
               escapeHTML(r.name) +
               ' <span class="rc-service-meta">(skipped)</span>' +
             '</td>' +
-            '<td colspan="9" class="rc-skip-note">' + escapeHTML((r.warnings[0] && r.warnings[0].msg) || "Skipped") + '</td>' +
+            '<td colspan="10" class="rc-skip-note">' + escapeHTML((r.warnings[0] && r.warnings[0].msg) || "Skipped") + '</td>' +
           '</tr>';
         return;
       }
@@ -633,6 +634,7 @@
               r.patternCount + ' pattern' + (r.patternCount === 1 ? '' : 's') + '</div>' +
           '</td>' +
           '<td class="rc-num">' + fmtDec(r.rtMiles, 2) + '</td>' +
+          '<td class="rc-num">' + fmtInt(r.cycleMin - r.layoverMin) + '</td>' +
           '<td class="rc-num">' + fmtInt(r.cycleMin) + '</td>' +
           '<td class="rc-num">' + fmtHeadway(r.peakHeadwayMin) + '</td>' +
           '<td class="rc-num">' + tripsCell + '</td>' +
@@ -646,7 +648,7 @@
         '</tr>' +
         '<tr class="rc-row-details" data-idx="' + idx + '" style="display:none;">' +
           '<td></td>' +
-          '<td colspan="10">' + buildBandBreakdownHTML(r) + '</td>' +
+          '<td colspan="11">' + buildBandBreakdownHTML(r) + '</td>' +
         '</tr>';
     });
 

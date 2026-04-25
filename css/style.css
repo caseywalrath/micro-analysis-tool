@@ -4142,9 +4142,9 @@ body.dark-mode .rc-pill-solo  { background: #2d2d3d; color: #aaa; }
   color: var(--muted);
   background: #fafafa;
   border-bottom: 1px solid #e5e5e5;
-  white-space: nowrap;
 }
-.rc-table td.rc-num, .rc-table th.rc-num { text-align: right; white-space: nowrap; }
+.rc-table td.rc-num, .rc-table th.rc-num { text-align: right; }
+.rc-table td.rc-num { white-space: nowrap; }
 .rc-table td.rc-cost { font-weight: var(--weight-semibold, 600); color: #2c3e50; }
 .rc-table tr.rc-row-main { cursor: pointer; }
 .rc-table tr.rc-row-main:hover td { background: #f5f9ff; }
