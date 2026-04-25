@@ -814,7 +814,7 @@
   // ---- Export: CSV ----
 
   var CSV_ATTR_COLS = [
-    "group", "routeGroup", "direction", "mode", "routeId", "avgSpeed",
+    "group", "routeGroup", "direction", "mode", "serviceId", "avgSpeed",
     "service", "lineMode", "notes", "stopId", "pointGroup", "lineGroup",
     "polygonGroup", "labelGroup"
   ];

@@ -31,7 +31,7 @@
     { key: "group",     label: "Group",     type: "text",   placeholder: "e.g. Corridor A", groupPicker: true },
     { key: "direction", label: "Direction", type: "select", options: ["Both","NB","SB","EB","WB","Inbound","Outbound","Loop","CW","CCW"] },
     { key: "mode",      label: "Mode",      type: "select", options: ["Bus","BRT","Light Rail","Streetcar"] },
-    { key: "routeId",   label: "Route ID",  type: "text",   placeholder: "e.g. 7, Blue" },
+    { key: "serviceId", label: "Service",   type: "text",   placeholder: "e.g. Blue Line", servicePicker: true },
     { key: "avgSpeed",  label: "Avg speed", type: "number", unit: "mph", defaultValue: 14 }
   ];
 
@@ -445,6 +445,75 @@
     return { el: inp, unit: null };
   }
 
+  // Route + Line only datalist for the Service field. Suggestions come from
+  // existing serviceId values on routes and lines (not points/polygons).
+  // Same color-inheritance side effect as the universal group picker so that
+  // pattern pairs (e.g. NB + SB) under one Service share a color automatically.
+  function buildServicePicker(field, attrs, feature, featureType) {
+    var inp = document.createElement("input");
+    inp.type = "text";
+    inp.className = "fp-attr-input";
+    if (field.placeholder) inp.placeholder = field.placeholder;
+    var val = attrs[field.key];
+    inp.value = (val !== undefined && val !== null) ? val : "";
+
+    var dlId = "fp-service-datalist";
+    var dl = document.getElementById(dlId);
+    if (!dl) {
+      dl = document.createElement("datalist");
+      dl.id = dlId;
+      document.body.appendChild(dl);
+    }
+    dl.innerHTML = "";
+    var seen = {};
+    var routeArrays = [App.routes || [], App.lines || []];
+    routeArrays.forEach(function (arr) {
+      arr.forEach(function (f) {
+        var s = f.properties.attributes && f.properties.attributes.serviceId;
+        if (s && !seen[s]) {
+          seen[s] = true;
+          var opt = document.createElement("option");
+          opt.value = s;
+          dl.appendChild(opt);
+        }
+      });
+    });
+    inp.setAttribute("list", dlId);
+
+    inp.addEventListener("change", function () {
+      var newVal = inp.value.trim();
+      if (newVal) {
+        attrs[field.key] = newVal;
+        var existingColor = null;
+        routeArrays.forEach(function (arr) {
+          arr.forEach(function (f) {
+            if (!existingColor && f.properties.color && f.properties !== feature.properties) {
+              var s = f.properties.attributes && f.properties.attributes.serviceId;
+              if (s === newVal) existingColor = f.properties.color;
+            }
+          });
+        });
+        if (existingColor) {
+          feature.properties.color = existingColor;
+          if (typeof App.updateFeatureColor === "function") {
+            var arrMap = { route: App.routes, line: App.lines };
+            var arr = arrMap[featureType] || [];
+            var idx = arr.indexOf(feature);
+            if (idx >= 0) App.updateFeatureColor(featureType, idx, existingColor);
+          }
+        }
+      } else {
+        delete attrs[field.key];
+      }
+      saveAttrCache();
+      if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+    });
+    inp.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") inp.blur();
+    });
+    return { el: inp, unit: null };
+  }
+
   /* ---- Service schedule (Weekday / Saturday / Sunday time bands) ---- */
 
   function _emptyBand() {
@@ -672,6 +741,7 @@
     if (field.type === "checkboxes")  return buildCheckboxes(field, attrs);
     if (field.type === "color")       return buildColorPicker(field, attrs, feature);
     if (field.groupPicker)            return buildUniversalGroupPicker(field, attrs, feature, featureType);
+    if (field.servicePicker)          return buildServicePicker(field, attrs, feature, featureType);
     if (field.key === "labelGroup")   return buildLabelGroupPicker(field, attrs, feature);
     return buildTextOrNumber(field, attrs);
   }

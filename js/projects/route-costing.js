@@ -164,14 +164,14 @@
     var lengthMi = 0;
     try { lengthMi = (typeof turf !== "undefined") ? turf.length(feature, { units: "miles" }) : 0; }
     catch (e) { lengthMi = 0; }
-    var group = attrs.group ? String(attrs.group).trim() : "";
+    var serviceId = attrs.serviceId ? String(attrs.serviceId).trim() : "";
     return {
       featureType:  type,
       featureIndex: idx,
       name:         name,
       direction:    attrs.direction || "Both",
       avgSpeed:     parseFloat(attrs.avgSpeed) || 0,
-      group:        group || null,
+      serviceId:    serviceId || null,
       lengthMiles:  lengthMi,
       service:      attrs.service || null
     };
@@ -179,13 +179,13 @@
 
   function buildServicesFromFeatures() {
     var services = [];
-    var buckets  = {};  // group name -> { name, patterns:[] }
+    var buckets  = {};  // serviceId -> { name, patterns:[] }
 
     function add(feature, type, idx) {
       var p = collectPattern(feature, type, idx);
-      if (p.group) {
-        if (!buckets[p.group]) buckets[p.group] = { name: p.group, patterns: [] };
-        buckets[p.group].patterns.push(p);
+      if (p.serviceId) {
+        if (!buckets[p.serviceId]) buckets[p.serviceId] = { name: p.serviceId, patterns: [] };
+        buckets[p.serviceId].patterns.push(p);
       } else {
         services.push({
           key:      "solo-" + type + "-" + idx,
@@ -203,7 +203,7 @@
     Object.keys(buckets).sort().forEach(function (k) {
       var b = buckets[k];
       services.push({
-        key:      "group-" + k,
+        key:      "service-" + k,
         name:     b.name,
         isGroup:  true,
         patterns: b.patterns,
@@ -218,13 +218,13 @@
   function validateService(svc) {
     var ps = svc.patterns;
 
-    // Hard error: 3+ patterns in a group
+    // Hard error: 3+ patterns assigned to one Service
     if (ps.length >= 3) {
       svc.warnings.push({
         level: "error",
-        msg: ps.length + " patterns in group — v1 supports max 2. Split into separate groups."
+        msg: ps.length + " patterns assigned to this Service — v1 supports max 2. Split into separate Services."
       });
-      return; // stop; other validations don't matter when the group is invalid
+      return; // stop; other validations don't matter when the Service is invalid
     }
 
     // 2-pattern: must be valid opposites
@@ -244,7 +244,7 @@
       svc.warnings.push({
         level: "error",
         msg: "Single-direction pattern (" + ps[0].direction + ") has no pair. " +
-             "Set direction to Both, Loop, CW, or CCW, or group with its opposite."
+             "Set direction to Both, Loop, CW, or CCW, or pair with its opposite under one Service."
       });
     }
 
@@ -317,7 +317,7 @@
         warnIcon = ' <span class="rc-warn-badge" title="' + escapeAttr(tip) + '">&#9888;</span>';
       }
       var typeBadge = svc.isGroup
-        ? '<span class="rc-pill rc-pill-group">Group</span>'
+        ? '<span class="rc-pill rc-pill-group">Paired</span>'
         : '<span class="rc-pill rc-pill-solo">Solo</span>';
 
       html +=
@@ -815,14 +815,14 @@
       if (r.skipped) {
         var warnStr = (r.warnings || []).map(function (w) { return w.msg; }).join(" | ");
         lines.push(csvRow([
-          r.name, r.isGroup ? "Group" : "Solo", r.patternCount, r.directionSummary,
+          r.name, r.isGroup ? "Paired" : "Solo", r.patternCount, r.directionSummary,
           "","","","","","","","","","","","","","","","","","","","",
           "YES", warnStr
         ]));
         return;
       }
       lines.push(csvRow([
-        r.name, r.isGroup ? "Group" : "Solo", r.patternCount, r.directionSummary,
+        r.name, r.isGroup ? "Paired" : "Solo", r.patternCount, r.directionSummary,
         round2(r.rtMiles), roundI(r.cycleMin), roundI(r.peakHeadwayMin),
         roundI(r.daily.weekday.trips),  roundI(r.daily.saturday.trips),  roundI(r.daily.sunday.trips),
         round1(r.daily.weekday.revHrs), round1(r.daily.saturday.revHrs), round1(r.daily.sunday.revHrs),
@@ -1082,7 +1082,13 @@
       _settings = Object.assign({}, DEFAULT_SETTINGS, data.settings);
     }
     if (Array.isArray(data.selectedKeys)) {
-      _restoredSelectedKeys = data.selectedKeys.slice();
+      // Migrate legacy "group-…" keys (pre-Service rename) to "service-…"
+      // so checkbox selections survive the upgrade.
+      _restoredSelectedKeys = data.selectedKeys.map(function (k) {
+        return (typeof k === "string" && k.indexOf("group-") === 0)
+          ? "service-" + k.slice(6)
+          : k;
+      });
     }
     if (data.lastSummary && Array.isArray(data.lastSummary.services)) {
       _lastResult = {
