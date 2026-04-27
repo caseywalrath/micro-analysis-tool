@@ -338,11 +338,9 @@
       App.clearProjectionsData();
     }
 
-    // 5. Uncheck all variable checkboxes
+    // 5. Uncheck all variable checkboxes (LODES checkbox lives inside #varSelect now).
     var boxes = document.querySelectorAll('#varSelect input[type="checkbox"]');
     for (var i = 0; i < boxes.length; i++) boxes[i].checked = false;
-    var lodesCb = document.getElementById("lodesCheckbox");
-    if (lodesCb) lodesCb.checked = false;
 
     // 6. Reset buffer-summary popup state (if popup DOM exists)
     var basGeoEl = document.getElementById("basGeoLevel");

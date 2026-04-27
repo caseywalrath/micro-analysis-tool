@@ -11,67 +11,10 @@
 
   App.drawMode = null; // null | "point" | "line" | "route" | "polygon" | "label" | "measure"
 
-  // ---- Data Inputs panel ----
-
-  // Reusable ⚠ tooltip markup for median (non-additive) variables.
-  var WARN_ICON = '<span class="var-warn-icon" title="Median estimate \u2014 displayed as an area-weighted average of overlapping geographies\u2019 values. This is not a true median for the buffer area. Use with caution.">\u26A0</span>';
-
-  var DATA_INPUTS_PANEL_HTML =
-    // ---- Census section ----
-    '<div class="sb2-section-label">Census</div>' +
-
-    '<div class="var-actions">' +
-      '<button type="button" id="varSelectAll" class="var-action-btn">Select all</button>' +
-      '<button type="button" id="varClearAll" class="var-action-btn">Clear all</button>' +
-    '</div>' +
-
-    '<fieldset id="varSelect" class="var-checklist">' +
-      '<legend>Variables (select one or more)</legend>' +
-
-      // ---- Demographics ----
-      '<div class="var-group-label">Demographics</div>' +
-      '<label class="var-check"><input type="checkbox" value="B01003_001E"> Total population</label>' +
-      '<label class="var-check"><input type="checkbox" value="B11001_001E"> Total households</label>' +
-      '<label class="var-check"><input type="checkbox" value="DERIVED_PPH"> Average persons per household</label>' +
-      '<label class="var-check"><input type="checkbox" value="B19013_001E"> Median household income ' + WARN_ICON + '</label>' +
-      '<label class="var-check"><input type="checkbox" value="B01002_001E"> Median age ' + WARN_ICON + '</label>' +
-      '<label class="var-check"><input type="checkbox" value="GROUP_SEX"> Sex</label>' +
-      '<label class="var-check"><input type="checkbox" value="GROUP_RACE"> Race</label>' +
-      '<label class="var-check"><input type="checkbox" value="GROUP_ETHNICITY"> Ethnicity</label>' +
-
-      // ---- Equity ----
-      '<div class="var-group-label">Equity</div>' +
-      '<label class="var-check"><input type="checkbox" value="DERIVED_DISABILITY"> With a disability</label>' +
-      '<label class="var-check"><input type="checkbox" value="B17001_002E"> Persons below poverty level</label>' +
-      '<label class="var-check"><input type="checkbox" value="GROUP_EDUCATION"> Education</label>' +
-      '<label class="var-check"><input type="checkbox" value="DERIVED_LEP"> Limited English proficient</label>' +
-      '<label class="var-check"><input type="checkbox" value="GROUP_CITIZENSHIP"> Citizenship</label>' +
-      '<label class="var-check"><input type="checkbox" value="B08201_002E"> Zero-car households</label>' +
-      '<label class="var-check"><input type="checkbox" value="GROUP_EMPLOYMENT"> Employment status</label>' +
-
-      // ---- Travel ----
-      '<div class="var-group-label">Travel</div>' +
-      '<label class="var-check"><input type="checkbox" value="GROUP_COMMUTE"> Commute mode</label>' +
-      '<label class="var-check"><input type="checkbox" value="GROUP_COMMTIME"> Commute time</label>' +
-
-      // ---- Housing ----
-      '<div class="var-group-label">Housing</div>' +
-      '<label class="var-check"><input type="checkbox" value="B25001_001E"> Total housing units</label>' +
-      '<label class="var-check"><input type="checkbox" value="GROUP_OCCUPANCY"> Occupancy</label>' +
-      '<label class="var-check"><input type="checkbox" value="GROUP_RENT_BURDEN"> Rent burden</label>' +
-      '<label class="var-check"><input type="checkbox" value="B25064_001E"> Median gross rent ' + WARN_ICON + '</label>' +
-      '<label class="var-check"><input type="checkbox" value="B25077_001E"> Median home value ' + WARN_ICON + '</label>' +
-
-    '</fieldset>' +
-
-    // ---- Employment (LODES) section ----
-    '<div class="sb2-section-label">Employment (LODES)</div>' +
-    '<label class="var-check"><input type="checkbox" id="lodesCheckbox" value="LODES_WAC_C000"> Total existing employment \u2014 file required</label>' +
-    '<span id="lodesState" style="display:none"></span>' +
-    '<span id="lodesLoaded" style="display:none"></span>' +
-
-    // PPACG Pop Projection has moved to the Projections tab in Ridership Forecasting.
-    '';
+  // ---- Variable checkbox UI ----
+  // The variable checkbox list is built at runtime by buffer-summary.js from
+  // VAR_META in utils.js (single source of truth). There is no sidebar Data
+  // Inputs panel — the checkboxes live inside the Feature Area Analysis popup.
 
   // ---- Module registry (replaces single-project system) ----
 
@@ -155,8 +98,9 @@
     }
   }
 
-  // Note: runSummary() and helpers (CHECKBOX_GROUPS, MANDATORY_VARS, DENOM_MAP,
-  // expandGroups, aggDescription) have moved to js/projects/buffer-summary.js.
+  // Note: runSummary(), MANDATORY_VARS, expandGroups, and aggDescription live
+  // in js/projects/buffer-summary.js. Variable metadata, checkbox groups, and
+  // percentage denominators are all driven by VAR_META in js/core/utils.js.
 
   // ---- Build Analysis sidebar panel HTML ----
 

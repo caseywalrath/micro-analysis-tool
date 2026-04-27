@@ -22,99 +22,86 @@
   // Reusable warning icon for median variables.
   var WARN_ICON = '<span class="var-warn-icon" title="Median estimate \u2014 displayed as an area-weighted average of overlapping geographies\u2019 values. This is not a true median for the buffer area. Use with caution.">\u26A0</span>';
 
-  // ---- Group checkbox → member variable mapping ----
-
-  var CHECKBOX_GROUPS = {
-    GROUP_SEX:         ["B01001_002E", "B01001_026E"],
-    GROUP_RACE:        ["B02001_002E","B02001_003E","B02001_004E","B02001_005E","B02001_006E","B02001_007E","B02001_008E"],
-    GROUP_ETHNICITY:   ["B03003_003E", "B03003_002E"],
-    GROUP_EDUCATION:   ["DERIVED_EDU_LT_HS","DERIVED_EDU_HS","DERIVED_EDU_SOME_COLLEGE","DERIVED_EDU_BA_PLUS"],
-    GROUP_CITIZENSHIP: ["B05001_002E","B05001_005E","B05001_006E"],
-    GROUP_EMPLOYMENT:  ["B23025_004E","B23025_005E","B23025_007E"],
-    GROUP_COMMUTE:     ["B08301_003E","B08301_004E","B08301_010E","B08301_019E","B08301_018E","B08301_021E"],
-    GROUP_COMMTIME:    ["DERIVED_COMMTIME_LT15","DERIVED_COMMTIME_15_29","DERIVED_COMMTIME_30_44","B08303_011E","DERIVED_COMMTIME_60PLUS"],
-    GROUP_OCCUPANCY:   ["B25003_002E","B25003_003E"],
-    GROUP_RENT_BURDEN: ["DERIVED_RENT_NOT_BURDENED","DERIVED_RENT_BURDENED","B25070_010E"]
-  };
-
   // Always fetched and always shown in results, regardless of checkbox state.
   var MANDATORY_VARS = ["B01003_001E", "B11001_001E", "B25001_001E", "B25003_003E"];
 
-  // Maps each variable code to how its percent denominator is computed.
-  var EDU_GROUP   = ["DERIVED_EDU_LT_HS","DERIVED_EDU_HS","DERIVED_EDU_SOME_COLLEGE","DERIVED_EDU_BA_PLUS"];
-  var EMP_GROUP   = ["B23025_004E","B23025_005E","B23025_007E"];
-  var COMM_GROUP  = ["B08301_003E","B08301_004E","B08301_010E","B08301_019E","B08301_018E","B08301_021E"];
-  var CTIME_GROUP = ["DERIVED_COMMTIME_LT15","DERIVED_COMMTIME_15_29","DERIVED_COMMTIME_30_44","B08303_011E","DERIVED_COMMTIME_60PLUS"];
+  // Section order for the checkbox UI. Categories not listed appear after.
+  var CATEGORY_ORDER = ["Demographics", "Equity", "Travel", "Housing", "Employment"];
 
-  var DENOM_MAP = {
-    // Sex → % of total population
-    "B01001_002E": { type: "var", code: "B01003_001E" },
-    "B01001_026E": { type: "var", code: "B01003_001E" },
-    // Race → % of total population
-    "B02001_002E": { type: "var", code: "B01003_001E" },
-    "B02001_003E": { type: "var", code: "B01003_001E" },
-    "B02001_004E": { type: "var", code: "B01003_001E" },
-    "B02001_005E": { type: "var", code: "B01003_001E" },
-    "B02001_006E": { type: "var", code: "B01003_001E" },
-    "B02001_007E": { type: "var", code: "B01003_001E" },
-    "B02001_008E": { type: "var", code: "B01003_001E" },
-    // Ethnicity → % of total population
-    "B03003_003E": { type: "var", code: "B01003_001E" },
-    "B03003_002E": { type: "var", code: "B01003_001E" },
-    // Disability → % of total population
-    "DERIVED_DISABILITY": { type: "var", code: "B01003_001E" },
-    // Poverty → % of total population
-    "B17001_002E": { type: "var", code: "B01003_001E" },
-    // Education → % of sum of all 4 education categories
-    "DERIVED_EDU_LT_HS":        { type: "group", codes: EDU_GROUP },
-    "DERIVED_EDU_HS":           { type: "group", codes: EDU_GROUP },
-    "DERIVED_EDU_SOME_COLLEGE": { type: "group", codes: EDU_GROUP },
-    "DERIVED_EDU_BA_PLUS":      { type: "group", codes: EDU_GROUP },
-    // Zero-car → % of total households
-    "B08201_002E": { type: "var", code: "B11001_001E" },
-    // Employment → % of sum of all 3 employment categories
-    "B23025_004E": { type: "group", codes: EMP_GROUP },
-    "B23025_005E": { type: "group", codes: EMP_GROUP },
-    "B23025_007E": { type: "group", codes: EMP_GROUP },
-    // Commute mode → % of sum of all 6 commute modes
-    "B08301_003E": { type: "group", codes: COMM_GROUP },
-    "B08301_004E": { type: "group", codes: COMM_GROUP },
-    "B08301_010E": { type: "group", codes: COMM_GROUP },
-    "B08301_019E": { type: "group", codes: COMM_GROUP },
-    "B08301_018E": { type: "group", codes: COMM_GROUP },
-    "B08301_021E": { type: "group", codes: COMM_GROUP },
-    // Commute time → % of sum of all 5 commute time categories
-    "DERIVED_COMMTIME_LT15":   { type: "group", codes: CTIME_GROUP },
-    "DERIVED_COMMTIME_15_29":  { type: "group", codes: CTIME_GROUP },
-    "DERIVED_COMMTIME_30_44":  { type: "group", codes: CTIME_GROUP },
-    "B08303_011E":             { type: "group", codes: CTIME_GROUP },
-    "DERIVED_COMMTIME_60PLUS": { type: "group", codes: CTIME_GROUP },
-    // Occupancy → % of total housing units
-    "B25003_002E": { type: "var", code: "B25001_001E" },
-    "B25003_003E": { type: "var", code: "B25001_001E" },
-    // Rent burden → % of renter-occupied units
-    "DERIVED_RENT_NOT_BURDENED": { type: "var", code: "B25003_003E" },
-    "DERIVED_RENT_BURDENED":     { type: "var", code: "B25003_003E" },
-    "B25070_010E":               { type: "var", code: "B25003_003E" },
-    // LEP → % of total population
-    "DERIVED_LEP": { type: "var", code: "B01003_001E" },
-    // Citizenship → % of total population
-    "B05001_002E": { type: "var", code: "B01003_001E" },
-    "B05001_005E": { type: "var", code: "B01003_001E" },
-    "B05001_006E": { type: "var", code: "B01003_001E" }
-  };
-
-  // Expands group checkbox codes into their member variable codes.
+  // Expands group checkbox codes into their member variable codes via the
+  // single-source-of-truth helper in utils.js. Non-group codes pass through.
   function expandGroups(codes) {
     var result = [], seen = {};
     for (var i = 0; i < codes.length; i++) {
-      var members = CHECKBOX_GROUPS[codes[i]];
-      var list = members || [codes[i]];
+      var members = App.getCheckboxGroupMembers(codes[i]);
+      var list = members.length ? members : [codes[i]];
       for (var j = 0; j < list.length; j++) {
         if (!seen[list[j]]) { seen[list[j]] = true; result.push(list[j]); }
       }
     }
     return result;
+  }
+
+  // Builds the variable checkbox markup from VAR_META + GROUP_INFO.
+  // Items are grouped by their `category` field; within each section the order
+  // follows VAR_META declaration order. Group checkboxes appear once per group
+  // at the position of their first member; group-member entries are not rendered
+  // individually. Variables with neither `displayInChecklist` nor `group` are
+  // hidden (denominator-only / mandatory totals).
+  function buildVarChecklistHTML() {
+    var meta = App.VAR_META;
+    var groupInfo = App.GROUP_INFO;
+    var bySection = {};       // category → [{ html, code }]
+    var renderedGroup = {};   // groupKey → true once that group's checkbox is emitted
+
+    Object.keys(meta).forEach(function (code) {
+      var m = meta[code];
+      var category = m.category || "Other";
+      if (!bySection[category]) bySection[category] = [];
+
+      if (m.group) {
+        if (renderedGroup[m.group]) return;
+        renderedGroup[m.group] = true;
+        var info = groupInfo[m.group] || { label: m.group };
+        bySection[category].push(
+          '<label class="var-check"><input type="checkbox" value="' + m.group + '"> ' +
+          escapeHtml(info.label) + '</label>'
+        );
+        return;
+      }
+
+      if (!m.displayInChecklist) return;
+
+      var warn = (m.agg === "avg") ? " " + WARN_ICON : "";
+      var idAttr = (code === "LODES_WAC_C000") ? ' id="lodesCheckbox"' : '';
+      bySection[category].push(
+        '<label class="var-check"><input type="checkbox"' + idAttr +
+        ' value="' + code + '"> ' + escapeHtml(m.label) + warn + '</label>'
+      );
+    });
+
+    var out = [];
+    var seenCat = {};
+    CATEGORY_ORDER.forEach(function (cat) {
+      if (!bySection[cat]) return;
+      seenCat[cat] = true;
+      out.push('<div class="var-group-label">' + escapeHtml(cat) + '</div>');
+      out.push(bySection[cat].join(""));
+    });
+    Object.keys(bySection).forEach(function (cat) {
+      if (seenCat[cat]) return;
+      out.push('<div class="var-group-label">' + escapeHtml(cat) + '</div>');
+      out.push(bySection[cat].join(""));
+    });
+    return out.join("");
+  }
+
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
   }
 
   function aggDescription(meta, apportionByArea) {
@@ -380,7 +367,7 @@
     var allPctCodes = Object.keys(codeToRows);
     for (var pi = 0; pi < allPctCodes.length; pi++) {
       var pCode = allPctCodes[pi];
-      var pDenom = DENOM_MAP[pCode];
+      var pDenom = App.getDenominator(pCode);
       var pRows = codeToRows[pCode] || [];
       var pct = null;
       if (pDenom && Number.isFinite(resultsMap[pCode])) {
@@ -436,14 +423,12 @@
     var apportionEl = document.getElementById("basApportionByArea");
     if (apportionEl) apportionEl.checked = _state.apportionByArea;
 
-    // Restore checkbox selections
+    // Restore checkbox selections (LODES checkbox is now inside #varSelect).
     if (_state.checkedVars && _state.checkedVars.length > 0) {
       var checkedSet = {};
       for (var i = 0; i < _state.checkedVars.length; i++) checkedSet[_state.checkedVars[i]] = true;
       var boxes = document.querySelectorAll('#varSelect input[type="checkbox"]');
       for (var j = 0; j < boxes.length; j++) boxes[j].checked = !!checkedSet[boxes[j].value];
-      var lodesCb = document.getElementById("lodesCheckbox");
-      if (lodesCb) lodesCb.checked = !!checkedSet["LODES_WAC_C000"];
     }
   }
 
@@ -451,8 +436,6 @@
     var boxes = document.querySelectorAll('#varSelect input[type="checkbox"]:checked');
     var codes = [];
     for (var i = 0; i < boxes.length; i++) codes.push(boxes[i].value);
-    var lodesCb = document.getElementById("lodesCheckbox");
-    if (lodesCb && lodesCb.checked) codes.push(lodesCb.value);
     return codes;
   }
 
@@ -468,6 +451,11 @@
     init: function (core) {
       _initialized = true;
 
+      // Populate the empty #varSelect fieldset from VAR_META.
+      // Must run before any querySelectorAll on the checkbox list below.
+      var varSelectEl = document.getElementById("varSelect");
+      if (varSelectEl) varSelectEl.innerHTML = buildVarChecklistHTML();
+
       // Wire Calculate Summary button
       document.getElementById("basRun").addEventListener("click", async function () {
         try {
@@ -477,20 +465,17 @@
         }
       });
 
-      // Wire Select All / Clear All buttons (moved from app.js sidebar)
+      // Wire Select All / Clear All buttons. LODES is a normal #varSelect
+      // checkbox now, so no special-case handling is needed.
       document.getElementById("varSelectAll").addEventListener("click", function () {
         var boxes = document.querySelectorAll('#varSelect input[type="checkbox"]');
         for (var i = 0; i < boxes.length; i++) boxes[i].checked = true;
-        var lodesCb = document.getElementById("lodesCheckbox");
-        if (lodesCb) lodesCb.checked = true;
         _state.checkedVars = collectCheckedVars();
         if (typeof App.cache !== "undefined") App.cache.save();
       });
       document.getElementById("varClearAll").addEventListener("click", function () {
         var boxes = document.querySelectorAll('#varSelect input[type="checkbox"]');
         for (var i = 0; i < boxes.length; i++) boxes[i].checked = false;
-        var lodesCb = document.getElementById("lodesCheckbox");
-        if (lodesCb) lodesCb.checked = false;
         _state.checkedVars = [];
         if (typeof App.cache !== "undefined") App.cache.save();
       });
@@ -502,13 +487,6 @@
           if (typeof App.cache !== "undefined") App.cache.save();
         });
       });
-      var lodesCbEl = document.getElementById("lodesCheckbox");
-      if (lodesCbEl) {
-        lodesCbEl.addEventListener("change", function () {
-          _state.checkedVars = collectCheckedVars();
-          if (typeof App.cache !== "undefined") App.cache.save();
-        });
-      }
 
       // Apply cached state to DOM
       applyStateToDOM();

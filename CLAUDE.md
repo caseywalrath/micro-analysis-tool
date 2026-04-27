@@ -31,7 +31,14 @@ Project onboarding for Claude Code sessions. Read this first.
 - Changes made to wrong files
 - User confusion about what version is "live"
 - User not knowing a new branch was created or how to work from it
-- **ACS variable code changes require updates in TWO files.** `utils.js` holds `VAR_META` (labels/categories), but `buffer-summary.js` has three additional structures that must stay in sync: (1) the `CHECKBOX_GROUPS` object used to build sidebar checkbox groups, (2) the matching local group array (e.g. `COMM_GROUP`), and (3) the `DENOM_MAP` entry for percentage calculation. Updating `utils.js` alone will cause the old code to appear as a raw label with no category in results.
+- **ACS variable code changes are a one-file edit in `js/core/utils.js`.** `VAR_META` is the single source of truth for variable metadata, checkbox-group membership, and percentage denominators. Add or change a variable with one entry; the popup checkbox list, the percent column, and group expansion all update automatically. Per-entry fields:
+  - `displayInChecklist: true` → render as its own checkbox in the popup.
+  - `group: "GROUP_X"` → appears in the UI only as part of group X's collective checkbox (mutually exclusive with `displayInChecklist`).
+  - `denominator: "B01003_001E"` → percent column against that variable.
+  - `denominator: "$group"` → percent against the sum of this entry's group members.
+  - omit `denominator` for "no percent column."
+
+  Group display labels live in `GROUP_INFO` (also in `utils.js`). The buffer-summary popup builds its checkbox list at runtime via `App.getCheckboxGroups()` and `App.getDenominator()`. The legacy `CHECKBOX_GROUPS`, local `*_GROUP` arrays, and `DENOM_MAP` in `buffer-summary.js` were removed in this consolidation.
 ## Overview
 
 Browser-based geospatial analysis tool. Pure front-end (no build step, no backend, no npm). Open `index.html` in a browser and it works. All data stays client-side; Census APIs are called directly.
@@ -44,9 +51,9 @@ css/
   style.css                 Core layout, toolbar, feature panel, module popup, floating widgets, basemap switcher, BAS styles (.bas- prefix), TPI styles, RF styles (.rf- prefix), FTA styles (.fta- prefix), TVI styles (.tvi- prefix), pill rating colors
   sidebar-v2.css            Sidebar panel system styles (scoped under #sidebar), variable checkbox list, section labels
 js/
-  app.js                    Startup, module registry, sidebar panel HTML (Data Inputs), event wiring. Note: CHECKBOX_GROUPS, DENOM_MAP, and runSummary() have moved to buffer-summary.js.
+  app.js                    Startup, module registry, event wiring. Variable checkbox UI is built at runtime by buffer-summary.js from VAR_META in utils.js (no sidebar Data Inputs panel).
   core/
-    utils.js                CSV parsing, number formatting, GEOID normalization, VAR_META (with label/category), getSelectedVars
+    utils.js                CSV parsing, number formatting, GEOID normalization, VAR_META (single source of truth — label, category, group, displayInChecklist, denominator), GROUP_INFO, getCheckboxGroups, getDenominator, getSelectedVars
     sidebar.js              Sidebar panel manager: addPanel, removePanel, toggle, render
     map.js                  MapLibre GL map instance, basemap registry + switcher control, cursor management
     points.js               Points, user-defined buffers (default 0.5 mi), union polygon, point drag support
@@ -61,7 +68,7 @@ js/
     cache.js                Session cache: save/restore/reset via localStorage; JSON import/export
     popup.js                Analysis popup manager: open/close module popups, floating map widgets (legend)
   projects/
-    buffer-summary.js       Buffer-Area Summary module: CHECKBOX_GROUPS, MANDATORY_VARS, DENOM_MAP, expandGroups, runSummary (moved from app.js). Registered as popup-based module.
+    buffer-summary.js       Buffer-Area Summary module: MANDATORY_VARS, expandGroups, runSummary, buildVarChecklistHTML (renders the popup's checkbox fieldset from VAR_META at init time). Registered as popup-based module.
     fta-small-starts.js     FTA Small Starts: breakpoint classification, CRE/ESS/LBAR, popup-based 2-tab UI (Ratings | Data Inputs), session persistence, CSV export
     tpi-scoring.js          TPI scoring engine: 9-factor definitions, batch ACS fetch, LODES aggregation, quintile normalization, composite scoring
     transit-propensity.js   TPI module: popup-based 2-column UI (Settings | Results), weights modal overlay, feature checklist (normalization pool), analysis corridor dropdown, scrollable geography list with expandable factor breakdowns, choropleth rendering, hover tooltips, floating legend (auto-shown on run), GeoJSON/CSV export, stale detection
@@ -128,7 +135,7 @@ cache.js    (needs App.points, App.lines, App.routes, App.polygons, render/rebui
 popup.js    (needs App namespace; defines App.popup)
 app.js              (wires everything; registers sidebar panels; defines App.registerModule; calls cache.restore)
 <modules>           (call App.registerModule)
-  buffer-summary.js     (needs App namespace, App.cache; registers Buffer-Area Summary module; contains CHECKBOX_GROUPS, DENOM_MAP, runSummary)
+  buffer-summary.js     (needs App namespace, App.cache; registers Buffer-Area Summary module; runSummary + builds checkbox UI from VAR_META at popup init)
   fta-small-starts.js   (needs App namespace, App.cache; registers FTA Small Starts module; popup-based 2-tab UI)
   tpi-scoring.js        (needs App namespace, turf; defines window.TPI)
   transit-propensity.js (needs TPI, App.registerModule, App.popup, App.map, App.renderCensusOverlay)
@@ -146,7 +153,9 @@ app.js              (wires everything; registers sidebar panels; defines App.reg
 ## App Namespace (Public API)
 
 ### utils.js
-`setStatus(s)`, `parseCSV(text)`, `fillSelect(el, opts, placeholder)`, `enableSelect(el, bool)`, `toNumberSafe(v)`, `normalizeTractGEOID(raw)`, `guessHeader(headers, candidates)`, `VAR_META`, `getMeta(code)`, `setAggUI(meta)`, `formatValue(val, meta)`, `getSelectedVars()`, `mapToObj(map)`, `objToMap(obj)`, `nestedMapToObj(outerMap)`, `nestedObjToMap(obj)`
+`setStatus(s)`, `parseCSV(text)`, `fillSelect(el, opts, placeholder)`, `enableSelect(el, bool)`, `toNumberSafe(v)`, `normalizeTractGEOID(raw)`, `guessHeader(headers, candidates)`, `VAR_META`, `GROUP_INFO`, `getMeta(code)`, `getCheckboxGroups()`, `getCheckboxGroupMembers(groupKey)`, `getDenominator(code)`, `setAggUI(meta)`, `formatValue(val, meta)`, `getSelectedVars()`, `mapToObj(map)`, `objToMap(obj)`, `nestedMapToObj(outerMap)`, `nestedObjToMap(obj)`
+
+`VAR_META` is the single source of truth for variable metadata. Per-entry fields: `source` ("ACS"|"LODES"), `agg` ("sum"|"avg"|"ratio"), `fmt`, `label`, `category`, optional `codes` (multi-code derived sums), optional `tractOnly`, `numerator`/`denominator`/`ratioLabel` (ratio aggregations only). Checkbox-UI fields (drive the popup): `displayInChecklist: true` for individual checkboxes, `group: "GROUP_X"` for group members, `denominator: "<code>"` or `"$group"` for the percent column. `GROUP_INFO` holds display labels for `GROUP_*` keys. `getCheckboxGroups()` returns `{ groupKey: [memberCodes] }` derived from `VAR_META`. `getDenominator(code)` returns `{ type: "var", code }` | `{ type: "group", codes }` | `null` (returns `null` for ratio aggregations).
 
 ### sidebar.js
 `sidebar.addPanel(config)`, `sidebar.removePanel(id)`, `sidebar.toggle(id)`, `sidebar.render()`
