@@ -313,8 +313,24 @@
 
       <!-- Present Mode Overlays (hidden until toggled on inside Present mode) -->
       <div id="pm-legend" class="pm-overlay" data-pm="legend" style="display:none;">
-        <div class="pm-drag-handle">LEGEND</div>
+        <div class="pm-drag-handle">
+          LEGEND
+          <button id="pm-legend-add-btn" class="pm-legend-add-btn" title="Add items to legend">+</button>
+        </div>
         <div class="pm-legend-body"></div>
+      </div>
+
+      <!-- Legend item picker (shown when + is clicked) -->
+      <div id="pm-legend-picker" style="display:none;">
+        <div class="pm-picker-header">
+          <span class="pm-picker-title">Add to Legend</span>
+          <button id="pm-picker-close" class="pm-picker-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="pm-picker-body"></div>
+        <div class="pm-picker-footer">
+          <button id="pm-picker-add" class="pm-picker-add-btn">Add to Legend</button>
+          <button id="pm-picker-clear" class="pm-picker-clear-btn">Clear Legend</button>
+        </div>
       </div>
 
       <div id="pm-north" class="pm-overlay" data-pm="north" style="display:none;">
