@@ -493,12 +493,12 @@ body.dark-mode .pm-overlay {
 }
 .pm-drag-handle:active { cursor: grabbing; }
 body.dark-mode .pm-drag-handle { border-bottom-color: rgba(255,255,255,0.1); }
-.pm-legend-body { padding: 6px 8px; }
+.pm-legend-body { padding: 0.45em 0.6em; }
 .pm-legend-row {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 3px 0;
+  gap: 0.5em;
+  padding: 0.2em 0;
 }
 .pm-legend-swatch { flex-shrink: 0; display: flex; align-items: center; line-height: 0; }
 .pm-legend-name {
@@ -511,7 +511,7 @@ body.dark-mode .pm-drag-handle { border-bottom-color: rgba(255,255,255,0.1); }
   background: transparent;
   font-size: inherit;
   color: inherit;
-  padding: 1px 4px;
+  padding: 0.08em 0.3em;
   border-radius: 3px;
   font-family: inherit;
 }

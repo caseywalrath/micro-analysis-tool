@@ -17,6 +17,7 @@
   var _titleText   = "Title";
   var _legendNames = {};   // { "route:0": "...", "group:Blue Line": "..." } custom display names
   var _legendPinned = [];  // ordered array of IDs currently shown in the legend
+  var _legendNaturalWidth = null;  // content width at default font — basis for proportional scaling
 
   var _els    = {};
   var _picker = null;
@@ -146,20 +147,53 @@
     return '<svg width="1em" height="1em" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1" fill="' + c + '" opacity="0.75" stroke="' + c + '" stroke-width="1.5"/></svg>';
   }
 
+  // Scale font proportionally to panel width. Only grows above the natural content
+  // width; at or below natural width the font stays at the CSS default (no override).
   function _applyLegendFontSize() {
-    // Font scaling removed: contenteditable spans size to text naturally.
-    // Just clear any stale inline override from old sessions.
-    var body = _els.legend && _els.legend.querySelector(".pm-legend-body");
-    if (body) body.style.fontSize = "";
+    var el = _els.legend;
+    if (!el) return;
+    var body = el.querySelector(".pm-legend-body");
+    if (!body) return;
+    var currentWidth = el.offsetWidth;
+    var natural = _legendNaturalWidth;
+    if (!natural || currentWidth <= natural + 2) {
+      body.style.fontSize = "";
+      return;
+    }
+    // 13px is the base body font size; cap at 32px for readability
+    var scale = currentWidth / natural;
+    body.style.fontSize = Math.min(32, Math.round(13 * scale)) + "px";
+  }
+
+  // Snapshot the tight content width so _applyLegendFontSize has a reliable baseline.
+  // Temporarily lifts any inline width so max-content governs during measurement,
+  // then restores it before re-applying the scale. Runs inside rAF so the browser
+  // has already performed layout on the new innerHTML before we measure.
+  function _measureNaturalWidth() {
+    var el = _els.legend;
+    var body = el && el.querySelector(".pm-legend-body");
+    if (!el || !body) return;
+    requestAnimationFrame(function () {
+      var savedW = el.style.width;
+      if (savedW) el.style.width = "";
+      _legendNaturalWidth = el.offsetWidth;
+      if (savedW) el.style.width = savedW;
+      _applyLegendFontSize();
+    });
   }
 
   function _refreshLegend() {
     var body = _els.legend && _els.legend.querySelector(".pm-legend-body");
     if (!body) return;
 
+    // Reset natural-width baseline and clear any previous scaling so the
+    // max-content layout is accurate before _measureNaturalWidth runs.
+    _legendNaturalWidth = null;
+    body.style.fontSize = "";
+
     if (_legendPinned.length === 0) {
       body.innerHTML = '<div class="pm-legend-empty">Click + to add items</div>';
-      _applyLegendFontSize();
+      _measureNaturalWidth();
       return;
     }
 
@@ -179,7 +213,7 @@
     body.innerHTML = rows.length
       ? rows.join("")
       : '<div class="pm-legend-empty">Click + to add items</div>';
-    _applyLegendFontSize();
+    _measureNaturalWidth();
   }
 
   // ── picker ─────────────────────────────────────────────────────────────────
@@ -343,9 +377,10 @@
       north:  { width: 80,  height: 100  },
       title:  { width: 280, height: null }
     };
-    _titleText    = "Title";
-    _legendNames  = {};
-    _legendPinned = [];
+    _titleText          = "Title";
+    _legendNames        = {};
+    _legendPinned       = [];
+    _legendNaturalWidth = null;
     _closePicker();
     _updateAll();
     _refreshToggles();
