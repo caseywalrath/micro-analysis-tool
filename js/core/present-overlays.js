@@ -147,18 +147,10 @@
   }
 
   function _applyLegendFontSize() {
-    var el = _els.legend;
-    if (!el) return;
-    var body = el.querySelector(".pm-legend-body");
-    if (!body) return;
-    // Only scale font when the user has explicitly resized the panel.
-    // At auto/content width, let CSS govern so the panel stays tight to content.
-    if (!_size.legend.width) {
-      body.style.fontSize = "";
-      return;
-    }
-    var fs = Math.max(9, Math.min(22, Math.round(el.offsetWidth / 190 * 13)));
-    body.style.fontSize = fs + "px";
+    // Font scaling removed: contenteditable spans size to text naturally.
+    // Just clear any stale inline override from old sessions.
+    var body = _els.legend && _els.legend.querySelector(".pm-legend-body");
+    if (body) body.style.fontSize = "";
   }
 
   function _refreshLegend() {
@@ -179,7 +171,7 @@
       rows.push(
         '<div class="pm-legend-row">' +
           '<span class="pm-legend-swatch">' + _swatchSVG(item.shape, item.color) + '</span>' +
-          '<input class="pm-legend-name" data-key="' + _esc(id) + '" value="' + _esc(name) + '" />' +
+          '<span class="pm-legend-name" contenteditable="true" spellcheck="false" data-key="' + _esc(id) + '">' + _esc(name) + '</span>' +
         '</div>'
       );
     });
@@ -437,12 +429,24 @@
       titleText.addEventListener("mousedown", function (e) { e.stopPropagation(); });
     }
 
-    // Legend: save name edits; prevent drag when clicking inputs
-    _els.legend.addEventListener("change", function (e) {
+    // Legend: save name edits; prevent drag when clicking contenteditable spans
+    _els.legend.addEventListener("input", function (e) {
       if (e.target.classList.contains("pm-legend-name")) {
-        _legendNames[e.target.getAttribute("data-key")] = e.target.value;
+        _legendNames[e.target.getAttribute("data-key")] = e.target.textContent;
         _saveState();
       }
+    });
+    _els.legend.addEventListener("keydown", function (e) {
+      if (e.target.classList.contains("pm-legend-name") && e.key === "Enter") {
+        e.preventDefault();
+        e.target.blur();
+      }
+    });
+    _els.legend.addEventListener("paste", function (e) {
+      if (!e.target.classList.contains("pm-legend-name")) return;
+      e.preventDefault();
+      var text = (e.clipboardData || window.clipboardData).getData("text/plain");
+      document.execCommand("insertText", false, text);
     });
     _els.legend.addEventListener("mousedown", function (e) {
       if (e.target.classList.contains("pm-legend-name")) e.stopPropagation();

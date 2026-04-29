@@ -503,12 +503,15 @@ body.dark-mode .pm-drag-handle { border-bottom-color: rgba(255,255,255,0.1); }
 .pm-legend-swatch { flex-shrink: 0; display: flex; align-items: center; line-height: 0; }
 .pm-legend-name {
   flex: 1;
-  border: none;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  outline: none;
+  cursor: text;
   background: transparent;
   font-size: inherit;
   color: inherit;
   padding: 1px 4px;
-  min-width: 0;
   border-radius: 3px;
   font-family: inherit;
 }
@@ -538,7 +541,7 @@ body.dark-mode .pm-legend-name:focus { background: rgba(255,255,255,0.07); }
   cursor: pointer;
   font-size: 15px;
   line-height: 1;
-  color: var(--muted, #777);
+  color: #bbb;
   padding: 0 2px;
   margin-left: 4px;
   border-radius: 3px;
