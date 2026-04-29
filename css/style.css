@@ -479,7 +479,7 @@ body.dark-mode .pm-overlay {
 }
 
 /* Legend */
-#pm-legend { width: 190px; overflow: auto; }
+#pm-legend { width: max-content; min-width: 120px; max-width: 360px; overflow: auto; }
 .pm-drag-handle {
   cursor: grab;
   padding: 6px 10px 5px;

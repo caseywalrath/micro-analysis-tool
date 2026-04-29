@@ -10,7 +10,7 @@
     title:  { top: 20,  left: null }   // null → centred on first show
   };
   var _size = {
-    legend: { width: 190, height: null },
+    legend: { width: null, height: null },
     north:  { width: 80,  height: 100  },
     title:  { width: 280, height: null }
   };
@@ -151,6 +151,12 @@
     if (!el) return;
     var body = el.querySelector(".pm-legend-body");
     if (!body) return;
+    // Only scale font when the user has explicitly resized the panel.
+    // At auto/content width, let CSS govern so the panel stays tight to content.
+    if (!_size.legend.width) {
+      body.style.fontSize = "";
+      return;
+    }
     var fs = Math.max(9, Math.min(22, Math.round(el.offsetWidth / 190 * 13)));
     body.style.fontSize = fs + "px";
   }
@@ -341,7 +347,7 @@
       title:  { top: 20, left: null }
     };
     _size = {
-      legend: { width: 190, height: null },
+      legend: { width: null, height: null },
       north:  { width: 80,  height: 100  },
       title:  { width: 280, height: null }
     };
