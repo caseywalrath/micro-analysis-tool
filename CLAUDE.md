@@ -67,6 +67,7 @@ js/
     lodes.js                LODES .csv.gz download/upload/parse, block-level employment
     cache.js                Session cache: save/restore/reset via localStorage; JSON import/export
     popup.js                Analysis popup manager: open/close module popups, floating map widgets (legend)
+    present-overlays.js     Presentation mode overlay manager: draggable/resizable legend, north arrow, and title. Registers `"present-overlays"` cache state and listens for `mat:present-mode-change` from `App.setPresentMode()` in `app.js`. Legend auto-sizes to row content with balanced horizontal padding until manually resized. Title auto-sizes to entered text until manually resized; manual title size persists and title text scales from box width.
   projects/
     buffer-summary.js       Buffer-Area Summary module: MANDATORY_VARS, expandGroups, runSummary, buildVarChecklistHTML (renders the popup's checkbox fieldset from VAR_META at init time). Registered as popup-based module.
     fta-small-starts.js     FTA Small Starts: breakpoint classification, CRE/ESS/LBAR, popup-based 2-tab UI (Ratings | Data Inputs), session persistence, CSV export
@@ -146,6 +147,7 @@ app.js              (wires everything; registers sidebar panels; defines App.reg
   title-vi-engine.js    (needs App namespace, turf; defines window.TitleVI)
   title-vi.js           (needs TitleVI, App.registerModule, App.popup, App.map, App.cache)
   gtfs.js               (needs JSZip, PapaParse, maplibregl, App.registerModule, App.popup, App.map; no scoring engine deps)
+present-overlays.js     (needs App namespace and App.cache; loaded after modules; listens for `mat:present-mode-change`)
 ```
 
 **Active modules:** Buffer-Area Summary is enabled (popup-based, settings + results table). TPI is enabled (popup-based, 2-column). FTA Small Starts is enabled (popup-based, 2-tab). Ridership Forecasting is enabled (popup-based, 4-tab). Corridor Scoring is enabled (popup-based, 2-column). Route Costing is enabled (popup-based, 2-column). Title VI Service Equity is enabled (popup-based, 3-tab). GTFS Feed Viewer is enabled (popup-based, 2-column file browser + map layers).

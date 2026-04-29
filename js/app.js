@@ -456,20 +456,26 @@
     }
 
     // Present mode
-    document.getElementById("present-btn").addEventListener("click", function () {
-      document.body.classList.add("present-mode");
+    App.setPresentMode = function (enabled) {
+      var isEnabled = !!enabled;
+      document.body.classList.toggle("present-mode", isEnabled);
       App.map.resize();
+      document.dispatchEvent(new CustomEvent("mat:present-mode-change", {
+        detail: { enabled: isEnabled }
+      }));
+    };
+
+    document.getElementById("present-btn").addEventListener("click", function () {
+      App.setPresentMode(true);
     });
     document.getElementById("present-exit").addEventListener("click", function () {
-      document.body.classList.remove("present-mode");
-      App.map.resize();
+      App.setPresentMode(false);
     });
 
     // Keyboard shortcuts
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape" && document.body.classList.contains("present-mode")) {
-        document.body.classList.remove("present-mode");
-        App.map.resize();
+        App.setPresentMode(false);
         return;
       }
       if (e.key === "Escape" && App.drawMode === "measure") {

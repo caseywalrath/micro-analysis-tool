@@ -12,15 +12,22 @@
   var _size = {
     legend: { width: null, height: null },
     north:  { width: 80,  height: 100  },
-    title:  { width: 280, height: null }
+    title:  { width: null, height: null }
   };
   var _titleText   = "Title";
+  var _titleManualSize = false;
+  var _titleSizingProgrammatic = false;
+  var _titleResizeReady = false;
   var _legendNames = {};   // { "route:0": "...", "group:Blue Line": "..." } custom display names
   var _legendPinned = [];  // ordered array of IDs currently shown in the legend
   var _legendNaturalWidth = null;  // content width at default font — basis for proportional scaling
+  var _legendManualSize = false;
+  var _legendSizingProgrammatic = false;
+  var _legendResizeReady = false;
 
   var _els    = {};
   var _picker = null;
+  var _elemDrop = null;
   var _inited = false;
 
   // ── helpers ────────────────────────────────────────────────────────────────
@@ -31,10 +38,17 @@
   }
 
   // ── drag ───────────────────────────────────────────────────────────────────
-  function _makeDraggable(el, handle) {
+  function _isInResizeCorner(el, e) {
+    var r = el.getBoundingClientRect();
+    var zone = 18;
+    return e.clientX >= r.right - zone && e.clientY >= r.bottom - zone;
+  }
+
+  function _makeDraggable(el, handle, shouldSkipDrag) {
     var ds = null;
     handle.addEventListener("mousedown", function (e) {
       if (e.button !== 0) return;
+      if (shouldSkipDrag && shouldSkipDrag(e, el)) return;
       e.preventDefault();
       var r = el.getBoundingClientRect();
       ds = { sx: e.clientX, sy: e.clientY, il: r.left, it: r.top };
@@ -65,8 +79,16 @@
     var ro = new ResizeObserver(function () {
       var key = el.getAttribute("data-pm");
       if (!key) return;
-      _size[key] = { width: el.offsetWidth, height: el.offsetHeight };
-      if (key === "legend") _applyLegendFontSize();
+      var width = el.offsetWidth;
+      var height = el.offsetHeight;
+      if (width === 0 || height === 0) return;
+      if (key === "legend") {
+        _onLegendResize(width, height);
+      } else if (key === "title") {
+        _onTitleResize(width, height);
+      } else {
+        _size[key] = { width: width, height: height };
+      }
       _saveState();
     });
     ro.observe(el);
@@ -165,20 +187,78 @@
     body.style.fontSize = Math.min(32, Math.round(13 * scale)) + "px";
   }
 
+  function _legendMaxWidth() {
+    return Math.min(360, Math.max(84, window.innerWidth - 32));
+  }
+
+  function _legendTightWidth() {
+    var el = _els.legend;
+    var body = el && el.querySelector(".pm-legend-body");
+    if (!el || !body) return 84;
+
+    var bodyStyle = window.getComputedStyle(body);
+    var padX = (parseFloat(bodyStyle.paddingLeft) || 0) +
+               (parseFloat(bodyStyle.paddingRight) || 0);
+    var borderX = Math.max(0, el.offsetWidth - el.clientWidth);
+    var maxRow = 0;
+
+    var rows = body.querySelectorAll(".pm-legend-row");
+    rows.forEach(function (row) {
+      var rowStyle = window.getComputedStyle(row);
+      var gap = parseFloat(rowStyle.columnGap || rowStyle.gap) || 0;
+      var rowPad = (parseFloat(rowStyle.paddingLeft) || 0) +
+                   (parseFloat(rowStyle.paddingRight) || 0);
+      var swatch = row.querySelector(".pm-legend-swatch");
+      var name = row.querySelector(".pm-legend-name");
+      var swatchW = swatch ? swatch.getBoundingClientRect().width : 0;
+      var nameW = name ? name.scrollWidth : row.scrollWidth;
+      maxRow = Math.max(maxRow, rowPad + swatchW + gap + nameW);
+    });
+
+    if (maxRow === 0) {
+      var empty = body.querySelector(".pm-legend-empty");
+      maxRow = empty ? empty.scrollWidth : body.scrollWidth;
+    }
+
+    return Math.ceil(Math.max(84, maxRow + padX + borderX));
+  }
+
+  function _autoSizeLegendToContent() {
+    var el = _els.legend;
+    if (!el || _legendManualSize) return;
+    var targetWidth = Math.min(_legendNaturalWidth || _legendTightWidth(), _legendMaxWidth());
+    _legendSizingProgrammatic = true;
+    el.style.width = targetWidth + "px";
+    el.style.height = "";
+    _size.legend = { width: targetWidth, height: null };
+    _applyLegendFontSize();
+    requestAnimationFrame(function () { _legendSizingProgrammatic = false; });
+  }
+
+  function _onLegendResize(width, height) {
+    if (_legendSizingProgrammatic) {
+      _applyLegendFontSize();
+      return;
+    }
+    if (!_legendResizeReady || !_vis.legend || !document.body.classList.contains("present-mode")) {
+      _applyLegendFontSize();
+      return;
+    }
+    _legendManualSize = true;
+    _size.legend = { width: width, height: height };
+    _applyLegendFontSize();
+  }
+
   // Snapshot the tight content width so _applyLegendFontSize has a reliable baseline.
-  // Temporarily lifts any inline width so max-content governs during measurement,
-  // then restores it before re-applying the scale. Runs inside rAF so the browser
-  // has already performed layout on the new innerHTML before we measure.
+  // Runs inside rAF so the browser has already performed layout on the new innerHTML.
   function _measureNaturalWidth() {
     var el = _els.legend;
     var body = el && el.querySelector(".pm-legend-body");
     if (!el || !body) return;
     requestAnimationFrame(function () {
-      var savedW = el.style.width;
-      if (savedW) el.style.width = "";
-      _legendNaturalWidth = el.offsetWidth;
-      if (savedW) el.style.width = savedW;
-      _applyLegendFontSize();
+      _legendNaturalWidth = _legendTightWidth();
+      if (_legendManualSize) _applyLegendFontSize();
+      else _autoSizeLegendToContent();
     });
   }
 
@@ -214,6 +294,82 @@
       ? rows.join("")
       : '<div class="pm-legend-empty">Click + to add items</div>';
     _measureNaturalWidth();
+  }
+
+  // Title width defaults to tight text content. Once the user manually resizes,
+  // that explicit box size takes precedence and only the text scale changes.
+  function _titleTextEl() {
+    return _els.title && _els.title.querySelector(".pm-title-text");
+  }
+
+  function _measureTitleTextWidth() {
+    var textEl = _titleTextEl();
+    if (!textEl) return 160;
+    var meas = document.createElement("span");
+    var cs = window.getComputedStyle(textEl);
+    meas.textContent = textEl.textContent || "Title";
+    meas.style.position = "fixed";
+    meas.style.left = "-9999px";
+    meas.style.top = "-9999px";
+    meas.style.visibility = "hidden";
+    meas.style.whiteSpace = "pre";
+    meas.style.fontFamily = cs.fontFamily;
+    meas.style.fontWeight = cs.fontWeight;
+    meas.style.fontSize = "22px";
+    meas.style.letterSpacing = cs.letterSpacing;
+    document.body.appendChild(meas);
+    var width = Math.ceil(meas.getBoundingClientRect().width);
+    document.body.removeChild(meas);
+    return Math.max(48, width);
+  }
+
+  function _applyTitleFontSize() {
+    var el = _els.title;
+    var textEl = _titleTextEl();
+    if (!el || !textEl) return;
+    var textWidth = Math.max(1, _measureTitleTextWidth());
+    var contentWidth = Math.max(1, el.clientWidth - 36);
+    var scale = contentWidth / textWidth;
+    var px = Math.max(16, Math.min(64, Math.round(22 * scale)));
+    textEl.style.fontSize = px + "px";
+  }
+
+  function _titleAutoWidth() {
+    return Math.min(Math.max(_measureTitleTextWidth() + 36, 96), Math.max(96, window.innerWidth - 32));
+  }
+
+  function _autoSizeTitleToText() {
+    var el = _els.title;
+    if (!el || _titleManualSize) return;
+    var targetWidth = _titleAutoWidth();
+    var rect = el.getBoundingClientRect();
+    var canRecenter = rect.width > 0 && rect.height > 0;
+    var center = canRecenter ? rect.left + rect.width / 2 : null;
+    _titleSizingProgrammatic = true;
+    el.style.width = targetWidth + "px";
+    el.style.height = "";
+    _size.title = { width: targetWidth, height: null };
+    if (canRecenter) {
+      var nextLeft = Math.max(0, Math.min(window.innerWidth - targetWidth, center - targetWidth / 2));
+      el.style.left = nextLeft + "px";
+      _pos.title = { top: Math.round(rect.top), left: Math.round(nextLeft) };
+    }
+    _applyTitleFontSize();
+    requestAnimationFrame(function () { _titleSizingProgrammatic = false; });
+  }
+
+  function _onTitleResize(width, height) {
+    if (_titleSizingProgrammatic) {
+      _applyTitleFontSize();
+      return;
+    }
+    if (!_titleResizeReady || !_vis.title || !document.body.classList.contains("present-mode")) {
+      _applyTitleFontSize();
+      return;
+    }
+    _titleManualSize = true;
+    _size.title = { width: width, height: height };
+    _applyTitleFontSize();
   }
 
   // ── picker ─────────────────────────────────────────────────────────────────
@@ -322,16 +478,36 @@
       if (key === "north") {
         p.left = Math.max(0, window.innerWidth - (s.width || 80) - 20);
         p.top  = p.top || 80;
+      } else if (key === "title" && !_titleManualSize) {
+        p.left = Math.max(0, Math.round((window.innerWidth - _titleAutoWidth()) / 2));
+        p.top  = p.top || 20;
       } else {
         p.left = Math.max(0, Math.round((window.innerWidth - (s.width || 280)) / 2));
         p.top  = p.top || 20;
       }
     }
-    el.style.top   = (p.top  || 0) + "px";
-    el.style.left  = (p.left || 0) + "px";
+    var width = s.width || el.offsetWidth || (key === "title" && !_titleManualSize ? _titleAutoWidth() : (key === "north" ? 80 : 280));
+    if (key === "legend" && !_legendManualSize) {
+      width = _legendNaturalWidth || el.offsetWidth || 84;
+    }
+    var height = s.height || el.offsetHeight || (key === "north" ? 100 : 36);
+    var top = Math.max(0, Math.min(window.innerHeight - height, p.top || 0));
+    var left = Math.max(0, Math.min(window.innerWidth - width, p.left || 0));
+    el.style.top   = top + "px";
+    el.style.left  = left + "px";
     el.style.right = "auto";
-    if (s.width)  el.style.width  = s.width  + "px";
-    if (s.height) el.style.height = s.height + "px";
+    if (s.width && (key !== "legend" || _legendManualSize)) el.style.width  = s.width  + "px";
+    if (s.height && (key !== "legend" || _legendManualSize)) el.style.height = s.height + "px";
+    if (key === "legend") {
+      if (_legendManualSize) _applyLegendFontSize();
+      else _measureNaturalWidth();
+      requestAnimationFrame(function () { _legendResizeReady = true; });
+    }
+    if (key === "title") {
+      if (_titleManualSize) _applyTitleFontSize();
+      else _autoSizeTitleToText();
+      requestAnimationFrame(function () { _titleResizeReady = true; });
+    }
   }
 
   function _setVisible(key, show) {
@@ -339,7 +515,7 @@
     if (!el) return;
     var inPresent = document.body.classList.contains("present-mode");
     var visible   = inPresent && show;
-    el.style.display = visible ? "block" : "none";
+    el.style.display = visible ? (key === "north" || key === "title" ? "flex" : "block") : "none";
     if (visible) _applyPosSize(key);
     // Close picker when legend is hidden
     if (key === "legend" && !visible) _closePicker();
@@ -347,6 +523,19 @@
 
   function _updateAll() {
     ["legend", "north", "title"].forEach(function (k) { _setVisible(k, _vis[k]); });
+  }
+
+  function _syncPresentMode(enabled) {
+    if (!enabled) {
+      _closePicker();
+      if (_elemDrop) _elemDrop.style.display = "none";
+    }
+    _updateAll();
+    if (enabled && _vis.legend) _refreshLegend();
+    if (enabled && _vis.title) {
+      if (_titleManualSize) _applyTitleFontSize();
+      else _autoSizeTitleToText();
+    }
   }
 
   // ── dropdown toggle checkmarks ─────────────────────────────────────────────
@@ -375,18 +564,26 @@
     _size = {
       legend: { width: null, height: null },
       north:  { width: 80,  height: 100  },
-      title:  { width: 280, height: null }
+      title:  { width: null, height: null }
     };
     _titleText          = "Title";
+    _titleManualSize    = false;
+    _titleResizeReady   = false;
     _legendNames        = {};
     _legendPinned       = [];
     _legendNaturalWidth = null;
+    _legendManualSize = false;
+    _legendResizeReady = false;
     _closePicker();
     _updateAll();
     _refreshToggles();
     _refreshLegend();
     var tt = _els.title && _els.title.querySelector(".pm-title-text");
-    if (tt) tt.textContent = _titleText;
+    if (tt) {
+      tt.textContent = _titleText;
+      tt.style.fontSize = "";
+    }
+    _autoSizeTitleToText();
   }
 
   // ── init ───────────────────────────────────────────────────────────────────
@@ -401,6 +598,7 @@
 
     var elemBtn  = document.getElementById("pm-elements-btn");
     var elemDrop = document.getElementById("pm-elements-dropdown");
+    _elemDrop = elemDrop;
     if (!_els.legend || !_els.north || !_els.title || !elemBtn || !elemDrop) return;
 
     // Map Elements dropdown open/close
@@ -429,25 +627,32 @@
         _vis[key] = !_vis[key];
         _setVisible(key, _vis[key]);
         if (key === "legend" && _vis.legend) _refreshLegend();
+        if (key === "title" && _vis.title) {
+          if (_titleManualSize) _applyTitleFontSize();
+          else _autoSizeTitleToText();
+        }
         _refreshToggles();
         _saveState();
       });
     });
 
-    // Sync overlays on present-mode enter/exit and Escape
-    var presentBtn  = document.getElementById("present-btn");
-    var presentExit = document.getElementById("present-exit");
-    if (presentBtn)  presentBtn.addEventListener("click",  function () { _updateAll(); if (_vis.legend) _refreshLegend(); });
-    if (presentExit) presentExit.addEventListener("click", function () { _closePicker(); _updateAll(); });
+    // Sync overlays after app.js has actually entered/exited present mode.
+    document.addEventListener("mat:present-mode-change", function (e) {
+      _syncPresentMode(!!(e.detail && e.detail.enabled));
+    });
     document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape") { _closePicker(); _updateAll(); }
+      if (e.key === "Escape") _closePicker();
     });
 
     // Drag
     var dragHandle = _els.legend.querySelector(".pm-drag-handle");
     _makeDraggable(_els.legend, dragHandle || _els.legend);
-    _makeDraggable(_els.north,  _els.north);
-    _makeDraggable(_els.title,  _els.title);
+    _makeDraggable(_els.north,  _els.north, function (e, el) {
+      return _isInResizeCorner(el, e);
+    });
+    _makeDraggable(_els.title,  _els.title, function (e, el) {
+      return _isInResizeCorner(el, e);
+    });
 
     // Resize observation
     _watchResize(_els.legend);
@@ -459,6 +664,8 @@
     if (titleText) {
       titleText.addEventListener("input", function () {
         _titleText = titleText.textContent;
+        if (_titleManualSize) _applyTitleFontSize();
+        else _autoSizeTitleToText();
         _saveState();
       });
       titleText.addEventListener("mousedown", function (e) { e.stopPropagation(); });
@@ -468,6 +675,10 @@
     _els.legend.addEventListener("input", function (e) {
       if (e.target.classList.contains("pm-legend-name")) {
         _legendNames[e.target.getAttribute("data-key")] = e.target.textContent;
+        _legendNaturalWidth = null;
+        var body = _els.legend.querySelector(".pm-legend-body");
+        if (body) body.style.fontSize = "";
+        _measureNaturalWidth();
         _saveState();
       }
     });
@@ -546,6 +757,8 @@
           pos:          _pos,
           size:         _size,
           titleText:    _titleText,
+          titleManualSize: _titleManualSize,
+          legendManualSize: _legendManualSize,
           legendNames:  _legendNames,
           legendPinned: _legendPinned
         };
@@ -556,6 +769,8 @@
         if (data.pos)                    _pos          = data.pos;
         if (data.size)                   _size         = data.size;
         if (data.titleText !== undefined) _titleText   = data.titleText;
+        _titleManualSize = data.titleManualSize === true;
+        _legendManualSize = data.legendManualSize === true;
         if (data.legendNames)            _legendNames  = data.legendNames;
         if (data.legendPinned)           _legendPinned = data.legendPinned;
         if (_inited) {
@@ -564,6 +779,8 @@
           _refreshLegend();
           var tt = _els.title && _els.title.querySelector(".pm-title-text");
           if (tt) tt.textContent = _titleText;
+          if (_titleManualSize) _applyTitleFontSize();
+          else _autoSizeTitleToText();
         }
       }
     });
