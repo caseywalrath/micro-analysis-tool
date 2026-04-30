@@ -1826,6 +1826,10 @@
   function exportShareLink() {
     try {
       var state = collectState("full");
+      // Strip analysis-module results to keep the URL short. Drawn features,
+      // feature attributes, buffers, and map view are preserved; the recipient
+      // can re-run any analysis module themselves.
+      delete state.moduleState;
       var json = JSON.stringify(state);
       var compressed = pako.deflate(json, { level: 9 });
       var binary = "";
