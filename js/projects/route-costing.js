@@ -486,11 +486,10 @@
     });
 
     // Peak vehicles: cycle / min-headway, across all bands/patterns.
-    var peakRaw = 0, peakRounded = 0, fleet = 0;
+    var peakRaw = 0, peakRounded = 0;
     if (isFinite(minHeadway) && minHeadway > 0) {
       peakRaw     = (cycleHrs * 60) / minHeadway;
       peakRounded = Math.ceil(peakRaw);
-      fleet       = Math.ceil(peakRounded * (1 + settings.spareRatio / 100));
     }
 
     return {
@@ -513,7 +512,6 @@
 
       peakVehiclesRaw:      peakRaw,
       peakVehiclesRounded:  peakRounded,
-      fleetWithSpares:      fleet,
 
       bandBreakdown: bandRows
     };
@@ -532,7 +530,9 @@
       dailyTripsSa:     0,
       dailyTripsSu:     0,
       fleetSumRounded:  0,   // Σ of each Service's rounded fleet need (standalone)
-      fleetSumRaw:      0    // ceil of Σ raw → theoretical floor if perfectly interlined
+      fleetSumRaw:      0,   // ceil of Σ raw → theoretical floor if perfectly interlined
+      fleetWithSpares:  0,   // fleetSumRounded + spare ratio (fleet-level planning total)
+      spareRatioPct:    settings.spareRatio
     };
     var rawSum = 0;
     serviceResults.forEach(function (r) {
@@ -551,6 +551,7 @@
     });
     out.fleetSumRaw = Math.ceil(rawSum);
     out.interlineGap = out.fleetSumRounded - out.fleetSumRaw;
+    out.fleetWithSpares = Math.ceil(out.fleetSumRounded * (1 + settings.spareRatio / 100));
     out.costBasisYear = settings.costBasisYear || "";
     return out;
   }
@@ -597,7 +598,7 @@
         '<th class="rc-num">Daily plat-hr</th>',
         '<th class="rc-num">Annual plat-hr</th>',
         '<th class="rc-num">Annual cost</th>',
-        '<th class="rc-num" title="raw / rounded / with spares">Peak veh</th>',
+        '<th class="rc-num" title="raw / rounded">Peak veh</th>',
       '</tr>'
     ].join("");
 
@@ -622,8 +623,7 @@
                       fmtInt(r.daily.saturday.trips) + " / " +
                       fmtInt(r.daily.sunday.trips);
       var vehCell   = fmtDec(r.peakVehiclesRaw, 1) + " / " +
-                      fmtInt(r.peakVehiclesRounded) + " / " +
-                      fmtInt(r.fleetWithSpares);
+                      fmtInt(r.peakVehiclesRounded);
 
       rows +=
         '<tr class="rc-row rc-row-main" data-idx="' + idx + '">' +
@@ -735,7 +735,8 @@
       ["Fleet — theoretical minimum (interlined)",  fmtInt(summary.fleetSumRaw)],
       ["Interline opportunity (gap)",
         fmtInt(summary.interlineGap) + ' <span class="tiny" style="color:var(--muted);">vehicles potentially savable</span>'
-      ]
+      ],
+      ["Fleet — planning total (with " + summary.spareRatioPct + "% spares)", fmtInt(summary.fleetWithSpares)]
     ];
     if (summary.costBasisYear) {
       rows.push(["Cost basis",  escapeHTML(summary.costBasisYear)]);
@@ -809,7 +810,7 @@
       "Daily rev-hr (Wk)","Daily rev-hr (Sa)","Daily rev-hr (Su)",
       "Daily plat-hr (Wk)","Daily plat-hr (Sa)","Daily plat-hr (Su)",
       "Annual rev-hr","Annual plat-hr","Annual miles","Annual trips","Annual cost ($)",
-      "Peak veh raw","Peak veh rounded","Fleet w/spares",
+      "Peak veh raw","Peak veh rounded",
       "Skipped","Warnings"
     ]));
 
@@ -818,7 +819,7 @@
         var warnStr = (r.warnings || []).map(function (w) { return w.msg; }).join(" | ");
         lines.push(csvRow([
           r.name, r.isGroup ? "Paired" : "Solo", r.patternCount, r.directionSummary,
-          "","","","","","","","","","","","","","","","","","","","",
+          "","","","","","","","","","","","","","","","","","","",
           "YES", warnStr
         ]));
         return;
@@ -831,7 +832,7 @@
         round1(r.daily.weekday.platHrs),round1(r.daily.saturday.platHrs),round1(r.daily.sunday.platHrs),
         roundI(r.annual.revHrs), roundI(r.annual.platHrs), roundI(r.annual.miles),
         roundI(r.annual.trips),  roundI(r.annual.cost),
-        round1(r.peakVehiclesRaw), roundI(r.peakVehiclesRounded), roundI(r.fleetWithSpares),
+        round1(r.peakVehiclesRaw), roundI(r.peakVehiclesRounded),
         "", ""
       ]));
     });
@@ -852,6 +853,7 @@
     lines.push(csvRow(["Fleet — sum of Service needs (standalone)", summary.fleetSumRounded]));
     lines.push(csvRow(["Fleet — theoretical minimum (interlined)",  summary.fleetSumRaw]));
     lines.push(csvRow(["Interline opportunity (gap)", summary.interlineGap]));
+    lines.push(csvRow(["Fleet — planning total (with " + summary.spareRatioPct + "% spares)", summary.fleetWithSpares]));
     if (settings.costBasisYear) lines.push(csvRow(["Cost basis", settings.costBasisYear]));
 
     var blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
@@ -1069,7 +1071,6 @@
             daily: r.daily, annual: r.annual,
             peakVehiclesRaw: r.peakVehiclesRaw,
             peakVehiclesRounded: r.peakVehiclesRounded,
-            fleetWithSpares: r.fleetWithSpares,
             bandBreakdown: []  // dropped from persistence; re-run to recompute
           };
         })
