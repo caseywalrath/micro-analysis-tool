@@ -1026,7 +1026,7 @@
               : (App.featureSettings ? App.featureSettings[bk] : 0);
             if (typeof App._openFpSlider === "function") {
               App._openFpSlider(btn, {
-                min: 0, max: 2, step: 0.1, unit: "mi",
+                values: (App.BUFFER_RADIUS_STEPS || [0,0.125,0.25,0.5,0.75,1,1.25,1.5,1.75,2]), unit: "mi",
                 value: curVal,
                 onChange: function (v) {
                   feat.properties._bufferRadius = v;

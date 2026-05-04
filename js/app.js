@@ -544,12 +544,23 @@
       if (el) el.innerHTML = pair[1];
     });
 
+    var BUFFER_RADIUS_STEPS = [0, 0.125, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+
     var _fpActiveBtn = null;
 
     function _closeFpSlider() {
       var pop = document.getElementById("fp-slider-popover");
       if (pop) pop.style.display = "none";
       if (_fpActiveBtn) { _fpActiveBtn.classList.remove("fp-sib-active"); _fpActiveBtn = null; }
+    }
+
+    function _valueToIdx(val, values) {
+      var bestIdx = 0, bestDist = Infinity;
+      for (var i = 0; i < values.length; i++) {
+        var d = Math.abs(values[i] - val);
+        if (d < bestDist) { bestDist = d; bestIdx = i; }
+      }
+      return bestIdx;
     }
 
     function _openFpSlider(btn, cfg) {
@@ -564,21 +575,37 @@
       var unitEl = document.getElementById("fp-slider-unit");
       if (!slider || !valEl) return;
 
-      slider.min   = cfg.min;
-      slider.max   = cfg.max;
-      slider.step  = cfg.step;
       var initVal = (cfg.value != null) ? cfg.value : (cfg.key ? App.featureSettings[cfg.key] : 0);
-      slider.value = initVal;
-      valEl.textContent  = _fmtSlider(initVal, cfg);
       if (unitEl) unitEl.textContent = cfg.unit || "";
 
-      slider.oninput = function () {
-        var v = parseFloat(this.value);
-        if (cfg.key) App.featureSettings[cfg.key] = v;
-        valEl.textContent = _fmtSlider(v, cfg);
-        cfg.onChange(v);
-        if (cfg.key && typeof App.cache !== "undefined") App.cache.save();
-      };
+      if (cfg.values) {
+        slider.min  = 0;
+        slider.max  = cfg.values.length - 1;
+        slider.step = 1;
+        var initIdx = _valueToIdx(initVal, cfg.values);
+        slider.value = initIdx;
+        valEl.textContent = _fmtSlider(cfg.values[initIdx], cfg);
+        slider.oninput = function () {
+          var v = cfg.values[parseInt(this.value)];
+          if (cfg.key) App.featureSettings[cfg.key] = v;
+          valEl.textContent = _fmtSlider(v, cfg);
+          cfg.onChange(v);
+          if (cfg.key && typeof App.cache !== "undefined") App.cache.save();
+        };
+      } else {
+        slider.min   = cfg.min;
+        slider.max   = cfg.max;
+        slider.step  = cfg.step;
+        slider.value = initVal;
+        valEl.textContent = _fmtSlider(initVal, cfg);
+        slider.oninput = function () {
+          var v = parseFloat(this.value);
+          if (cfg.key) App.featureSettings[cfg.key] = v;
+          valEl.textContent = _fmtSlider(v, cfg);
+          cfg.onChange(v);
+          if (cfg.key && typeof App.cache !== "undefined") App.cache.save();
+        };
+      }
 
       // Position popover below (or above) the icon
       var rect = btn.getBoundingClientRect();
@@ -596,6 +623,7 @@
     }
 
     function _fmtSlider(v, cfg) {
+      if (cfg.values) return parseFloat(v.toFixed(3)).toString();
       if (cfg.step < 1) return parseFloat(v).toFixed(1);
       return Math.round(v).toString();
     }
@@ -624,7 +652,7 @@
         if (_fpActiveBtn === btn) {
           var slider = document.getElementById("fp-slider-input");
           var valEl  = document.getElementById("fp-slider-value");
-          if (slider) slider.value = cfg.def;
+          if (slider) slider.value = cfg.values ? _valueToIdx(cfg.def, cfg.values) : cfg.def;
           if (valEl)  valEl.textContent = _fmtSlider(cfg.def, cfg);
         }
       });
@@ -635,9 +663,9 @@
     _wireFpBtn("fp-set-routeOpacity",      { key:"routeOpacity",       def:100, min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("route"); } });
     _wireFpBtn("fp-set-polygonOpacity",    { key:"polygonOpacity",     def:50,  min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("polygon"); } });
     _wireFpBtn("fp-set-bufferOpacity",     { key:"bufferOpacity",      def:50,  min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("buffer"); } });
-    _wireFpBtn("fp-set-bufferRadius",      { key:"bufferRadius",       def:0,   min:0, max:2,   step:0.1, unit:"mi", onChange: function(v) { App.rebuildBuffers(v); notifyProject(); } });
-    _wireFpBtn("fp-set-lineBufferRadius",  { key:"lineBufferRadius",   def:0,   min:0, max:2,   step:0.1, unit:"mi", onChange: function(v) { App.rebuildLineBuffers(v); notifyProject(); } });
-    _wireFpBtn("fp-set-routeBufferRadius", { key:"routeBufferRadius",  def:0,   min:0, max:2,   step:0.1, unit:"mi", onChange: function(v) { App.rebuildRouteBuffers(v); notifyProject(); } });
+    _wireFpBtn("fp-set-bufferRadius",      { key:"bufferRadius",       def:0,   values:BUFFER_RADIUS_STEPS, unit:"mi", onChange: function(v) { App.rebuildBuffers(v); notifyProject(); } });
+    _wireFpBtn("fp-set-lineBufferRadius",  { key:"lineBufferRadius",   def:0,   values:BUFFER_RADIUS_STEPS, unit:"mi", onChange: function(v) { App.rebuildLineBuffers(v); notifyProject(); } });
+    _wireFpBtn("fp-set-routeBufferRadius", { key:"routeBufferRadius",  def:0,   values:BUFFER_RADIUS_STEPS, unit:"mi", onChange: function(v) { App.rebuildRouteBuffers(v); notifyProject(); } });
     _wireFpBtn("fp-set-pointLineWidth",    { key:"pointLineWidth",     def:1,   min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyLineWidth("point"); } });
     _wireFpBtn("fp-set-lineLineWidth",     { key:"lineLineWidth",      def:1,   min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyLineWidth("line"); } });
     _wireFpBtn("fp-set-routeLineWidth",    { key:"routeLineWidth",     def:1,   min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyLineWidth("route"); } });
@@ -645,8 +673,9 @@
     _wireFpBtn("fp-set-bufferLineWidth",   { key:"bufferLineWidth",    def:1,   min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyBufferLineWidth(); } });
 
     // Expose slider infrastructure for per-feature overrides in feature-attributes.js
-    App._openFpSlider  = _openFpSlider;
-    App._closeFpSlider = _closeFpSlider;
+    App._openFpSlider      = _openFpSlider;
+    App._closeFpSlider     = _closeFpSlider;
+    App.BUFFER_RADIUS_STEPS = BUFFER_RADIUS_STEPS;
 
     // Offset overlapping lines/routes toggle
     document.getElementById("offsetOverlap").addEventListener("change", function () {
