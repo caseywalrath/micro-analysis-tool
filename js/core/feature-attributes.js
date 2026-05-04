@@ -32,7 +32,8 @@
     { key: "direction", label: "Direction", type: "select", options: ["Both","NB","SB","EB","WB","Inbound","Outbound","Loop","CW","CCW"] },
     { key: "mode",      label: "Mode",      type: "select", options: ["Bus","BRT","Light Rail","Streetcar"] },
     { key: "serviceId", label: "Service",   type: "text",   placeholder: "e.g. Blue Line", servicePicker: true },
-    { key: "avgSpeed",  label: "Avg speed", type: "number", unit: "mph", defaultValue: 14 }
+    { key: "avgSpeed",  label: "Avg speed", type: "number", unit: "mph", defaultValue: 14 },
+    { key: "runTime",   label: "Run time",  type: "number", unit: "min", placeholder: "e.g. 45" }
   ];
 
   // Field definitions per feature type.
@@ -1160,12 +1161,43 @@
       body.appendChild(buildServiceSchedule(attrs));
     }
 
-    // Computed measurements (read-only)
-    if ((featureType === "route" || featureType === "line") &&
-        feature.geometry && feature.geometry.coordinates &&
-        feature.geometry.coordinates.length >= 2) {
-      var lenMi = turf.length(feature, { units: "miles" });
-      body.appendChild(buildRow("Length", buildReadOnlyValue(fmtLength(lenMi)), null));
+    // Computed measurements + cycle estimate (routes and lines only)
+    if (featureType === "route" || featureType === "line") {
+      var _rcLenMi = 0;
+      try {
+        if (feature.geometry && feature.geometry.coordinates &&
+            feature.geometry.coordinates.length >= 2)
+          _rcLenMi = turf.length(feature, { units: "miles" });
+      } catch (e) {}
+      if (_rcLenMi > 0) {
+        body.appendChild(buildRow("Length", buildReadOnlyValue(fmtLength(_rcLenMi)), null));
+      }
+
+      var cycleSpan = buildReadOnlyValue("—");
+      body.appendChild(buildRow("Cycle est.", cycleSpan, null));
+
+      (function (span, len) {
+        function refreshCycleEst() {
+          var spd = parseFloat(attrs.avgSpeed);
+          var rt  = parseFloat(attrs.runTime);
+          var dir = attrs.direction || "Both";
+          var isLoop = (dir === "Loop" || dir === "CW" || dir === "CCW");
+          var isBoth = (dir === "Both");
+          var label  = isBoth ? "cycle" : isLoop ? "loop" : "one-way";
+          var parts  = [];
+          if (spd > 0 && len > 0) {
+            var owMin  = len / spd * 60;
+            var cycMin = isBoth ? owMin * 2 : owMin;
+            parts.push(Math.round(cycMin) + " min " + label + " · speed");
+          }
+          if (rt > 0) {
+            parts.push(rt + " min " + label + " · manual");
+          }
+          span.textContent = parts.length ? parts.join("  ·  ") : "—";
+        }
+        refreshCycleEst();
+        body.addEventListener("change", refreshCycleEst);
+      })(cycleSpan, _rcLenMi);
     }
 
     if (featureType === "polygon" &&

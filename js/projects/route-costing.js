@@ -23,7 +23,8 @@
     daysSaturday:   52,
     daysSunday:     58,
     spareRatio:     15,     // % added to peak vehicles for planning fleet
-    costBasisYear:  ""      // free-text label (e.g. "2024 NTD")
+    costBasisYear:  "",     // free-text label (e.g. "2024 NTD")
+    runtimeMode:    "speed" // "speed" | "runTime"
   };
 
   // ---- Module-local state ----
@@ -67,6 +68,7 @@
   function closeSettingsModal(confirm) {
     if (confirm) {
       _settings = Object.assign({}, _pendingSettings);
+      buildServiceChecklist();   // re-validate against new runtimeMode
       if (_lastResult) markStale();
       if (App.cache) App.cache.save();
     }
@@ -94,6 +96,10 @@
     for (var i = 0; i < radios.length; i++) {
       radios[i].checked = (radios[i].value === s.layoverMode);
     }
+    var rtRadios = document.querySelectorAll('input[name="rcRuntimeMode"]');
+    for (var j = 0; j < rtRadios.length; j++) {
+      rtRadios[j].checked = (rtRadios[j].value === (s.runtimeMode || "speed"));
+    }
     updateLayoverUnitLabel();
     updateDaysSum();
   }
@@ -118,7 +124,12 @@
       daysSaturday:  num(byId("rcDaysSaturday"),  DEFAULT_SETTINGS.daysSaturday),
       daysSunday:    num(byId("rcDaysSunday"),    DEFAULT_SETTINGS.daysSunday),
       spareRatio:    num(byId("rcSpareRatio"),    DEFAULT_SETTINGS.spareRatio),
-      costBasisYear: (byId("rcCostBasisYear") && byId("rcCostBasisYear").value) || ""
+      costBasisYear: (byId("rcCostBasisYear") && byId("rcCostBasisYear").value) || "",
+      runtimeMode:   (function () {
+        var els = document.querySelectorAll('input[name="rcRuntimeMode"]');
+        for (var i = 0; i < els.length; i++) { if (els[i].checked) return els[i].value; }
+        return "speed";
+      })()
     };
   }
 
@@ -171,6 +182,7 @@
       name:         name,
       direction:    attrs.direction || "Both",
       avgSpeed:     parseFloat(attrs.avgSpeed) || 0,
+      runTime:      parseFloat(attrs.runTime)  || 0,   // one-way run time in minutes (manual)
       serviceId:    serviceId || null,
       lengthMiles:  lengthMi,
       service:      attrs.service || null
@@ -248,15 +260,22 @@
       });
     }
 
-    // Missing avgSpeed
-    ps.forEach(function (p) {
-      if (!(p.avgSpeed > 0)) {
-        svc.warnings.push({
-          level: "error",
-          msg: "\"" + p.name + "\" is missing Avg speed."
-        });
-      }
-    });
+    // Missing runtime input — check whichever mode is active
+    if (_settings.runtimeMode === "runTime") {
+      ps.forEach(function (p) {
+        if (!(p.runTime > 0)) {
+          svc.warnings.push({ level: "error",
+            msg: "\"" + p.name + "\" is missing Run time (Route Costing is in Run Time mode)." });
+        }
+      });
+    } else {
+      ps.forEach(function (p) {
+        if (!(p.avgSpeed > 0)) {
+          svc.warnings.push({ level: "error",
+            msg: "\"" + p.name + "\" is missing Avg speed." });
+        }
+      });
+    }
 
     // No service bands defined on any pattern
     var hasAnyBand = ps.some(function (p) {
@@ -364,19 +383,26 @@
     return { trips: 0, revHrs: 0, miles: 0, platHrs: 0, cost: 0 };
   }
 
-  // One-way runtime per pattern, in hours. Requires avgSpeed > 0 (validated upstream).
+  // One-way runtime per pattern, in hours — speed-based.
   function oneWayRuntimeHrs(pattern) {
     if (!(pattern.avgSpeed > 0)) return 0;
     return pattern.lengthMiles / pattern.avgSpeed;
+  }
+
+  // One-way runtime per pattern, in hours — respects runtimeMode setting.
+  function oneWayRuntimeHrsFromSettings(pattern, settings) {
+    if (settings.runtimeMode === "runTime")
+      return (pattern.runTime > 0) ? pattern.runTime / 60 : 0;
+    return (pattern.avgSpeed > 0) ? pattern.lengthMiles / pattern.avgSpeed : 0;
   }
 
   // Compute round-trip runtime and round-trip miles for a Service.
   // - 2-pattern: sum both one-ways / sum both lengths.
   // - 1-pattern "Both": double one-way / double length.
   // - 1-pattern Loop/CW/CCW: one-way is already the full cycle; length is unchanged.
-  function computeRoundTrip(svc) {
+  function computeRoundTrip(svc, settings) {
     var ps = svc.patterns;
-    var oneWays = ps.map(oneWayRuntimeHrs);
+    var oneWays = ps.map(function (p) { return oneWayRuntimeHrsFromSettings(p, settings); });
     var lenSum  = ps.reduce(function (s, p) { return s + p.lengthMiles; }, 0);
     var oneWaySum = oneWays.reduce(function (s, v) { return s + v; }, 0);
 
@@ -414,7 +440,7 @@
       };
     }
 
-    var rt = computeRoundTrip(svc);
+    var rt = computeRoundTrip(svc, settings);
     var layHrs = computeLayoverHrs(rt.rtHrs, settings);
     var cycleHrs = rt.rtHrs + layHrs;
 

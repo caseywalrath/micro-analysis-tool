@@ -42,6 +42,16 @@
       <label class="tiny">Cost basis year (label)</label>
       <input type="text" id="rcCostBasisYear" class="rf-select" placeholder="e.g. 2024 NTD">
 
+      <label class="tiny">Runtime input</label>
+      <div style="display:flex;gap:12px;align-items:center;">
+        <label class="tiny" style="display:flex;gap:4px;align-items:center;">
+          <input type="radio" name="rcRuntimeMode" value="speed" checked> Use avg speed
+        </label>
+        <label class="tiny" style="display:flex;gap:4px;align-items:center;">
+          <input type="radio" name="rcRuntimeMode" value="runTime"> Use run time
+        </label>
+      </div>
+
     </div>
 
     <div class="tiny" id="rcDaysSumWarn" style="margin-top:6px;color:var(--muted);">
@@ -114,7 +124,7 @@
       <div id="rcEmptyState" class="rf-info-box">
         <p>Select Services and click <strong>Cost Services</strong> to estimate daily and annual operating costs.</p>
         <p class="tiny" style="color:var(--muted);">
-          Each Service reads <b>length</b>, <b>avg speed</b>, <b>direction</b>, and <b>service bands</b> from its underlying route/line attributes. Use <b>Costing Settings</b> to set cost per hour, deadhead, layover, and days per year.
+          Each Service reads <b>length</b>, <b>avg speed</b> or <b>run time</b>, <b>direction</b>, and <b>service bands</b> from its underlying route/line attributes. Use <b>Costing Settings</b> to set cost per hour, deadhead, layover, days per year, and runtime input mode.
         </p>
       </div>
 
