@@ -891,6 +891,7 @@
   var _OVR_OPACITY_SVG = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="8" cy="8" r="6" stroke-dasharray="3 2"/></svg>';
   var _OVR_BUFFER_SVG  = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="2" fill="currentColor" stroke="none"/></svg>';
   var _OVR_WIDTH_SVG   = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-linecap="round"><line x1="2" y1="8" x2="14" y2="8" stroke-width="2.5"/></svg>';
+  var _OVR_OFFSET_SVG  = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="2" y1="6" x2="14" y2="6"/><line x1="2" y1="10" x2="14" y2="10"/></svg>';
   var _OVR_DEFAULT_SVG = '<svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 6.5A4 4 0 1 1 8 2.5"/><polyline points="8 0.5 10.5 2.5 8 4.5"/></svg>';
 
   // Push updated feature GeoJSON data to MapLibre source so data-driven
@@ -1071,6 +1072,39 @@
       })(widthBtn, feature, featureType, keys.widthKey);
       overrides.appendChild(widthBtn);
 
+      // ---- Offset button (routes and lines only) ----
+      if (featureType === "route" || featureType === "line") {
+        var OFFSET_STEPS = [-6, -3, 0, 3, 6];
+        var offsetBtn = document.createElement("button");
+        offsetBtn.type = "button";
+        offsetBtn.className = "fp-sib";
+        offsetBtn.title = "Per-feature offset (perpendicular to line)";
+        offsetBtn.innerHTML = _OVR_OFFSET_SVG;
+        if (feature.properties._offsetManual) {
+          offsetBtn.classList.add("fp-sib-has-override");
+        }
+        (function (btn, feat, ft) {
+          btn.addEventListener("click", function (e) {
+            e.stopPropagation();
+            var curVal = (feat.properties._offset != null) ? feat.properties._offset : 0;
+            if (typeof App._openFpSlider === "function") {
+              App._openFpSlider(btn, {
+                values: OFFSET_STEPS, unit: "px",
+                value: curVal,
+                onChange: function (v) {
+                  feat.properties._offset = v;
+                  feat.properties._offsetManual = true;
+                  btn.classList.add("fp-sib-has-override");
+                  _pushFeatureLayer(ft);
+                  if (typeof App.cache !== "undefined") App.cache.save();
+                }
+              });
+            }
+          });
+        })(offsetBtn, feature, featureType);
+        overrides.appendChild(offsetBtn);
+      }
+
       // ---- Default (reset) button ----
       var defaultBtn = document.createElement("button");
       defaultBtn.type = "button";
@@ -1085,8 +1119,16 @@
           delete feat.properties._borderOpacity;
           delete feat.properties._lineWidth;
           delete feat.properties._bufferRadius;
+          delete feat.properties._offset;
+          delete feat.properties._offsetManual;
           _pushFeatureLayer(ft);
           if (rbFn) rbFn(App.featureSettings ? (App.featureSettings[bk] || 0) : 0);
+          // If the auto-offset toggle is on, recompute now that this feature
+          // is no longer pinned to a manual offset.
+          var oCb = document.getElementById("offsetOverlap");
+          if (oCb && oCb.checked && typeof App.computeOverlapOffsets === "function") {
+            App.computeOverlapOffsets();
+          }
           if (typeof App.cache !== "undefined") App.cache.save();
           if (typeof App._closeFpSlider === "function") App._closeFpSlider();
           // Remove has-override indicators

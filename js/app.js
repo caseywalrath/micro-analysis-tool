@@ -132,10 +132,16 @@
     _computingOffsets = true;
     try {
       var features = [];
-      (App.lines || []).forEach(function (f, i) { if (!f.properties.hidden) features.push({ src: "line", idx: i, feature: f }); });
-      (App.routes || []).forEach(function (f, i) { if (!f.properties.hidden) features.push({ src: "route", idx: i, feature: f }); });
+      // Only include features without a manual offset override — manually-offset
+      // features keep their value and are excluded from auto computation.
+      (App.lines || []).forEach(function (f, i) {
+        if (!f.properties.hidden && !f.properties._offsetManual) features.push({ src: "line", idx: i, feature: f });
+      });
+      (App.routes || []).forEach(function (f, i) {
+        if (!f.properties.hidden && !f.properties._offsetManual) features.push({ src: "route", idx: i, feature: f });
+      });
 
-      // Clear all offsets first
+      // Clear all auto-managed offsets first (manual ones are already excluded)
       for (var k = 0; k < features.length; k++) {
         if (features[k].feature.properties) features[k].feature.properties._offset = 0;
       }
@@ -200,8 +206,13 @@
     if (_computingOffsets) return;
     _computingOffsets = true;
     try {
-      (App.lines || []).forEach(function (f) { if (f.properties) f.properties._offset = 0; });
-      (App.routes || []).forEach(function (f) { if (f.properties) f.properties._offset = 0; });
+      // Preserve manual per-feature offsets when the global toggle is turned off.
+      (App.lines || []).forEach(function (f) {
+        if (f.properties && !f.properties._offsetManual) f.properties._offset = 0;
+      });
+      (App.routes || []).forEach(function (f) {
+        if (f.properties && !f.properties._offsetManual) f.properties._offset = 0;
+      });
       _pushOffsetSources();
     } finally {
       _computingOffsets = false;
