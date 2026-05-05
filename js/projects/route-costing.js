@@ -444,11 +444,23 @@
     var layHrs = computeLayoverHrs(rt.rtHrs, settings);
     var cycleHrs = rt.rtHrs + layHrs;
 
-    var daily = { weekday: emptyDay(), saturday: emptyDay(), sunday: emptyDay() };
-    var minHeadway = Infinity;
+    // tripsPerCycle: how many one-way trips constitute one cycle (for layover allocation)
+    // - Paired (2 patterns): 2 (one of each direction per cycle)
+    // - Solo "Both": 2 (out and back per cycle)
+    // - Solo Loop/CW/CCW: 1 (the one-way IS the full cycle)
+    var tripsPerCycle = (svc.patterns.length === 2) ? 2
+                      : (svc.patterns[0].direction === "Both") ? 2
+                      : 1;
+
+    var DAYS = ["weekday", "saturday", "sunday"];
+    var perDay = {
+      weekday:  { minHeadway: Infinity, trips: 0, revHrs: 0, miles: 0 },
+      saturday: { minHeadway: Infinity, trips: 0, revHrs: 0, miles: 0 },
+      sunday:   { minHeadway: Infinity, trips: 0, revHrs: 0, miles: 0 }
+    };
     var bandRows = [];
 
-    ["weekday", "saturday", "sunday"].forEach(function (day) {
+    DAYS.forEach(function (day) {
       svc.patterns.forEach(function (p, pi) {
         var bands = (p.service && Array.isArray(p.service[day])) ? p.service[day] : [];
         bands.forEach(function (b) {
@@ -468,11 +480,11 @@
           var bandRevHr = trips * oneWayHr;
           var bandMiles = trips * p.lengthMiles;
 
-          daily[day].trips   += trips;
-          daily[day].revHrs  += bandRevHr;
-          daily[day].miles   += bandMiles;
+          perDay[day].trips   += trips;
+          perDay[day].revHrs  += bandRevHr;
+          perDay[day].miles   += bandMiles;
 
-          if (headway < minHeadway) minHeadway = headway;
+          if (headway < perDay[day].minHeadway) perDay[day].minHeadway = headway;
 
           bandRows.push({
             day:         day,
@@ -490,95 +502,178 @@
     });
 
     var dh = settings.deadheadPct / 100;
-    ["weekday", "saturday", "sunday"].forEach(function (day) {
-      daily[day].platHrs = daily[day].revHrs * (1 + dh);
-      daily[day].cost    = daily[day].platHrs * settings.costPerHour;
-    });
-
     var daysMap = {
-      weekday:  settings.daysWeekday,
-      saturday: settings.daysSaturday,
-      sunday:   settings.daysSunday
+      weekday:  settings.daysWeekday  || 0,
+      saturday: settings.daysSaturday || 0,
+      sunday:   settings.daysSunday   || 0
     };
 
-    var annual = { revHrs: 0, platHrs: 0, cost: 0, trips: 0, miles: 0 };
-    ["weekday", "saturday", "sunday"].forEach(function (day) {
-      var dd = daysMap[day] || 0;
-      annual.revHrs  += daily[day].revHrs  * dd;
-      annual.platHrs += daily[day].platHrs * dd;
-      annual.cost    += daily[day].cost    * dd;
-      annual.trips   += daily[day].trips   * dd;
-      annual.miles   += daily[day].miles   * dd;
+    // Per-day-type cost breakdown — explicit layover + deadhead.
+    // platHrs = revHrs + layoverHrs + deadheadHrs (where deadhead% applies to revHrs only).
+    DAYS.forEach(function (day) {
+      var d = perDay[day];
+      d.cycles      = (tripsPerCycle > 0) ? (d.trips / tripsPerCycle) : 0;
+      d.layoverHrs  = d.cycles * layHrs;
+      d.deadheadHrs = d.revHrs * dh;
+      d.platHrs     = d.revHrs + d.layoverHrs + d.deadheadHrs;
+      d.cost        = d.platHrs * settings.costPerHour;
+      d.annualCost  = d.cost    * daysMap[day];
+      // Per-day fleet
+      if (isFinite(d.minHeadway) && d.minHeadway > 0) {
+        d.peakVehiclesRaw     = (cycleHrs * 60) / d.minHeadway;
+        d.peakVehiclesRounded = Math.ceil(d.peakVehiclesRaw);
+      } else {
+        d.minHeadway = null;
+        d.peakVehiclesRaw = 0;
+        d.peakVehiclesRounded = 0;
+      }
+      d.hasService = d.trips > 0;
     });
 
-    // Peak vehicles: cycle / min-headway, across all bands/patterns.
-    var peakRaw = 0, peakRounded = 0;
-    if (isFinite(minHeadway) && minHeadway > 0) {
-      peakRaw     = (cycleHrs * 60) / minHeadway;
-      peakRounded = Math.ceil(peakRaw);
-    }
+    // Annual aggregates (sum across day types with their day counts).
+    var annual = { revHrs: 0, platHrs: 0, layoverHrs: 0, deadheadHrs: 0,
+                   cost: 0, trips: 0, miles: 0 };
+    DAYS.forEach(function (day) {
+      var d  = perDay[day];
+      var dd = daysMap[day];
+      annual.revHrs      += d.revHrs      * dd;
+      annual.platHrs     += d.platHrs     * dd;
+      annual.layoverHrs  += d.layoverHrs  * dd;
+      annual.deadheadHrs += d.deadheadHrs * dd;
+      annual.cost        += d.cost        * dd;
+      annual.trips       += d.trips       * dd;
+      annual.miles       += d.miles       * dd;
+    });
+
+    // System-level peak vehicles = max across day types (the busiest day drives fleet size).
+    var peakPulloutMax = Math.max(
+      perDay.weekday.peakVehiclesRounded,
+      perDay.saturday.peakVehiclesRounded,
+      perDay.sunday.peakVehiclesRounded
+    );
+    var peakRawMax = Math.max(
+      perDay.weekday.peakVehiclesRaw,
+      perDay.saturday.peakVehiclesRaw,
+      perDay.sunday.peakVehiclesRaw
+    );
+
+    // Backwards-compat aliases used by older code paths during transition.
+    var daily = {
+      weekday:  perDay.weekday,
+      saturday: perDay.saturday,
+      sunday:   perDay.sunday
+    };
+    var minHeadwayAcrossAll = Math.min(
+      perDay.weekday.minHeadway  || Infinity,
+      perDay.saturday.minHeadway || Infinity,
+      perDay.sunday.minHeadway   || Infinity
+    );
 
     return {
       name:             svc.name,
       key:              svc.key,
       isGroup:          svc.isGroup,
       skipped:          false,
-      warnings:         svc.warnings,   // non-blocking warnings if any future soft warnings exist
+      warnings:         svc.warnings,
       patternCount:     svc.patterns.length,
       directionSummary: directionSummary(svc),
 
       rtMiles:          rt.rtMiles,
-      oneWayHrs:        rt.oneWays,     // per-pattern one-way runtimes (hours)
+      oneWayHrs:        rt.oneWays,
+      runTimeMin:       rt.rtHrs * 60,
       cycleMin:         cycleHrs * 60,
       layoverMin:       layHrs * 60,
-      peakHeadwayMin:   isFinite(minHeadway) ? minHeadway : null,
+      tripsPerCycle:    tripsPerCycle,
+      peakHeadwayMin:   isFinite(minHeadwayAcrossAll) ? minHeadwayAcrossAll : null,
 
-      daily:  daily,
+      perDay: perDay,
+      daily:  daily,    // alias of perDay (legacy key)
       annual: annual,
 
-      peakVehiclesRaw:      peakRaw,
-      peakVehiclesRounded:  peakRounded,
+      peakVehiclesRaw:      peakRawMax,
+      peakVehiclesRounded:  peakPulloutMax,
 
       bandBreakdown: bandRows
     };
   }
 
   function computeSystemSummary(serviceResults, settings) {
-    var out = {
-      servicesScored:   0,
-      servicesSkipped:  0,
-      annualCost:       0,
-      annualPlatHrs:    0,
-      annualRevHrs:     0,
-      annualTrips:      0,
-      annualMiles:      0,
-      dailyTripsWk:     0,
-      dailyTripsSa:     0,
-      dailyTripsSu:     0,
-      fleetSumRounded:  0,   // Σ of each Service's rounded fleet need (standalone)
-      fleetSumRaw:      0,   // ceil of Σ raw → theoretical floor if perfectly interlined
-      fleetWithSpares:  0,   // fleetSumRounded + spare ratio (fleet-level planning total)
-      spareRatioPct:    settings.spareRatio
+    var DAYS = ["weekday", "saturday", "sunday"];
+    var emptyDayAgg = function () {
+      return {
+        services: 0, dailyTrips: 0, dailyRevHrs: 0, dailyPlatHrs: 0,
+        dailyLayoverHrs: 0, dailyDeadheadHrs: 0, dailyCost: 0, dailyMiles: 0,
+        annualTrips: 0, annualRevHrs: 0, annualPlatHrs: 0, annualMiles: 0, annualCost: 0,
+        fleetSumRounded: 0, fleetSumRaw: 0
+      };
     };
-    var rawSum = 0;
+    var out = {
+      servicesScored:  0,
+      servicesSkipped: 0,
+      perDay: { weekday: emptyDayAgg(), saturday: emptyDayAgg(), sunday: emptyDayAgg() },
+      total: {
+        annualTrips: 0, annualRevHrs: 0, annualPlatHrs: 0, annualMiles: 0, annualCost: 0
+      },
+      daysMap: {
+        weekday:  settings.daysWeekday  || 0,
+        saturday: settings.daysSaturday || 0,
+        sunday:   settings.daysSunday   || 0
+      },
+      spareRatioPct: settings.spareRatio,
+      costBasisYear: settings.costBasisYear || ""
+    };
+
     serviceResults.forEach(function (r) {
       if (r.skipped) { out.servicesSkipped++; return; }
       out.servicesScored++;
-      out.annualCost     += r.annual.cost;
-      out.annualPlatHrs  += r.annual.platHrs;
-      out.annualRevHrs   += r.annual.revHrs;
-      out.annualTrips    += r.annual.trips;
-      out.annualMiles    += r.annual.miles;
-      out.dailyTripsWk   += r.daily.weekday.trips;
-      out.dailyTripsSa   += r.daily.saturday.trips;
-      out.dailyTripsSu   += r.daily.sunday.trips;
-      out.fleetSumRounded += r.peakVehiclesRounded;
-      rawSum              += r.peakVehiclesRaw;
+
+      // Per-day-type aggregation
+      DAYS.forEach(function (day) {
+        var d = r.perDay[day];
+        var agg = out.perDay[day];
+        if (d.hasService) agg.services++;
+        agg.dailyTrips        += d.trips;
+        agg.dailyRevHrs       += d.revHrs;
+        agg.dailyPlatHrs      += d.platHrs;
+        agg.dailyLayoverHrs   += d.layoverHrs;
+        agg.dailyDeadheadHrs  += d.deadheadHrs;
+        agg.dailyCost         += d.cost;
+        agg.dailyMiles        += d.miles;
+        agg.fleetSumRounded   += d.peakVehiclesRounded;
+        agg.fleetSumRaw       += d.peakVehiclesRaw;  // accumulate raw for ceil later
+      });
+
+      // Annual totals
+      out.total.annualTrips    += r.annual.trips;
+      out.total.annualRevHrs   += r.annual.revHrs;
+      out.total.annualPlatHrs  += r.annual.platHrs;
+      out.total.annualMiles    += r.annual.miles;
+      out.total.annualCost     += r.annual.cost;
     });
-    out.fleetSumRaw = Math.ceil(rawSum);
-    out.interlineGap = out.fleetSumRounded - out.fleetSumRaw;
-    out.fleetWithSpares = Math.ceil(out.fleetSumRounded * (1 + settings.spareRatio / 100));
-    out.costBasisYear = settings.costBasisYear || "";
+
+    // Per-day annual aggregates (= daily × days/year of that type) and fleetSumRaw ceiling
+    DAYS.forEach(function (day) {
+      var agg = out.perDay[day];
+      var dd  = out.daysMap[day];
+      agg.annualTrips    = agg.dailyTrips    * dd;
+      agg.annualRevHrs   = agg.dailyRevHrs   * dd;
+      agg.annualPlatHrs  = agg.dailyPlatHrs  * dd;
+      agg.annualMiles    = agg.dailyMiles    * dd;
+      agg.annualCost     = agg.dailyCost     * dd;
+      agg.fleetSumRaw    = Math.ceil(agg.fleetSumRaw);
+      agg.interlineGap   = agg.fleetSumRounded - agg.fleetSumRaw;
+    });
+
+    // System-wide fleet metrics — the fleet you must own = max across day types.
+    out.peakFleetRounded   = Math.max(out.perDay.weekday.fleetSumRounded,
+                                       out.perDay.saturday.fleetSumRounded,
+                                       out.perDay.sunday.fleetSumRounded);
+    out.peakFleetInterlined = Math.max(out.perDay.weekday.fleetSumRaw,
+                                        out.perDay.saturday.fleetSumRaw,
+                                        out.perDay.sunday.fleetSumRaw);
+    out.peakInterlineGap   = out.peakFleetRounded - out.peakFleetInterlined;
+    out.fleetWithSpares    = Math.ceil(out.peakFleetRounded * (1 + settings.spareRatio / 100));
+
     return out;
   }
 
@@ -611,77 +706,54 @@
       return;
     }
 
-    var head = [
-      '<tr>',
-        '<th style="width:18px;"></th>',
-        '<th>Service</th>',
-        '<th class="rc-num">RT mi</th>',
-        '<th class="rc-num">Run time (min)</th>',
-        '<th class="rc-num">Cycle (min)</th>',
-        '<th class="rc-num">Peak headway</th>',
-        '<th class="rc-num" title="Weekday / Saturday / Sunday">Daily trips</th>',
-        '<th class="rc-num">Daily rev-hr</th>',
-        '<th class="rc-num">Daily plat-hr</th>',
-        '<th class="rc-num">Annual plat-hr</th>',
-        '<th class="rc-num">Annual cost</th>',
-        '<th class="rc-num" title="raw / rounded">Peak veh</th>',
-      '</tr>'
-    ].join("");
+    var html = "";
 
-    var rows = "";
-    serviceResults.forEach(function (r, idx) {
-      if (r.skipped) {
+    // Skipped services first (outside the per-day tables)
+    var skipped = serviceResults.filter(function (r) { return r.skipped; });
+    if (skipped.length) {
+      html += '<div class="rc-section-label" style="margin-top:0;">Skipped</div>';
+      html += '<table class="rc-table"><tbody>';
+      skipped.forEach(function (r) {
         var tip = (r.warnings || []).map(function (w) { return w.msg; }).join(" \n");
-        rows +=
-          '<tr class="rc-row rc-row-skipped" data-idx="' + idx + '">' +
-            '<td></td>' +
+        html +=
+          '<tr class="rc-row rc-row-skipped">' +
             '<td>' +
               '<span class="rc-warn-badge" title="' + escapeAttr(tip) + '">&#9888;</span> ' +
               escapeHTML(r.name) +
               ' <span class="rc-service-meta">(skipped)</span>' +
             '</td>' +
-            '<td colspan="10" class="rc-skip-note">' + escapeHTML((r.warnings[0] && r.warnings[0].msg) || "Skipped") + '</td>' +
+            '<td class="rc-skip-note">' + escapeHTML((r.warnings[0] && r.warnings[0].msg) || "Skipped") + '</td>' +
           '</tr>';
+      });
+      html += '</tbody></table>';
+    }
+
+    var scored = serviceResults.filter(function (r) { return !r.skipped; });
+    if (!scored.length) {
+      wrap.innerHTML = html || '<div class="tiny" style="color:var(--muted);">No services selected.</div>';
+      return;
+    }
+
+    // Per-day tables (Weekday | Saturday | Sunday)
+    var dayLabels = { weekday: "Weekday", saturday: "Saturday", sunday: "Sunday" };
+    ["weekday", "saturday", "sunday"].forEach(function (day) {
+      var dayRows = scored.filter(function (r) { return r.perDay[day].hasService; });
+      html += '<div class="rc-section-label" style="margin-top:18px;">' + dayLabels[day] + '</div>';
+      if (!dayRows.length) {
+        html += '<div class="tiny" style="color:var(--muted);">No service on ' + dayLabels[day] + '.</div>';
         return;
       }
-
-      var tripsCell = fmtInt(r.daily.weekday.trips) + " / " +
-                      fmtInt(r.daily.saturday.trips) + " / " +
-                      fmtInt(r.daily.sunday.trips);
-      var vehCell   = fmtDec(r.peakVehiclesRaw, 1) + " / " +
-                      fmtInt(r.peakVehiclesRounded);
-
-      rows +=
-        '<tr class="rc-row rc-row-main" data-idx="' + idx + '">' +
-          '<td class="rc-caret">&#9656;</td>' +
-          '<td>' +
-            '<span class="rc-service-name">' + escapeHTML(r.name) + '</span>' +
-            '<div class="rc-service-meta">' + escapeHTML(r.directionSummary) + ' &middot; ' +
-              r.patternCount + ' pattern' + (r.patternCount === 1 ? '' : 's') + '</div>' +
-          '</td>' +
-          '<td class="rc-num">' + fmtDec(r.rtMiles, 2) + '</td>' +
-          '<td class="rc-num">' + fmtInt(r.cycleMin - r.layoverMin) + '</td>' +
-          '<td class="rc-num">' + fmtInt(r.cycleMin) + '</td>' +
-          '<td class="rc-num">' + fmtHeadway(r.peakHeadwayMin) + '</td>' +
-          '<td class="rc-num">' + tripsCell + '</td>' +
-          '<td class="rc-num">' + fmtDec(r.daily.weekday.revHrs + r.daily.saturday.revHrs + r.daily.sunday.revHrs, 1) + '</td>' +
-          // Note: "Daily plat-hr" shown is weekday-only by convention — the most useful single
-          // daily number. Saturday/Sunday totals live in the expand row + annual aggregate.
-          '<td class="rc-num">' + fmtDec(r.daily.weekday.platHrs, 1) + '</td>' +
-          '<td class="rc-num">' + fmtInt(r.annual.platHrs) + '</td>' +
-          '<td class="rc-num rc-cost">' + fmtMoney(r.annual.cost) + '</td>' +
-          '<td class="rc-num">' + vehCell + '</td>' +
-        '</tr>' +
-        '<tr class="rc-row-details" data-idx="' + idx + '" style="display:none;">' +
-          '<td></td>' +
-          '<td colspan="11">' + buildBandBreakdownHTML(r) + '</td>' +
-        '</tr>';
+      html += renderPerDayTable(dayRows, day);
     });
 
-    wrap.innerHTML = '<table class="rc-table"><thead>' + head + '</thead><tbody>' + rows + '</tbody></table>';
+    // Total table
+    html += '<div class="rc-section-label" style="margin-top:18px;">Total (annualized)</div>';
+    html += renderTotalTable(scored);
 
-    // Wire expand toggling
-    var mainRows = wrap.querySelectorAll("tr.rc-row-main");
+    wrap.innerHTML = html;
+
+    // Wire expand toggling on Total table only (band breakdown lives there)
+    var mainRows = wrap.querySelectorAll('tr.rc-row-main[data-totalrow]');
     for (var i = 0; i < mainRows.length; i++) {
       mainRows[i].addEventListener("click", function () {
         var idx = this.getAttribute("data-idx");
@@ -693,6 +765,79 @@
         if (caret) caret.innerHTML = isOpen ? "&#9656;" : "&#9662;";
       });
     }
+  }
+
+  function renderPerDayTable(rows, day) {
+    var head = '<tr>' +
+      '<th>Service</th>' +
+      '<th class="rc-num">RT mi</th>' +
+      '<th class="rc-num">Frequency</th>' +
+      '<th class="rc-num">Run time (min)</th>' +
+      '<th class="rc-num">Cycle time (min)</th>' +
+      '<th class="rc-num">Trips</th>' +
+      '<th class="rc-num">Daily rev-hr</th>' +
+      '<th class="rc-num">Daily plat-hr</th>' +
+      '<th class="rc-num">Annual cost</th>' +
+      '<th class="rc-num">Peak pullout</th>' +
+      '</tr>';
+    var body = "";
+    rows.forEach(function (r) {
+      var d = r.perDay[day];
+      body +=
+        '<tr class="rc-row">' +
+          '<td>' +
+            '<span class="rc-service-name">' + escapeHTML(r.name) + '</span>' +
+            '<div class="rc-service-meta">' + escapeHTML(r.directionSummary) +
+            ' &middot; ' + r.patternCount + ' pattern' + (r.patternCount === 1 ? '' : 's') + '</div>' +
+          '</td>' +
+          '<td class="rc-num">' + fmtDec(r.rtMiles, 2) + '</td>' +
+          '<td class="rc-num">' + fmtHeadway(d.minHeadway) + '</td>' +
+          '<td class="rc-num">' + fmtInt(r.runTimeMin) + '</td>' +
+          '<td class="rc-num">' + fmtInt(r.cycleMin) + '</td>' +
+          '<td class="rc-num">' + fmtInt(d.trips) + '</td>' +
+          '<td class="rc-num">' + fmtDec(d.revHrs, 1) + '</td>' +
+          '<td class="rc-num">' + fmtDec(d.platHrs, 1) + '</td>' +
+          '<td class="rc-num rc-cost">' + fmtMoney(d.annualCost) + '</td>' +
+          '<td class="rc-num">' + fmtInt(d.peakVehiclesRounded) + '</td>' +
+        '</tr>';
+    });
+    return '<table class="rc-table"><thead>' + head + '</thead><tbody>' + body + '</tbody></table>';
+  }
+
+  function renderTotalTable(rows) {
+    var head = '<tr>' +
+      '<th style="width:18px;"></th>' +
+      '<th>Service</th>' +
+      '<th class="rc-num">RT mi</th>' +
+      '<th class="rc-num">Annual trips</th>' +
+      '<th class="rc-num">Annual rev-hr</th>' +
+      '<th class="rc-num">Annual plat-hr</th>' +
+      '<th class="rc-num">Annual cost</th>' +
+      '<th class="rc-num" title="Max across day types">Peak pullout</th>' +
+      '</tr>';
+    var body = "";
+    rows.forEach(function (r, idx) {
+      body +=
+        '<tr class="rc-row rc-row-main" data-idx="' + idx + '" data-totalrow="1">' +
+          '<td class="rc-caret">&#9656;</td>' +
+          '<td>' +
+            '<span class="rc-service-name">' + escapeHTML(r.name) + '</span>' +
+            '<div class="rc-service-meta">' + escapeHTML(r.directionSummary) +
+            ' &middot; ' + r.patternCount + ' pattern' + (r.patternCount === 1 ? '' : 's') + '</div>' +
+          '</td>' +
+          '<td class="rc-num">' + fmtDec(r.rtMiles, 2) + '</td>' +
+          '<td class="rc-num">' + fmtInt(r.annual.trips) + '</td>' +
+          '<td class="rc-num">' + fmtInt(r.annual.revHrs) + '</td>' +
+          '<td class="rc-num">' + fmtInt(r.annual.platHrs) + '</td>' +
+          '<td class="rc-num rc-cost">' + fmtMoney(r.annual.cost) + '</td>' +
+          '<td class="rc-num">' + fmtInt(r.peakVehiclesRounded) + '</td>' +
+        '</tr>' +
+        '<tr class="rc-row-details" data-idx="' + idx + '" style="display:none;">' +
+          '<td></td>' +
+          '<td colspan="7">' + buildBandBreakdownHTML(r) + '</td>' +
+        '</tr>';
+    });
+    return '<table class="rc-table"><thead>' + head + '</thead><tbody>' + body + '</tbody></table>';
   }
 
   function buildBandBreakdownHTML(r) {
@@ -728,8 +873,8 @@
 
     html += '</tbody></table>';
 
-    // Show per-day totals line
-    var wk = r.daily.weekday, sa = r.daily.saturday, su = r.daily.sunday;
+    // Show per-day totals line (uses new perDay shape with explicit layover/deadhead)
+    var wk = r.perDay.weekday, sa = r.perDay.saturday, su = r.perDay.sunday;
     html += '<div class="rc-day-totals tiny">' +
       'Daily totals — ' +
       'Wk: ' + fmtInt(wk.trips) + ' trips, ' + fmtDec(wk.revHrs, 1) + ' rev-hr, ' + fmtMoney(wk.cost) + ' &middot; ' +
@@ -744,35 +889,56 @@
     if (!wrap) return;
     if (!summary) { wrap.innerHTML = ""; return; }
 
-    var rows = [
-      ["Services scored",
-        fmtInt(summary.servicesScored) +
-        (summary.servicesSkipped ? ' <span class="tiny" style="color:var(--muted);">(' + summary.servicesSkipped + ' skipped)</span>' : '')
-      ],
-      ["Annual operating cost", fmtMoney(summary.annualCost)],
-      ["Annual platform hours", fmtInt(summary.annualPlatHrs)],
-      ["Annual revenue hours",  fmtInt(summary.annualRevHrs)],
-      ["Annual revenue miles",  fmtInt(summary.annualMiles)],
-      ["Annual trips",          fmtInt(summary.annualTrips)],
-      ["Daily trips (Wk / Sa / Su)",
-        fmtInt(summary.dailyTripsWk) + " / " + fmtInt(summary.dailyTripsSa) + " / " + fmtInt(summary.dailyTripsSu)
-      ],
-      ["Fleet — sum of Service needs (standalone)", fmtInt(summary.fleetSumRounded)],
-      ["Fleet — theoretical minimum (interlined)",  fmtInt(summary.fleetSumRaw)],
-      ["Interline opportunity (gap)",
-        fmtInt(summary.interlineGap) + ' <span class="tiny" style="color:var(--muted);">vehicles potentially savable</span>'
-      ],
-      ["Fleet — planning total (with " + summary.spareRatioPct + "% spares)", fmtInt(summary.fleetWithSpares)]
-    ];
-    if (summary.costBasisYear) {
-      rows.push(["Cost basis",  escapeHTML(summary.costBasisYear)]);
-    }
+    var wk = summary.perDay.weekday, sa = summary.perDay.saturday, su = summary.perDay.sunday;
+    var t  = summary.total;
+    var DASH = '<span class="tiny" style="color:var(--muted);">—</span>';
 
-    var html = '<table class="rc-summary-table"><tbody>';
+    // Each row: [label, wk-cell, sa-cell, su-cell, total-cell]
+    var rows = [
+      ["Days/year",            fmtInt(summary.daysMap.weekday),  fmtInt(summary.daysMap.saturday),  fmtInt(summary.daysMap.sunday),  fmtInt(summary.daysMap.weekday + summary.daysMap.saturday + summary.daysMap.sunday)],
+      ["Services in operation",fmtInt(wk.services),              fmtInt(sa.services),               fmtInt(su.services),             fmtInt(summary.servicesScored)],
+      ["Daily trips",          fmtInt(wk.dailyTrips),            fmtInt(sa.dailyTrips),             fmtInt(su.dailyTrips),           DASH],
+      ["Daily rev-hr",         fmtDec(wk.dailyRevHrs, 1),        fmtDec(sa.dailyRevHrs, 1),         fmtDec(su.dailyRevHrs, 1),       DASH],
+      ["Daily plat-hr",        fmtDec(wk.dailyPlatHrs, 1),       fmtDec(sa.dailyPlatHrs, 1),        fmtDec(su.dailyPlatHrs, 1),      DASH],
+      ["Daily cost",           fmtMoney(wk.dailyCost),           fmtMoney(sa.dailyCost),            fmtMoney(su.dailyCost),          DASH],
+      ["Annual trips",         fmtInt(wk.annualTrips),           fmtInt(sa.annualTrips),            fmtInt(su.annualTrips),          fmtInt(t.annualTrips)],
+      ["Annual rev-hr",        fmtInt(wk.annualRevHrs),          fmtInt(sa.annualRevHrs),           fmtInt(su.annualRevHrs),         fmtInt(t.annualRevHrs)],
+      ["Annual plat-hr",       fmtInt(wk.annualPlatHrs),         fmtInt(sa.annualPlatHrs),          fmtInt(su.annualPlatHrs),        fmtInt(t.annualPlatHrs)],
+      ["Annual rev miles",     fmtInt(wk.annualMiles),           fmtInt(sa.annualMiles),            fmtInt(su.annualMiles),          fmtInt(t.annualMiles)],
+      ["Annual operating cost",fmtMoney(wk.annualCost),          fmtMoney(sa.annualCost),           fmtMoney(su.annualCost),         fmtMoney(t.annualCost)],
+      ["Peak pullout (ΣServices)", fmtInt(wk.fleetSumRounded),   fmtInt(sa.fleetSumRounded),        fmtInt(su.fleetSumRounded),      fmtInt(summary.peakFleetRounded)],
+      ["Fleet — interlined min",   fmtInt(wk.fleetSumRaw),       fmtInt(sa.fleetSumRaw),            fmtInt(su.fleetSumRaw),          fmtInt(summary.peakFleetInterlined)],
+      ["Interline opportunity",    fmtInt(wk.interlineGap),      fmtInt(sa.interlineGap),           fmtInt(su.interlineGap),         fmtInt(summary.peakInterlineGap)],
+      ["Fleet — planning total (with " + summary.spareRatioPct + "% spares)",
+        DASH, DASH, DASH, fmtInt(summary.fleetWithSpares)]
+    ];
+
+    var html = '<table class="rc-summary-table"><thead><tr>' +
+      '<th></th>' +
+      '<th class="rc-num">Weekday</th>' +
+      '<th class="rc-num">Saturday</th>' +
+      '<th class="rc-num">Sunday</th>' +
+      '<th class="rc-num">Total</th>' +
+      '</tr></thead><tbody>';
     rows.forEach(function (r) {
-      html += '<tr><th>' + escapeHTML(r[0]) + '</th><td>' + r[1] + '</td></tr>';
+      html += '<tr>' +
+        '<th>' + escapeHTML(r[0]) + '</th>' +
+        '<td class="rc-num">' + r[1] + '</td>' +
+        '<td class="rc-num">' + r[2] + '</td>' +
+        '<td class="rc-num">' + r[3] + '</td>' +
+        '<td class="rc-num"><b>' + r[4] + '</b></td>' +
+        '</tr>';
     });
     html += '</tbody></table>';
+
+    if (summary.servicesSkipped) {
+      html += '<div class="tiny" style="margin-top:6px;color:var(--muted);">' +
+        summary.servicesSkipped + ' service' + (summary.servicesSkipped === 1 ? '' : 's') + ' skipped (see warnings).</div>';
+    }
+    if (summary.costBasisYear) {
+      html += '<div class="tiny" style="margin-top:4px;color:var(--muted);">Cost basis: ' + escapeHTML(summary.costBasisYear) + '</div>';
+    }
+
     wrap.innerHTML = html;
   }
 
@@ -828,36 +994,75 @@
     lines.push("# Spare ratio %: " + settings.spareRatio);
     lines.push("");
 
-    // Per-Service rows
+    // Per-Service rows — one row per (service, day type) plus a Total row per service.
+    // Daily columns blank on Total row; per-day rows show that day's annual contribution.
     lines.push(csvRow([
-      "Service","Type","Patterns","Direction",
-      "RT mi","Cycle (min)","Peak headway (min)",
-      "Daily trips (Wk)","Daily trips (Sa)","Daily trips (Su)",
-      "Daily rev-hr (Wk)","Daily rev-hr (Sa)","Daily rev-hr (Su)",
-      "Daily plat-hr (Wk)","Daily plat-hr (Sa)","Daily plat-hr (Su)",
-      "Annual rev-hr","Annual plat-hr","Annual miles","Annual trips","Annual cost ($)",
-      "Peak veh raw","Peak veh rounded",
+      "Service","Type","Patterns","Day type",
+      "RT mi","Frequency (min)","Run time (min)","Layover (min)","Cycle time (min)",
+      "Trips","Daily rev-hr","Daily plat-hr","Daily layover hr","Daily deadhead hr",
+      "Daily rev mi","Daily plat mi","Daily deadhead mi","Daily cost ($)",
+      "Annual rev-hr","Annual plat-hr","Annual rev mi","Annual plat mi","Annual cost ($)",
+      "Peak veh (raw)","Peak pullout (rounded)",
       "Skipped","Warnings"
     ]));
+
+    var DAY_NAME = { weekday: "Weekday", saturday: "Saturday", sunday: "Sunday" };
+    var dayOrder = ["weekday", "saturday", "sunday"];
+    var dh = settings.deadheadPct / 100;
 
     services.forEach(function (r) {
       if (r.skipped) {
         var warnStr = (r.warnings || []).map(function (w) { return w.msg; }).join(" | ");
         lines.push(csvRow([
-          r.name, r.isGroup ? "Paired" : "Solo", r.patternCount, r.directionSummary,
-          "","","","","","","","","","","","","","","","","","","",
+          r.name, r.isGroup ? "Paired" : "Solo", r.patternCount, "—",
+          "","","","","",
+          "","","","","",
+          "","","","",
+          "","","","","",
+          "","",
           "YES", warnStr
         ]));
         return;
       }
+
+      dayOrder.forEach(function (day) {
+        var d  = r.perDay[day];
+        var ddays = (day === "weekday")  ? (settings.daysWeekday  || 0)
+                  : (day === "saturday") ? (settings.daysSaturday || 0)
+                  :                        (settings.daysSunday   || 0);
+        var dailyDeadheadMi = d.miles * dh;
+        var dailyPlatMi     = d.miles + dailyDeadheadMi;
+        var annRevHr  = d.revHrs   * ddays;
+        var annPlatHr = d.platHrs  * ddays;
+        var annRevMi  = d.miles    * ddays;
+        var annPlatMi = dailyPlatMi * ddays;
+
+        lines.push(csvRow([
+          r.name, r.isGroup ? "Paired" : "Solo", r.patternCount, DAY_NAME[day],
+          round2(r.rtMiles), roundI(d.minHeadway), roundI(r.runTimeMin),
+          roundI(r.layoverMin), roundI(r.cycleMin),
+          roundI(d.trips), round1(d.revHrs), round1(d.platHrs),
+          round1(d.layoverHrs), round1(d.deadheadHrs),
+          round1(d.miles), round1(dailyPlatMi), round1(dailyDeadheadMi),
+          roundI(d.cost),
+          roundI(annRevHr), roundI(annPlatHr), roundI(annRevMi), roundI(annPlatMi),
+          roundI(d.annualCost),
+          round1(d.peakVehiclesRaw), roundI(d.peakVehiclesRounded),
+          "", ""
+        ]));
+      });
+
+      // Total row — annuals only; daily/per-day cells blank
+      var totalDeadheadMi = r.annual.miles * dh;
+      var totalPlatMi     = r.annual.miles + totalDeadheadMi;
       lines.push(csvRow([
-        r.name, r.isGroup ? "Paired" : "Solo", r.patternCount, r.directionSummary,
-        round2(r.rtMiles), roundI(r.cycleMin), roundI(r.peakHeadwayMin),
-        roundI(r.daily.weekday.trips),  roundI(r.daily.saturday.trips),  roundI(r.daily.sunday.trips),
-        round1(r.daily.weekday.revHrs), round1(r.daily.saturday.revHrs), round1(r.daily.sunday.revHrs),
-        round1(r.daily.weekday.platHrs),round1(r.daily.saturday.platHrs),round1(r.daily.sunday.platHrs),
-        roundI(r.annual.revHrs), roundI(r.annual.platHrs), roundI(r.annual.miles),
-        roundI(r.annual.trips),  roundI(r.annual.cost),
+        r.name, r.isGroup ? "Paired" : "Solo", r.patternCount, "Total",
+        round2(r.rtMiles), "", roundI(r.runTimeMin), roundI(r.layoverMin), roundI(r.cycleMin),
+        "", "", "", "", "",
+        "", "", "", "",
+        roundI(r.annual.revHrs), roundI(r.annual.platHrs),
+        roundI(r.annual.miles), roundI(totalPlatMi),
+        roundI(r.annual.cost),
         round1(r.peakVehiclesRaw), roundI(r.peakVehiclesRounded),
         "", ""
       ]));
@@ -865,22 +1070,27 @@
 
     lines.push("");
     lines.push("# System Summary");
-    lines.push(csvRow(["Metric","Value"]));
-    lines.push(csvRow(["Services scored", summary.servicesScored]));
-    lines.push(csvRow(["Services skipped", summary.servicesSkipped]));
-    lines.push(csvRow(["Annual operating cost ($)", roundI(summary.annualCost)]));
-    lines.push(csvRow(["Annual platform hours", roundI(summary.annualPlatHrs)]));
-    lines.push(csvRow(["Annual revenue hours",  roundI(summary.annualRevHrs)]));
-    lines.push(csvRow(["Annual revenue miles",  roundI(summary.annualMiles)]));
-    lines.push(csvRow(["Annual trips",          roundI(summary.annualTrips)]));
-    lines.push(csvRow(["Daily trips (Wk)", roundI(summary.dailyTripsWk)]));
-    lines.push(csvRow(["Daily trips (Sa)", roundI(summary.dailyTripsSa)]));
-    lines.push(csvRow(["Daily trips (Su)", roundI(summary.dailyTripsSu)]));
-    lines.push(csvRow(["Fleet — sum of Service needs (standalone)", summary.fleetSumRounded]));
-    lines.push(csvRow(["Fleet — theoretical minimum (interlined)",  summary.fleetSumRaw]));
-    lines.push(csvRow(["Interline opportunity (gap)", summary.interlineGap]));
-    lines.push(csvRow(["Fleet — planning total (with " + summary.spareRatioPct + "% spares)", summary.fleetWithSpares]));
-    if (settings.costBasisYear) lines.push(csvRow(["Cost basis", settings.costBasisYear]));
+    lines.push(csvRow(["Metric","Weekday","Saturday","Sunday","Total"]));
+    var wk = summary.perDay.weekday, sa = summary.perDay.saturday,
+        su = summary.perDay.sunday, tot = summary.total;
+    lines.push(csvRow(["Days/year", summary.daysMap.weekday, summary.daysMap.saturday, summary.daysMap.sunday,
+      summary.daysMap.weekday + summary.daysMap.saturday + summary.daysMap.sunday]));
+    lines.push(csvRow(["Services in operation", wk.services, sa.services, su.services, summary.servicesScored]));
+    lines.push(csvRow(["Daily trips", roundI(wk.dailyTrips), roundI(sa.dailyTrips), roundI(su.dailyTrips), ""]));
+    lines.push(csvRow(["Daily rev-hr", round1(wk.dailyRevHrs), round1(sa.dailyRevHrs), round1(su.dailyRevHrs), ""]));
+    lines.push(csvRow(["Daily plat-hr", round1(wk.dailyPlatHrs), round1(sa.dailyPlatHrs), round1(su.dailyPlatHrs), ""]));
+    lines.push(csvRow(["Daily cost ($)", roundI(wk.dailyCost), roundI(sa.dailyCost), roundI(su.dailyCost), ""]));
+    lines.push(csvRow(["Annual trips", roundI(wk.annualTrips), roundI(sa.annualTrips), roundI(su.annualTrips), roundI(tot.annualTrips)]));
+    lines.push(csvRow(["Annual rev-hr", roundI(wk.annualRevHrs), roundI(sa.annualRevHrs), roundI(su.annualRevHrs), roundI(tot.annualRevHrs)]));
+    lines.push(csvRow(["Annual plat-hr", roundI(wk.annualPlatHrs), roundI(sa.annualPlatHrs), roundI(su.annualPlatHrs), roundI(tot.annualPlatHrs)]));
+    lines.push(csvRow(["Annual rev miles", roundI(wk.annualMiles), roundI(sa.annualMiles), roundI(su.annualMiles), roundI(tot.annualMiles)]));
+    lines.push(csvRow(["Annual operating cost ($)", roundI(wk.annualCost), roundI(sa.annualCost), roundI(su.annualCost), roundI(tot.annualCost)]));
+    lines.push(csvRow(["Peak pullout (ΣServices)", wk.fleetSumRounded, sa.fleetSumRounded, su.fleetSumRounded, summary.peakFleetRounded]));
+    lines.push(csvRow(["Fleet — interlined min", wk.fleetSumRaw, sa.fleetSumRaw, su.fleetSumRaw, summary.peakFleetInterlined]));
+    lines.push(csvRow(["Interline opportunity (gap)", wk.interlineGap, sa.interlineGap, su.interlineGap, summary.peakInterlineGap]));
+    lines.push(csvRow(["Fleet — planning total (with " + summary.spareRatioPct + "% spares)", "", "", "", summary.fleetWithSpares]));
+    lines.push(csvRow(["Services skipped", "", "", "", summary.servicesSkipped]));
+    if (settings.costBasisYear) lines.push(csvRow(["Cost basis", "", "", "", settings.costBasisYear]));
 
     var blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
     var url  = URL.createObjectURL(blob);
@@ -1070,7 +1280,7 @@
 
   function saveRcState(/* mode */) {
     var data = {
-      version:       1,
+      version:       2,   // v2: per-day-type structure; explicit layover/deadhead
       settings:      Object.assign({}, _settings),
       selectedKeys:  getSelectedServiceKeys(),
       lastSummary:   null
@@ -1092,9 +1302,13 @@
             name: r.name, key: r.key, isGroup: r.isGroup,
             skipped: false, patternCount: r.patternCount,
             directionSummary: r.directionSummary,
-            rtMiles: r.rtMiles, cycleMin: r.cycleMin,
+            rtMiles: r.rtMiles, runTimeMin: r.runTimeMin,
+            cycleMin: r.cycleMin, layoverMin: r.layoverMin,
+            tripsPerCycle: r.tripsPerCycle,
             peakHeadwayMin: r.peakHeadwayMin,
-            daily: r.daily, annual: r.annual,
+            perDay: r.perDay,
+            daily: r.perDay,   // legacy alias; always equal to perDay
+            annual: r.annual,
             peakVehiclesRaw: r.peakVehiclesRaw,
             peakVehiclesRounded: r.peakVehiclesRounded,
             bandBreakdown: []  // dropped from persistence; re-run to recompute
@@ -1119,7 +1333,10 @@
           : k;
       });
     }
-    if (data.lastSummary && Array.isArray(data.lastSummary.services)) {
+    // Restore lastSummary only if it's v2-shaped (has perDay on each service).
+    // v1 summaries are silently dropped — user will re-run to repopulate.
+    if (data.lastSummary && Array.isArray(data.lastSummary.services) &&
+        data.version >= 2) {
       _lastResult = {
         settings: Object.assign({}, data.lastSummary.settings || _settings),
         summary:  data.lastSummary.summary || {},
