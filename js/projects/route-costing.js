@@ -37,6 +37,10 @@
   var _running         = false;
   var _initialized     = false;
 
+  var _interlineGroups   = [];   // [{ id, name, serviceKeys:[], days:{weekday,saturday,sunday} }]
+  var _pendingInterlines = null; // temp copy while Interlines modal is open
+  var _ilGroupCounter    = 0;    // auto-increment for unique group IDs
+
   // ---- DOM guard: only touch DOM when this module's popup is open ----
 
   function isPopupVisible() {
@@ -80,6 +84,132 @@
   function resetSettingsToDefaults() {
     _pendingSettings = Object.assign({}, DEFAULT_SETTINGS);
     syncSettingsToInputs(_pendingSettings);
+  }
+
+  // ---- Interlines modal ----
+
+  function openInterlinesModal() {
+    _pendingInterlines = _interlineGroups.map(function (g) {
+      return {
+        id:          g.id,
+        name:        g.name,
+        serviceKeys: g.serviceKeys.slice(),
+        days:        Object.assign({}, g.days)
+      };
+    });
+    renderInterlinesModal();
+    var modal = document.getElementById("rcInterlinesModal");
+    if (modal) modal.style.display = "flex";
+  }
+
+  function closeInterlinesModal(confirm) {
+    if (confirm) {
+      _interlineGroups = _pendingInterlines || [];
+      if (_lastResult) markStale();
+      if (App.cache) App.cache.save();
+    }
+    _pendingInterlines = null;
+    var modal = document.getElementById("rcInterlinesModal");
+    if (modal) modal.style.display = "none";
+  }
+
+  function renderInterlinesModal() {
+    var el = document.getElementById("rcInterlineGroupsList");
+    if (!el) return;
+
+    if (!_lastServices || !_lastServices.length) {
+      el.innerHTML = '<div class="tiny" style="color:var(--muted);padding:8px 0;">No Services available. Draw routes or lines and set their attributes first.</div>';
+      return;
+    }
+
+    if (!_pendingInterlines || !_pendingInterlines.length) {
+      el.innerHTML = '<div class="tiny" style="color:var(--muted);padding:8px 0;">No interline groups defined. Click &ldquo;+ Add Group&rdquo; to create one.</div>';
+      return;
+    }
+
+    var validServices = (_lastServices || []).filter(function (s) { return !hasBlockingWarnings(s); });
+
+    var html = "";
+    _pendingInterlines.forEach(function (grp, gidx) {
+      html += '<div class="rc-interline-group" data-gidx="' + gidx + '">';
+      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">';
+      html += '<input class="rf-select rc-il-name" type="text"' +
+              ' placeholder="Group name (e.g. Route 10/12 Interline)"' +
+              ' value="' + escapeAttr(grp.name) + '" style="flex:1;">';
+      html += '<button class="rf-btn-sm rc-il-remove" type="button" data-gidx="' + gidx + '">Remove</button>';
+      html += '</div>';
+      // Day-type applicability
+      html += '<div class="tiny" style="margin-bottom:4px;color:var(--muted);">Applies on:</div>';
+      html += '<div style="display:flex;gap:12px;margin-bottom:8px;">';
+      ["weekday", "saturday", "sunday"].forEach(function (day) {
+        var label = day.charAt(0).toUpperCase() + day.slice(1);
+        html += '<label class="tiny" style="display:flex;gap:4px;align-items:center;">' +
+          '<input type="checkbox" class="rc-il-day" data-gidx="' + gidx + '" data-day="' + day + '"' +
+          (grp.days[day] ? ' checked' : '') + '> ' + label + '</label>';
+      });
+      html += '</div>';
+      // Member service checkboxes
+      html += '<div class="tiny" style="margin-bottom:4px;color:var(--muted);">Member Services (select 2+):</div>';
+      html += '<div style="display:flex;flex-direction:column;gap:3px;max-height:120px;overflow-y:auto;">';
+      validServices.forEach(function (svc) {
+        var checked = grp.serviceKeys.indexOf(svc.key) >= 0;
+        html += '<label class="tiny" style="display:flex;gap:4px;align-items:center;">' +
+          '<input type="checkbox" class="rc-il-member" data-gidx="' + gidx +
+          '" data-key="' + escapeAttr(svc.key) + '"' + (checked ? ' checked' : '') + '> ' +
+          escapeHTML(svc.name) + '</label>';
+      });
+      html += '</div>';
+      html += '</div>'; // .rc-interline-group
+    });
+
+    el.innerHTML = html;
+
+    // Wire remove buttons
+    var removeBtns = el.querySelectorAll(".rc-il-remove");
+    for (var i = 0; i < removeBtns.length; i++) {
+      removeBtns[i].addEventListener("click", function () {
+        var idx = parseInt(this.getAttribute("data-gidx"), 10);
+        _pendingInterlines.splice(idx, 1);
+        renderInterlinesModal();
+      });
+    }
+
+    // Wire name inputs (use closure to capture index at bind time)
+    var nameInputs = el.querySelectorAll(".rc-il-name");
+    for (var j = 0; j < nameInputs.length; j++) {
+      (function (input) {
+        input.addEventListener("input", function () {
+          var idx = parseInt(
+            input.closest(".rc-interline-group").getAttribute("data-gidx"), 10);
+          _pendingInterlines[idx].name = input.value;
+        });
+      })(nameInputs[j]);
+    }
+
+    // Wire day checkboxes
+    var dayCbs = el.querySelectorAll(".rc-il-day");
+    for (var k = 0; k < dayCbs.length; k++) {
+      dayCbs[k].addEventListener("change", function () {
+        var idx = parseInt(this.getAttribute("data-gidx"), 10);
+        var day = this.getAttribute("data-day");
+        _pendingInterlines[idx].days[day] = this.checked;
+      });
+    }
+
+    // Wire member checkboxes
+    var memberCbs = el.querySelectorAll(".rc-il-member");
+    for (var m = 0; m < memberCbs.length; m++) {
+      memberCbs[m].addEventListener("change", function () {
+        var idx = parseInt(this.getAttribute("data-gidx"), 10);
+        var key = this.getAttribute("data-key");
+        var grp = _pendingInterlines[idx];
+        if (this.checked) {
+          if (grp.serviceKeys.indexOf(key) < 0) grp.serviceKeys.push(key);
+        } else {
+          grp.serviceKeys = grp.serviceKeys.filter(function (k) { return k !== key; });
+        }
+      });
+    }
   }
 
   function syncSettingsToInputs(s) {
@@ -597,7 +727,7 @@
     };
   }
 
-  function computeSystemSummary(serviceResults, settings) {
+  function computeSystemSummary(serviceResults, settings, intGroups) {
     var DAYS = ["weekday", "saturday", "sunday"];
     var emptyDayAgg = function () {
       return {
@@ -665,6 +795,7 @@
     });
 
     // System-wide fleet metrics — the fleet you must own = max across day types.
+    // System-wide fleet metrics
     out.peakFleetRounded   = Math.max(out.perDay.weekday.fleetSumRounded,
                                        out.perDay.saturday.fleetSumRounded,
                                        out.perDay.sunday.fleetSumRounded);
@@ -672,9 +803,71 @@
                                         out.perDay.saturday.fleetSumRaw,
                                         out.perDay.sunday.fleetSumRaw);
     out.peakInterlineGap   = out.peakFleetRounded - out.peakFleetInterlined;
-    out.fleetWithSpares    = Math.ceil(out.peakFleetRounded * (1 + settings.spareRatio / 100));
+
+    // Interline effect: subtract declared pool savings from fleet totals
+    var ilEffect = computeInterlinesEffect(serviceResults, intGroups || []);
+    out.interlineEffect = ilEffect;
+    DAYS.forEach(function (day) {
+      var agg = out.perDay[day];
+      var savings = ilEffect ? (ilEffect.savingsPerDay[day] || 0) : 0;
+      agg.interlinedFleet   = Math.max(0, agg.fleetSumRounded - savings);
+      agg.interlinedSavings = savings;
+    });
+
+    // Fleet after declared interlines
+    out.hasInterlines = !!(ilEffect && ilEffect.groupResults.length);
+    out.peakFleetAfterInterlines = Math.max(
+      out.perDay.weekday.interlinedFleet,
+      out.perDay.saturday.interlinedFleet,
+      out.perDay.sunday.interlinedFleet
+    );
+    out.fleetWithSpares = Math.ceil(
+      (out.hasInterlines ? out.peakFleetAfterInterlines : out.peakFleetRounded)
+      * (1 + settings.spareRatio / 100)
+    );
 
     return out;
+  }
+
+  function computeInterlinesEffect(serviceResults, intGroups) {
+    if (!intGroups || !intGroups.length) return null;
+
+    var DAYS = ["weekday", "saturday", "sunday"];
+    var resultMap = {};
+    serviceResults.forEach(function (r) { if (!r.skipped) resultMap[r.key] = r; });
+
+    var groupResults = [];
+    var savingsPerDay = { weekday: 0, saturday: 0, sunday: 0 };
+
+    intGroups.forEach(function (grp) {
+      var members = grp.serviceKeys
+        .map(function (k) { return resultMap[k]; })
+        .filter(Boolean);
+      if (members.length < 2) return;
+
+      var gResult = {
+        id:      grp.id,
+        name:    grp.name,
+        members: members.map(function (m) { return m.name; }),
+        days:    {}
+      };
+
+      DAYS.forEach(function (day) {
+        if (!grp.days[day]) return;
+        var memberPeaks = members.map(function (m) {
+          return m.perDay[day].peakVehiclesRounded || 0;
+        });
+        var standaloneSum = memberPeaks.reduce(function (a, b) { return a + b; }, 0);
+        var poolMax       = Math.max.apply(null, memberPeaks);
+        var savings       = standaloneSum - poolMax;
+        gResult.days[day] = { standaloneSum: standaloneSum, poolMax: poolMax, savings: savings };
+        savingsPerDay[day] += savings;
+      });
+
+      groupResults.push(gResult);
+    });
+
+    return { groupResults: groupResults, savingsPerDay: savingsPerDay };
   }
 
   // ---- Rendering ----
@@ -906,12 +1099,36 @@
       ["Annual plat-hr",       fmtInt(wk.annualPlatHrs),         fmtInt(sa.annualPlatHrs),          fmtInt(su.annualPlatHrs),        fmtInt(t.annualPlatHrs)],
       ["Annual rev miles",     fmtInt(wk.annualMiles),           fmtInt(sa.annualMiles),            fmtInt(su.annualMiles),          fmtInt(t.annualMiles)],
       ["Annual operating cost",fmtMoney(wk.annualCost),          fmtMoney(sa.annualCost),           fmtMoney(su.annualCost),         fmtMoney(t.annualCost)],
-      ["Peak pullout (ΣServices)", fmtInt(wk.fleetSumRounded),   fmtInt(sa.fleetSumRounded),        fmtInt(su.fleetSumRounded),      fmtInt(summary.peakFleetRounded)],
-      ["Fleet — interlined min",   fmtInt(wk.fleetSumRaw),       fmtInt(sa.fleetSumRaw),            fmtInt(su.fleetSumRaw),          fmtInt(summary.peakFleetInterlined)],
-      ["Interline opportunity",    fmtInt(wk.interlineGap),      fmtInt(sa.interlineGap),           fmtInt(su.interlineGap),         fmtInt(summary.peakInterlineGap)],
-      ["Fleet — planning total (with " + summary.spareRatioPct + "% spares)",
-        DASH, DASH, DASH, fmtInt(summary.fleetWithSpares)]
+      ["Peak pullout (ΣServices)", fmtInt(wk.fleetSumRounded),   fmtInt(sa.fleetSumRounded),        fmtInt(su.fleetSumRounded),      fmtInt(summary.peakFleetRounded)]
     ];
+
+    // Fleet rows: interline-aware if groups are defined, theoretical otherwise
+    if (summary.hasInterlines) {
+      var ilEffect = summary.interlineEffect;
+      ilEffect.groupResults.forEach(function (grp) {
+        var wkS  = grp.days.weekday  ? fmtInt(grp.days.weekday.savings)  : DASH;
+        var saS  = grp.days.saturday ? fmtInt(grp.days.saturday.savings) : DASH;
+        var suS  = grp.days.sunday   ? fmtInt(grp.days.sunday.savings)   : DASH;
+        var totS = Math.max(
+          grp.days.weekday  ? (grp.days.weekday.savings  || 0) : 0,
+          grp.days.saturday ? (grp.days.saturday.savings || 0) : 0,
+          grp.days.sunday   ? (grp.days.sunday.savings   || 0) : 0
+        );
+        rows.push(["  Pool: " + grp.name, wkS, saS, suS, fmtInt(totS)]);
+      });
+      rows.push(["Fleet — after interlines",
+        fmtInt(wk.interlinedFleet), fmtInt(sa.interlinedFleet), fmtInt(su.interlinedFleet),
+        fmtInt(summary.peakFleetAfterInterlines)]);
+    } else {
+      rows.push(["Fleet — interlined min",
+        fmtInt(wk.fleetSumRaw),  fmtInt(sa.fleetSumRaw),  fmtInt(su.fleetSumRaw),
+        fmtInt(summary.peakFleetInterlined)]);
+      rows.push(["Interline opportunity",
+        fmtInt(wk.interlineGap), fmtInt(sa.interlineGap), fmtInt(su.interlineGap),
+        fmtInt(summary.peakInterlineGap)]);
+    }
+    rows.push(["Fleet — planning total (with " + summary.spareRatioPct + "% spares)",
+      DASH, DASH, DASH, fmtInt(summary.fleetWithSpares)]);
 
     var html = '<table class="rc-summary-table"><thead><tr>' +
       '<th></th>' +
@@ -1125,7 +1342,7 @@
       return;
     }
     var results = selected.map(function (svc) { return computeService(svc, _settings); });
-    var summary = computeSystemSummary(results, _settings);
+    var summary = computeSystemSummary(results, _settings, _interlineGroups);
     _lastResult = { services: results, summary: summary, settings: Object.assign({}, _settings) };
     _stale = false;
 
@@ -1160,6 +1377,39 @@
     // Settings modal open
     if (byId("rcSettingsBtn")) {
       byId("rcSettingsBtn").addEventListener("click", openSettingsModal);
+    }
+
+    // Interlines modal
+    if (byId("rcInterlinesBtn")) {
+      byId("rcInterlinesBtn").addEventListener("click", openInterlinesModal);
+    }
+    if (byId("rcInterlinesConfirm")) {
+      byId("rcInterlinesConfirm").addEventListener("click", function () {
+        closeInterlinesModal(true);
+      });
+    }
+    if (byId("rcInterlinesCancel")) {
+      byId("rcInterlinesCancel").addEventListener("click", function () {
+        closeInterlinesModal(false);
+      });
+    }
+    if (byId("rcInterlinesClear")) {
+      byId("rcInterlinesClear").addEventListener("click", function () {
+        _pendingInterlines = [];
+        renderInterlinesModal();
+      });
+    }
+    if (byId("rcAddInterlineGroup")) {
+      byId("rcAddInterlineGroup").addEventListener("click", function () {
+        if (!_pendingInterlines) _pendingInterlines = [];
+        _pendingInterlines.push({
+          id:          "ilg-" + (++_ilGroupCounter),
+          name:        "",
+          serviceKeys: [],
+          days:        { weekday: true, saturday: false, sunday: false }
+        });
+        renderInterlinesModal();
+      });
     }
     // Settings modal actions
     if (byId("rcSettingsConfirm")) {
@@ -1251,6 +1501,7 @@
 
   function clearAll() {
     _lastResult = null;
+    _interlineGroups = [];
     _stale = false;
     if (!isPopupVisible()) return;
     showResultsSection(false);
@@ -1280,10 +1531,13 @@
 
   function saveRcState(/* mode */) {
     var data = {
-      version:       2,   // v2: per-day-type structure; explicit layover/deadhead
-      settings:      Object.assign({}, _settings),
-      selectedKeys:  getSelectedServiceKeys(),
-      lastSummary:   null
+      version:        2,   // v2: per-day-type structure; explicit layover/deadhead
+      settings:       Object.assign({}, _settings),
+      selectedKeys:   getSelectedServiceKeys(),
+      interlineGroups: _interlineGroups.map(function (g) {
+        return { id: g.id, name: g.name, serviceKeys: g.serviceKeys.slice(), days: Object.assign({}, g.days) };
+      }),
+      lastSummary:    null
     };
     if (_lastResult) {
       // Strip bandBreakdown (large + reconstructible) in light mode; keep per-service totals.
@@ -1331,6 +1585,16 @@
         return (typeof k === "string" && k.indexOf("group-") === 0)
           ? "service-" + k.slice(6)
           : k;
+      });
+    }
+    if (Array.isArray(data.interlineGroups)) {
+      _interlineGroups = data.interlineGroups.map(function (g) {
+        return {
+          id:          g.id || ("ilg-" + (++_ilGroupCounter)),
+          name:        g.name || "",
+          serviceKeys: Array.isArray(g.serviceKeys) ? g.serviceKeys.slice() : [],
+          days:        Object.assign({ weekday: true, saturday: false, sunday: false }, g.days || {})
+        };
       });
     }
     // Restore lastSummary only if it's v2-shaped (has perDay on each service).

@@ -4368,3 +4368,11 @@ body.dark-mode .rc-summary-table th { color: #ccc; }
 body.dark-mode .rc-summary-table td { color: #edf2f7; }
 body.dark-mode .rc-summary-table tr { border-color: #2d2d3d; }
 
+.rc-interline-group {
+  border: 1px solid var(--border, #ddd);
+  border-radius: 4px;
+  padding: 10px;
+  margin-bottom: 8px;
+}
+body.dark-mode .rc-interline-group { border-color: #3a3a4a; }
+
