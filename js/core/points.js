@@ -12,7 +12,7 @@
   var bufferRadiusMiles = 0.5; // user-defined; 0 = no buffers
 
   function pointsGeoJSON() { return { type: "FeatureCollection", features: points.filter(function (p) { return !p.properties.hidden; }) }; }
-  function buffersGeoJSON() { return { type: "FeatureCollection", features: buffers }; }
+  function buffersGeoJSON() { return { type: "FeatureCollection", features: buffers.filter(Boolean) }; }
 
   function updateCoordsPanel() {
     if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
@@ -109,6 +109,7 @@
     if (typeof App.clearCensusOverlay === "function") App.clearCensusOverlay();
     bufferRadiusMiles = radiusMiles;
     buffers.length = 0;
+    buffers.length = points.length;
     for (var i = 0; i < points.length; i++) {
       if (points[i].properties.hidden) continue;
       var r = (points[i].properties._bufferRadius != null)
@@ -118,20 +119,23 @@
         var coords = points[i].geometry.coordinates;
         var pt = turf.point(coords);
         var circle = turf.circle(pt, r, { units: "miles", steps: 64 });
-        buffers.push({
+        buffers[i] = {
           type: circle.type,
           geometry: circle.geometry,
           properties: { pointIdx: points[i].properties.pointIdx }
-        });
+        };
       }
     }
     renderPointLayers();
   }
 
   function bufferUnionPolygon() {
-    if (buffers.length === 0) return null;
-    var u = buffers[0];
-    for (var i = 1; i < buffers.length; i++) u = turf.union(u, buffers[i]);
+    var u = null;
+    for (var i = 0; i < buffers.length; i++) {
+      if (!buffers[i]) continue;
+      if (!u) { u = buffers[i]; continue; }
+      try { u = turf.union(u, buffers[i]); } catch (e) { /* skip invalid */ }
+    }
     return u;
   }
 
