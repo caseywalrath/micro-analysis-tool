@@ -1033,6 +1033,7 @@
     stog.className = "fp-section-toggle";
     stog.innerHTML = CHEVRON_SVG;
     stog.title = "Toggle Feature Settings";
+    stog.classList.add("open");
     header.appendChild(stog);
 
     var body = header.nextElementSibling; // .fp-settings-body
