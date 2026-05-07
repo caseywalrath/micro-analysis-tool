@@ -4376,3 +4376,245 @@ body.dark-mode .rc-summary-table tr { border-color: #2d2d3d; }
 }
 body.dark-mode .rc-interline-group { border-color: #3a3a4a; }
 
+/* ===========================================================
+   Feature Settings — Attribute Summary entry button
+   =========================================================== */
+.fp-attr-summary-btn {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium, 500);
+  color: #fff;
+  background: #3182ce;
+  border: 1px solid #2b6cb0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.fp-attr-summary-btn:hover { background: #2b6cb0; }
+body.dark-mode .fp-attr-summary-btn { background: #4299e1; border-color: #3182ce; }
+body.dark-mode .fp-attr-summary-btn:hover { background: #3182ce; }
+
+/* ===========================================================
+   Shared Mini-popup (Time Bands and Route Picker pills)
+   =========================================================== */
+#fp-mini-popup {
+  position: fixed;
+  z-index: 9100;
+  width: 320px;
+  max-height: 70vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid var(--border, #d6dae0);
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.18);
+}
+.fp-mini-popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: #f7fafc;
+  border-bottom: 1px solid var(--border, #e5e7eb);
+  cursor: move;
+  user-select: none;
+}
+.fp-mini-popup-header.dragging { cursor: grabbing; }
+.fp-mini-popup-title {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold, 600);
+  color: #2d3748;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fp-mini-popup-close {
+  background: none;
+  border: none;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0 4px;
+}
+.fp-mini-popup-close:hover { color: #1a202c; }
+.fp-mini-popup-body {
+  padding: 10px;
+  overflow: auto;
+  flex: 1;
+}
+body.dark-mode #fp-mini-popup { background: #1f1f2e; border-color: #2d2d3d; }
+body.dark-mode .fp-mini-popup-header { background: #2a2a3a; border-color: #2d2d3d; }
+body.dark-mode .fp-mini-popup-title { color: #e2e8f0; }
+body.dark-mode .fp-mini-popup-close { color: #a0aec0; }
+body.dark-mode .fp-mini-popup-close:hover { color: #fff; }
+
+/* ===========================================================
+   Compact pill badges (route count, bands summary)
+   =========================================================== */
+.fp-route-badge,
+.fp-bands-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  font-size: var(--text-2xs, 10px);
+  font-weight: var(--weight-medium, 500);
+  color: #2c5282;
+  background: #ebf4ff;
+  border: 1px solid #bee3f8;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+.fp-route-badge:hover,
+.fp-bands-badge:hover { background: #bee3f8; border-color: #90cdf4; }
+body.dark-mode .fp-route-badge,
+body.dark-mode .fp-bands-badge {
+  color: #bee3f8;
+  background: #1e3a5f;
+  border-color: #2c5282;
+}
+body.dark-mode .fp-route-badge:hover,
+body.dark-mode .fp-bands-badge:hover { background: #2c5282; }
+
+/* ===========================================================
+   Attribute Summary module (.as- prefix)
+   =========================================================== */
+.as-root {
+  font-size: var(--text-sm);
+  color: #2d3748;
+}
+.as-intro {
+  color: var(--muted);
+  font-size: var(--text-xs, 11px);
+  margin-bottom: 10px;
+}
+.as-empty {
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  border: 1px dashed var(--border, #d6dae0);
+  border-radius: 6px;
+}
+.as-section { margin-bottom: 18px; }
+.as-section-header {
+  font-size: var(--text-xs, 11px);
+  font-weight: var(--weight-semibold, 600);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  padding-bottom: 4px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--border, #e5e7eb);
+}
+.as-table {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.as-row {
+  display: grid;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 4px;
+  border-radius: 4px;
+}
+.as-row:not(.as-row-header):hover { background: #f7fafc; }
+body.dark-mode .as-row:not(.as-row-header):hover { background: #22222f; }
+.as-row-header {
+  border-bottom: 1px solid var(--border, #edf0f3);
+  padding-bottom: 6px;
+  margin-bottom: 4px;
+}
+.as-cell {
+  min-width: 0; /* let inputs shrink */
+  display: flex;
+  align-items: center;
+}
+.as-cell-header {
+  font-size: var(--text-2xs, 10px);
+  font-weight: var(--weight-semibold, 600);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+.as-cell-swatch { justify-content: center; }
+.as-cell-badge { justify-content: flex-start; }
+.as-cell-overrides { justify-content: flex-end; }
+.as-cell-overrides .fp-attr-overrides {
+  display: flex;
+  gap: 2px;
+}
+.as-input {
+  width: 100%;
+  font-size: var(--text-sm);
+  padding: 3px 6px;
+  border: 1px solid var(--border, #d6dae0);
+  border-radius: 3px;
+  background: #fff;
+  color: #2d3748;
+}
+.as-input:focus { outline: 1px solid #4299e1; border-color: #4299e1; }
+.as-input-num { text-align: right; }
+.as-select { padding: 2px 4px; }
+body.dark-mode .as-input {
+  background: #1f1f2e; color: #e2e8f0; border-color: #2d2d3d;
+}
+body.dark-mode .as-section-header,
+body.dark-mode .as-cell-header { color: #a0aec0; }
+body.dark-mode .as-row-header { border-color: #2d2d3d; }
+body.dark-mode .as-section-header { border-color: #2d2d3d; }
+
+.as-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  border: 1px solid rgba(0,0,0,0.2);
+  cursor: pointer;
+  padding: 0;
+  flex: 0 0 auto;
+}
+.as-swatch:hover { box-shadow: 0 0 0 2px rgba(66,153,225,0.3); }
+
+/* Column widths per section (CSS Grid templates) */
+.as-grid-points {
+  grid-template-columns:
+    24px            /* swatch */
+    1.4fr           /* name */
+    0.8fr           /* id */
+    1fr             /* routes badge */
+    auto;           /* overrides */
+}
+.as-grid-routelike {
+  grid-template-columns:
+    24px            /* swatch */
+    1.4fr           /* name */
+    74px            /* direction */
+    78px            /* mode */
+    1.2fr           /* service */
+    62px            /* avg spd */
+    62px            /* run time */
+    78px            /* bands */
+    auto;           /* overrides */
+}
+.as-grid-polygons {
+  grid-template-columns:
+    24px            /* swatch */
+    1.2fr           /* name */
+    2fr             /* notes */
+    auto;           /* overrides */
+}
+.as-grid-marker {
+  grid-template-columns:
+    1.4fr           /* name */
+    90px            /* size */
+    100px           /* bg swatch col */
+    100px;          /* text swatch col */
+}
+
+.as-col-narrow  { }
+.as-col-num     { }
+.as-col-overrides { justify-self: end; }
+

@@ -107,6 +107,9 @@
   function buildAnalysisButtonsHTML() {
     var html = '<div class="analysis-module-list">';
     for (var entry of _modules.values()) {
+      // System modules (e.g. Attribute Summary, opened from Feature Settings)
+      // are not surfaced in the Analysis sidebar panel.
+      if (entry.system === true) continue;
       var isEnabled = entry.enabled !== false;
       var disabledAttr = isEnabled ? '' : ' disabled';
       html += '<button class="analysis-module-btn"' +
@@ -372,6 +375,20 @@
 
     // Wire popup system
     App.popup.wire(_modules, buildCore);
+
+    // Public opener for the Attribute Summary "system" module (registered with
+    // system: true so it does NOT appear in the Analysis dropdown).
+    App.openAttributeSummary = function () {
+      App.popup.open("attribute-summary", _modules, buildCore);
+    };
+
+    // Wire the entry button in Feature Settings
+    var asBtn = document.getElementById("open-attribute-summary");
+    if (asBtn) {
+      asBtn.addEventListener("click", function () {
+        if (typeof App.openAttributeSummary === "function") App.openAttributeSummary();
+      });
+    }
 
     // Populate Analysis toolbar dropdown with module buttons
     var analysisDropdown = document.getElementById("analysis-dropdown");
