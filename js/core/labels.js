@@ -111,6 +111,7 @@
     var marker = _createMarker(feature, labels.length - 1);
     _markers.push(marker);
     if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+    if (typeof App.openAttrPopup === "function") App.openAttrPopup("label", labels.length - 1, feature);
   }
 
   function removeLabel(index) {
