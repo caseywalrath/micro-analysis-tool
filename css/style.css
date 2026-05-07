@@ -4578,14 +4578,19 @@ body.dark-mode .as-section-header { border-color: #2d2d3d; }
 }
 .as-swatch:hover { box-shadow: 0 0 0 2px rgba(66,153,225,0.3); }
 
-/* Column widths per section (CSS Grid templates) */
+/* Column widths per section (CSS Grid templates).
+   The trailing override-icons column is given an EXPLICIT width (not `auto`)
+   so the header row (with an empty placeholder cell) and the data rows
+   (with N icon buttons) compute identical tracks. Otherwise the auto track
+   shrinks to 0 in the header, leaving the fr columns extra space and
+   pushing the header labels visibly right of their data inputs. */
 .as-grid-points {
   grid-template-columns:
     24px            /* swatch */
     1.4fr           /* name */
     0.8fr           /* id */
     1fr             /* routes badge */
-    auto;           /* overrides */
+    96px;           /* overrides (4 icons) */
 }
 .as-grid-routelike {
   grid-template-columns:
@@ -4597,14 +4602,14 @@ body.dark-mode .as-section-header { border-color: #2d2d3d; }
     62px            /* avg spd */
     62px            /* run time */
     78px            /* bands */
-    auto;           /* overrides */
+    122px;          /* overrides (5 icons) */
 }
 .as-grid-polygons {
   grid-template-columns:
     24px            /* swatch */
     1.2fr           /* name */
     2fr             /* notes */
-    auto;           /* overrides */
+    72px;           /* overrides (3 icons) */
 }
 .as-grid-marker {
   grid-template-columns:
