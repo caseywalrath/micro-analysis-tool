@@ -4382,6 +4382,198 @@ body.dark-mode .rc-summary-table tr { border-color: #2d2d3d; }
 }
 body.dark-mode .rc-interline-group { border-color: #3a3a4a; }
 
+/* ----- Trip Builder module ----- */
+
+.tb-svc-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 6px 8px;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
+  line-height: 1.25;
+}
+.tb-svc-row:last-child { border-bottom: none; }
+.tb-svc-row:hover { background: #f5f9ff; }
+.tb-svc-row.tb-svc-selected { background: #e0ecff; }
+.tb-svc-row.tb-svc-blocked { cursor: not-allowed; }
+.tb-svc-row.tb-svc-blocked .tb-svc-name { color: #c0392b; }
+.tb-svc-row.tb-svc-blocked:hover { background: transparent; }
+
+.tb-svc-stripe {
+  flex: 0 0 auto;
+  width: 4px;
+  align-self: stretch;
+  border-radius: 2px;
+  margin-top: 1px;
+}
+
+.tb-svc-main { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.tb-svc-name { font-size: 12px; color: #333; font-weight: var(--weight-medium, 500); }
+.tb-svc-meta { font-size: 11px; color: var(--muted); margin-top: 1px; }
+
+.tb-header {
+  position: relative;
+  padding: 8px 32px 8px 12px;
+  background: #f8fafc;
+  border-radius: 4px;
+  border-left: 4px solid #999;
+}
+.tb-header-name {
+  font-size: 14px;
+  font-weight: var(--weight-semibold, 600);
+  color: #2c3e50;
+}
+.tb-header-meta {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.tb-header-toggle {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 2px 6px;
+  line-height: 1;
+}
+.tb-header-toggle:hover { color: #333; }
+.tb-header-details {
+  display: none;
+  margin-top: 8px;
+  font-size: 11px;
+  color: #555;
+}
+.tb-header-details.tb-open { display: block; }
+.tb-header-details ul {
+  margin: 4px 0;
+  padding-left: 4px;
+  list-style: none;
+}
+.tb-header-details li {
+  padding: 2px 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.tb-pat-color {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex: 0 0 auto;
+}
+
+.tb-day-section { margin-top: 16px; }
+.tb-day-label {
+  font-size: 11px;
+  font-weight: var(--weight-semibold, 600);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 0 0 6px;
+}
+.tb-day-grid {
+  display: grid;
+  gap: 14px;
+  align-items: start;
+}
+.tb-direction-table-wrap { min-width: 0; }
+
+.tb-direction-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: var(--weight-semibold, 600);
+  color: #2c3e50;
+  border-left: 4px solid #999;
+  background: #fafafa;
+  border-radius: 3px 3px 0 0;
+}
+.tb-direction-meta {
+  font-size: 10px;
+  color: var(--muted);
+  font-weight: var(--weight-normal, 400);
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.tb-trip-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.tb-trip-table th, .tb-trip-table td {
+  padding: 3px 8px;
+  border-bottom: 1px solid #eee;
+  text-align: left;
+  vertical-align: middle;
+}
+.tb-trip-table thead th {
+  font-size: 10px;
+  font-weight: var(--weight-semibold, 600);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  background: #fafafa;
+  border-bottom: 1px solid #e5e5e5;
+}
+.tb-trip-table .tb-time {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.tb-trip-table .tb-trip-num {
+  width: 28px;
+  text-align: right;
+  padding-right: 4px;
+  color: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.tb-trip-table .tb-del-cell {
+  width: 28px;
+  text-align: center;
+  padding: 0 4px;
+}
+.tb-del-btn {
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 4px;
+  line-height: 1;
+}
+.tb-del-btn:hover { color: #c0392b; }
+
+.tb-no-bands {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 6px 8px;
+  font-style: italic;
+}
+
+/* Dark mode */
+body.dark-mode .tb-svc-row { border-color: #2d2d3d; }
+body.dark-mode .tb-svc-row:hover { background: #2a2a3a; }
+body.dark-mode .tb-svc-row.tb-svc-selected { background: #1e2d50; }
+body.dark-mode .tb-svc-name { color: #ddd; }
+body.dark-mode .tb-header { background: #1c1c28; }
+body.dark-mode .tb-header-name { color: #edf2f7; }
+body.dark-mode .tb-header-toggle:hover { color: #edf2f7; }
+body.dark-mode .tb-header-details { color: #ccc; }
+body.dark-mode .tb-direction-header { background: #1c1c28; color: #edf2f7; }
+body.dark-mode .tb-trip-table thead th { background: #1e1e2e; color: #a0aec0; border-color: #2d2d3d; }
+body.dark-mode .tb-trip-table th,
+body.dark-mode .tb-trip-table td { border-color: #2d2d3d; color: #ddd; }
+
 /* ===========================================================
    Feature Settings — Attribute Summary entry button
    =========================================================== */
