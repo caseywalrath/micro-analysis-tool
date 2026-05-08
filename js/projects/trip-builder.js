@@ -637,13 +637,13 @@
           escapeHTML(directionSummary(svc)) + ' &middot; ' +
           svc.patterns.length + ' pattern' + (svc.patterns.length === 1 ? '' : 's') +
         '</div>' +
-        buildSummaryTableHTML(svc) +
         '<div class="tb-header-actions">' +
           '<button id="tbEditBtn" type="button" class="tb-edit-btn" title="Edit service attributes">' +
             '&#9998; Edit' +
           '</button>' +
         '</div>' +
         '<div class="tb-header-details' + (_detailsOpen ? ' tb-open' : '') + '">' +
+          buildSummaryTableHTML(svc) +
           '<ul>' + detailsHTML + '</ul>' +
         '</div>' +
       '</div>';
