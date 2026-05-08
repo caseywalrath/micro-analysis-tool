@@ -4574,6 +4574,27 @@ body.dark-mode .tb-trip-table thead th { background: #1e1e2e; color: #a0aec0; bo
 body.dark-mode .tb-trip-table th,
 body.dark-mode .tb-trip-table td { border-color: #2d2d3d; color: #ddd; }
 
+/* Full-height layout: stretch the service list to fill the dialog */
+.tb-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+.tb-body .rf-section-row {
+  flex: 1;
+  align-items: stretch;
+  min-height: 0;
+}
+.tb-body .rf-settings-col {
+  display: flex;
+  flex-direction: column;
+}
+.tb-body .rf-feature-checklist {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+}
+
 /* ===========================================================
    Feature Settings — Attribute Summary entry button
    =========================================================== */
