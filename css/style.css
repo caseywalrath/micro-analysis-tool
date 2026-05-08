@@ -4574,6 +4574,113 @@ body.dark-mode .tb-trip-table thead th { background: #1e1e2e; color: #a0aec0; bo
 body.dark-mode .tb-trip-table th,
 body.dark-mode .tb-trip-table td { border-color: #2d2d3d; color: #ddd; }
 
+/* Service summary table inside the header */
+.tb-summary {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 0;
+  font-size: 11px;
+}
+.tb-summary thead th {
+  text-align: left;
+  font-weight: var(--weight-semibold, 600);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 10px;
+  padding: 4px 8px 3px;
+  border-bottom: 1px solid #e5e5e5;
+}
+.tb-summary tbody td {
+  padding: 4px 8px;
+  border-bottom: 1px solid #f0f0f0;
+  color: #333;
+  font-variant-numeric: tabular-nums;
+  vertical-align: top;
+}
+.tb-summary tbody tr:last-child td { border-bottom: none; }
+.tb-summary .tb-summary-day-label {
+  font-weight: var(--weight-medium, 500);
+  color: #555;
+  white-space: nowrap;
+}
+.tb-summary .tb-summary-empty td {
+  color: var(--muted);
+}
+
+/* Header action row (Edit button) */
+.tb-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.tb-edit-btn {
+  background: #fff;
+  border: 1px solid var(--border, #ddd);
+  border-radius: 3px;
+  font-size: 11px;
+  padding: 3px 10px;
+  cursor: pointer;
+  color: #2c3e50;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  line-height: 1.2;
+}
+.tb-edit-btn:hover {
+  background: #f5f9ff;
+  border-color: #2b6cb0;
+  color: #2b6cb0;
+}
+
+/* Edit mini-popup body */
+.tb-edit-popup-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tb-edit-block { padding: 2px 0; }
+.tb-edit-block-sep {
+  border-top: 1px dashed var(--border, #ddd);
+  padding-top: 10px;
+  margin-top: 4px;
+}
+.tb-edit-pattern-hdr {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: #2c3e50;
+}
+.tb-edit-bands-label {
+  font-size: 10px;
+  font-weight: var(--weight-semibold, 600);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 6px 0 2px;
+}
+
+/* Dark mode for the new bits */
+body.dark-mode .tb-summary thead th { color: #a0aec0; border-color: #2d2d3d; }
+body.dark-mode .tb-summary tbody td { color: #ddd; border-color: #2d2d3d; }
+body.dark-mode .tb-summary .tb-summary-day-label { color: #ccc; }
+body.dark-mode .tb-summary .tb-summary-empty td { color: #888; }
+body.dark-mode .tb-edit-btn {
+  background: #1c1c28;
+  border-color: #3a3a4a;
+  color: #edf2f7;
+}
+body.dark-mode .tb-edit-btn:hover {
+  background: #2a2a3a;
+  border-color: #5a8fd6;
+  color: #b8cef5;
+}
+body.dark-mode .tb-edit-block-sep { border-top-color: #3a3a4a; }
+body.dark-mode .tb-edit-pattern-hdr { color: #edf2f7; }
+
 /* Full-height layout: stretch the service list to fill the dialog */
 .tb-body {
   display: flex;

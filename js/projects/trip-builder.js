@@ -464,6 +464,137 @@
     }
   }
 
+  // Resolve the underlying feature object for a Service pattern. Used by the
+  // Edit popup, which mutates `feature.properties.attributes` directly.
+  function getFeatureFromPattern(p) {
+    if (!p) return null;
+    var arr = (p.featureType === "route") ? App.routes : App.lines;
+    return (arr && arr[p.featureIndex]) || null;
+  }
+
+  // Merge sorted intervals; "touch or overlap" → join. Returns minutes-pair list.
+  function mergeIntervals(intervals) {
+    if (!intervals.length) return [];
+    intervals.sort(function (a, b) { return a.from - b.from; });
+    var out = [intervals[0]];
+    for (var i = 1; i < intervals.length; i++) {
+      var prev = out[out.length - 1];
+      var cur  = intervals[i];
+      if (cur.from <= prev.to) {
+        prev.to = Math.max(prev.to, cur.to);
+      } else {
+        out.push(cur);
+      }
+    }
+    return out;
+  }
+
+  // Build the per-day rollup used by the summary table.
+  // For each day: Span string, Frequency string, Run Time string, Avg Speed string.
+  // For paired services, values are combined across patterns (slash-joined when
+  // they differ; single value when they match).
+  function summarizeService(svc) {
+    var DAYS = ["weekday", "saturday", "sunday"];
+    var out = {};
+
+    // Run Time + Avg Speed are pattern attributes (not day-specific). Compute once.
+    var rtVals = [];
+    var spVals = [];
+    svc.patterns.forEach(function (p) {
+      var rt = oneWayRuntimeMin(p);
+      var src = runtimeSource(p);
+      if (rt > 0) {
+        var rtStr = Math.round(rt) + " min";
+        if (src === "speed") rtStr = "~" + rtStr;
+        rtVals.push(rtStr);
+      } else {
+        rtVals.push("—");
+      }
+      spVals.push(p.avgSpeed > 0 ? (Math.round(p.avgSpeed * 10) / 10) + " mph" : "—");
+    });
+    var rtAllSame = rtVals.every(function (v) { return v === rtVals[0]; });
+    var spAllSame = spVals.every(function (v) { return v === spVals[0]; });
+    var runTimeStr  = rtAllSame ? rtVals[0] : rtVals.join(" / ");
+    var avgSpeedStr = spAllSame ? spVals[0] : spVals.join(" / ");
+
+    DAYS.forEach(function (day) {
+      // Collect intervals + headways across all patterns for this day.
+      var intervals = [];
+      var freqs = [];
+      svc.patterns.forEach(function (p) {
+        var bands = (p.service && Array.isArray(p.service[day])) ? p.service[day] : [];
+        bands.forEach(function (b) {
+          var fromMin = parseHHMMtoMin(b && b.from);
+          var toMin   = parseHHMMtoMin(b && b.to);
+          if (isFinite(fromMin) && isFinite(toMin)) {
+            // Midnight wrap: extend `to` by 1440 so merge math works.
+            if (toMin <= fromMin) toMin += 1440;
+            intervals.push({ from: fromMin, to: toMin });
+          }
+          var f = parseFloat(b && b.frequency);
+          if (isFinite(f) && f > 0 && freqs.indexOf(f) < 0) freqs.push(f);
+        });
+      });
+
+      var spanStr = "";
+      if (intervals.length) {
+        var merged = mergeIntervals(intervals);
+        spanStr = merged.map(function (iv) {
+          return formatMin(iv.from) + " – " + formatMin(iv.to);
+        }).join(", ");
+      }
+
+      var freqStr = "";
+      if (freqs.length) {
+        freqs.sort(function (a, b) { return a - b; });
+        freqStr = freqs.join("/") + " min";
+      }
+
+      out[day] = {
+        hasService: intervals.length > 0,
+        span:       spanStr   || "—",
+        frequency:  freqStr   || "—",
+        runTime:    runTimeStr,
+        avgSpeed:   avgSpeedStr
+      };
+    });
+
+    return out;
+  }
+
+  function buildSummaryTableHTML(svc) {
+    var rollup = summarizeService(svc);
+    var rows = [
+      { key: "weekday",  label: "Weekday"  },
+      { key: "saturday", label: "Saturday" },
+      { key: "sunday",   label: "Sunday"   }
+    ];
+    var html =
+      '<table class="tb-summary">' +
+        '<thead><tr>' +
+          '<th></th>' +
+          '<th>Span</th>' +
+          '<th>Frequency</th>' +
+          '<th>Run Time</th>' +
+          '<th>Avg Speed</th>' +
+        '</tr></thead>' +
+        '<tbody>';
+    rows.forEach(function (r) {
+      var d = rollup[r.key];
+      var rowCls = d.hasService ? "" : " class=\"tb-summary-empty\"";
+      html +=
+        '<tr' + rowCls + '>' +
+          '<td class="tb-summary-day-label">' + r.label + '</td>' +
+          '<td>' + escapeHTML(d.span)      + '</td>' +
+          '<td>' + escapeHTML(d.frequency) + '</td>' +
+          '<td>' + escapeHTML(d.runTime)   + '</td>' +
+          '<td>' + escapeHTML(d.avgSpeed)  + '</td>' +
+        '</tr>';
+    });
+    html += '</tbody></table>';
+    return html;
+  }
+
   function renderServiceHeader(svc) {
     var hdr = document.getElementById("tbHeader");
     if (!hdr) return;
@@ -506,6 +637,12 @@
           escapeHTML(directionSummary(svc)) + ' &middot; ' +
           svc.patterns.length + ' pattern' + (svc.patterns.length === 1 ? '' : 's') +
         '</div>' +
+        buildSummaryTableHTML(svc) +
+        '<div class="tb-header-actions">' +
+          '<button id="tbEditBtn" type="button" class="tb-edit-btn" title="Edit service attributes">' +
+            '&#9998; Edit' +
+          '</button>' +
+        '</div>' +
         '<div class="tb-header-details' + (_detailsOpen ? ' tb-open' : '') + '">' +
           '<ul>' + detailsHTML + '</ul>' +
         '</div>' +
@@ -515,6 +652,178 @@
     if (toggle) toggle.addEventListener("click", function () {
       _detailsOpen = !_detailsOpen;
       renderServiceHeader(svc);
+    });
+    var editBtn = document.getElementById("tbEditBtn");
+    if (editBtn) editBtn.addEventListener("click", function () {
+      openEditPopup(svc, editBtn);
+    });
+  }
+
+  // ---- Truncated Edit popup ----
+  // Mounts inside the shared #fp-mini-popup (App.openMiniPopup). Each pattern
+  // gets its own block: Direction select, Run time, Avg speed, time-bands
+  // editor (App.buildServiceScheduleEditor). All inputs mutate
+  // feature.properties.attributes directly. On every change, save to cache,
+  // mark stale, and re-render the header summary live. On popup close, fire
+  // App.notifyProject() so other modules pick up the changes.
+
+  var DIRECTION_OPTIONS = [
+    "Both", "NB", "SB", "EB", "WB", "Inbound", "Outbound", "Loop", "CW", "CCW"
+  ];
+
+  function buildEditPatternBlock(pattern, isFirst) {
+    var feature = getFeatureFromPattern(pattern);
+    if (!feature) return null;
+    if (!feature.properties.attributes) feature.properties.attributes = {};
+    var attrs = feature.properties.attributes;
+
+    var block = document.createElement("div");
+    block.className = "tb-edit-block" + (isFirst ? "" : " tb-edit-block-sep");
+
+    // Section header: pattern name + direction badge
+    var hdr = document.createElement("div");
+    hdr.className = "tb-edit-pattern-hdr";
+    hdr.innerHTML =
+      '<span class="tb-pat-color" style="background:' + escapeAttr(pattern.color) + ';"></span>' +
+      '<b>' + escapeHTML(pattern.name) + '</b>' +
+      ' <span class="tiny" style="color:var(--muted);">(' + escapeHTML(pattern.direction) + ')</span>';
+    block.appendChild(hdr);
+
+    // Direction
+    var dirRow = document.createElement("div");
+    dirRow.className = "fp-attr-row";
+    var dirLabel = document.createElement("label");
+    dirLabel.className = "fp-attr-label";
+    dirLabel.textContent = "Direction";
+    var dirSel = document.createElement("select");
+    dirSel.className = "fp-attr-input";
+    DIRECTION_OPTIONS.forEach(function (opt) {
+      var o = document.createElement("option");
+      o.value = opt;
+      o.textContent = opt;
+      if ((attrs.direction || "Both") === opt) o.selected = true;
+      dirSel.appendChild(o);
+    });
+    dirSel.addEventListener("change", function () {
+      attrs.direction = dirSel.value;
+    });
+    dirRow.appendChild(dirLabel);
+    dirRow.appendChild(dirSel);
+    block.appendChild(dirRow);
+
+    // Run time
+    var rtRow = document.createElement("div");
+    rtRow.className = "fp-attr-row";
+    var rtLabel = document.createElement("label");
+    rtLabel.className = "fp-attr-label";
+    rtLabel.textContent = "Run time";
+    var rtInp = document.createElement("input");
+    rtInp.type = "number";
+    rtInp.className = "fp-attr-input";
+    rtInp.placeholder = "min";
+    rtInp.min = 0;
+    rtInp.step = "any";
+    if (attrs.runTime != null && attrs.runTime !== "") rtInp.value = attrs.runTime;
+    rtInp.addEventListener("input", function () {
+      attrs.runTime = (rtInp.value === "") ? null : parseFloat(rtInp.value);
+    });
+    var rtUnit = document.createElement("span");
+    rtUnit.className = "tiny";
+    rtUnit.style.color = "var(--muted)";
+    rtUnit.textContent = "min";
+    rtRow.appendChild(rtLabel);
+    rtRow.appendChild(rtInp);
+    rtRow.appendChild(rtUnit);
+    block.appendChild(rtRow);
+
+    // Avg speed
+    var spRow = document.createElement("div");
+    spRow.className = "fp-attr-row";
+    var spLabel = document.createElement("label");
+    spLabel.className = "fp-attr-label";
+    spLabel.textContent = "Avg speed";
+    var spInp = document.createElement("input");
+    spInp.type = "number";
+    spInp.className = "fp-attr-input";
+    spInp.placeholder = "mph";
+    spInp.min = 0;
+    spInp.step = "any";
+    if (attrs.avgSpeed != null && attrs.avgSpeed !== "") spInp.value = attrs.avgSpeed;
+    spInp.addEventListener("input", function () {
+      attrs.avgSpeed = (spInp.value === "") ? null : parseFloat(spInp.value);
+    });
+    var spUnit = document.createElement("span");
+    spUnit.className = "tiny";
+    spUnit.style.color = "var(--muted)";
+    spUnit.textContent = "mph";
+    spRow.appendChild(spLabel);
+    spRow.appendChild(spInp);
+    spRow.appendChild(spUnit);
+    block.appendChild(spRow);
+
+    // Time bands editor (shared widget)
+    var bandsLabel = document.createElement("div");
+    bandsLabel.className = "tb-edit-bands-label";
+    bandsLabel.textContent = "Time Bands";
+    block.appendChild(bandsLabel);
+    if (typeof App.buildServiceScheduleEditor === "function") {
+      var bandsEditor = App.buildServiceScheduleEditor(feature);
+      if (bandsEditor) block.appendChild(bandsEditor);
+    } else {
+      var fallback = document.createElement("div");
+      fallback.className = "tiny";
+      fallback.style.color = "var(--muted)";
+      fallback.textContent = "Time bands editor unavailable.";
+      block.appendChild(fallback);
+    }
+
+    return block;
+  }
+
+  function openEditPopup(svc, anchorBtn) {
+    if (!svc || !svc.patterns || !svc.patterns.length) return;
+    if (typeof App.openMiniPopup !== "function") return;
+
+    var content = document.createElement("div");
+    content.className = "tb-edit-popup-body";
+
+    svc.patterns.forEach(function (p, idx) {
+      var block = buildEditPatternBlock(p, idx === 0);
+      if (block) content.appendChild(block);
+    });
+
+    // Live re-render of the trip-builder summary on every input/change inside
+    // the popup. Also save to cache and mark trips stale.
+    function onAttrChange() {
+      if (App.cache) App.cache.save();
+      if (_tripsByService[svc.key]) {
+        _stale = true;
+        setStatus("Attributes changed — re-generate to refresh.", "warn");
+      }
+      // Re-resolve the service from current feature state so derived fields
+      // (length, color, validation) reflect the edits — patterns hold a
+      // snapshot, so a refresh is needed.
+      if (isPopupVisible()) {
+        var refreshed = buildServicesFromFeatures();
+        _services = refreshed;
+        var current = null;
+        for (var i = 0; i < refreshed.length; i++) {
+          if (refreshed[i].key === svc.key) { current = refreshed[i]; break; }
+        }
+        if (current) renderServiceHeader(current);
+      }
+    }
+    content.addEventListener("input",  onAttrChange);
+    content.addEventListener("change", onAttrChange);
+
+    App.openMiniPopup({
+      title:   "Edit — " + svc.name,
+      content: content,
+      anchor:  anchorBtn,
+      onClose: function () {
+        // Broadcast to other modules (Feature Panel, Attribute Summary, etc.).
+        if (typeof App.notifyProject === "function") App.notifyProject();
+      }
     });
   }
 

@@ -1462,6 +1462,25 @@
     });
   };
 
+  // Generic mini-popup opener — any module can mount its own content node in
+  // the shared `#fp-mini-popup` singleton. Same dialog as the time-bands and
+  // route-picker mini-popups (320px, draggable header, Escape closes).
+  // `opts` = { title, content (DOM node), anchor (DOM element), onClose (fn) }.
+  App.openMiniPopup = function (opts) { openMiniPopup(opts || {}); };
+
+  // Close the mini-popup if it's open. Safe to call when not open.
+  App.closeMiniPopup = function () { closeMiniPopup(); };
+
+  // Build the Weekday / Saturday / Sunday time-bands editor for a route/line
+  // feature and return the DOM node. Same widget mounted by the per-feature
+  // attribute popup and `App.openTimeBandsPopup` — modules embedding their own
+  // attribute editors should use this rather than reimplementing the bands UI.
+  App.buildServiceScheduleEditor = function (feature) {
+    if (!feature || !feature.properties) return null;
+    if (!feature.properties.attributes) feature.properties.attributes = {};
+    return buildServiceSchedule(feature.properties.attributes);
+  };
+
   // Build a `.fp-attr-overrides` container with the per-feature override icons
   // (opacity / buffer / width / offset / reset). Returns null for label/textbox.
   App.buildOverrideIcons = function (featureType, feature) {
