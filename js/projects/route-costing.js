@@ -31,7 +31,7 @@
 
   var _settings        = Object.assign({}, DEFAULT_SETTINGS);
   var _pendingSettings = null;    // temp copy while Settings modal is open
-  var _lastServices    = null;    // last-assembled Service[] from buildServicesFromFeatures()
+  var _lastServices    = null;    // last-assembled Service[] from App.buildTransitServices()
   var _lastResult      = null;    // { services:[...], summary:{...}, settings } (Step 5)
   var _stale           = false;
   var _running         = false;
@@ -127,7 +127,7 @@
       return;
     }
 
-    var validServices = (_lastServices || []).filter(function (s) { return !hasBlockingWarnings(s); });
+    var validServices = (_lastServices || []).filter(function (s) { return !App.hasBlockingWarnings(s); });
 
     var html = "";
     _pendingInterlines.forEach(function (grp, gidx) {
@@ -286,153 +286,9 @@
   }
 
   // ---- Service assembly ----
-
-  // Valid direction opposites for 2-pattern Services (sorted, "|"-joined key).
-  var VALID_PAIR_KEYS = {
-    "NB|SB": true,
-    "EB|WB": true,
-    "Inbound|Outbound": true,
-    "CCW|CW": true
-  };
-
-  // Single-pattern directions that represent a complete cycle.
-  var SOLO_OK_DIRECTIONS = { "Both": true, "Loop": true, "CW": true, "CCW": true };
-
-  function collectPattern(feature, type, idx) {
-    var attrs = (feature.properties && feature.properties.attributes) || {};
-    var name  = (feature.properties && feature.properties.name) ||
-                (type.charAt(0).toUpperCase() + type.slice(1) + " " + (idx + 1));
-    var lengthMi = 0;
-    try { lengthMi = (typeof turf !== "undefined") ? turf.length(feature, { units: "miles" }) : 0; }
-    catch (e) { lengthMi = 0; }
-    var serviceId = attrs.serviceId ? String(attrs.serviceId).trim() : "";
-    return {
-      featureType:  type,
-      featureIndex: idx,
-      name:         name,
-      direction:    attrs.direction || "Both",
-      avgSpeed:     parseFloat(attrs.avgSpeed) || 0,
-      runTime:      parseFloat(attrs.runTime)  || 0,   // one-way run time in minutes (manual)
-      serviceId:    serviceId || null,
-      lengthMiles:  lengthMi,
-      service:      attrs.service || null
-    };
-  }
-
-  function buildServicesFromFeatures() {
-    var services = [];
-    var buckets  = {};  // serviceId -> { name, patterns:[] }
-
-    function add(feature, type, idx) {
-      var p = collectPattern(feature, type, idx);
-      if (p.serviceId) {
-        if (!buckets[p.serviceId]) buckets[p.serviceId] = { name: p.serviceId, patterns: [] };
-        buckets[p.serviceId].patterns.push(p);
-      } else {
-        services.push({
-          key:      "solo-" + type + "-" + idx,
-          name:     p.name,
-          isGroup:  false,
-          patterns: [p],
-          warnings: []
-        });
-      }
-    }
-
-    (App.routes || []).forEach(function (f, i) { add(f, "route", i); });
-    (App.lines  || []).forEach(function (f, i) { add(f, "line",  i); });
-
-    Object.keys(buckets).sort().forEach(function (k) {
-      var b = buckets[k];
-      services.push({
-        key:      "service-" + k,
-        name:     b.name,
-        isGroup:  true,
-        patterns: b.patterns,
-        warnings: []
-      });
-    });
-
-    services.forEach(validateService);
-    return services;
-  }
-
-  function validateService(svc) {
-    var ps = svc.patterns;
-
-    // Hard error: 3+ patterns assigned to one Service
-    if (ps.length >= 3) {
-      svc.warnings.push({
-        level: "error",
-        msg: ps.length + " patterns assigned to this Service — v1 supports max 2. Split into separate Services."
-      });
-      return; // stop; other validations don't matter when the Service is invalid
-    }
-
-    // 2-pattern: must be valid opposites
-    if (ps.length === 2) {
-      var key = [ps[0].direction, ps[1].direction].sort().join("|");
-      if (!VALID_PAIR_KEYS[key]) {
-        svc.warnings.push({
-          level: "error",
-          msg: "Directions not valid opposites (" + ps[0].direction + " + " + ps[1].direction +
-               "). Valid pairs: NB+SB, EB+WB, Inbound+Outbound, CW+CCW."
-        });
-      }
-    }
-
-    // 1-pattern: direction must represent a full cycle
-    if (ps.length === 1 && !SOLO_OK_DIRECTIONS[ps[0].direction]) {
-      svc.warnings.push({
-        level: "error",
-        msg: "Single-direction pattern (" + ps[0].direction + ") has no pair. " +
-             "Set direction to Both, Loop, CW, or CCW, or pair with its opposite under one Service."
-      });
-    }
-
-    // Missing runtime input — check whichever mode is active
-    if (_settings.runtimeMode === "runTime") {
-      ps.forEach(function (p) {
-        if (!(p.runTime > 0)) {
-          svc.warnings.push({ level: "error",
-            msg: "\"" + p.name + "\" is missing Run time (Route Costing is in Run Time mode)." });
-        }
-      });
-    } else {
-      ps.forEach(function (p) {
-        if (!(p.avgSpeed > 0)) {
-          svc.warnings.push({ level: "error",
-            msg: "\"" + p.name + "\" is missing Avg speed." });
-        }
-      });
-    }
-
-    // No service bands defined on any pattern
-    var hasAnyBand = ps.some(function (p) {
-      var s = p.service || {};
-      var hasBandWithHeadway = function (arr) {
-        return Array.isArray(arr) && arr.some(function (b) {
-          var f = parseFloat(b && b.frequency);
-          return isFinite(f) && f > 0;
-        });
-      };
-      return hasBandWithHeadway(s.weekday) || hasBandWithHeadway(s.saturday) || hasBandWithHeadway(s.sunday);
-    });
-    if (!hasAnyBand) {
-      svc.warnings.push({
-        level: "error",
-        msg: "No service bands with a headway defined. Add bands via the Attributes popup."
-      });
-    }
-  }
-
-  function directionSummary(svc) {
-    return svc.patterns.map(function (p) { return p.direction; }).join(" + ");
-  }
-
-  function hasBlockingWarnings(svc) {
-    return svc.warnings.some(function (w) { return w.level === "error"; });
-  }
+  // Lives in js/core/service-assembly.js — call App.buildTransitServices({ runtimeMode })
+  // for service assembly, and App.directionSummary / App.hasBlockingWarnings
+  // for the helpers.
 
   // ---- Checklist rendering ----
 
@@ -447,7 +303,7 @@
       prev[prevBoxes[i].getAttribute("data-key")] = prevBoxes[i].checked;
     }
 
-    var services = buildServicesFromFeatures();
+    var services = App.buildTransitServices({ runtimeMode: _settings.runtimeMode });
     _lastServices = services;
 
     if (!services.length) {
@@ -458,7 +314,7 @@
 
     var html = "";
     services.forEach(function (svc) {
-      var blocked = hasBlockingWarnings(svc);
+      var blocked = App.hasBlockingWarnings(svc);
       var checkedAttr = (prev[svc.key] === false) ? "" : "checked";
       var warnIcon = "";
       if (svc.warnings.length) {
@@ -476,7 +332,7 @@
             '<span class="rc-service-name">' + escapeHTML(svc.name) + warnIcon + '</span>' +
             '<span class="rc-service-meta">' +
               typeBadge + ' ' +
-              escapeHTML(directionSummary(svc)) + ' &middot; ' +
+              escapeHTML(App.directionSummary(svc)) + ' &middot; ' +
               svc.patterns.length + ' pattern' + (svc.patterns.length === 1 ? '' : 's') +
             '</span>' +
           '</span>' +
@@ -558,14 +414,14 @@
   // Compute one Service's full cost picture. Returns a result object.
   // If the Service has blocking warnings, returns { skipped:true, warnings, name }.
   function computeService(svc, settings) {
-    if (hasBlockingWarnings(svc)) {
+    if (App.hasBlockingWarnings(svc)) {
       return {
         name: svc.name,
         key: svc.key,
         isGroup: svc.isGroup,
         skipped: true,
         warnings: svc.warnings,
-        directionSummary: directionSummary(svc),
+        directionSummary: App.directionSummary(svc),
         patternCount: svc.patterns.length
       };
     }
@@ -592,7 +448,7 @@
 
     DAYS.forEach(function (day) {
       svc.patterns.forEach(function (p, pi) {
-        var bands = (p.service && Array.isArray(p.service[day])) ? p.service[day] : [];
+        var bands = App.getEffectiveServiceBands(p.service, day);
         bands.forEach(function (b) {
           var headway = parseFloat(b && b.frequency);
           if (!(headway > 0)) return;  // skip blank/0 headways (= "no service in this band")
@@ -706,7 +562,7 @@
       skipped:          false,
       warnings:         svc.warnings,
       patternCount:     svc.patterns.length,
-      directionSummary: directionSummary(svc),
+      directionSummary: App.directionSummary(svc),
 
       rtMiles:          rt.rtMiles,
       oneWayHrs:        rt.oneWays,
