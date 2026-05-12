@@ -1,6 +1,8 @@
 # Code Review — 2026-05-12
 
 > **Verification pass — 2026-05-12 (this session):** Each finding below was independently re-checked against the current source. A `**Verification:**` line has been added to every finding with a CONFIRMED / PARTIAL / DISAGREE label and any nuance worth recording. No code was changed in this pass — verification only.
+>
+> **Implementation pass — 2026-05-12 (later):** Sessions 1–5 of the fix sequence have shipped on branch `claude/trivial-correctness-wins-cz18i`. A `**Status:**` line has been added to every addressed finding with the session, commit SHA, and a one-line summary. Findings without a `**Status:**` line are still open (Sessions 6–8).
 
 ## Summary
 This branch keeps the project within the documented no-build, browser-only architecture, but the highest-risk issues are analytical correctness and recovery from bad imported state. The new Trip Builder and Route Costing work added another copy of service assembly and service-band semantics, and that duplication has already produced divergent behavior. The cache/import path still trusts too much of the session file before mutating live state, which conflicts with the stated need for recoverability. The most likely next user-visible bugs are silent wrong Sunday service outputs, wrong ACS/TPI numbers that look plausible, and import-driven XSS or browser freezes.
@@ -13,6 +15,7 @@ This branch keeps the project within the documented no-build, browser-only archi
 **Why it matters:** A user can explicitly choose “Mirror Saturday” and then get zero Sunday/Holiday trips, zero Sunday revenue hours, and zero Sunday annual cost in downstream results. This is a silent wrong-number bug because the UI says the Sunday schedule exists, while the analysis modules treat it as empty.
 **Trigger:** In a route or line Attributes popup, add Saturday bands, check “Mirror Saturday,” then run Route Costing or generate trips in Trip Builder.
 **Verification: CONFIRMED.** `feature-attributes.js` only renders a read-only Saturday preview inside the Sunday section (lines 713–734); the `svc.sunday` array is never populated. `route-costing.js:595` reads `p.service[day]` directly with no mirror resolution, and `trip-builder.js:291` does the same. Either consumer will see Sunday bands as empty whenever the user toggled "Mirror Saturday".
+**Status: IMPLEMENTED in Session 4 (commit `9f2d42f`).** Extracted the shared service-assembly logic into a new `js/core/service-assembly.js` and added `App.getEffectiveServiceBands(service, day)` that resolves the mirror flag once. Rewired four raw-band read sites — `route-costing.js` `computeService` and `trip-builder.js`'s `generateTripsForPattern`, `summarizeService`, and `listHeadways` — to use the helper. Attribute Summary's bands badge already mirror-resolves via `App.buildTimeBandsBadge`, so no UI change was needed there.
 
 ### Weight averaged ACS values by overlap area, not coverage fraction
 **Where:** `js/core/census.js:294`
@@ -34,6 +37,7 @@ This branch keeps the project within the documented no-build, browser-only archi
 **Why it matters:** A bad session file can leave the app half-initialized and can destroy the user’s current in-memory work even though the file was not actually usable. The import catch block reports invalid JSON for any thrown error, which also hides the real failure mode from a non-coder maintainer.
 **Trigger:** Load a JSON state file whose `points`, `lines`, `routes`, or `polygons` fields are arrays but contain malformed feature geometry, missing `properties`, invalid coordinates, or values that break buffer rebuild/render code.
 **Verification: CONFIRMED.** `cache.js:359–381` only checks top-level `Array.isArray()`. `applyState()` clears the live arrays in-place (lines 115–120) *before* pushing imported features and calling `rebuildBuffers` / render functions, any of which can throw on malformed `geometry.coordinates` or missing `properties`. The import `try/catch` around `applyState` reports a generic "Invalid JSON" message regardless of the real failure, masking the actual cause.
+**Status: IMPLEMENTED in Session 5 (commit `a50601c`).** Added `App.validateSessionState(state)` — deep validator that walks every feature, checks `type === "Feature"`, plain-object `properties` and `geometry`, geometry-type-specific coordinate validity (Point pair; LineString ≥ 2 pairs; Polygon ≥ 1 ring of ≥ 3 pairs), 5000-feature-per-array size cap, and basic `moduleState` / `mapCenter` / `mapZoom` shape. Wired into `importFromFile`, `importFullState`, and `restore()`. Validator also runs at the top of `applyState` as defense in depth, so live arrays are never cleared on invalid input. Both import-path catch blocks now surface `parseErr.message` instead of always reporting "Invalid JSON". Chose deep pre-validation over the temp-swap-then-replace alternative because the in-place clear+push pattern is intentional (preserves external references to the live arrays).
 
 ## High
 
@@ -43,6 +47,7 @@ This branch keeps the project within the documented no-build, browser-only archi
 **Why it matters:** Negative sentinel values can be treated as real population, income, denominator, or factor values. That can produce negative aggregates, inverted percentages, or distorted TPI quintiles without any visible error.
 **Trigger:** Request an ACS variable/geography/year combination where the Census response contains a negative placeholder such as a suppressed, unavailable, or not-applicable estimate.
 **Verification: CONFIRMED.** `census.js:143–144` (single-variable fetch) and `census.js:192–193` (county fetch) only check `Number.isFinite(val)`. `tpi-scoring.js:312–313` (batch) does the same. By contrast, `census.js:240` correctly gates with `Number.isFinite(val) && val >= 0` and even comments the sentinel rationale — proving the team knows the rule and applied it inconsistently.
+**Status: IMPLEMENTED in Session 1 (commit `ebabdba`).** Tightened the three entry points to mirror `fetchACSMultiValues`: `census.js:144` and `:193` and `tpi-scoring.js:313` now skip values with `!Number.isFinite(val) || val < 0`. Each gate carries a short sentinel-rationale comment.
 
 ### Escape LODES file metadata before writing it with `innerHTML`
 **Where:** `js/core/lodes.js:84`, `js/core/lodes.js:111`
@@ -50,6 +55,7 @@ This branch keeps the project within the documented no-build, browser-only archi
 **Why it matters:** A crafted session file can inject HTML or script into the app origin through the LODES loaded-file list. This is an import-path XSS issue in exactly the untrusted JSON path the review prompt calls out.
 **Trigger:** Import a state JSON where `lodesData.meta.files[0].name` contains HTML such as an image tag with an event handler.
 **Verification: CONFIRMED.** `lodes.js:82–84` concatenates `f.stateAbbr`, `f.name`, and `f.nRows.toLocaleString()` directly into `infoEl.innerHTML`. `restoreLodesFromData()` at line 121 accepts `meta.files` from the imported session JSON without sanitizing.
+**Status: IMPLEMENTED in Session 2 (commit `6b5f97a`).** Added `App.escapeHTML` and `App.escapeAttr` to `js/core/utils.js` (canonical 5-replace form, including the single-quote replacement that older module-local helpers miss) and applied `App.escapeHTML` to `f.stateAbbr`, `f.name`, and `f.nRows.toLocaleString()` in `setLodesLoadedUI`. A malicious session JSON's LODES file metadata now renders as visible text.
 
 ### Escape GTFS ZIP entry names before rendering the file list
 **Where:** `js/projects/gtfs.js:103`, `js/projects/gtfs.js:548`
@@ -57,6 +63,7 @@ This branch keeps the project within the documented no-build, browser-only archi
 **Why it matters:** A malicious GTFS ZIP can execute HTML or script when the GTFS module lists feed files. Restored GTFS data has the same issue because `restoreGTFSFromData()` accepts object keys as file names.
 **Trigger:** Load a GTFS ZIP with a `.txt` entry whose base name contains HTML, or import a state JSON with a malicious `gtfsData` key.
 **Verification: CONFIRMED.** `gtfs.js:635–639` writes `'<span class="gtfs-file-name">' + fname + '</span>'` directly into `btn.innerHTML`. `fname` originates from `path.split("/").pop()` at line 95 (ZIP load) or from `Object.keys(serialized)` at line 147 (session restore) — neither path escapes. The module already has a private `escapeHTML()` helper used elsewhere; it just isn't applied here.
+**Status: IMPLEMENTED in Session 2 (commit `6b5f97a`).** Applied `App.escapeHTML(fname)` at the `renderFileList` sink. Collapsed the module-local `escHtml` into a thin delegate on `App.escapeHTML` so the other 11 in-module callsites also get the upgraded escaping (single-quote handling) without callsite churn.
 
 ### Remove GTFS layer event handlers when replacing GTFS layers
 **Where:** `js/projects/gtfs.js:219`, `js/projects/gtfs.js:276`, `js/projects/gtfs.js:376`
@@ -64,6 +71,7 @@ This branch keeps the project within the documented no-build, browser-only archi
 **Why it matters:** Loading or restoring GTFS feeds repeatedly accumulates duplicate event handlers. The observable result is duplicate hover/click behavior, repeated context actions, and retained closures over old GTFS state.
 **Trigger:** Load a GTFS feed, clear it or load another one, then hover, click, or right-click the GTFS shapes/stops layer.
 **Verification: CONFIRMED.** `wireHoverEvents()` (gtfs.js:389–) registers fresh anonymous handlers via `map.on(...)` on every `addMapLayers()` call. The comment at lines 384–387 asserts MapLibre auto-cleans listeners when a layer is removed — this is incorrect for layer-bound listeners; they remain attached to the map. Each reload of a feed adds another set, and old closures (over the previous `_gtfsData`/`_shapesFC`) stay reachable.
+**Status: IMPLEMENTED in Session 3 (commit `633e302`).** Added a module-local `_layerListeners` array. `wireHoverEvents` now routes every `map.on()` registration through a small `addListener(event, layerId, handler)` helper that records the triple. `removeMapLayers` iterates and `map.off()`s them before tearing down layers and sources. Replaced the misleading "auto-cleans" comment with an accurate description.
 
 ### Invalidate Trip Builder cached trips when index-based service keys change
 **Where:** `js/projects/trip-builder.js:20`, `js/projects/trip-builder.js:106`, `js/projects/trip-builder.js:421`
@@ -78,6 +86,7 @@ This branch keeps the project within the documented no-build, browser-only archi
 **Why it matters:** Quota or blocked-storage failures make the autosave contract false. A user can keep working for a long session, refresh the browser, and discover that recent work was never saved.
 **Trigger:** Create a large session that exceeds localStorage quota, use a browser/profile that blocks localStorage, or hit an implementation-specific storage error during the debounced save.
 **Verification: CONFIRMED.** `cache.js:251–256` swallows every error from `JSON.stringify` and `localStorage.setItem` into `console.warn`. There is no status-bar update, no quota check before serializing, and no UI affordance that "you are working without autosave." For a non-coder maintainer the silent failure is the worst case.
+**Status: IMPLEMENTED in Session 1 (commit `ebabdba`).** The catch block now additionally calls `App.setStatus("Autosave disabled — storage error or quota exceeded.")` (guarded with a `typeof` check) so the failure surfaces in the status bar on the next debounced save attempt.
 
 ## Medium
 
@@ -87,6 +96,7 @@ This branch keeps the project within the documented no-build, browser-only archi
 **Why it matters:** This is cross-file schema drift: one import path writes a field that the rest of the route/line UI does not consume. A user who copies GTFS shapes as editable lines will not see the expected mode value and downstream modules that expect `mode` will not receive it.
 **Trigger:** Load GTFS, right-click a shape, choose “Copy As Line,” then inspect the copied line in Attribute Summary or the per-feature Attributes popup.
 **Verification: CONFIRMED.** `gtfs.js:354` writes `attrs.lineMode = lineMode`, but `feature-attributes.js:33` defines the field as `mode` (used identically by `attribute-summary.js`). The copied line will display "Mode: —" in both surfaces and any module reading `attributes.mode` (none today, but RF/Title VI/Costing all read other attributes the same way) will miss the imported mode.
+**Status: IMPLEMENTED in Session 1 (commit `ebabdba`).** Renamed the schema field in `copyShapeToLine` from `attrs.lineMode` to `attrs.mode` so the copied line is read correctly by `feature-attributes.js`, `attribute-summary.js`, and any future consumer that reads `attributes.mode`. Local variable name kept as `lineMode` for readability.
 
 ### Bound imported Trip Builder headways before generating rows
 **Where:** `js/projects/trip-builder.js:270`, `js/projects/trip-builder.js:303`, `js/core/cache.js:374`
@@ -94,6 +104,7 @@ This branch keeps the project within the documented no-build, browser-only archi
 **Why it matters:** A malformed or malicious session can freeze the browser by generating millions of trip rows in the main thread. The app has no server-side recovery path, so this can make a project effectively unrecoverable until local state is cleared.
 **Trigger:** Import a state file with a service band such as `from: "00:00"`, `to: "24:00"`, and `frequency: 0.000001`, then click Generate Trips.
 **Verification: CONFIRMED.** `trip-builder.js:304` is `for (var t = fromMin; t < toMin; t += headway)` with no clamp, no `Math.max(headway, MIN)`, and no per-band trip ceiling. A fractional headway from imported JSON would loop into the millions of iterations on the main thread before the browser noticed.
+**Status: IMPLEMENTED in Session 1 (commit `ebabdba`).** `generateTripsForPattern` now clamps `headway` to `>= 1` (matching the UI minimum) and caps trip generation at `MAX_TRIPS_PER_BAND = 1500`, breaking out of the inner loop once that many trips are emitted for the band. A 1-min/24-hour band caps at 1500 trips instead of running unbounded.
 
 ### Preserve the undo contract for Attribute Summary edits
 **Where:** `js/core/feature-attributes.js:74`, `js/projects/attribute-summary.js:17`
@@ -101,6 +112,7 @@ This branch keeps the project within the documented no-build, browser-only archi
 **Why it matters:** Attribute Summary is a bulk-edit surface for service IDs, speeds, run times, names, colors, and notes. A mistaken edit there cannot be recovered through the same Undo controls users rely on elsewhere.
 **Trigger:** Change `serviceId`, `avgSpeed`, `runTime`, or a feature name in Attribute Summary, then try Undo/Ctrl+Z.
 **Verification: CONFIRMED.** `feature-attributes.js:66–69` (`saveAttrCache`) calls `App.undo.push()` before `App.cache.save()`. `attribute-summary.js:18–21` (`saveAndRefreshFeaturePanel`) calls `App.cache.save()` and `App.refreshFeaturePanel()` only — no undo push. Identical fields, two surfaces, divergent recoverability.
+**Status: IMPLEMENTED in Session 1 (commit `ebabdba`).** `saveAndRefreshFeaturePanel` now calls `App.undo.push()` (guarded with `App.undo && !App.undo.isRestoring()`) before `App.cache.save()`, mirroring `saveAttrCache` in `feature-attributes.js`. Attribute Summary cell edits are now reachable via Ctrl+Z.
 
 ### Validate required GTFS members before declaring a feed loaded
 **Where:** `js/projects/gtfs.js:24`, `js/projects/gtfs.js:103`, `js/projects/gtfs.js:132`
@@ -108,6 +120,7 @@ This branch keeps the project within the documented no-build, browser-only archi
 **Why it matters:** A malformed ZIP can look successfully loaded while producing empty map layers and incomplete table views. The user gets no clear reason why the feed cannot be used as a real GTFS feed.
 **Trigger:** Load a ZIP containing only `readme.txt`, only `shapes.txt`, or a partial set of GTFS files.
 **Verification: CONFIRMED.** `gtfs.js:96` accepts any `.txt` entry; the early-out at line 99 only fires when *zero* `.txt` files are present. The `REQUIRED` map at line 24 is consulted later only for the REQ/OPT badge rendering, not for accept/reject.
+**Status: IMPLEMENTED in Session 1 (commit `ebabdba`).** `loadGTFSFile` now consults the existing `REQUIRED` map between the empty-ZIP early-out and the parsing kickoff; if no required member is present, status is set to "GTFS error: ZIP contains no required GTFS files (stops, routes, trips, stop_times, calendar, calendar_dates, or agency)." and the feed is not registered.
 
 ## Low / Notes
 
@@ -134,7 +147,7 @@ This branch keeps the project within the documented no-build, browser-only archi
 
 Each session below is meant to be **one prompt's worth of work** — bounded scope, a small set of files, and an obvious self-check at the end. Sessions are ordered so each one either stands alone or builds on a helper introduced in an earlier session, which keeps individual diffs small and easy to review. Inside each session the items touch overlapping files, which makes the change set cohesive.
 
-### Session 1 — Trivial correctness wins (no new helpers required)
+### Session 1 — Trivial correctness wins (no new helpers required) — ✅ SHIPPED (commit `ebabdba`)
 **Files:** `js/core/census.js`, `js/projects/tpi-scoring.js`, `js/core/cache.js`, `js/projects/gtfs.js`, `js/projects/trip-builder.js`, `js/projects/attribute-summary.js`
 **Fixes:**
 - Filter Census negative sentinels (`val >= 0`) in `fetchACSValues`, `fetchACSCountyValues`, and `TPI.batchFetchACS` — mirror the existing pattern in `fetchACSMultiValues`.
@@ -145,21 +158,21 @@ Each session below is meant to be **one prompt's worth of work** — bounded sco
 - GTFS: gate "loaded" status on presence of at least one required member (`stops.txt`, `routes.txt`, etc.) and report the missing files when it isn't.
 **Why first:** Each fix is one to a few lines, isolated, behavior-preserving in the happy path, and produces immediately verifiable results. Good warm-up that clears six findings without touching shared helpers.
 
-### Session 2 — Escape helper + XSS fixes
+### Session 2 — Escape helper + XSS fixes — ✅ SHIPPED (commit `6b5f97a`)
 **Files:** `js/core/utils.js`, `js/core/lodes.js`, `js/projects/gtfs.js`
 **Fixes:**
 - Add `App.escapeHTML(s)` and `App.escapeAttr(s)` in `utils.js`.
 - Apply in `lodes.setLodesLoadedUI` (LODES file metadata) and `gtfs.renderFileList` (GTFS file list). Audit any other `innerHTML` writes that consume imported data.
 **Why second:** One small helper + two call sites. Pure addition with no semantic change to good-path data. Closes both XSS findings in a single batch.
 
-### Session 3 — GTFS event-listener lifecycle
+### Session 3 — GTFS event-listener lifecycle — ✅ SHIPPED (commit `633e302`)
 **Files:** `js/projects/gtfs.js`
 **Fixes:**
 - Stash registered hover/click handlers in a module-local array inside `wireHoverEvents` and explicitly `map.off(...)` them in `removeMapLayers` before adding new layers.
 - Remove the misleading comment at lines 384–387.
 **Why third:** Single file, narrow contract; the test is "load GTFS twice, hover, count popups." Worth doing while the gtfs.js context is fresh from Session 2.
 
-### Session 4 — Shared service-assembly + Sunday-mirror helper
+### Session 4 — Shared service-assembly + Sunday-mirror helper — ✅ SHIPPED (commit `9f2d42f`)
 **Files:** new `js/core/service-assembly.js`, `js/projects/route-costing.js`, `js/projects/trip-builder.js`, `index.html` (script tag)
 **Fixes:**
 - Extract `collectPattern`, `buildServicesFromFeatures`, `validateService`, `VALID_PAIR_KEYS`, `SOLO_OK_DIRECTIONS` into `App.buildTransitServices` (or equivalent) in `service-assembly.js`.
@@ -168,7 +181,7 @@ Each session below is meant to be **one prompt's worth of work** — bounded sco
 - Sanity-check that Attribute Summary's bands badge still renders correctly (it builds its summary from raw bands, so the badge can stay raw or be updated to use the helper — flag the decision).
 **Why fourth:** This is the biggest single refactor in the list, but it is behavior-preserving for non-mirror services and *automatically fixes* the Critical Sunday finding the moment the helper is wired in. Done after Sessions 1–3 so the unrelated nits aren't tangled in the same diff.
 
-### Session 5 — Cache import safety
+### Session 5 — Cache import safety — ✅ SHIPPED (commit `a50601c`)
 **Files:** `js/core/cache.js` (or new `js/core/session-schema.js`)
 **Fixes:**
 - Add `App.validateSessionState(state)` that walks each feature, checks GeoJSON shape (`type === "Feature"`, valid `geometry.coordinates`, `properties` is an object), bounds feature-array sizes, and validates `moduleState` payload types.
