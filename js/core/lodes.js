@@ -80,7 +80,9 @@
       if (clearBtn) clearBtn.style.display = "none";
     } else {
       infoEl.innerHTML = LODES_LOADED_FILES.map(function (f) {
-        return "<div>" + f.stateAbbr + " \u2014 " + f.name + " (" + f.nRows.toLocaleString() + " blocks)</div>";
+        return "<div>" + App.escapeHTML(f.stateAbbr) + " \u2014 " +
+               App.escapeHTML(f.name) + " (" +
+               App.escapeHTML(f.nRows.toLocaleString()) + " blocks)</div>";
       }).join("");
       if (clearBtn) clearBtn.style.display = "";
     }

@@ -640,7 +640,7 @@
       var btn = document.createElement("button");
       btn.className = "gtfs-file-item" + active;
       btn.innerHTML =
-        '<span class="gtfs-file-name">' + fname + '</span>' +
+        '<span class="gtfs-file-name">' + App.escapeHTML(fname) + '</span>' +
         '<span class="gtfs-file-badge' + (isReq ? ' req' : '') + '">' +
           (isReq ? "REQ" : "OPT") +
         '</span>';
@@ -727,13 +727,9 @@
     }
   }
 
-  function escHtml(s) {
-    return String(s)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
-  }
+  // Thin alias on App.escapeHTML so the 11 existing callsites in this module
+  // keep working while escaping is centralized in utils.js.
+  function escHtml(s) { return App.escapeHTML(s); }
 
   // ---- Module lifecycle ----
 

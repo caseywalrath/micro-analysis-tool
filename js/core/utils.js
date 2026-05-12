@@ -1,10 +1,10 @@
 // js/core/utils.js
 // Shared utility functions, variable metadata, and helpers.
 // No dependencies beyond PapaParse (loaded via CDN).
-// Exports: setStatus, parseCSV, fillSelect, enableSelect, toNumberSafe,
-//          normalizeTractGEOID, guessHeader, VAR_META, GROUP_INFO, getMeta,
-//          getCheckboxGroups, getCheckboxGroupMembers, getDenominator,
-//          setAggUI, formatValue
+// Exports: setStatus, escapeHTML, escapeAttr, parseCSV, fillSelect,
+//          enableSelect, toNumberSafe, normalizeTractGEOID, guessHeader,
+//          VAR_META, GROUP_INFO, getMeta, getCheckboxGroups,
+//          getCheckboxGroupMembers, getDenominator, setAggUI, formatValue
 
 (function () {
   var App = window.App = window.App || {};
@@ -35,6 +35,21 @@
     clearTimeout(_statusTimer);
     if (s) _statusTimer = setTimeout(function () { el.textContent = ""; }, 5000);
   }
+
+  // --- HTML escaping ---
+  // Single source of truth for innerHTML / template-string escaping.
+  // escapeAttr is an alias so callers can self-document the context they're
+  // escaping for; both names produce identical, attribute-safe output.
+
+  function escapeHTML(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+  function escapeAttr(s) { return escapeHTML(s); }
 
   // --- CSV parsing + helpers ---
 
@@ -349,6 +364,8 @@
   // --- Expose on App namespace ---
 
   App.setStatus = setStatus;
+  App.escapeHTML = escapeHTML;
+  App.escapeAttr = escapeAttr;
   App.parseCSV = parseCSV;
   App.fillSelect = fillSelect;
   App.enableSelect = enableSelect;
