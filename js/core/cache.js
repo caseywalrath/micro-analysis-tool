@@ -111,6 +111,12 @@
   // ---- Apply a state object to the app (shared by restore + import) ----
 
   function applyState(state) {
+    // 0. Defense in depth — the import callers and restore() already pre-validate,
+    // but throwing here protects against a future caller that forgets to.
+    // We must reject BEFORE clearing the live arrays.
+    var validationErr = validateSessionState(state);
+    if (validationErr) throw new Error(validationErr);
+
     // 1. Clear all feature arrays unconditionally (in-place to preserve closure refs)
     App.points.length = 0;
     App.lines.length = 0;
@@ -270,9 +276,9 @@
 
       var state = JSON.parse(raw);
       if (!state) return false;
-      state = migrateToCurrent(state);
-      if (state.version !== SCHEMA_VERSION) {
-        console.warn("Cache: schema version mismatch, ignoring cached data.");
+      var validationErr = validateSessionState(state);
+      if (validationErr) {
+        console.warn("Cache restore: ignoring stored state — " + validationErr);
         return false;
       }
 
@@ -358,30 +364,144 @@
   }
 
   // ---- Validate imported state ----
+  // Returns null when valid, or a descriptive error string identifying the
+  // offending element. Used by importFromFile, importFullState, and restore()
+  // BEFORE applyState mutates any live App arrays.
 
-  function validateState(state) {
-    if (!state || typeof state !== "object") {
-      return "File does not contain a valid JSON object.";
+  var MAX_FEATURES_PER_ARRAY = 5000;
+
+  function isPlainObject(x) {
+    return x !== null && typeof x === "object" && !Array.isArray(x);
+  }
+  function isFiniteNumber(n) {
+    return typeof n === "number" && isFinite(n);
+  }
+  function isCoordPair(c) {
+    return Array.isArray(c) && c.length >= 2 &&
+           isFiniteNumber(c[0]) && isFiniteNumber(c[1]);
+  }
+
+  function validateFeature(f, arrName, idx) {
+    var loc = arrName + "[" + idx + "]";
+    if (!isPlainObject(f)) return loc + ": not a plain object.";
+    if (f.type !== "Feature") return loc + ".type must be \"Feature\".";
+    if (!isPlainObject(f.properties)) return loc + ".properties must be an object.";
+    if (!isPlainObject(f.geometry)) return loc + ".geometry must be an object.";
+    var g = f.geometry;
+    if (typeof g.type !== "string") return loc + ".geometry.type must be a string.";
+    if (!Array.isArray(g.coordinates)) return loc + ".geometry.coordinates must be an array.";
+
+    if (g.type === "Point") {
+      if (!isCoordPair(g.coordinates)) {
+        return loc + ".geometry.coordinates must be [lon, lat] of finite numbers.";
+      }
+    } else if (g.type === "LineString") {
+      if (g.coordinates.length < 2) {
+        return loc + ".geometry: LineString needs at least 2 coordinate pairs.";
+      }
+      for (var i = 0; i < g.coordinates.length; i++) {
+        if (!isCoordPair(g.coordinates[i])) {
+          return loc + ".geometry.coordinates[" + i + "] must be [lon, lat] of finite numbers.";
+        }
+      }
+    } else if (g.type === "Polygon") {
+      if (g.coordinates.length < 1) {
+        return loc + ".geometry: Polygon needs at least one ring.";
+      }
+      for (var r = 0; r < g.coordinates.length; r++) {
+        var ring = g.coordinates[r];
+        if (!Array.isArray(ring) || ring.length < 3) {
+          return loc + ".geometry.coordinates[" + r + "] must be a ring of at least 3 points.";
+        }
+        for (var p = 0; p < ring.length; p++) {
+          if (!isCoordPair(ring[p])) {
+            return loc + ".geometry.coordinates[" + r + "][" + p + "] must be [lon, lat] of finite numbers.";
+          }
+        }
+      }
+    } else {
+      return loc + ".geometry.type \"" + g.type + "\" is not supported (Point, LineString, Polygon).";
     }
+    return null;
+  }
+
+  function validateFeatureArray(state, name) {
+    if (state[name] == null) return null;
+    if (!Array.isArray(state[name])) return "Invalid " + name + " data — not an array.";
+    if (state[name].length > MAX_FEATURES_PER_ARRAY) {
+      return name + " has " + state[name].length + " features; max " +
+             MAX_FEATURES_PER_ARRAY + " supported.";
+    }
+    for (var i = 0; i < state[name].length; i++) {
+      var err = validateFeature(state[name][i], name, i);
+      if (err) return err;
+    }
+    return null;
+  }
+
+  function validateSessionState(state) {
+    if (!isPlainObject(state)) return "File does not contain a valid JSON object.";
     migrateToCurrent(state);
     if (state.version !== SCHEMA_VERSION) {
       return "Unsupported file version (expected " + SCHEMA_VERSION +
              ", got " + (state.version || "none") + ").";
     }
-    if (state.points != null && !Array.isArray(state.points)) {
-      return "Invalid points data.";
+
+    var arrs = ["points", "lines", "routes", "polygons"];
+    for (var i = 0; i < arrs.length; i++) {
+      var err = validateFeatureArray(state, arrs[i]);
+      if (err) return err;
     }
-    if (state.lines != null && !Array.isArray(state.lines)) {
-      return "Invalid lines data.";
+
+    // Labels / textBoxes are simpler marker objects (not GeoJSON features);
+    // only check that they are arrays within bounds. The renderers tolerate
+    // shape drift via the existing per-marker null checks.
+    var simpleArrs = ["labels", "textBoxes"];
+    for (var j = 0; j < simpleArrs.length; j++) {
+      var sn = simpleArrs[j];
+      if (state[sn] != null) {
+        if (!Array.isArray(state[sn])) return "Invalid " + sn + " data — not an array.";
+        if (state[sn].length > MAX_FEATURES_PER_ARRAY) {
+          return sn + " has " + state[sn].length + " items; max " +
+                 MAX_FEATURES_PER_ARRAY + " supported.";
+        }
+      }
     }
-    if (state.routes != null && !Array.isArray(state.routes)) {
-      return "Invalid routes data.";
+
+    // moduleState (optional). Top-level must be a plain object; per-module
+    // payloads must each be objects or null. Each module's apply() handler is
+    // already wrapped in try/catch, so deeper shape checks aren't required here.
+    if (state.moduleState != null) {
+      if (!isPlainObject(state.moduleState)) {
+        return "moduleState must be an object.";
+      }
+      var keys = Object.keys(state.moduleState);
+      for (var mi = 0; mi < keys.length; mi++) {
+        var v = state.moduleState[keys[mi]];
+        if (v != null && !isPlainObject(v)) {
+          return "moduleState[\"" + keys[mi] + "\"] must be an object or null.";
+        }
+      }
     }
-    if (state.polygons != null && !Array.isArray(state.polygons)) {
-      return "Invalid polygons data.";
+
+    // Map state (light check — not safety-critical, but a clear error beats
+    // a silent fall-through to App.map.jumpTo({ center: "x" })).
+    if (state.mapCenter != null) {
+      if (!Array.isArray(state.mapCenter) || state.mapCenter.length !== 2 ||
+          !isFiniteNumber(state.mapCenter[0]) || !isFiniteNumber(state.mapCenter[1])) {
+        return "mapCenter must be a [lon, lat] pair of finite numbers.";
+      }
     }
+    if (state.mapZoom != null && !isFiniteNumber(state.mapZoom)) {
+      return "mapZoom must be a finite number.";
+    }
+
     return null; // null = valid
   }
+
+  // Keep the old name for any internal caller; both point at the same logic.
+  function validateState(state) { return validateSessionState(state); }
+  App.validateSessionState = validateSessionState;
 
   // ---- Export to JSON file ----
 
@@ -705,7 +825,9 @@
         if (handle) addRecent(handle, { source: "load" });
       } catch (parseErr) {
         App.setStatus("Load state failed");
-        alert("Load state failed: the file does not contain valid JSON.");
+        alert("Load state failed: " + (parseErr && parseErr.message ?
+          parseErr.message :
+          "the file does not contain valid JSON."));
       }
     };
 
@@ -753,7 +875,9 @@
         App.setStatus("Imported " + nFeatures + " feature" + (nFeatures !== 1 ? "s" : ""));
       } catch (parseErr) {
         App.setStatus("Import failed");
-        alert("Import failed: the file does not contain valid JSON.");
+        alert("Import failed: " + (parseErr && parseErr.message ?
+          parseErr.message :
+          "the file does not contain valid JSON."));
       }
     };
 
