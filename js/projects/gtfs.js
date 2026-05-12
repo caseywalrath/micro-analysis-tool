@@ -17,6 +17,7 @@
   var _shapesFC     = null;  // stored shapes FeatureCollection for full-geometry lookup
   var _hoverPopup   = null;  // maplibregl.Popup for hover tooltips
   var _clickPopup   = null;  // maplibregl.Popup for click details
+  var _layerListeners = [];  // [{ event, layerId, handler }] for explicit map.off() on tear-down
 
   // GTFS files in preferred display order
   var FILE_ORDER = [
@@ -295,6 +296,13 @@
     if (!map) return;
     removePopups();
     _shapesFC = null;
+    // MapLibre does NOT auto-detach layer-bound listeners when a layer is
+    // removed; explicitly map.off() everything wireHoverEvents() registered.
+    for (var i = 0; i < _layerListeners.length; i++) {
+      var rec = _layerListeners[i];
+      map.off(rec.event, rec.layerId, rec.handler);
+    }
+    _layerListeners = [];
     ["gtfs-shapes-layer", "gtfs-stops-layer"].forEach(function (id) {
       if (map.getLayer(id)) map.removeLayer(id);
     });
@@ -389,13 +397,20 @@
   }
 
   // ---- Hover / click event wiring ----
-  // MapLibre deregisters listeners automatically when removeLayer() is called,
-  // so wireHoverEvents() can be called each time addMapLayers() runs without
-  // accumulating duplicate listeners.
+  // Layer-bound listeners are NOT auto-detached when removeLayer() runs, so
+  // every handler we register here is recorded in _layerListeners and
+  // detached by removeMapLayers() before the layer is torn down. Without
+  // that, repeated GTFS load/clear cycles accumulate duplicate handlers
+  // (and old _gtfsData / _shapesFC closures stay reachable).
 
   function wireHoverEvents() {
     var map = App.map;
     if (!map) return;
+
+    function addListener(event, layerId, handler) {
+      map.on(event, layerId, handler);
+      _layerListeners.push({ event: event, layerId: layerId, handler: handler });
+    }
 
     var layers = [
       { id: "gtfs-shapes-layer", isStop: false },
@@ -407,11 +422,11 @@
       var layerId = layer.id;
       var isStop  = layer.isStop;
 
-      map.on("mouseenter", layerId, function () {
+      addListener("mouseenter", layerId, function () {
         if (!App.drawMode) map.getCanvas().style.cursor = "pointer";
       });
 
-      map.on("mousemove", layerId, function (e) {
+      addListener("mousemove", layerId, function (e) {
         if (!e.features || !e.features.length) return;
         if (!App.drawMode) map.getCanvas().style.cursor = "pointer";
         ensurePopups();
@@ -421,12 +436,12 @@
           .addTo(map);
       });
 
-      map.on("mouseleave", layerId, function () {
+      addListener("mouseleave", layerId, function () {
         map.getCanvas().style.cursor = App.drawMode ? "crosshair" : "grab";
         if (_hoverPopup) _hoverPopup.remove();
       });
 
-      map.on("click", layerId, function (e) {
+      addListener("click", layerId, function (e) {
         if (!e.features || !e.features.length) return;
         if (_hoverPopup) _hoverPopup.remove();
         ensurePopups();
@@ -436,7 +451,7 @@
           .addTo(map);
       });
 
-      map.on("contextmenu", layerId, function (e) {
+      addListener("contextmenu", layerId, function (e) {
         if (!e.features || !e.features.length) return;
         e.originalEvent.preventDefault();
         if (_hoverPopup) _hoverPopup.remove();
