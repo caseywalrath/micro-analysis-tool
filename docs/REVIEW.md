@@ -127,3 +127,77 @@ This branch keeps the project within the documented no-build, browser-only archi
 - Add stable feature IDs, for example `feature.properties.uid`, assigned when features are created and migrated during cache restore. Trip Builder service keys, point-route associations, and cached module result ownership should use those IDs instead of array indexes.
 
 **Verification of architectural observations: AGREE with all five.** The five suggestions correspond directly to confirmed findings above — the service-assembly + Sunday-mirror helpers map to the Critical Sunday finding, the escape helpers map to the LODES + GTFS XSS findings, the schema validator maps to the cache-import finding, and stable feature IDs map to the Trip Builder index-key finding. They are concrete, scoped, and named to the file/function level as the review prompt requested. None of them is being implemented in this verification pass; they are documented next-step targets.
+
+---
+
+## Proposed fix sequence
+
+Each session below is meant to be **one prompt's worth of work** — bounded scope, a small set of files, and an obvious self-check at the end. Sessions are ordered so each one either stands alone or builds on a helper introduced in an earlier session, which keeps individual diffs small and easy to review. Inside each session the items touch overlapping files, which makes the change set cohesive.
+
+### Session 1 — Trivial correctness wins (no new helpers required)
+**Files:** `js/core/census.js`, `js/projects/tpi-scoring.js`, `js/core/cache.js`, `js/projects/gtfs.js`, `js/projects/trip-builder.js`, `js/projects/attribute-summary.js`
+**Fixes:**
+- Filter Census negative sentinels (`val >= 0`) in `fetchACSValues`, `fetchACSCountyValues`, and `TPI.batchFetchACS` — mirror the existing pattern in `fetchACSMultiValues`.
+- Surface `localStorage.setItem` failures in `cache.save()` via `App.setStatus` (e.g. "Autosave disabled — quota exceeded").
+- Trip Builder: clamp `headway` to a sane minimum (e.g. 1 min) and cap per-band trip generation before the `for` loop in `generateTripsForPattern`.
+- Attribute Summary: call `App.undo.push()` inside `saveAndRefreshFeaturePanel` before `App.cache.save()`.
+- GTFS: rename `lineMode` → `mode` in `copyShapeToLine` to match `ATTR_FIELDS`.
+- GTFS: gate "loaded" status on presence of at least one required member (`stops.txt`, `routes.txt`, etc.) and report the missing files when it isn't.
+**Why first:** Each fix is one to a few lines, isolated, behavior-preserving in the happy path, and produces immediately verifiable results. Good warm-up that clears six findings without touching shared helpers.
+
+### Session 2 — Escape helper + XSS fixes
+**Files:** `js/core/utils.js`, `js/core/lodes.js`, `js/projects/gtfs.js`
+**Fixes:**
+- Add `App.escapeHTML(s)` and `App.escapeAttr(s)` in `utils.js`.
+- Apply in `lodes.setLodesLoadedUI` (LODES file metadata) and `gtfs.renderFileList` (GTFS file list). Audit any other `innerHTML` writes that consume imported data.
+**Why second:** One small helper + two call sites. Pure addition with no semantic change to good-path data. Closes both XSS findings in a single batch.
+
+### Session 3 — GTFS event-listener lifecycle
+**Files:** `js/projects/gtfs.js`
+**Fixes:**
+- Stash registered hover/click handlers in a module-local array inside `wireHoverEvents` and explicitly `map.off(...)` them in `removeMapLayers` before adding new layers.
+- Remove the misleading comment at lines 384–387.
+**Why third:** Single file, narrow contract; the test is "load GTFS twice, hover, count popups." Worth doing while the gtfs.js context is fresh from Session 2.
+
+### Session 4 — Shared service-assembly + Sunday-mirror helper
+**Files:** new `js/core/service-assembly.js`, `js/projects/route-costing.js`, `js/projects/trip-builder.js`, `index.html` (script tag)
+**Fixes:**
+- Extract `collectPattern`, `buildServicesFromFeatures`, `validateService`, `VALID_PAIR_KEYS`, `SOLO_OK_DIRECTIONS` into `App.buildTransitServices` (or equivalent) in `service-assembly.js`.
+- Add `App.getEffectiveServiceBands(attrs, day)` that resolves `sundayMirrorsSaturday` once.
+- Have Route Costing's `computeService` band loop and Trip Builder's `generateTripsForPattern` call `getEffectiveServiceBands` instead of reading `p.service[day]` directly.
+- Sanity-check that Attribute Summary's bands badge still renders correctly (it builds its summary from raw bands, so the badge can stay raw or be updated to use the helper — flag the decision).
+**Why fourth:** This is the biggest single refactor in the list, but it is behavior-preserving for non-mirror services and *automatically fixes* the Critical Sunday finding the moment the helper is wired in. Done after Sessions 1–3 so the unrelated nits aren't tangled in the same diff.
+
+### Session 5 — Cache import safety
+**Files:** `js/core/cache.js` (or new `js/core/session-schema.js`)
+**Fixes:**
+- Add `App.validateSessionState(state)` that walks each feature, checks GeoJSON shape (`type === "Feature"`, valid `geometry.coordinates`, `properties` is an object), bounds feature-array sizes, and validates `moduleState` payload types.
+- Change `applyState` to build temporary arrays first, validate, *then* swap them into `App.points` / `App.lines` / etc. in place. Surface a real error message when validation fails instead of "Invalid JSON".
+**Why fifth:** Localized to cache.js but conceptually delicate (it is the recovery path). Best done after the small fixes settle so it can be reviewed in isolation. Independent of Session 4.
+
+### Session 6 — Stable feature UIDs
+**Files:** `js/core/points.js`, `js/core/lines.js`, `js/core/routes.js`, `js/core/polygons.js`, `js/core/cache.js`, `js/projects/trip-builder.js`
+**Fixes:**
+- Assign `feature.properties.uid` (e.g. `crypto.randomUUID()`) on creation in all four feature modules.
+- Migrate sessions on restore: any feature lacking `uid` gets one assigned in `applyState`.
+- Trip Builder: switch `_tripsByService` keys from `solo-route-<idx>` / `service-<id>` to UIDs (services get a deterministic UID derived from sorted member UIDs).
+- Add `restoreTbState` migration to drop unmigratable legacy keys.
+**Why sixth:** Larger surface but well-bounded. Depends on the cache import being safer (Session 5) so restore-time migrations don't run before validation. Closes the Trip Builder index-key finding.
+
+### Session 7 — Numeric methodology decisions
+**Files:** `js/projects/tpi-scoring.js`, `js/core/census.js`
+**Fixes:**
+- TPI: change `computeQuintiles` to assign tied raw values to the same quintile (e.g. bucket by `floor(rank_of_min_tied_index * 5 / n) + 1` or by computing breakpoints on unique values).
+- Census: decide and document the area-weighting basis. Options to weigh: (a) true area weighting (`Σ value·aInter / Σ aInter`), (b) keep coverage-fraction weighting but rename the UI label, (c) add a population-weighted mode behind a toggle.
+**Why seventh:** Both fixes change visible numbers. They warrant a deliberate session focused only on numeric correctness so the diffs can be inspected against expected outputs. Each fix is small in lines but has high blast radius.
+
+### Session 8 — Policy items (out of scope without explicit decision)
+**Fixes:**
+- Census API key: rotate, scope to the deployed origin if possible, or document the trade-off. Hard to fix in a static-only client without a proxy.
+**Why last:** Not a code bug — a deployment/operations call. Worth raising once the in-app issues are cleared.
+
+### Ordering notes
+- Sessions 1, 2, 3, 5, 7 are mutually independent and could be reordered or run in parallel sessions if needed.
+- Session 4 should precede Session 6 because the new service-assembly helper is the natural place to also speak UIDs once those exist.
+- Session 5 should precede Session 6 so the restore path's new UID migration runs after validation.
+- Each session is sized to fit a single prompt with room for verification; if any session feels too large during execution, the first thing to split off is the multi-call-site refactor (Session 4 → service-assembly extraction in one pass, Sunday-mirror wiring in a follow-up).
