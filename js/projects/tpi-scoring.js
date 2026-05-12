@@ -310,7 +310,8 @@
             var raw = r[varIndices[vc]];
             if (raw === null || raw === undefined || raw === "") continue;
             var val = Number(raw);
-            if (Number.isFinite(val)) valMap.set(vc, val);
+            // Skip Census sentinel values (negative placeholders like -666666666).
+            if (Number.isFinite(val) && val >= 0) valMap.set(vc, val);
           }
         }
       }

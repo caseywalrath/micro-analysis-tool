@@ -291,9 +291,12 @@
     var bands = Array.isArray(svc[day]) ? svc[day] : [];
     var trips = [];
 
+    var MAX_TRIPS_PER_BAND = 1500;
     bands.forEach(function (b) {
       var headway = parseFloat(b && b.frequency);
       if (!(headway > 0)) return;             // blank/0 → "no service in band"
+      // Clamp to the UI's minimum (1 min) so a malformed import can't freeze the browser.
+      if (headway < 1) headway = 1;
       var fromMin = parseHHMMtoMin(b && b.from);
       var toMin   = parseHHMMtoMin(b && b.to);
       if (!isFinite(fromMin) || !isFinite(toMin)) return;
@@ -301,8 +304,10 @@
       if (toMin <= fromMin) toMin += 1440;
       // Generate from the band start, stepping by headway, while < band end.
       // Q5: trips whose end exceeds the band end are still emitted.
+      var emitted = 0;
       for (var t = fromMin; t < toMin; t += headway) {
         trips.push({ startMin: t, endMin: t + runtimeMin });
+        if (++emitted >= MAX_TRIPS_PER_BAND) break;
       }
     });
 

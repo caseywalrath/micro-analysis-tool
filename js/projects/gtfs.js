@@ -101,6 +101,13 @@
       return;
     }
 
+    // Require at least one GTFS-spec required file before treating this as a feed.
+    var hasRequired = entries.some(function (e) { return REQUIRED[e.name]; });
+    if (!hasRequired) {
+      App.setStatus("GTFS error: ZIP contains no required GTFS files (stops, routes, trips, stop_times, calendar, calendar_dates, or agency).");
+      return;
+    }
+
     App.setStatus("Parsing GTFS files\u2026");
     for (var i = 0; i < entries.length; i++) {
       var name  = entries[i].name;
@@ -351,7 +358,7 @@
     }
 
     var attrs = {};
-    if (lineMode) attrs.lineMode = lineMode;
+    if (lineMode) attrs.mode = lineMode;
     var notesParts = [];
     if (props.route_id) notesParts.push("route_id: " + props.route_id);
     if (shapeId) notesParts.push("shape_id: " + shapeId);

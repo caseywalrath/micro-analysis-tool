@@ -16,6 +16,7 @@
   function el(id) { return document.getElementById(id); }
 
   function saveAndRefreshFeaturePanel() {
+    if (App.undo && !App.undo.isRestoring()) App.undo.push();
     if (App.cache && typeof App.cache.save === "function") App.cache.save();
     if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
   }

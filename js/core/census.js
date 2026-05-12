@@ -141,7 +141,8 @@
         var raw = r[idxVar];
         if (raw === null || raw === undefined || raw === "") continue;
         var val = Number(raw);
-        if (!Number.isFinite(val)) continue;
+        // Skip Census sentinel values (negative placeholders like -666666666).
+        if (!Number.isFinite(val) || val < 0) continue;
 
         if (geoLevel === "tract") {
           var tract = r[header.indexOf("tract")];
@@ -190,7 +191,8 @@
         var co2 = r[idxCounty];
         if (!counties.includes(co2)) continue;
         var val = Number(r[idxVar]);
-        if (!Number.isFinite(val)) continue;
+        // Skip Census sentinel values (negative placeholders like -666666666).
+        if (!Number.isFinite(val) || val < 0) continue;
         out.set(r[idxState] + co2, val);
       }
     }

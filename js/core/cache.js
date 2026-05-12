@@ -253,6 +253,9 @@
         localStorage.setItem(STORAGE_KEY, json);
       } catch (e) {
         console.warn("Cache save failed:", e);
+        if (typeof App.setStatus === "function") {
+          App.setStatus("Autosave disabled — storage error or quota exceeded.");
+        }
       }
     }, DEBOUNCE_MS);
   }
