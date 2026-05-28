@@ -28,11 +28,12 @@
 
   // Shared route/line fields — line mirrors route exactly
   var ROUTE_FIELDS = [
-    { key: "group",     label: "Group",     type: "text",   placeholder: "e.g. Corridor A", groupPicker: true },
-    { key: "direction", label: "Direction", type: "select", options: ["Both","NB","SB","EB","WB","Inbound","Outbound","Loop"] },
+    { key: "group",     label: "Group",     type: "text",   placeholder: "e.g. Corridor A", groupPicker: true, hidden: true },
+    { key: "direction", label: "Direction", type: "select", options: ["Both","NB","SB","EB","WB","Inbound","Outbound","Loop","CW","CCW"] },
     { key: "mode",      label: "Mode",      type: "select", options: ["Bus","BRT","Light Rail","Streetcar"] },
-    { key: "routeId",   label: "Route ID",  type: "text",   placeholder: "e.g. 7, Blue" },
-    { key: "avgSpeed",  label: "Avg speed", type: "number", unit: "mph" }
+    { key: "serviceId", label: "Service",   type: "text",   placeholder: "e.g. Blue Line", servicePicker: true },
+    { key: "avgSpeed",  label: "Avg speed", type: "number", unit: "mph", defaultValue: 14 },
+    { key: "runTime",   label: "Run time",  type: "number", unit: "min", placeholder: "e.g. 45" }
   ];
 
   // Field definitions per feature type.
@@ -41,12 +42,12 @@
     route: ROUTE_FIELDS,
     line:  ROUTE_FIELDS,
     point: [
-      { key: "group",            label: "Group",    type: "text", placeholder: "e.g. North Corridor", groupPicker: true },
+      { key: "group",            label: "Group",    type: "text", placeholder: "e.g. North Corridor", groupPicker: true, hidden: true },
       { key: "stopId",           label: "Stop ID",       type: "text", placeholder: "e.g. 1042" },
       { key: "associatedRoutes", label: "Routes"                                                 }
     ],
     polygon: [
-      { key: "group",  label: "Group",  type: "text", placeholder: "e.g. Study Area", groupPicker: true },
+      { key: "group",  label: "Group",  type: "text", placeholder: "e.g. Study Area", groupPicker: true, hidden: true },
       { key: "notes",  label: "Notes",  type: "text", placeholder: "" }
     ],
     label: [
@@ -115,7 +116,7 @@
     return { el: wrapper, unit: null };
   }
 
-  function buildRoutePicker(attrs) {
+  function buildRoutePickerContent(attrs) {
     var container = document.createElement("div");
     container.className = "fp-route-picker";
 
@@ -127,7 +128,7 @@
       msg.className = "fp-attr-unit";
       msg.textContent = "No routes or lines drawn";
       container.appendChild(msg);
-      return { el: container, unit: null };
+      return container;
     }
 
     var current = attrs.associatedRoutes || [];
@@ -166,7 +167,26 @@
     routes.forEach(function (r) { makeCheck("route", r, "routeIdx"); });
     lines.forEach(function  (l) { makeCheck("line",  l, "lineIdx");  });
 
-    return { el: container, unit: null };
+    return container;
+  }
+
+  // Compact pill button that shows the count of associated routes.
+  // Clicking opens the route-picker popup.
+  function buildRouteBadge(attrs, anchorRefresh) {
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "fp-route-badge";
+    function refresh() {
+      var n = (attrs.associatedRoutes || []).length;
+      btn.textContent = n === 0 ? "Add routes" : n === 1 ? "1 route" : (n + " routes");
+      if (anchorRefresh) anchorRefresh(n);
+    }
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      App.openRoutePickerPopup(attrs, btn, refresh);
+    });
+    refresh();
+    return { el: btn, unit: null, refresh: refresh };
   }
 
   function buildTextOrNumber(field, attrs) {
@@ -445,6 +465,75 @@
     return { el: inp, unit: null };
   }
 
+  // Route + Line only datalist for the Service field. Suggestions come from
+  // existing serviceId values on routes and lines (not points/polygons).
+  // Same color-inheritance side effect as the universal group picker so that
+  // pattern pairs (e.g. NB + SB) under one Service share a color automatically.
+  function buildServicePicker(field, attrs, feature, featureType) {
+    var inp = document.createElement("input");
+    inp.type = "text";
+    inp.className = "fp-attr-input";
+    if (field.placeholder) inp.placeholder = field.placeholder;
+    var val = attrs[field.key];
+    inp.value = (val !== undefined && val !== null) ? val : "";
+
+    var dlId = "fp-service-datalist";
+    var dl = document.getElementById(dlId);
+    if (!dl) {
+      dl = document.createElement("datalist");
+      dl.id = dlId;
+      document.body.appendChild(dl);
+    }
+    dl.innerHTML = "";
+    var seen = {};
+    var routeArrays = [App.routes || [], App.lines || []];
+    routeArrays.forEach(function (arr) {
+      arr.forEach(function (f) {
+        var s = f.properties.attributes && f.properties.attributes.serviceId;
+        if (s && !seen[s]) {
+          seen[s] = true;
+          var opt = document.createElement("option");
+          opt.value = s;
+          dl.appendChild(opt);
+        }
+      });
+    });
+    inp.setAttribute("list", dlId);
+
+    inp.addEventListener("change", function () {
+      var newVal = inp.value.trim();
+      if (newVal) {
+        attrs[field.key] = newVal;
+        var existingColor = null;
+        routeArrays.forEach(function (arr) {
+          arr.forEach(function (f) {
+            if (!existingColor && f.properties.color && f.properties !== feature.properties) {
+              var s = f.properties.attributes && f.properties.attributes.serviceId;
+              if (s === newVal) existingColor = f.properties.color;
+            }
+          });
+        });
+        if (existingColor) {
+          feature.properties.color = existingColor;
+          if (typeof App.updateFeatureColor === "function") {
+            var arrMap = { route: App.routes, line: App.lines };
+            var arr = arrMap[featureType] || [];
+            var idx = arr.indexOf(feature);
+            if (idx >= 0) App.updateFeatureColor(featureType, idx, existingColor);
+          }
+        }
+      } else {
+        delete attrs[field.key];
+      }
+      saveAttrCache();
+      if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+    });
+    inp.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") inp.blur();
+    });
+    return { el: inp, unit: null };
+  }
+
   /* ---- Service schedule (Weekday / Saturday / Sunday time bands) ---- */
 
   function _emptyBand() {
@@ -667,11 +756,12 @@
   }
 
   function buildFieldInput(field, attrs, feature, featureType) {
-    if (field.key === "associatedRoutes") return buildRoutePicker(attrs);
+    if (field.key === "associatedRoutes") return buildRouteBadge(attrs);
     if (field.type === "select")      return buildSelect(field, attrs);
     if (field.type === "checkboxes")  return buildCheckboxes(field, attrs);
     if (field.type === "color")       return buildColorPicker(field, attrs, feature);
     if (field.groupPicker)            return buildUniversalGroupPicker(field, attrs, feature, featureType);
+    if (field.servicePicker)          return buildServicePicker(field, attrs, feature, featureType);
     if (field.key === "labelGroup")   return buildLabelGroupPicker(field, attrs, feature);
     return buildTextOrNumber(field, attrs);
   }
@@ -820,6 +910,7 @@
   var _OVR_OPACITY_SVG = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="8" cy="8" r="6" stroke-dasharray="3 2"/></svg>';
   var _OVR_BUFFER_SVG  = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="2" fill="currentColor" stroke="none"/></svg>';
   var _OVR_WIDTH_SVG   = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-linecap="round"><line x1="2" y1="8" x2="14" y2="8" stroke-width="2.5"/></svg>';
+  var _OVR_OFFSET_SVG  = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="2" y1="6" x2="14" y2="6"/><line x1="2" y1="10" x2="14" y2="10"/></svg>';
   var _OVR_DEFAULT_SVG = '<svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 6.5A4 4 0 1 1 8 2.5"/><polyline points="8 0.5 10.5 2.5 8 4.5"/></svg>';
 
   // Push updated feature GeoJSON data to MapLibre source so data-driven
@@ -835,6 +926,206 @@
   function _invertPolyFillOpacity(fill) {
     if (fill <= 0.15) return Math.round(fill * 50 / 0.15);
     return Math.round(50 + (fill - 0.15) * 50 / 0.85);
+  }
+
+  // Build the per-feature override icons container (opacity / buffer / width / offset / reset).
+  // Used by the per-feature attribute popup AND the Attribute Summary module.
+  // Returns a DOM div (`.fp-attr-overrides`) wired with click handlers, or null
+  // for label/textbox features (which have no per-feature overrides in this app).
+  function buildOverridesContainer(featureType, feature) {
+    if (featureType === "label" || featureType === "textbox") return null;
+
+    var TYPE_KEYS = {
+      point:   { opacityKey: "pointOpacity",   widthKey: "pointLineWidth",   bufferKey: "bufferRadius" },
+      line:    { opacityKey: "lineOpacity",     widthKey: "lineLineWidth",    bufferKey: "lineBufferRadius" },
+      route:   { opacityKey: "routeOpacity",    widthKey: "routeLineWidth",   bufferKey: "routeBufferRadius" },
+      polygon: { opacityKey: "polygonOpacity",  widthKey: "polygonLineWidth", bufferKey: null }
+    };
+    var REBUILD_FNS = {
+      point:  function (v) { if (typeof App.rebuildBuffers      === "function") App.rebuildBuffers(v); },
+      line:   function (v) { if (typeof App.rebuildLineBuffers  === "function") App.rebuildLineBuffers(v); },
+      route:  function (v) { if (typeof App.rebuildRouteBuffers === "function") App.rebuildRouteBuffers(v); },
+      polygon: null
+    };
+    var keys = TYPE_KEYS[featureType] || TYPE_KEYS.point;
+    var rebuildFn = REBUILD_FNS[featureType] || null;
+
+    var overrides = document.createElement("div");
+    overrides.className = "fp-attr-overrides";
+
+    // Opacity
+    var opacityBtn = document.createElement("button");
+    opacityBtn.type = "button";
+    opacityBtn.className = "fp-sib";
+    opacityBtn.title = "Per-feature opacity";
+    opacityBtn.innerHTML = _OVR_OPACITY_SVG;
+    if (feature.properties._opacity != null || feature.properties._fillOpacity != null) {
+      opacityBtn.classList.add("fp-sib-has-override");
+    }
+    (function (btn, feat, ft, ok) {
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        var curVal;
+        if (ft === "polygon") {
+          curVal = (feat.properties._fillOpacity != null)
+            ? _invertPolyFillOpacity(feat.properties._fillOpacity)
+            : (App.featureSettings ? App.featureSettings[ok] : 50);
+        } else {
+          curVal = (feat.properties._opacity != null)
+            ? feat.properties._opacity * 100
+            : (App.featureSettings ? App.featureSettings[ok] : 100);
+        }
+        if (typeof App._openFpSlider === "function") {
+          App._openFpSlider(btn, {
+            min: 0, max: 100, step: 1, unit: "%",
+            value: curVal,
+            onChange: function (S) {
+              if (ft === "polygon") {
+                var pc = App._polyOpacityValues(S);
+                feat.properties._fillOpacity   = pc.fill;
+                feat.properties._borderOpacity = pc.border;
+              } else {
+                feat.properties._opacity = S / 100;
+              }
+              btn.classList.add("fp-sib-has-override");
+              _pushFeatureLayer(ft);
+              if (typeof App.cache !== "undefined") App.cache.save();
+            }
+          });
+        }
+      });
+    })(opacityBtn, feature, featureType, keys.opacityKey);
+    overrides.appendChild(opacityBtn);
+
+    // Buffer (not for polygons)
+    if (featureType !== "polygon") {
+      var bufferBtn = document.createElement("button");
+      bufferBtn.type = "button";
+      bufferBtn.className = "fp-sib";
+      bufferBtn.title = "Per-feature buffer radius";
+      bufferBtn.innerHTML = _OVR_BUFFER_SVG;
+      if (feature.properties._bufferRadius != null) {
+        bufferBtn.classList.add("fp-sib-has-override");
+      }
+      (function (btn, feat, bk, rbFn) {
+        btn.addEventListener("click", function (e) {
+          e.stopPropagation();
+          var curVal = (feat.properties._bufferRadius != null)
+            ? feat.properties._bufferRadius
+            : (App.featureSettings ? App.featureSettings[bk] : 0);
+          if (typeof App._openFpSlider === "function") {
+            App._openFpSlider(btn, {
+              values: (App.BUFFER_RADIUS_STEPS || [0,0.125,0.25,0.5,0.75,1,1.25,1.5,1.75,2]), unit: "mi",
+              value: curVal,
+              onChange: function (v) {
+                feat.properties._bufferRadius = v;
+                btn.classList.add("fp-sib-has-override");
+                if (rbFn) rbFn(App.featureSettings ? App.featureSettings[bk] : 0);
+                if (typeof App.cache !== "undefined") App.cache.save();
+              }
+            });
+          }
+        });
+      })(bufferBtn, feature, keys.bufferKey, rebuildFn);
+      overrides.appendChild(bufferBtn);
+    }
+
+    // Width
+    var widthBtn = document.createElement("button");
+    widthBtn.type = "button";
+    widthBtn.className = "fp-sib";
+    widthBtn.title = "Per-feature line width";
+    widthBtn.innerHTML = _OVR_WIDTH_SVG;
+    if (feature.properties._lineWidth != null) {
+      widthBtn.classList.add("fp-sib-has-override");
+    }
+    (function (btn, feat, ft, wk) {
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        var curVal = (feat.properties._lineWidth != null)
+          ? feat.properties._lineWidth
+          : (App.featureSettings ? App.featureSettings[wk] : 1);
+        if (typeof App._openFpSlider === "function") {
+          App._openFpSlider(btn, {
+            min: 0, max: 5, step: 0.1, unit: "×",
+            value: curVal,
+            onChange: function (v) {
+              feat.properties._lineWidth = v;
+              btn.classList.add("fp-sib-has-override");
+              _pushFeatureLayer(ft);
+              if (typeof App.cache !== "undefined") App.cache.save();
+            }
+          });
+        }
+      });
+    })(widthBtn, feature, featureType, keys.widthKey);
+    overrides.appendChild(widthBtn);
+
+    // Offset (routes and lines only)
+    if (featureType === "route" || featureType === "line") {
+      var OFFSET_STEPS = [-6, -3, 0, 3, 6];
+      var offsetBtn = document.createElement("button");
+      offsetBtn.type = "button";
+      offsetBtn.className = "fp-sib";
+      offsetBtn.title = "Per-feature offset (perpendicular to line)";
+      offsetBtn.innerHTML = _OVR_OFFSET_SVG;
+      if (feature.properties._offsetManual) {
+        offsetBtn.classList.add("fp-sib-has-override");
+      }
+      (function (btn, feat, ft) {
+        btn.addEventListener("click", function (e) {
+          e.stopPropagation();
+          var curVal = (feat.properties._offset != null) ? feat.properties._offset : 0;
+          if (typeof App._openFpSlider === "function") {
+            App._openFpSlider(btn, {
+              values: OFFSET_STEPS, unit: "px",
+              value: curVal,
+              onChange: function (v) {
+                feat.properties._offset = v;
+                feat.properties._offsetManual = true;
+                btn.classList.add("fp-sib-has-override");
+                _pushFeatureLayer(ft);
+                if (typeof App.cache !== "undefined") App.cache.save();
+              }
+            });
+          }
+        });
+      })(offsetBtn, feature, featureType);
+      overrides.appendChild(offsetBtn);
+    }
+
+    // Reset
+    var defaultBtn = document.createElement("button");
+    defaultBtn.type = "button";
+    defaultBtn.className = "fp-sib";
+    defaultBtn.title = "Reset to global defaults";
+    defaultBtn.innerHTML = _OVR_DEFAULT_SVG;
+    (function (btn, feat, ft, bk, rbFn) {
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        delete feat.properties._opacity;
+        delete feat.properties._fillOpacity;
+        delete feat.properties._borderOpacity;
+        delete feat.properties._lineWidth;
+        delete feat.properties._bufferRadius;
+        delete feat.properties._offset;
+        delete feat.properties._offsetManual;
+        _pushFeatureLayer(ft);
+        if (rbFn) rbFn(App.featureSettings ? (App.featureSettings[bk] || 0) : 0);
+        var oCb = document.getElementById("offsetOverlap");
+        if (oCb && oCb.checked && typeof App.computeOverlapOffsets === "function") {
+          App.computeOverlapOffsets();
+        }
+        if (typeof App.cache !== "undefined") App.cache.save();
+        if (typeof App._closeFpSlider === "function") App._closeFpSlider();
+        overrides.querySelectorAll(".fp-sib-has-override").forEach(function (el) {
+          el.classList.remove("fp-sib-has-override");
+        });
+      });
+    })(defaultBtn, feature, featureType, keys.bufferKey, rebuildFn);
+    overrides.appendChild(defaultBtn);
+
+    return overrides;
   }
 
   function populatePopupBody(featureType, featureIndex, feature) {
@@ -875,158 +1166,11 @@
     if (existingOverrides) existingOverrides.remove();
 
     var closeBtn = headerEl.querySelector(".fp-attr-popup-close");
-    var overrides = document.createElement("div");
-    overrides.className = "fp-attr-overrides";
-
-    if (featureType !== "label" && featureType !== "textbox") {
-      // Per-type key mappings
-      var TYPE_KEYS = {
-        point:   { opacityKey: "pointOpacity",   widthKey: "pointLineWidth",   bufferKey: "bufferRadius" },
-        line:    { opacityKey: "lineOpacity",     widthKey: "lineLineWidth",    bufferKey: "lineBufferRadius" },
-        route:   { opacityKey: "routeOpacity",    widthKey: "routeLineWidth",   bufferKey: "routeBufferRadius" },
-        polygon: { opacityKey: "polygonOpacity",  widthKey: "polygonLineWidth", bufferKey: null }
-      };
-      var REBUILD_FNS = {
-        point:  function (v) { if (typeof App.rebuildBuffers      === "function") App.rebuildBuffers(v); },
-        line:   function (v) { if (typeof App.rebuildLineBuffers  === "function") App.rebuildLineBuffers(v); },
-        route:  function (v) { if (typeof App.rebuildRouteBuffers === "function") App.rebuildRouteBuffers(v); },
-        polygon: null
-      };
-      var keys = TYPE_KEYS[featureType] || TYPE_KEYS.point;
-      var rebuildFn = REBUILD_FNS[featureType] || null;
-
-      // ---- Opacity button ----
-      var opacityBtn = document.createElement("button");
-      opacityBtn.type = "button";
-      opacityBtn.className = "fp-sib";
-      opacityBtn.title = "Per-feature opacity";
-      opacityBtn.innerHTML = _OVR_OPACITY_SVG;
-      if (feature.properties._opacity != null || feature.properties._fillOpacity != null) {
-        opacityBtn.classList.add("fp-sib-has-override");
-      }
-      (function (btn, feat, ft, ok) {
-        btn.addEventListener("click", function (e) {
-          e.stopPropagation();
-          var curVal;
-          if (ft === "polygon") {
-            curVal = (feat.properties._fillOpacity != null)
-              ? _invertPolyFillOpacity(feat.properties._fillOpacity)
-              : (App.featureSettings ? App.featureSettings[ok] : 50);
-          } else {
-            curVal = (feat.properties._opacity != null)
-              ? feat.properties._opacity * 100
-              : (App.featureSettings ? App.featureSettings[ok] : 100);
-          }
-          if (typeof App._openFpSlider === "function") {
-            App._openFpSlider(btn, {
-              min: 0, max: 100, step: 1, unit: "%",
-              value: curVal,
-              onChange: function (S) {
-                if (ft === "polygon") {
-                  var pc = App._polyOpacityValues(S);
-                  feat.properties._fillOpacity   = pc.fill;
-                  feat.properties._borderOpacity = pc.border;
-                } else {
-                  feat.properties._opacity = S / 100;
-                }
-                _pushFeatureLayer(ft);
-                if (typeof App.cache !== "undefined") App.cache.save();
-              }
-            });
-          }
-        });
-      })(opacityBtn, feature, featureType, keys.opacityKey);
-      overrides.appendChild(opacityBtn);
-
-      // ---- Buffer button (not for polygons) ----
-      if (featureType !== "polygon") {
-        var bufferBtn = document.createElement("button");
-        bufferBtn.type = "button";
-        bufferBtn.className = "fp-sib";
-        bufferBtn.title = "Per-feature buffer radius";
-        bufferBtn.innerHTML = _OVR_BUFFER_SVG;
-        if (feature.properties._bufferRadius != null) {
-          bufferBtn.classList.add("fp-sib-has-override");
-        }
-        (function (btn, feat, bk, rbFn) {
-          btn.addEventListener("click", function (e) {
-            e.stopPropagation();
-            var curVal = (feat.properties._bufferRadius != null)
-              ? feat.properties._bufferRadius
-              : (App.featureSettings ? App.featureSettings[bk] : 0);
-            if (typeof App._openFpSlider === "function") {
-              App._openFpSlider(btn, {
-                min: 0, max: 2, step: 0.1, unit: "mi",
-                value: curVal,
-                onChange: function (v) {
-                  feat.properties._bufferRadius = v;
-                  if (rbFn) rbFn(App.featureSettings ? App.featureSettings[bk] : 0);
-                  if (typeof App.cache !== "undefined") App.cache.save();
-                }
-              });
-            }
-          });
-        })(bufferBtn, feature, keys.bufferKey, rebuildFn);
-        overrides.appendChild(bufferBtn);
-      }
-
-      // ---- Width button ----
-      var widthBtn = document.createElement("button");
-      widthBtn.type = "button";
-      widthBtn.className = "fp-sib";
-      widthBtn.title = "Per-feature line width";
-      widthBtn.innerHTML = _OVR_WIDTH_SVG;
-      if (feature.properties._lineWidth != null) {
-        widthBtn.classList.add("fp-sib-has-override");
-      }
-      (function (btn, feat, ft, wk) {
-        btn.addEventListener("click", function (e) {
-          e.stopPropagation();
-          var curVal = (feat.properties._lineWidth != null)
-            ? feat.properties._lineWidth
-            : (App.featureSettings ? App.featureSettings[wk] : 1);
-          if (typeof App._openFpSlider === "function") {
-            App._openFpSlider(btn, {
-              min: 0, max: 5, step: 0.1, unit: "×",
-              value: curVal,
-              onChange: function (v) {
-                feat.properties._lineWidth = v;
-                _pushFeatureLayer(ft);
-                if (typeof App.cache !== "undefined") App.cache.save();
-              }
-            });
-          }
-        });
-      })(widthBtn, feature, featureType, keys.widthKey);
-      overrides.appendChild(widthBtn);
-
-      // ---- Default (reset) button ----
-      var defaultBtn = document.createElement("button");
-      defaultBtn.type = "button";
-      defaultBtn.className = "fp-sib";
-      defaultBtn.title = "Reset to global defaults";
-      defaultBtn.innerHTML = _OVR_DEFAULT_SVG;
-      (function (btn, feat, ft, bk, rbFn) {
-        btn.addEventListener("click", function (e) {
-          e.stopPropagation();
-          delete feat.properties._opacity;
-          delete feat.properties._fillOpacity;
-          delete feat.properties._borderOpacity;
-          delete feat.properties._lineWidth;
-          delete feat.properties._bufferRadius;
-          _pushFeatureLayer(ft);
-          if (rbFn) rbFn(App.featureSettings ? (App.featureSettings[bk] || 0) : 0);
-          if (typeof App.cache !== "undefined") App.cache.save();
-          if (typeof App._closeFpSlider === "function") App._closeFpSlider();
-          // Remove has-override indicators
-          overrides.querySelectorAll(".fp-sib-has-override").forEach(function (el) {
-            el.classList.remove("fp-sib-has-override");
-          });
-        });
-      })(defaultBtn, feature, featureType, keys.bufferKey, rebuildFn);
-      overrides.appendChild(defaultBtn);
-    }
-
+    var overrides = buildOverridesContainer(featureType, feature) || (function () {
+      var d = document.createElement("div");
+      d.className = "fp-attr-overrides";
+      return d;
+    })();
     headerEl.insertBefore(overrides, closeBtn);
 
     // Clear and rebuild body
@@ -1036,6 +1180,17 @@
     // Lazy-init attributes
     if (!feature.properties.attributes) feature.properties.attributes = {};
     var attrs = feature.properties.attributes;
+
+    // Seed field defaults for any missing values (e.g. avgSpeed = 14 mph)
+    var typeFields = ATTR_FIELDS[featureType] || [];
+    var seededDefault = false;
+    typeFields.forEach(function (f) {
+      if (f.defaultValue !== undefined && (attrs[f.key] === undefined || attrs[f.key] === null || attrs[f.key] === "")) {
+        attrs[f.key] = f.defaultValue;
+        seededDefault = true;
+      }
+    });
+    if (seededDefault) saveAttrCache();
 
     // Name row (always present)
     var nameInput = document.createElement("input");
@@ -1079,12 +1234,43 @@
       body.appendChild(buildServiceSchedule(attrs));
     }
 
-    // Computed measurements (read-only)
-    if ((featureType === "route" || featureType === "line") &&
-        feature.geometry && feature.geometry.coordinates &&
-        feature.geometry.coordinates.length >= 2) {
-      var lenMi = turf.length(feature, { units: "miles" });
-      body.appendChild(buildRow("Length", buildReadOnlyValue(fmtLength(lenMi)), null));
+    // Computed measurements + cycle estimate (routes and lines only)
+    if (featureType === "route" || featureType === "line") {
+      var _rcLenMi = 0;
+      try {
+        if (feature.geometry && feature.geometry.coordinates &&
+            feature.geometry.coordinates.length >= 2)
+          _rcLenMi = turf.length(feature, { units: "miles" });
+      } catch (e) {}
+      if (_rcLenMi > 0) {
+        body.appendChild(buildRow("Length", buildReadOnlyValue(fmtLength(_rcLenMi)), null));
+      }
+
+      var cycleSpan = buildReadOnlyValue("—");
+      body.appendChild(buildRow("Cycle est.", cycleSpan, null));
+
+      (function (span, len) {
+        function refreshCycleEst() {
+          var spd = parseFloat(attrs.avgSpeed);
+          var rt  = parseFloat(attrs.runTime);
+          var dir = attrs.direction || "Both";
+          var isLoop = (dir === "Loop" || dir === "CW" || dir === "CCW");
+          var isBoth = (dir === "Both");
+          var label  = isBoth ? "cycle" : isLoop ? "loop" : "one-way";
+          var parts  = [];
+          if (spd > 0 && len > 0) {
+            var owMin  = len / spd * 60;
+            var cycMin = isBoth ? owMin * 2 : owMin;
+            parts.push(Math.round(cycMin) + " min " + label + " · speed");
+          }
+          if (rt > 0) {
+            parts.push(rt + " min " + label + " · manual");
+          }
+          span.textContent = parts.length ? parts.join("  ·  ") : "—";
+        }
+        refreshCycleEst();
+        body.addEventListener("change", refreshCycleEst);
+      })(cycleSpan, _rcLenMi);
     }
 
     if (featureType === "polygon" &&
@@ -1147,6 +1333,192 @@
   App.getAttrPopupFeature = function () {
     if (!App.isAttrPopupOpen()) return null;
     return { featureType: _currentType, featureIndex: _currentIdx };
+  };
+
+  /* ---- Mini-popup singleton (used by Time Bands and Route Picker pills) ---- */
+
+  var _miniEl = null;
+  var _miniDrag = null;
+  var _miniOnClose = null;
+
+  function buildMiniEl() {
+    if (_miniEl) return;
+    var el = document.createElement("div");
+    el.id = "fp-mini-popup";
+    el.style.display = "none";
+
+    var header = document.createElement("div");
+    header.className = "fp-mini-popup-header";
+    var titleEl = document.createElement("span");
+    titleEl.className = "fp-mini-popup-title";
+    header.appendChild(titleEl);
+    var closeBtn = document.createElement("button");
+    closeBtn.className = "fp-mini-popup-close";
+    closeBtn.innerHTML = "&times;";
+    closeBtn.title = "Close";
+    closeBtn.addEventListener("click", function (e) { e.stopPropagation(); closeMiniPopup(); });
+    header.appendChild(closeBtn);
+    el.appendChild(header);
+
+    var body = document.createElement("div");
+    body.className = "fp-mini-popup-body";
+    el.appendChild(body);
+
+    document.body.appendChild(el);
+    _miniEl = el;
+
+    header.addEventListener("mousedown", function (e) {
+      if (e.button !== 0) return;
+      if (e.target === closeBtn || closeBtn.contains(e.target)) return;
+      e.preventDefault();
+      var rect = el.getBoundingClientRect();
+      _miniDrag = { startX: e.clientX, startY: e.clientY, initLeft: rect.left, initTop: rect.top };
+      header.classList.add("dragging");
+    });
+    document.addEventListener("mousemove", function (e) {
+      if (!_miniDrag) return;
+      var dx = e.clientX - _miniDrag.startX;
+      var dy = e.clientY - _miniDrag.startY;
+      var pw = el.offsetWidth || 280, ph = el.offsetHeight || 200;
+      var left = Math.max(-(pw - 40), Math.min(_miniDrag.initLeft + dx, window.innerWidth - 40));
+      var top  = Math.max(0,           Math.min(_miniDrag.initTop  + dy, window.innerHeight - 40));
+      el.style.left = left + "px";
+      el.style.top  = top  + "px";
+    });
+    document.addEventListener("mouseup", function () {
+      if (_miniDrag) { _miniDrag = null; header.classList.remove("dragging"); }
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && _miniEl && _miniEl.style.display !== "none") closeMiniPopup();
+    });
+  }
+
+  function openMiniPopup(opts) {
+    buildMiniEl();
+    _miniEl.querySelector(".fp-mini-popup-title").textContent = opts.title || "";
+    var body = _miniEl.querySelector(".fp-mini-popup-body");
+    body.innerHTML = "";
+    if (opts.content) body.appendChild(opts.content);
+
+    // Show first so we can measure size, then position.
+    _miniEl.style.left = "-9999px";
+    _miniEl.style.top  = "0";
+    _miniEl.style.display = "";
+
+    var pw = _miniEl.offsetWidth  || 280;
+    var ph = _miniEl.offsetHeight || 200;
+    var left, top;
+    if (opts.anchor && opts.anchor.getBoundingClientRect) {
+      var r = opts.anchor.getBoundingClientRect();
+      left = r.left;
+      top  = r.bottom + 6;
+      if (left + pw > window.innerWidth - 8)  left = window.innerWidth  - pw - 8;
+      if (top  + ph > window.innerHeight - 8) top  = Math.max(8, r.top - ph - 6);
+    } else {
+      left = Math.max(8, (window.innerWidth  - pw) / 2);
+      top  = Math.max(8, (window.innerHeight - ph) / 2);
+    }
+    _miniEl.style.left = Math.round(left) + "px";
+    _miniEl.style.top  = Math.round(top)  + "px";
+
+    _miniOnClose = (typeof opts.onClose === "function") ? opts.onClose : null;
+  }
+
+  function closeMiniPopup() {
+    if (_miniEl) _miniEl.style.display = "none";
+    var fn = _miniOnClose;
+    _miniOnClose = null;
+    if (typeof fn === "function") { try { fn(); } catch (e) {} }
+  }
+
+  /* ---- Public exports for the Attribute Summary module ---- */
+
+  // Open the time-bands editor for a route/line feature in the mini-popup.
+  // The same buildServiceSchedule UI used inside the per-feature attribute popup
+  // is mounted here (Weekday / Saturday / Sunday with Mirror Saturday checkbox).
+  App.openTimeBandsPopup = function (feature, anchor, onChange) {
+    if (!feature || !feature.properties) return;
+    if (!feature.properties.attributes) feature.properties.attributes = {};
+    var content = buildServiceSchedule(feature.properties.attributes);
+    openMiniPopup({
+      title: "Time Bands — " + (feature.properties.name || ""),
+      content: content,
+      anchor: anchor,
+      onClose: function () { if (typeof onChange === "function") onChange(); }
+    });
+  };
+
+  // Open the route-picker checklist for a point feature in the mini-popup.
+  // `attrs` is the point's `properties.attributes` object; the picker mutates
+  // `attrs.associatedRoutes` directly.
+  App.openRoutePickerPopup = function (attrs, anchor, onChange) {
+    if (!attrs) return;
+    var content = buildRoutePickerContent(attrs);
+    openMiniPopup({
+      title: "Routes",
+      content: content,
+      anchor: anchor,
+      onClose: function () { if (typeof onChange === "function") onChange(); }
+    });
+  };
+
+  // Generic mini-popup opener — any module can mount its own content node in
+  // the shared `#fp-mini-popup` singleton. Same dialog as the time-bands and
+  // route-picker mini-popups (320px, draggable header, Escape closes).
+  // `opts` = { title, content (DOM node), anchor (DOM element), onClose (fn) }.
+  App.openMiniPopup = function (opts) { openMiniPopup(opts || {}); };
+
+  // Close the mini-popup if it's open. Safe to call when not open.
+  App.closeMiniPopup = function () { closeMiniPopup(); };
+
+  // Build the Weekday / Saturday / Sunday time-bands editor for a route/line
+  // feature and return the DOM node. Same widget mounted by the per-feature
+  // attribute popup and `App.openTimeBandsPopup` — modules embedding their own
+  // attribute editors should use this rather than reimplementing the bands UI.
+  App.buildServiceScheduleEditor = function (feature) {
+    if (!feature || !feature.properties) return null;
+    if (!feature.properties.attributes) feature.properties.attributes = {};
+    return buildServiceSchedule(feature.properties.attributes);
+  };
+
+  // Build a `.fp-attr-overrides` container with the per-feature override icons
+  // (opacity / buffer / width / offset / reset). Returns null for label/textbox.
+  App.buildOverrideIcons = function (featureType, feature) {
+    return buildOverridesContainer(featureType, feature);
+  };
+
+  // Build the `N routes` pill for a point feature. Returns the button DOM.
+  // Used by the Attribute Summary module to show a compact, clickable badge.
+  App.buildPointRouteBadge = function (pointFeature) {
+    if (!pointFeature || !pointFeature.properties) return null;
+    if (!pointFeature.properties.attributes) pointFeature.properties.attributes = {};
+    return buildRouteBadge(pointFeature.properties.attributes).el;
+  };
+
+  // Build a compact "Bands (Wd · Sa · Su)" button for a route/line feature.
+  // Click opens the same Time Bands mini-popup used by the per-feature popup.
+  App.buildTimeBandsBadge = function (feature) {
+    if (!feature || !feature.properties) return null;
+    if (!feature.properties.attributes) feature.properties.attributes = {};
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "fp-bands-badge";
+    function refresh() {
+      var svc = feature.properties.attributes.service || {};
+      var w = (svc.weekday  || []).length;
+      var s = (svc.saturday || []).length;
+      var u = svc.sundayMirrorsSaturday ? s : (svc.sunday || []).length;
+      var total = w + s + u;
+      btn.textContent = total === 0 ? "Add bands" : (w + " · " + s + " · " + u);
+      btn.title = "Time bands — Weekday: " + w + ", Saturday: " + s + ", Sunday: " + u +
+                  (svc.sundayMirrorsSaturday ? " (mirrors Sat)" : "");
+    }
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      App.openTimeBandsPopup(feature, btn, refresh);
+    });
+    refresh();
+    return btn;
   };
 
 })();

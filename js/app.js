@@ -11,67 +11,10 @@
 
   App.drawMode = null; // null | "point" | "line" | "route" | "polygon" | "label" | "measure"
 
-  // ---- Data Inputs panel ----
-
-  // Reusable ⚠ tooltip markup for median (non-additive) variables.
-  var WARN_ICON = '<span class="var-warn-icon" title="Median estimate \u2014 displayed as an area-weighted average of overlapping geographies\u2019 values. This is not a true median for the buffer area. Use with caution.">\u26A0</span>';
-
-  var DATA_INPUTS_PANEL_HTML =
-    // ---- Census section ----
-    '<div class="sb2-section-label">Census</div>' +
-
-    '<div class="var-actions">' +
-      '<button type="button" id="varSelectAll" class="var-action-btn">Select all</button>' +
-      '<button type="button" id="varClearAll" class="var-action-btn">Clear all</button>' +
-    '</div>' +
-
-    '<fieldset id="varSelect" class="var-checklist">' +
-      '<legend>Variables (select one or more)</legend>' +
-
-      // ---- Demographics ----
-      '<div class="var-group-label">Demographics</div>' +
-      '<label class="var-check"><input type="checkbox" value="B01003_001E"> Total population</label>' +
-      '<label class="var-check"><input type="checkbox" value="B11001_001E"> Total households</label>' +
-      '<label class="var-check"><input type="checkbox" value="DERIVED_PPH"> Average persons per household</label>' +
-      '<label class="var-check"><input type="checkbox" value="B19013_001E"> Median household income ' + WARN_ICON + '</label>' +
-      '<label class="var-check"><input type="checkbox" value="B01002_001E"> Median age ' + WARN_ICON + '</label>' +
-      '<label class="var-check"><input type="checkbox" value="GROUP_SEX"> Sex</label>' +
-      '<label class="var-check"><input type="checkbox" value="GROUP_RACE"> Race</label>' +
-      '<label class="var-check"><input type="checkbox" value="GROUP_ETHNICITY"> Ethnicity</label>' +
-
-      // ---- Equity ----
-      '<div class="var-group-label">Equity</div>' +
-      '<label class="var-check"><input type="checkbox" value="DERIVED_DISABILITY"> With a disability</label>' +
-      '<label class="var-check"><input type="checkbox" value="B17001_002E"> Persons below poverty level</label>' +
-      '<label class="var-check"><input type="checkbox" value="GROUP_EDUCATION"> Education</label>' +
-      '<label class="var-check"><input type="checkbox" value="DERIVED_LEP"> Limited English proficient</label>' +
-      '<label class="var-check"><input type="checkbox" value="GROUP_CITIZENSHIP"> Citizenship</label>' +
-      '<label class="var-check"><input type="checkbox" value="B08201_002E"> Zero-car households</label>' +
-      '<label class="var-check"><input type="checkbox" value="GROUP_EMPLOYMENT"> Employment status</label>' +
-
-      // ---- Travel ----
-      '<div class="var-group-label">Travel</div>' +
-      '<label class="var-check"><input type="checkbox" value="GROUP_COMMUTE"> Commute mode</label>' +
-      '<label class="var-check"><input type="checkbox" value="GROUP_COMMTIME"> Commute time</label>' +
-
-      // ---- Housing ----
-      '<div class="var-group-label">Housing</div>' +
-      '<label class="var-check"><input type="checkbox" value="B25001_001E"> Total housing units</label>' +
-      '<label class="var-check"><input type="checkbox" value="GROUP_OCCUPANCY"> Occupancy</label>' +
-      '<label class="var-check"><input type="checkbox" value="GROUP_RENT_BURDEN"> Rent burden</label>' +
-      '<label class="var-check"><input type="checkbox" value="B25064_001E"> Median gross rent ' + WARN_ICON + '</label>' +
-      '<label class="var-check"><input type="checkbox" value="B25077_001E"> Median home value ' + WARN_ICON + '</label>' +
-
-    '</fieldset>' +
-
-    // ---- Employment (LODES) section ----
-    '<div class="sb2-section-label">Employment (LODES)</div>' +
-    '<label class="var-check"><input type="checkbox" id="lodesCheckbox" value="LODES_WAC_C000"> Total existing employment \u2014 file required</label>' +
-    '<span id="lodesState" style="display:none"></span>' +
-    '<span id="lodesLoaded" style="display:none"></span>' +
-
-    // PPACG Pop Projection has moved to the Projections tab in Ridership Forecasting.
-    '';
+  // ---- Variable checkbox UI ----
+  // The variable checkbox list is built at runtime by buffer-summary.js from
+  // VAR_META in utils.js (single source of truth). There is no sidebar Data
+  // Inputs panel — the checkboxes live inside the Feature Area Analysis popup.
 
   // ---- Module registry (replaces single-project system) ----
 
@@ -155,14 +98,18 @@
     }
   }
 
-  // Note: runSummary() and helpers (CHECKBOX_GROUPS, MANDATORY_VARS, DENOM_MAP,
-  // expandGroups, aggDescription) have moved to js/projects/buffer-summary.js.
+  // Note: runSummary(), MANDATORY_VARS, expandGroups, and aggDescription live
+  // in js/projects/buffer-summary.js. Variable metadata, checkbox groups, and
+  // percentage denominators are all driven by VAR_META in js/core/utils.js.
 
   // ---- Build Analysis sidebar panel HTML ----
 
   function buildAnalysisButtonsHTML() {
     var html = '<div class="analysis-module-list">';
     for (var entry of _modules.values()) {
+      // System modules (e.g. Attribute Summary, opened from Feature Settings)
+      // are not surfaced in the Analysis sidebar panel.
+      if (entry.system === true) continue;
       var isEnabled = entry.enabled !== false;
       var disabledAttr = isEnabled ? '' : ' disabled';
       html += '<button class="analysis-module-btn"' +
@@ -188,10 +135,16 @@
     _computingOffsets = true;
     try {
       var features = [];
-      (App.lines || []).forEach(function (f, i) { if (!f.properties.hidden) features.push({ src: "line", idx: i, feature: f }); });
-      (App.routes || []).forEach(function (f, i) { if (!f.properties.hidden) features.push({ src: "route", idx: i, feature: f }); });
+      // Only include features without a manual offset override — manually-offset
+      // features keep their value and are excluded from auto computation.
+      (App.lines || []).forEach(function (f, i) {
+        if (!f.properties.hidden && !f.properties._offsetManual) features.push({ src: "line", idx: i, feature: f });
+      });
+      (App.routes || []).forEach(function (f, i) {
+        if (!f.properties.hidden && !f.properties._offsetManual) features.push({ src: "route", idx: i, feature: f });
+      });
 
-      // Clear all offsets first
+      // Clear all auto-managed offsets first (manual ones are already excluded)
       for (var k = 0; k < features.length; k++) {
         if (features[k].feature.properties) features[k].feature.properties._offset = 0;
       }
@@ -256,8 +209,13 @@
     if (_computingOffsets) return;
     _computingOffsets = true;
     try {
-      (App.lines || []).forEach(function (f) { if (f.properties) f.properties._offset = 0; });
-      (App.routes || []).forEach(function (f) { if (f.properties) f.properties._offset = 0; });
+      // Preserve manual per-feature offsets when the global toggle is turned off.
+      (App.lines || []).forEach(function (f) {
+        if (f.properties && !f.properties._offsetManual) f.properties._offset = 0;
+      });
+      (App.routes || []).forEach(function (f) {
+        if (f.properties && !f.properties._offsetManual) f.properties._offset = 0;
+      });
       _pushOffsetSources();
     } finally {
       _computingOffsets = false;
@@ -418,6 +376,20 @@
     // Wire popup system
     App.popup.wire(_modules, buildCore);
 
+    // Public opener for the Attribute Summary "system" module (registered with
+    // system: true so it does NOT appear in the Analysis dropdown).
+    App.openAttributeSummary = function () {
+      App.popup.open("attribute-summary", _modules, buildCore);
+    };
+
+    // Wire the entry button in Feature Settings
+    var asBtn = document.getElementById("open-attribute-summary");
+    if (asBtn) {
+      asBtn.addEventListener("click", function () {
+        if (typeof App.openAttributeSummary === "function") App.openAttributeSummary();
+      });
+    }
+
     // Populate Analysis toolbar dropdown with module buttons
     var analysisDropdown = document.getElementById("analysis-dropdown");
     if (analysisDropdown && _modules.size > 0) {
@@ -512,20 +484,26 @@
     }
 
     // Present mode
-    document.getElementById("present-btn").addEventListener("click", function () {
-      document.body.classList.add("present-mode");
+    App.setPresentMode = function (enabled) {
+      var isEnabled = !!enabled;
+      document.body.classList.toggle("present-mode", isEnabled);
       App.map.resize();
+      document.dispatchEvent(new CustomEvent("mat:present-mode-change", {
+        detail: { enabled: isEnabled }
+      }));
+    };
+
+    document.getElementById("present-btn").addEventListener("click", function () {
+      App.setPresentMode(true);
     });
     document.getElementById("present-exit").addEventListener("click", function () {
-      document.body.classList.remove("present-mode");
-      App.map.resize();
+      App.setPresentMode(false);
     });
 
     // Keyboard shortcuts
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape" && document.body.classList.contains("present-mode")) {
-        document.body.classList.remove("present-mode");
-        App.map.resize();
+        App.setPresentMode(false);
         return;
       }
       if (e.key === "Escape" && App.drawMode === "measure") {
@@ -594,12 +572,23 @@
       if (el) el.innerHTML = pair[1];
     });
 
+    var BUFFER_RADIUS_STEPS = [0, 0.125, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+
     var _fpActiveBtn = null;
 
     function _closeFpSlider() {
       var pop = document.getElementById("fp-slider-popover");
       if (pop) pop.style.display = "none";
       if (_fpActiveBtn) { _fpActiveBtn.classList.remove("fp-sib-active"); _fpActiveBtn = null; }
+    }
+
+    function _valueToIdx(val, values) {
+      var bestIdx = 0, bestDist = Infinity;
+      for (var i = 0; i < values.length; i++) {
+        var d = Math.abs(values[i] - val);
+        if (d < bestDist) { bestDist = d; bestIdx = i; }
+      }
+      return bestIdx;
     }
 
     function _openFpSlider(btn, cfg) {
@@ -614,21 +603,37 @@
       var unitEl = document.getElementById("fp-slider-unit");
       if (!slider || !valEl) return;
 
-      slider.min   = cfg.min;
-      slider.max   = cfg.max;
-      slider.step  = cfg.step;
       var initVal = (cfg.value != null) ? cfg.value : (cfg.key ? App.featureSettings[cfg.key] : 0);
-      slider.value = initVal;
-      valEl.textContent  = _fmtSlider(initVal, cfg);
       if (unitEl) unitEl.textContent = cfg.unit || "";
 
-      slider.oninput = function () {
-        var v = parseFloat(this.value);
-        if (cfg.key) App.featureSettings[cfg.key] = v;
-        valEl.textContent = _fmtSlider(v, cfg);
-        cfg.onChange(v);
-        if (cfg.key && typeof App.cache !== "undefined") App.cache.save();
-      };
+      if (cfg.values) {
+        slider.min  = 0;
+        slider.max  = cfg.values.length - 1;
+        slider.step = 1;
+        var initIdx = _valueToIdx(initVal, cfg.values);
+        slider.value = initIdx;
+        valEl.textContent = _fmtSlider(cfg.values[initIdx], cfg);
+        slider.oninput = function () {
+          var v = cfg.values[parseInt(this.value)];
+          if (cfg.key) App.featureSettings[cfg.key] = v;
+          valEl.textContent = _fmtSlider(v, cfg);
+          cfg.onChange(v);
+          if (cfg.key && typeof App.cache !== "undefined") App.cache.save();
+        };
+      } else {
+        slider.min   = cfg.min;
+        slider.max   = cfg.max;
+        slider.step  = cfg.step;
+        slider.value = initVal;
+        valEl.textContent = _fmtSlider(initVal, cfg);
+        slider.oninput = function () {
+          var v = parseFloat(this.value);
+          if (cfg.key) App.featureSettings[cfg.key] = v;
+          valEl.textContent = _fmtSlider(v, cfg);
+          cfg.onChange(v);
+          if (cfg.key && typeof App.cache !== "undefined") App.cache.save();
+        };
+      }
 
       // Position popover below (or above) the icon
       var rect = btn.getBoundingClientRect();
@@ -646,6 +651,7 @@
     }
 
     function _fmtSlider(v, cfg) {
+      if (cfg.values) return parseFloat(v.toFixed(3)).toString();
       if (cfg.step < 1) return parseFloat(v).toFixed(1);
       return Math.round(v).toString();
     }
@@ -674,7 +680,7 @@
         if (_fpActiveBtn === btn) {
           var slider = document.getElementById("fp-slider-input");
           var valEl  = document.getElementById("fp-slider-value");
-          if (slider) slider.value = cfg.def;
+          if (slider) slider.value = cfg.values ? _valueToIdx(cfg.def, cfg.values) : cfg.def;
           if (valEl)  valEl.textContent = _fmtSlider(cfg.def, cfg);
         }
       });
@@ -685,9 +691,9 @@
     _wireFpBtn("fp-set-routeOpacity",      { key:"routeOpacity",       def:100, min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("route"); } });
     _wireFpBtn("fp-set-polygonOpacity",    { key:"polygonOpacity",     def:50,  min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("polygon"); } });
     _wireFpBtn("fp-set-bufferOpacity",     { key:"bufferOpacity",      def:50,  min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("buffer"); } });
-    _wireFpBtn("fp-set-bufferRadius",      { key:"bufferRadius",       def:0,   min:0, max:2,   step:0.1, unit:"mi", onChange: function(v) { App.rebuildBuffers(v); notifyProject(); } });
-    _wireFpBtn("fp-set-lineBufferRadius",  { key:"lineBufferRadius",   def:0,   min:0, max:2,   step:0.1, unit:"mi", onChange: function(v) { App.rebuildLineBuffers(v); notifyProject(); } });
-    _wireFpBtn("fp-set-routeBufferRadius", { key:"routeBufferRadius",  def:0,   min:0, max:2,   step:0.1, unit:"mi", onChange: function(v) { App.rebuildRouteBuffers(v); notifyProject(); } });
+    _wireFpBtn("fp-set-bufferRadius",      { key:"bufferRadius",       def:0,   values:BUFFER_RADIUS_STEPS, unit:"mi", onChange: function(v) { App.rebuildBuffers(v); notifyProject(); } });
+    _wireFpBtn("fp-set-lineBufferRadius",  { key:"lineBufferRadius",   def:0,   values:BUFFER_RADIUS_STEPS, unit:"mi", onChange: function(v) { App.rebuildLineBuffers(v); notifyProject(); } });
+    _wireFpBtn("fp-set-routeBufferRadius", { key:"routeBufferRadius",  def:0,   values:BUFFER_RADIUS_STEPS, unit:"mi", onChange: function(v) { App.rebuildRouteBuffers(v); notifyProject(); } });
     _wireFpBtn("fp-set-pointLineWidth",    { key:"pointLineWidth",     def:1,   min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyLineWidth("point"); } });
     _wireFpBtn("fp-set-lineLineWidth",     { key:"lineLineWidth",      def:1,   min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyLineWidth("line"); } });
     _wireFpBtn("fp-set-routeLineWidth",    { key:"routeLineWidth",     def:1,   min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyLineWidth("route"); } });
@@ -695,8 +701,9 @@
     _wireFpBtn("fp-set-bufferLineWidth",   { key:"bufferLineWidth",    def:1,   min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyBufferLineWidth(); } });
 
     // Expose slider infrastructure for per-feature overrides in feature-attributes.js
-    App._openFpSlider  = _openFpSlider;
-    App._closeFpSlider = _closeFpSlider;
+    App._openFpSlider      = _openFpSlider;
+    App._closeFpSlider     = _closeFpSlider;
+    App.BUFFER_RADIUS_STEPS = BUFFER_RADIUS_STEPS;
 
     // Offset overlapping lines/routes toggle
     document.getElementById("offsetOverlap").addEventListener("change", function () {
