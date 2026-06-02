@@ -815,7 +815,7 @@
           }
         }
 
-        if (typeof App._syncInlineSliders === "function") App._syncInlineSliders();
+        if (typeof App._syncDisplaySliders === "function") App._syncDisplaySliders();
         if (typeof App.notifyProject === "function") App.notifyProject();
 
         var nFeatures = App.points.length + App.lines.length +
@@ -870,7 +870,7 @@
         applyState(state);
         save(); // persist imported state to localStorage
 
-        if (typeof App._syncInlineSliders === "function") App._syncInlineSliders();
+        if (typeof App._syncDisplaySliders === "function") App._syncDisplaySliders();
         if (typeof App.notifyProject === "function") App.notifyProject();
 
         var nFeatures = App.points.length + App.lines.length + App.routes.length + App.polygons.length + (App.labels ? App.labels.length : 0);

@@ -259,40 +259,13 @@
           <div class="fp-section" id="fp-settings-section">
             <div class="fp-section-header fp-settings-header">Feature Settings</div>
             <div class="fp-settings-body">
-              <div class="fp-settings-list">
-                <div class="fp-sl-group">
-                  <div class="fp-sl-group-label">Points</div>
-                  <div class="fp-sl-row"><span class="fp-sl-name">Opacity</span><input type="range" id="fp-sl-pointOpacity" /><span class="fp-sl-val"></span></div>
-                  <div class="fp-sl-row"><span class="fp-sl-name">Buffer</span><input type="range" id="fp-sl-bufferRadius" /><span class="fp-sl-val"></span></div>
-                  <div class="fp-sl-row"><span class="fp-sl-name">Size</span><input type="range" id="fp-sl-pointLineWidth" /><span class="fp-sl-val"></span></div>
-                </div>
-                <div class="fp-sl-group">
-                  <div class="fp-sl-group-label">Lines</div>
-                  <div class="fp-sl-row"><span class="fp-sl-name">Opacity</span><input type="range" id="fp-sl-lineOpacity" /><span class="fp-sl-val"></span></div>
-                  <div class="fp-sl-row"><span class="fp-sl-name">Buffer</span><input type="range" id="fp-sl-lineBufferRadius" /><span class="fp-sl-val"></span></div>
-                  <div class="fp-sl-row"><span class="fp-sl-name">Width</span><input type="range" id="fp-sl-lineLineWidth" /><span class="fp-sl-val"></span></div>
-                </div>
-                <div class="fp-sl-group">
-                  <div class="fp-sl-group-label">Routes</div>
-                  <div class="fp-sl-row"><span class="fp-sl-name">Opacity</span><input type="range" id="fp-sl-routeOpacity" /><span class="fp-sl-val"></span></div>
-                  <div class="fp-sl-row"><span class="fp-sl-name">Buffer</span><input type="range" id="fp-sl-routeBufferRadius" /><span class="fp-sl-val"></span></div>
-                  <div class="fp-sl-row"><span class="fp-sl-name">Width</span><input type="range" id="fp-sl-routeLineWidth" /><span class="fp-sl-val"></span></div>
-                </div>
-                <div class="fp-sl-group">
-                  <div class="fp-sl-group-label">Polygons</div>
-                  <div class="fp-sl-row"><span class="fp-sl-name">Opacity</span><input type="range" id="fp-sl-polygonOpacity" /><span class="fp-sl-val"></span></div>
-                  <div class="fp-sl-row"><span class="fp-sl-name">Width</span><input type="range" id="fp-sl-polygonLineWidth" /><span class="fp-sl-val"></span></div>
-                </div>
-                <div class="fp-sl-group">
-                  <div class="fp-sl-group-label">Buffers</div>
-                  <div class="fp-sl-row"><span class="fp-sl-name">Opacity</span><input type="range" id="fp-sl-bufferOpacity" /><span class="fp-sl-val"></span></div>
-                  <div class="fp-sl-row"><span class="fp-sl-name">Width</span><input type="range" id="fp-sl-bufferLineWidth" /><span class="fp-sl-val"></span></div>
-                </div>
-              </div>
               <div class="fp-buffer-row">
                 <label class="fp-buffer-label" for="offsetOverlap">
                   <input type="checkbox" id="offsetOverlap" /> Offset overlapping Lines/Routes
                 </label>
+              </div>
+              <div class="fp-buffer-row">
+                <button id="open-display-settings" class="fp-attr-summary-btn" type="button">Display Settings…</button>
               </div>
               <div class="fp-buffer-row">
                 <button id="open-attribute-summary" class="fp-attr-summary-btn" type="button">Attribute Summary…</button>
@@ -402,6 +375,7 @@
     <script src="js/projects/title-vi.js"></script>
     <script src="js/projects/gtfs.js"></script>
     <script src="js/projects/attribute-summary.js"></script>
+    <script src="js/projects/display-settings.js"></script>
     <script src="js/core/present-overlays.js"></script>
   </body>
 </html>

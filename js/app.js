@@ -382,11 +382,21 @@
       App.popup.open("attribute-summary", _modules, buildCore);
     };
 
-    // Wire the entry button in Feature Settings
+    // Wire the entry buttons in Feature Settings
     var asBtn = document.getElementById("open-attribute-summary");
     if (asBtn) {
       asBtn.addEventListener("click", function () {
         if (typeof App.openAttributeSummary === "function") App.openAttributeSummary();
+      });
+    }
+
+    App.openDisplaySettings = function () {
+      App.popup.open("display-settings", _modules, buildCore);
+    };
+    var dsBtn = document.getElementById("open-display-settings");
+    if (dsBtn) {
+      dsBtn.addEventListener("click", function () {
+        if (typeof App.openDisplaySettings === "function") App.openDisplaySettings();
       });
     }
 
@@ -641,91 +651,6 @@
       }
     }, true);
 
-    // Wire inline horizontal sliders for Feature Settings
-    function _wireInlineSlider(id, cfg) {
-      var slider = document.getElementById(id);
-      if (!slider) return;
-      var valSpan = slider.parentNode.querySelector(".fp-sl-val");
-
-      function fmt(v) {
-        if (cfg.values) return parseFloat(v.toFixed(3)).toString() + (cfg.unit ? " " + cfg.unit : "");
-        if (cfg.unit === "%") return Math.round(v) + "%";
-        if (cfg.step < 1) return parseFloat(v).toFixed(1) + (cfg.unit ? cfg.unit : "");
-        return Math.round(v).toString() + (cfg.unit ? cfg.unit : "");
-      }
-
-      var initVal = App.featureSettings[cfg.key];
-      if (cfg.values) {
-        slider.min = 0;
-        slider.max = cfg.values.length - 1;
-        slider.step = 1;
-        slider.value = _valueToIdx(initVal, cfg.values);
-        if (valSpan) valSpan.textContent = fmt(initVal);
-        slider.addEventListener("input", function () {
-          var v = cfg.values[parseInt(this.value)];
-          App.featureSettings[cfg.key] = v;
-          if (valSpan) valSpan.textContent = fmt(v);
-          cfg.onChange(v);
-          if (typeof App.cache !== "undefined") App.cache.save();
-        });
-      } else {
-        slider.min = cfg.min;
-        slider.max = cfg.max;
-        slider.step = cfg.step;
-        slider.value = initVal;
-        if (valSpan) valSpan.textContent = fmt(initVal);
-        slider.addEventListener("input", function () {
-          var v = parseFloat(this.value);
-          App.featureSettings[cfg.key] = v;
-          if (valSpan) valSpan.textContent = fmt(v);
-          cfg.onChange(v);
-          if (typeof App.cache !== "undefined") App.cache.save();
-        });
-      }
-
-      slider.addEventListener("dblclick", function () {
-        App.featureSettings[cfg.key] = cfg.def;
-        this.value = cfg.values ? _valueToIdx(cfg.def, cfg.values) : cfg.def;
-        if (valSpan) valSpan.textContent = fmt(cfg.def);
-        cfg.onChange(cfg.def);
-        if (typeof App.cache !== "undefined") App.cache.save();
-      });
-
-      cfg._slider = slider;
-      cfg._valSpan = valSpan;
-    }
-
-    var _inlineSliderCfgs = [];
-    function _regInline(id, cfg) { _inlineSliderCfgs.push(cfg); _wireInlineSlider(id, cfg); }
-
-    _regInline("fp-sl-pointOpacity",      { key:"pointOpacity",      def:100, min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("point"); } });
-    _regInline("fp-sl-lineOpacity",       { key:"lineOpacity",       def:100, min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("line"); } });
-    _regInline("fp-sl-routeOpacity",      { key:"routeOpacity",      def:100, min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("route"); } });
-    _regInline("fp-sl-polygonOpacity",    { key:"polygonOpacity",    def:50,  min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("polygon"); } });
-    _regInline("fp-sl-bufferOpacity",     { key:"bufferOpacity",     def:50,  min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("buffer"); } });
-    _regInline("fp-sl-bufferRadius",      { key:"bufferRadius",      def:0,   values:BUFFER_RADIUS_STEPS, unit:"mi", onChange: function(v) { App.rebuildBuffers(v); notifyProject(); } });
-    _regInline("fp-sl-lineBufferRadius",  { key:"lineBufferRadius",  def:0,   values:BUFFER_RADIUS_STEPS, unit:"mi", onChange: function(v) { App.rebuildLineBuffers(v); notifyProject(); } });
-    _regInline("fp-sl-routeBufferRadius", { key:"routeBufferRadius", def:0,   values:BUFFER_RADIUS_STEPS, unit:"mi", onChange: function(v) { App.rebuildRouteBuffers(v); notifyProject(); } });
-    _regInline("fp-sl-pointLineWidth",    { key:"pointLineWidth",    def:1,   min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyLineWidth("point"); } });
-    _regInline("fp-sl-lineLineWidth",     { key:"lineLineWidth",     def:1,   min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyLineWidth("line"); } });
-    _regInline("fp-sl-routeLineWidth",    { key:"routeLineWidth",    def:1,   min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyLineWidth("route"); } });
-    _regInline("fp-sl-polygonLineWidth",  { key:"polygonLineWidth",  def:1,   min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyLineWidth("polygon"); } });
-    _regInline("fp-sl-bufferLineWidth",   { key:"bufferLineWidth",   def:1,   min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyBufferLineWidth(); } });
-
-    App._syncInlineSliders = function () {
-      _inlineSliderCfgs.forEach(function (cfg) {
-        if (!cfg._slider) return;
-        var v = App.featureSettings[cfg.key];
-        cfg._slider.value = cfg.values ? _valueToIdx(v, cfg.values) : v;
-        if (cfg._valSpan) {
-          if (cfg.values) cfg._valSpan.textContent = parseFloat(v.toFixed(3)).toString() + (cfg.unit ? " " + cfg.unit : "");
-          else if (cfg.unit === "%") cfg._valSpan.textContent = Math.round(v) + "%";
-          else if (cfg.step < 1) cfg._valSpan.textContent = parseFloat(v).toFixed(1) + (cfg.unit ? cfg.unit : "");
-          else cfg._valSpan.textContent = Math.round(v).toString() + (cfg.unit ? cfg.unit : "");
-        }
-      });
-    };
-
     // Expose slider infrastructure for per-feature overrides in feature-attributes.js
     App._openFpSlider      = _openFpSlider;
     App._closeFpSlider     = _closeFpSlider;
@@ -941,7 +866,7 @@
         if (typeof App.clearRoadNetwork === "function") App.clearRoadNetwork();
         if (typeof App.clearCensusOverlay === "function") App.clearCensusOverlay();
         if (typeof App.clearPresentOverlays === "function") App.clearPresentOverlays();
-        if (typeof App._syncInlineSliders === "function") App._syncInlineSliders();
+        if (typeof App._syncDisplaySliders === "function") App._syncDisplaySliders();
         clearModules();
         notifyProject();
       });
@@ -1404,7 +1329,7 @@
       App.setStatus("Session restored");
       notifyProject();
     }
-    if (typeof App._syncInlineSliders === "function") App._syncInlineSliders();
+    if (typeof App._syncDisplaySliders === "function") App._syncDisplaySliders();
 
     // "Start fresh" link in view-only banner
     var _viewOnlyFreshBtn = document.getElementById("view-only-start-fresh");
