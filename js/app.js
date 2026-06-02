@@ -547,31 +547,6 @@
 
     // ---- Feature Settings slider popover ----
 
-    var OPACITY_SVG = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="8" cy="8" r="6" stroke-dasharray="3 2"/></svg>';
-    var BUFFER_SVG  = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="2" fill="currentColor" stroke="none"/></svg>';
-    var WIDTH_SVG   = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-linecap="round"><line x1="2" y1="8" x2="14" y2="8" stroke-width="2.5"/></svg>';
-
-    // Populate icon buttons with SVGs
-    var _iconDefs = [
-      ["fp-set-pointOpacity",      OPACITY_SVG],
-      ["fp-set-lineOpacity",       OPACITY_SVG],
-      ["fp-set-routeOpacity",      OPACITY_SVG],
-      ["fp-set-polygonOpacity",    OPACITY_SVG],
-      ["fp-set-bufferOpacity",     OPACITY_SVG],
-      ["fp-set-bufferRadius",      BUFFER_SVG],
-      ["fp-set-lineBufferRadius",  BUFFER_SVG],
-      ["fp-set-routeBufferRadius", BUFFER_SVG],
-      ["fp-set-pointLineWidth",    WIDTH_SVG],
-      ["fp-set-lineLineWidth",     WIDTH_SVG],
-      ["fp-set-routeLineWidth",    WIDTH_SVG],
-      ["fp-set-polygonLineWidth",  WIDTH_SVG],
-      ["fp-set-bufferLineWidth",   WIDTH_SVG]
-    ];
-    _iconDefs.forEach(function (pair) {
-      var el = document.getElementById(pair[0]);
-      if (el) el.innerHTML = pair[1];
-    });
-
     var BUFFER_RADIUS_STEPS = [0, 0.125, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
     var _fpActiveBtn = null;
@@ -666,39 +641,90 @@
       }
     }, true);
 
-    // Wire each icon button
-    function _wireFpBtn(id, cfg) {
-      var btn = document.getElementById(id);
-      if (!btn) return;
-      btn.addEventListener("click", function (e) { e.stopPropagation(); _openFpSlider(btn, cfg); });
-      btn.addEventListener("dblclick", function (e) {
-        e.stopPropagation();
+    // Wire inline horizontal sliders for Feature Settings
+    function _wireInlineSlider(id, cfg) {
+      var slider = document.getElementById(id);
+      if (!slider) return;
+      var valSpan = slider.parentNode.querySelector(".fp-sl-val");
+
+      function fmt(v) {
+        if (cfg.values) return parseFloat(v.toFixed(3)).toString() + (cfg.unit ? " " + cfg.unit : "");
+        if (cfg.unit === "%") return Math.round(v) + "%";
+        if (cfg.step < 1) return parseFloat(v).toFixed(1) + (cfg.unit ? cfg.unit : "");
+        return Math.round(v).toString() + (cfg.unit ? cfg.unit : "");
+      }
+
+      var initVal = App.featureSettings[cfg.key];
+      if (cfg.values) {
+        slider.min = 0;
+        slider.max = cfg.values.length - 1;
+        slider.step = 1;
+        slider.value = _valueToIdx(initVal, cfg.values);
+        if (valSpan) valSpan.textContent = fmt(initVal);
+        slider.addEventListener("input", function () {
+          var v = cfg.values[parseInt(this.value)];
+          App.featureSettings[cfg.key] = v;
+          if (valSpan) valSpan.textContent = fmt(v);
+          cfg.onChange(v);
+          if (typeof App.cache !== "undefined") App.cache.save();
+        });
+      } else {
+        slider.min = cfg.min;
+        slider.max = cfg.max;
+        slider.step = cfg.step;
+        slider.value = initVal;
+        if (valSpan) valSpan.textContent = fmt(initVal);
+        slider.addEventListener("input", function () {
+          var v = parseFloat(this.value);
+          App.featureSettings[cfg.key] = v;
+          if (valSpan) valSpan.textContent = fmt(v);
+          cfg.onChange(v);
+          if (typeof App.cache !== "undefined") App.cache.save();
+        });
+      }
+
+      slider.addEventListener("dblclick", function () {
         App.featureSettings[cfg.key] = cfg.def;
+        this.value = cfg.values ? _valueToIdx(cfg.def, cfg.values) : cfg.def;
+        if (valSpan) valSpan.textContent = fmt(cfg.def);
         cfg.onChange(cfg.def);
         if (typeof App.cache !== "undefined") App.cache.save();
-        // If this slider is currently open, sync its display
-        if (_fpActiveBtn === btn) {
-          var slider = document.getElementById("fp-slider-input");
-          var valEl  = document.getElementById("fp-slider-value");
-          if (slider) slider.value = cfg.values ? _valueToIdx(cfg.def, cfg.values) : cfg.def;
-          if (valEl)  valEl.textContent = _fmtSlider(cfg.def, cfg);
-        }
       });
+
+      cfg._slider = slider;
+      cfg._valSpan = valSpan;
     }
 
-    _wireFpBtn("fp-set-pointOpacity",      { key:"pointOpacity",      def:100, min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("point"); } });
-    _wireFpBtn("fp-set-lineOpacity",       { key:"lineOpacity",        def:100, min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("line"); } });
-    _wireFpBtn("fp-set-routeOpacity",      { key:"routeOpacity",       def:100, min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("route"); } });
-    _wireFpBtn("fp-set-polygonOpacity",    { key:"polygonOpacity",     def:50,  min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("polygon"); } });
-    _wireFpBtn("fp-set-bufferOpacity",     { key:"bufferOpacity",      def:50,  min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("buffer"); } });
-    _wireFpBtn("fp-set-bufferRadius",      { key:"bufferRadius",       def:0,   values:BUFFER_RADIUS_STEPS, unit:"mi", onChange: function(v) { App.rebuildBuffers(v); notifyProject(); } });
-    _wireFpBtn("fp-set-lineBufferRadius",  { key:"lineBufferRadius",   def:0,   values:BUFFER_RADIUS_STEPS, unit:"mi", onChange: function(v) { App.rebuildLineBuffers(v); notifyProject(); } });
-    _wireFpBtn("fp-set-routeBufferRadius", { key:"routeBufferRadius",  def:0,   values:BUFFER_RADIUS_STEPS, unit:"mi", onChange: function(v) { App.rebuildRouteBuffers(v); notifyProject(); } });
-    _wireFpBtn("fp-set-pointLineWidth",    { key:"pointLineWidth",     def:1,   min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyLineWidth("point"); } });
-    _wireFpBtn("fp-set-lineLineWidth",     { key:"lineLineWidth",      def:1,   min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyLineWidth("line"); } });
-    _wireFpBtn("fp-set-routeLineWidth",    { key:"routeLineWidth",     def:1,   min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyLineWidth("route"); } });
-    _wireFpBtn("fp-set-polygonLineWidth",  { key:"polygonLineWidth",   def:1,   min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyLineWidth("polygon"); } });
-    _wireFpBtn("fp-set-bufferLineWidth",   { key:"bufferLineWidth",    def:1,   min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyBufferLineWidth(); } });
+    var _inlineSliderCfgs = [];
+    function _regInline(id, cfg) { _inlineSliderCfgs.push(cfg); _wireInlineSlider(id, cfg); }
+
+    _regInline("fp-sl-pointOpacity",      { key:"pointOpacity",      def:100, min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("point"); } });
+    _regInline("fp-sl-lineOpacity",       { key:"lineOpacity",       def:100, min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("line"); } });
+    _regInline("fp-sl-routeOpacity",      { key:"routeOpacity",      def:100, min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("route"); } });
+    _regInline("fp-sl-polygonOpacity",    { key:"polygonOpacity",    def:50,  min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("polygon"); } });
+    _regInline("fp-sl-bufferOpacity",     { key:"bufferOpacity",     def:50,  min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("buffer"); } });
+    _regInline("fp-sl-bufferRadius",      { key:"bufferRadius",      def:0,   values:BUFFER_RADIUS_STEPS, unit:"mi", onChange: function(v) { App.rebuildBuffers(v); notifyProject(); } });
+    _regInline("fp-sl-lineBufferRadius",  { key:"lineBufferRadius",  def:0,   values:BUFFER_RADIUS_STEPS, unit:"mi", onChange: function(v) { App.rebuildLineBuffers(v); notifyProject(); } });
+    _regInline("fp-sl-routeBufferRadius", { key:"routeBufferRadius", def:0,   values:BUFFER_RADIUS_STEPS, unit:"mi", onChange: function(v) { App.rebuildRouteBuffers(v); notifyProject(); } });
+    _regInline("fp-sl-pointLineWidth",    { key:"pointLineWidth",    def:1,   min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyLineWidth("point"); } });
+    _regInline("fp-sl-lineLineWidth",     { key:"lineLineWidth",     def:1,   min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyLineWidth("line"); } });
+    _regInline("fp-sl-routeLineWidth",    { key:"routeLineWidth",    def:1,   min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyLineWidth("route"); } });
+    _regInline("fp-sl-polygonLineWidth",  { key:"polygonLineWidth",  def:1,   min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyLineWidth("polygon"); } });
+    _regInline("fp-sl-bufferLineWidth",   { key:"bufferLineWidth",   def:1,   min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyBufferLineWidth(); } });
+
+    App._syncInlineSliders = function () {
+      _inlineSliderCfgs.forEach(function (cfg) {
+        if (!cfg._slider) return;
+        var v = App.featureSettings[cfg.key];
+        cfg._slider.value = cfg.values ? _valueToIdx(v, cfg.values) : v;
+        if (cfg._valSpan) {
+          if (cfg.values) cfg._valSpan.textContent = parseFloat(v.toFixed(3)).toString() + (cfg.unit ? " " + cfg.unit : "");
+          else if (cfg.unit === "%") cfg._valSpan.textContent = Math.round(v) + "%";
+          else if (cfg.step < 1) cfg._valSpan.textContent = parseFloat(v).toFixed(1) + (cfg.unit ? cfg.unit : "");
+          else cfg._valSpan.textContent = Math.round(v).toString() + (cfg.unit ? cfg.unit : "");
+        }
+      });
+    };
 
     // Expose slider infrastructure for per-feature overrides in feature-attributes.js
     App._openFpSlider      = _openFpSlider;
@@ -915,6 +941,7 @@
         if (typeof App.clearRoadNetwork === "function") App.clearRoadNetwork();
         if (typeof App.clearCensusOverlay === "function") App.clearCensusOverlay();
         if (typeof App.clearPresentOverlays === "function") App.clearPresentOverlays();
+        if (typeof App._syncInlineSliders === "function") App._syncInlineSliders();
         clearModules();
         notifyProject();
       });
@@ -1377,6 +1404,7 @@
       App.setStatus("Session restored");
       notifyProject();
     }
+    if (typeof App._syncInlineSliders === "function") App._syncInlineSliders();
 
     // "Start fresh" link in view-only banner
     var _viewOnlyFreshBtn = document.getElementById("view-only-start-fresh");
