@@ -4896,15 +4896,15 @@ body.dark-mode .tb-edit-pattern-hdr { color: #edf2f7; }
   padding: 6px 10px;
   font-size: var(--text-sm);
   font-weight: var(--weight-medium, 500);
-  color: #fff;
-  background: #3182ce;
-  border: 1px solid #2b6cb0;
+  color: #2d3748;
+  background: #f7f8fa;
+  border: 1px solid var(--border);
   border-radius: 4px;
   cursor: pointer;
 }
-.fp-attr-summary-btn:hover { background: #2b6cb0; }
-body.dark-mode .fp-attr-summary-btn { background: #4299e1; border-color: #3182ce; }
-body.dark-mode .fp-attr-summary-btn:hover { background: #3182ce; }
+.fp-attr-summary-btn:hover { background: #eef1f5; }
+body.dark-mode .fp-attr-summary-btn { background: #2a2a3d; color: #e2e8f0; }
+body.dark-mode .fp-attr-summary-btn:hover { background: rgba(255,255,255,0.07); }
 
 /* ===========================================================
    Shared Mini-popup (Time Bands and Route Picker pills)
