@@ -207,6 +207,18 @@
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4.5 12a7.5 7.5 0 0 1 13-5.1l1.5-1.5" stroke="#e53e3e" stroke-width="2.5" stroke-linecap="round"/><path d="M19.5 12a7.5 7.5 0 0 1-13 5.1l-1.5 1.5" stroke="#e53e3e" stroke-width="2.5" stroke-linecap="round"/><polygon points="19,2 22,5.5 18,6" fill="#e53e3e"/><polygon points="5,22 2,18.5 6,18" fill="#e53e3e"/><line x1="12" y1="9" x2="12" y2="13" stroke="#e53e3e" stroke-width="2.5" stroke-linecap="round"/><circle cx="12" cy="16" r="1.3" fill="#e53e3e"/></svg>
           </button>
         </div>
+        <div id="search-wrapper">
+          <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
+               stroke="#a0aec0" stroke-width="2.5" stroke-linecap="round">
+            <circle cx="10.5" cy="10.5" r="7"/>
+            <line x1="15.5" y1="15.5" x2="21" y2="21"/>
+          </svg>
+          <input id="search-input" type="text" placeholder="Search location..."
+                 autocomplete="off" spellcheck="false" aria-label="Search location" />
+          <button id="search-clear" title="Clear search" aria-label="Clear search"
+                  style="display:none;">&times;</button>
+          <div id="search-results" role="listbox" style="display:none;"></div>
+        </div>
       </div>
 
       <div id="main-content">
@@ -354,6 +366,7 @@
     <script src="js/core/utils.js"></script>
     <script src="js/core/sidebar.js"></script>
     <script src="js/core/map.js"></script>
+    <script src="js/core/search.js"></script>
     <script src="js/core/road-network.js"></script>
     <script src="js/core/points.js"></script>
     <script src="js/core/lines.js"></script>

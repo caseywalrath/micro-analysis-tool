@@ -1330,6 +1330,7 @@
     }
 
     // Close dropdowns on outside click or Escape
+    var searchResults = document.getElementById("search-results");
     document.addEventListener("click", function () {
       exportDropdown.style.display = "none";
       addDataDropdown.style.display = "none";
@@ -1342,6 +1343,7 @@
         addDataDropdown.style.display = "none";
         if (analysisDropdown) analysisDropdown.style.display = "none";
         if (saveStateDropdown) saveStateDropdown.style.display = "none";
+        if (searchResults) searchResults.style.display = "none";
         if (typeof _closeFpSlider === "function") _closeFpSlider();
       }
     });
