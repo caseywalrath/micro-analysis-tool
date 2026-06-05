@@ -5135,3 +5135,54 @@ body.dark-mode .as-section-header { border-color: #2d2d3d; }
 .as-col-num     { }
 .as-col-overrides { justify-self: end; }
 
+/* ============================================================
+   Wetland & Channel Mitigation Needs module (.mn- prefix)
+   Mock RFP-demo module. Reuses .rf-*, .cs-*, .pill.*, .tpi-legend-*.
+   Only the resource toggle + a couple of readouts are module-specific.
+   ============================================================ */
+
+.mn-segmented {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.mn-segmented button {
+  flex: 1;
+  padding: 7px 8px;
+  border: none;
+  background: #fff;
+  color: #333;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.mn-segmented button + button { border-left: 1px solid var(--border); }
+.mn-segmented button:hover { background: #eef1f5; }
+.mn-segmented button.is-active {
+  background: #2b6cb0;
+  color: #fff;
+  font-weight: var(--weight-semibold);
+}
+
+.mn-unit-readout {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 5px 8px;
+  background: var(--panel, #f6f8fa);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.mn-unit-readout strong { font-size: var(--text-sm); }
+
+.mn-detail-raw {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.mn-detail-raw strong { color: #1a202c; }
+
