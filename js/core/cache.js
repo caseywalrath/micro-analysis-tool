@@ -1821,7 +1821,7 @@
     reader.onload = function (e) {
       var buffer = e.target.result;
       if (ext === "zip") {
-        _importSHPFromZip(buffer);
+        _importSHPFromZip(buffer, file);
       } else if (ext === "shp") {
         _parseSHPBuffers(buffer, null);
       } else {
@@ -1832,7 +1832,7 @@
     reader.readAsArrayBuffer(file);
   }
 
-  function _importSHPFromZip(zipBuffer) {
+  function _importSHPFromZip(zipBuffer, file) {
     if (typeof JSZip === "undefined") {
       alert("JSZip library not loaded. Cannot read ZIP files. Please check your internet connection and reload.");
       return;
@@ -1840,15 +1840,24 @@
 
     JSZip.loadAsync(zipBuffer).then(function (zip) {
       var shpEntry = null, dbfEntry = null, prjEntry = null;
+      var gtfsLike = false;
+      var GTFS_RE = /(^|\/)(agency|stops|routes|trips|stop_times|calendar|calendar_dates)\.txt$/i;
 
       zip.forEach(function (path, entry) {
         var lower = path.toLowerCase();
         if (/\.shp$/.test(lower) && !shpEntry) shpEntry = entry;
         if (/\.dbf$/.test(lower) && !dbfEntry) dbfEntry = entry;
         if (/\.prj$/.test(lower) && !prjEntry) prjEntry = entry;
+        if (GTFS_RE.test(path)) gtfsLike = true;
       });
 
       if (!shpEntry) {
+        // A GTFS feed is also a .zip of .txt files (no .shp). Hand it to the
+        // GTFS loader instead of failing as a malformed shapefile.
+        if (gtfsLike && file && typeof App.loadGTFSFile === "function") {
+          App.loadGTFSFile(file);
+          return;
+        }
         alert("No .shp file found in the ZIP archive.");
         return;
       }
