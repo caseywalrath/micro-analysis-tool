@@ -48,6 +48,7 @@ body { margin: 0; font-family: var(--font-sans); background: var(--bg); }
 /* ---- Top toolbar ---- */
 #toolbar {
   position: relative;
+  z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
