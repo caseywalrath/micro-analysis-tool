@@ -412,6 +412,36 @@
       _layerListeners.push({ event: event, layerId: layerId, handler: handler });
     }
 
+    // Query a small box around the cursor so stacked / near-parallel features
+    // are all captured (the single-pixel e.features only catches the topmost),
+    // deduped by a stable key.
+    function featuresNear(e, layerId, keyFn) {
+      var T = 5; // px tolerance
+      var p = e.point;
+      var box = [[p.x - T, p.y - T], [p.x + T, p.y + T]];
+      var raw = map.queryRenderedFeatures(box, { layers: [layerId] });
+      var seen = {}, out = [];
+      raw.forEach(function (f) {
+        var k = keyFn(f.properties);
+        if (k == null || seen[k]) return;
+        seen[k] = 1;
+        out.push(f);
+      });
+      return out;
+    }
+
+    function keyFor(props, isStop) {
+      return isStop ? props.stop_id : props.shape_id;
+    }
+
+    function shapeName(props) {
+      return props.route_short_name || props.route_long_name || props.shape_id || "";
+    }
+
+    function stopName(props) {
+      return props.stop_name || props.stop_code || props.stop_id || "";
+    }
+
     var layers = [
       { id: "gtfs-shapes-layer", isStop: false },
       { id: "gtfs-stops-layer",  isStop: true  }
@@ -427,12 +457,13 @@
       });
 
       addListener("mousemove", layerId, function (e) {
-        if (!e.features || !e.features.length) return;
+        var feats = featuresNear(e, layerId, function (p) { return keyFor(p, isStop); });
+        if (!feats.length) return;
         if (!App.drawMode) map.getCanvas().style.cursor = "pointer";
         ensurePopups();
         _hoverPopup
           .setLngLat(e.lngLat)
-          .setHTML(buildHoverHTML(e.features[0].properties, isStop))
+          .setHTML(buildHoverHTML(feats, isStop))
           .addTo(map);
       });
 
@@ -452,25 +483,29 @@
       });
 
       addListener("contextmenu", layerId, function (e) {
-        if (!e.features || !e.features.length) return;
+        var feats = featuresNear(e, layerId, function (p) { return keyFor(p, isStop); });
+        if (!feats.length) return;
         e.originalEvent.preventDefault();
         if (_hoverPopup) _hoverPopup.remove();
 
-        var props  = e.features[0].properties;
         var lngLat = e.lngLat;
+        var multiple = feats.length > 1;
         var options = [];
 
-        if (isStop) {
-          options.push({
-            label: "Copy As Point",
-            action: function () { copyStopToPoint(props, lngLat); }
-          });
-        } else {
-          options.push({
-            label: "Copy As Line",
-            action: function () { copyShapeToLine(props); }
-          });
-        }
+        feats.forEach(function (f) {
+          var props = f.properties;
+          if (isStop) {
+            options.push({
+              label: multiple ? "Copy As Point: " + stopName(props) : "Copy As Point",
+              action: function () { copyStopToPoint(props, lngLat); }
+            });
+          } else {
+            options.push({
+              label: multiple ? "Copy As Line: " + shapeName(props) : "Copy As Line",
+              action: function () { copyShapeToLine(props); }
+            });
+          }
+        });
 
         if (typeof App.showContextMenu === "function") {
           App.showContextMenu(
@@ -485,8 +520,8 @@
 
   // ---- Popup HTML builders ----
 
-  function buildHoverHTML(props, isStop) {
-    var html = '<div class="gtfs-hover">';
+  function buildHoverEntry(props, isStop) {
+    var html = "";
     if (isStop) {
       var name = props.stop_name || props.stop_code || props.stop_id || "";
       html += "<b>" + escHtml(name) + "</b>";
@@ -501,6 +536,19 @@
       if (typeLabel) {
         html += '<br><span style="color:var(--muted)">' + escHtml(typeLabel) + "</span>";
       }
+    }
+    return html;
+  }
+
+  // Accepts an array of features so overlapping routes/stops are all listed.
+  function buildHoverHTML(feats, isStop) {
+    var list = Array.isArray(feats) ? feats : [{ properties: feats }];
+    var html = '<div class="gtfs-hover">';
+    for (var i = 0; i < list.length; i++) {
+      if (i > 0) {
+        html += '<div style="border-top:1px solid var(--border);margin:4px 0"></div>';
+      }
+      html += buildHoverEntry(list[i].properties, isStop);
     }
     html += "</div>";
     return html;
