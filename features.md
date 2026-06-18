@@ -12,8 +12,8 @@ Status key: **Implemented**, **Partial**, **Not started**
 - Add a travel mode selector (walking, cycling) per route
 
 
-### Midpoint Insertion — Medium Priority
-Click along an existing route in vertex edit mode to insert a new waypoint between existing ones
+### Midpoint Insertion — Implemented
+Click along an existing route/line/polygon in vertex edit mode to insert a new vertex between existing ones. Implemented via `insertVertex` in `js/core/editing.js` using `turf.nearestPointOnLine` to find the insertion point; supported with undo.
 
 ### Walkshed polygons — Low Priority
 Compute an isochrone/walkshed polygon from a selected point (e.g., 10-minute walk). Requires a network analysis service. The walkshed polygon could replace or supplement the circular buffer.
@@ -21,8 +21,8 @@ Compute an isochrone/walkshed polygon from a selected point (e.g., 10-minute wal
 ### Unmerge dissolved union — Low Priority
 Currently `bufferUnionPolygon()` always dissolves overlapping buffers. Add an option to keep individual buffers separate for per-station analysis or visual comparison.
 
-### Import geospatial data (KML/KMZ/GeoJSON) — Partial
-Allow the user to upload KML, KMZ, or GeoJSON files. Imported geometries appear as map layers and can optionally be used as study area boundaries for analysis. Import/Export buttons exist in the Features panel but are currently disabled.
+### Import geospatial data (KML/KMZ/GeoJSON) — Implemented
+Upload KML, KMZ, GeoJSON, JSON, CSV, or shapefile (.shp/.zip) via Add Data (+) → Spatial Data. Imported geometries become editable features. Wired in `js/app.js` (extension router) to `importKML` / `importFromFile` / `importCSV` / `importSHP` in `js/core/cache.js`. The Features-panel Import/Export buttons are enabled and functional.
 
 ### Floating attributes popup — Implemented
 Feature attributes (name, direction, mode, frequency, span, stop ID, notes, etc.) now open in a floating draggable popup (`#fp-attr-popup`) rather than an inline slide-down panel. The popup is 320px wide, position: fixed, clamped within viewport on drag and resize, closes on Escape or X button, and auto-updates when the user selects a different feature. Opened via the gear icon (⚙) that appears on each feature row on hover, or via right-click → "Attributes". Row click now selects only; the trash icon stays in the row with its inline confirm strip.
@@ -33,8 +33,8 @@ Draw multiple concentric rings at user-defined distances (e.g. 0.25/0.5/1 mi) ar
 ### Freehand drawing mode — Not started
 Draw lines and polygons by holding and dragging rather than click-by-click vertex placement. Useful for sketching irregular study areas or approximate corridors quickly.
 
-### Copy / paste features — Not started
-Duplicate a drawn feature in place (Ctrl+D shortcut or context menu item). Creates an independent copy with a new name. Useful for quickly creating "before/after" scenario variants.
+### Copy / paste features — Implemented
+Duplicate a drawn feature in place via the right-click context menu ("Duplicate"). Creates an independent copy with a new name. Implemented for every feature type (`duplicatePoint`/`duplicateLine`/`duplicateRoute`/`duplicatePolygon`/`duplicateLabel`/`duplicateTextBox`). Remaining nice-to-have: a Ctrl+D keyboard shortcut (not yet wired).
 
 ---
 
@@ -66,21 +66,23 @@ For each block group, compute `score_i = Σ (importance_j / turf.distance(centro
 - `js/projects/transit-propensity.js` — show/hide Destinations row in factor breakdowns; add footnote when active; exclude from Adjust Weights modal (fixed weight)
 - `js/core/osm-pois.js` — `App.osmPoiFeatures` already exposed; no changes needed
 
-### Transit Costing module
-Produce estimates for service and revenue miles, hours, potential blocking scenarioss, pullout requirements, and staffing
+### Transit Costing module — Partial
+Delivered as the **Route Costing** module (`js/projects/route-costing.js`, enabled). Produces estimates for service/revenue miles, revenue and platform hours (daily + annualized), layover/deadhead, peak vehicle pullout, and fleet total with spares. Still missing: staffing estimates, and blocking/interlines fleet pooling (the interline logic is built but the UI button is disabled pending review).
 
-### More census categories — Priority To Be Determined
-Expand `VAR_META` in utils.js with additional ACS variables (e.g., vehicle ownership, commute mode, housing tenure, age distribution). Each entry needs a variable code, label, category, aggregation mode, and format.
+### More census categories — Partial
+Expand `VAR_META` in utils.js with additional ACS variables (e.g., vehicle ownership, commute mode, housing tenure, age distribution). Each entry needs a variable code, label, category, aggregation mode, and format. `VAR_META` has been substantially expanded (~60 ACS/LODES variables across Demographics, Equity, Travel, Housing, and Employment); this is an open-ended item that can keep growing.
 
 
-### FTA Small Starts popup UI — Partial
-FTA Small Starts is registered as a disabled module (button shown grayed out in the Analysis panel). The popup infrastructure exists (`App.popup`, module registry), but the FTA popup HTML and popup-specific wiring have not been built yet. The original sidebar-based code (`fta-small-starts.js`) is still intact and will need to be adapted to the popup layout pattern (similar to how TPI was migrated).
+### FTA Small Starts popup UI — Implemented
+FTA Small Starts is an enabled popup-based module (`js/projects/fta-small-starts.js`, `projects/fta-small-starts-popup.html`) with a 2-tab layout (Ratings | Data Inputs): CRE/ESS/LBAR uploads with column mapping, five color-coded rating cards, breakpoint classification, session persistence, and CSV export.
 
 ### Simplified LBAR Housing Inventory workflow — Not started
 The current LBAR workflow requires uploading a pre-formatted inventory file with lat/lon/units/county columns. A simpler flow might allow uploading a basic address list, geocoding it, and auto-detecting the county FIPS. Requires conceptual planning — the geocoding step is the main complexity (no backend, so would need a client-side or free API solution).
 
 
-### Title VI Analysis Module —Partial
+### Title VI Analysis Module — Implemented
+Implemented as an enabled popup module (`js/projects/title-vi.js` + engine `js/projects/title-vi-engine.js` + `projects/title-vi-popup.html`) with a 3-tab layout (Policies & Inputs | Analysis | Scenarios): route-alteration pairing, major-service-change rules, disparate-impact / disproportionate-burden findings against a system baseline, service loss/gain map overlay, scenario comparison, and CSV/GeoJSON/JSON export. Original planning notes retained below for reference.
+
 A new analysis module for Title VI civil rights compliance reporting. Title VI of the Civil Rights Act of 1964 requires that federally funded transit projects do not disproportionately burden minority and low-income populations. This module would leverage existing TPI/ACS infrastructure to automate the demographic analysis portion of a Title VI equity assessment. See document Title_VI_Module_Overview.md
 
 **Core concept:** Compare demographic composition inside the project corridor (buffer union) against a reference area (county, metro area, or user-defined region) to identify whether protected populations are disproportionately affected.
@@ -123,6 +125,12 @@ Upload a GTFS `.zip` via Add Data (+) → GTFS → Load GTFS Feed. Routes (shape
 - Filter displayed routes by route_type or agency
 - Persist GTFS feed across sessions (localStorage is too small; IndexedDB or a re-upload prompt would be needed)
 
+### Trip Builder — Implemented
+Enabled popup module (`js/projects/trip-builder.js`, `projects/trip-builder-popup.html`) that generates a high-level trip schedule (start/end times per direction per day type) for each Service from its underlying Time Bands, frequency, and run time / avg speed. Same Service assembly as Route Costing (`attributes.serviceId` buckets). Per-trip deletion and CSV export per Service.
+
+### Corridor Scoring — Implemented
+Enabled popup module (`js/projects/corridor-scoring.js`, `projects/corridor-scoring-popup.html`) that surfaces the per-route Corridor Demand Index as a ranked, objective composite score per drawn route/line. Ranked table with classification pills and expandable per-factor breakdowns, map line layer colored by composite CDI, Adjust Weights modal, CSV/GeoJSON export, and session persistence.
+
 ### FTA STOPS-Style Ridership Modeling — Not started
 A new analysis module that replicates or approximates the methodology of FTA's STOPS (Simplified Trips-on-Project Software) model. STOPS is FTA's official ridership forecasting tool for Small Starts and some New Starts projects. It estimates **station-level boardings** by modeling three things: where people want to go (destination attractiveness), how well transit gets them there (accessibility via travel time), and how likely they are to choose transit over driving (mode share).
 
@@ -150,8 +158,8 @@ A new analysis module that replicates or approximates the methodology of FTA's S
 
 **Files (anticipated):** `js/projects/fta-stops.js`, `projects/fta-stops-popup.html`, and potentially a standalone helper script (Python or Node) for travel time matrix generation.
 
-### CSV point import — Not started
-Upload a CSV with lat/lon columns (auto-detected via `App.guessHeader`) and plot as a styled point layer. Common uses: existing stop-level boardings, peer-system data, community facility inventories. Pairs with the future Layer Panel for visibility control.
+### CSV point import — Implemented
+Upload a CSV with lat/lon columns (auto-detected) via Add Data (+) → Spatial Data and plot as point features. Implemented in `importCSV` (`js/core/cache.js`), which also recognizes a geometry_type column for lines/polygons. Common uses: existing stop-level boardings, peer-system data, community facility inventories.
 
 
 ### Frequency / service heatmap — Not started
@@ -180,11 +188,11 @@ Click any census tract or block group on a choropleth overlay to get a floating 
 ## Persistence & Export
 
 
-### External Data Import - Partial
-Investigate possibility of importing external data such as .KML Files
+### External Data Import — Implemented
+Superseded by "Import geospatial data (KML/KMZ/GeoJSON)" above — KML/KMZ, GeoJSON, JSON, CSV, and shapefile import are all wired through Add Data (+) → Spatial Data.
 
-### Read-only share link — Not started
-Encode the full session state as a compressed URL hash (using LZ-string or similar client-side compression) so sharing a link opens the map in view-only mode with all drawn features and last analysis settings intact. No backend required. Fits the existing JSON session schema; the hash would be a compressed version of the same export format.
+### Read-only share link — Implemented
+Encodes the full session state as a compressed URL hash (pako-deflated `#share=` payload) so sharing a link opens the map in view-only mode with all drawn features intact. No backend required. Implemented via `exportShareLink` / share-hash load in `js/core/cache.js`, the `data-format="share-link"` export button, and a view-only banner.
 
 ### Map export (PNG / PDF) — Not started
 Export the current map view as a PNG screenshot (using MapLibre's `map.getCanvas().toBlob()`) or a simple one-page PDF with a legend and key summary stats from the last analysis run. Agencies use this constantly for board presentations and grant documentation. A lightweight PDF library (jsPDF) could handle layout without a backend.
@@ -218,10 +226,10 @@ A keyboard-triggered search overlay that lets users reach any tool, analysis mod
 A dedicated panel listing all drawn feature groups and imported reference layers, with per-layer visibility toggles, opacity sliders, and draw-order control (drag to reorder). Becomes essential once GTFS import and CSV import are added. Modeled on Felt's layers panel.
 
 
-### Keyboard shortcuts — Not started
-Standard single-key shortcuts for draw modes: `S` = Station, `L` = Line, `R` = Route, `P` = Polygon. `Escape` cancels current draw operation; `Enter` finishes a line/route. Shortcut hints shown in toolbar button tooltips on hover.
+### Keyboard shortcuts — Partial
+Implemented: `Escape` cancels the current draw/measure operation and closes popups; `Ctrl+Z` / `Ctrl+Shift+Z` undo/redo; `Delete`/`Backspace` removes the selected vertex in edit mode (`js/app.js`). Still to do: single-key draw-mode shortcuts (`S` = Station, `L` = Line, `R` = Route, `P` = Polygon), `Enter` to finish a line/route, and tooltip hints.
 
 
 
-### Print / presentation mode — Not started
-A "present" button that temporarily hides the sidebar, feature panel, and toolbar to show the map full-screen. Useful for screen-sharing in stakeholder meetings. Toggle back with a persistent floating button or keyboard shortcut.
+### Print / presentation mode — Implemented
+A "Present" button hides the sidebar, feature panel, and toolbar to show the map full-screen, with an Exit button and `Escape` to toggle back. Implemented via `App.setPresentMode` (`js/app.js`) and `js/core/present-overlays.js`, which adds draggable/resizable legend, north arrow, and title overlays for screen-sharing and grant documentation.
