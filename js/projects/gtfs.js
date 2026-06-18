@@ -209,7 +209,8 @@
         route_type:       route.route_type        || "",
         route_color:      route.route_color       || "",
         route_text_color: route.route_text_color  || "",
-        agency_id:        route.agency_id         || ""
+        agency_id:        route.agency_id         || "",
+        trip_headsign:    r.trip_headsign         || ""
       });
     });
 
@@ -490,9 +491,10 @@
 
         var lngLat = e.lngLat;
         var multiple = feats.length > 1;
+        var flagged = isStop ? {} : flagDuplicateShapes(feats);
         var options = [];
 
-        feats.forEach(function (f) {
+        feats.forEach(function (f, idx) {
           var props = f.properties;
           if (isStop) {
             options.push({
@@ -500,8 +502,15 @@
               action: function () { copyStopToPoint(props, lngLat); }
             });
           } else {
+            var label = "Copy As Line";
+            if (multiple) {
+              var headsign = shapeHeadsign(props);
+              label += ": " + shapeName(props) +
+                       (headsign ? " → " + headsign : "") +
+                       (flagged[idx] ? " [" + props.shape_id + "]" : "");
+            }
             options.push({
-              label: multiple ? "Copy As Line: " + shapeName(props) : "Copy As Line",
+              label: label,
               action: function () { copyShapeToLine(props); }
             });
           }
@@ -520,7 +529,32 @@
 
   // ---- Popup HTML builders ----
 
-  function buildHoverEntry(props, isStop) {
+  // Shared shape-label helpers (used by hover tooltip + right-click menu).
+  function shapeNameOf(props) {
+    return props.route_short_name || props.route_long_name || props.shape_id || "";
+  }
+  function shapeHeadsign(props) {
+    return (props.trip_headsign || "").trim();
+  }
+  // Given the overlapping feature array, return a set (object) of indexes whose
+  // name + headsign collides with another entry — those need a shape_id suffix
+  // so the listed entries stay distinguishable even without a headsign.
+  function flagDuplicateShapes(feats) {
+    var counts = {}, keys = [];
+    for (var i = 0; i < feats.length; i++) {
+      var p = feats[i].properties;
+      var k = shapeNameOf(p) + " → " + shapeHeadsign(p);
+      keys[i] = k;
+      counts[k] = (counts[k] || 0) + 1;
+    }
+    var flagged = {};
+    for (var j = 0; j < feats.length; j++) {
+      if (counts[keys[j]] > 1) flagged[j] = true;
+    }
+    return flagged;
+  }
+
+  function buildHoverEntry(props, isStop, showShapeId) {
     var html = "";
     if (isStop) {
       var name = props.stop_name || props.stop_code || props.stop_id || "";
@@ -530,11 +564,19 @@
                 escHtml(props.stop_id) + "</span>";
       }
     } else {
-      var routeLabel = props.route_short_name || props.route_long_name || props.shape_id || "";
+      var routeLabel = shapeNameOf(props);
+      var headsign   = shapeHeadsign(props);
       var typeLabel  = ROUTE_TYPE_LABELS[parseInt(props.route_type, 10)] || "";
       html += "<b>" + escHtml(routeLabel) + "</b>";
+      if (headsign) {
+        html += '<br><span style="color:var(--muted)">→ ' + escHtml(headsign) + "</span>";
+      }
       if (typeLabel) {
         html += '<br><span style="color:var(--muted)">' + escHtml(typeLabel) + "</span>";
+      }
+      if (showShapeId && props.shape_id) {
+        html += '<br><span style="color:var(--muted)">shape_id: ' +
+                escHtml(props.shape_id) + "</span>";
       }
     }
     return html;
@@ -543,12 +585,13 @@
   // Accepts an array of features so overlapping routes/stops are all listed.
   function buildHoverHTML(feats, isStop) {
     var list = Array.isArray(feats) ? feats : [{ properties: feats }];
+    var flagged = isStop ? {} : flagDuplicateShapes(list);
     var html = '<div class="gtfs-hover">';
     for (var i = 0; i < list.length; i++) {
       if (i > 0) {
         html += '<div style="border-top:1px solid var(--border);margin:4px 0"></div>';
       }
-      html += buildHoverEntry(list[i].properties, isStop);
+      html += buildHoverEntry(list[i].properties, isStop, !!flagged[i]);
     }
     html += "</div>";
     return html;
