@@ -5311,11 +5311,9 @@ body.dark-mode .as-section-header { border-color: #2d2d3d; }
 .as-bulk-clear-btn:hover { background: #f0f4f8; }
 /* Bulk-edit form (inside the shared mini-popup) */
 .as-bulk-form { display: flex; flex-direction: column; gap: 8px; }
-.as-bulk-frow { display: grid; grid-template-columns: 18px 1fr; align-items: center; gap: 6px; }
-.as-bulk-frow .as-input { grid-column: 2; }
-.as-bulk-flabel { font-size: var(--text-xs); color: #333; cursor: pointer; }
-.as-bulk-bands { grid-column: 1 / -1; }
-.as-disabled { opacity: 0.45; pointer-events: none; }
+.as-bulk-frow { display: flex; flex-direction: column; gap: 2px; }
+.as-bulk-frow .as-input { width: 100%; }
+.as-bulk-flabel { font-size: var(--text-xs); color: var(--muted); }
 .as-bulk-apply {
   margin-top: 4px;
   align-self: flex-end;

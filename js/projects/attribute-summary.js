@@ -133,22 +133,13 @@
       opts = opts || {};
       var frow = document.createElement("div");
       frow.className = "as-bulk-frow";
-      var inc = makeCheckbox("as-bulk-inc");
       var lab = document.createElement("label");
       lab.className = "as-bulk-flabel";
       lab.textContent = label;
-      frow.appendChild(inc);
       frow.appendChild(lab);
       frow.appendChild(inputEl);
-      // Disabled until "include" is checked (so an empty value can be applied).
-      if (opts.isBands) { inputEl.classList.add("as-disabled"); }
-      else { inputEl.disabled = true; }
-      inc.addEventListener("change", function () {
-        if (opts.isBands) inputEl.classList.toggle("as-disabled", !inc.checked);
-        else inputEl.disabled = !inc.checked;
-      });
       form.appendChild(frow);
-      fields.push({ key: key, inc: inc, read: readFn, opts: opts });
+      fields.push({ key: key, read: readFn, opts: opts });
     }
 
     function plainSelect(options) {
@@ -186,19 +177,24 @@
     addField("group", "Group", grp, function () { return grp.value.trim() || null; });
 
     // Time bands — reuse the shared editor against a throwaway carrier feature.
+    // Snapshot the editor's default service so we can tell whether the user
+    // actually changed the bands (blank/untouched = no change, like other fields).
     var carrier = { properties: { attributes: {} } };
     var bandsWrap = document.createElement("div");
     bandsWrap.className = "as-bulk-bands";
     if (typeof App.buildServiceScheduleEditor === "function") {
       bandsWrap.appendChild(App.buildServiceScheduleEditor(carrier));
     }
-    addField("service", "Time bands", bandsWrap,
-      function () { return carrier.properties.attributes.service || null; }, { isBands: true });
+    var bandsSnapshot = JSON.stringify(carrier.properties.attributes.service || null);
+    addField("service", "Time bands", bandsWrap, function () {
+      var cur = JSON.stringify(carrier.properties.attributes.service || null);
+      return cur === bandsSnapshot ? null : carrier.properties.attributes.service;
+    }, { isBands: true });
 
     var applyBtn = document.createElement("button");
     applyBtn.type = "button";
     applyBtn.className = "as-bulk-apply";
-    applyBtn.textContent = "Apply to " + indices.length;
+    applyBtn.textContent = "Apply";
     applyBtn.addEventListener("click", function () { applyBulk(type, indices, fields); });
     form.appendChild(applyBtn);
 
@@ -221,13 +217,11 @@
       if (!feat.properties.attributes) feat.properties.attributes = {};
       var a = feat.properties.attributes;
       fields.forEach(function (f) {
-        if (!f.inc.checked) return;
         var val = f.read();
+        // Blank / unchanged inputs are skipped — only changed values are written.
+        if (val == null || val === "") return;
         if (f.opts.isBands) {
-          if (val) a.service = JSON.parse(JSON.stringify(val)); // deep clone per feature
-          else delete a.service;
-        } else if (val == null || val === "") {
-          delete a[f.key];
+          a.service = JSON.parse(JSON.stringify(val)); // deep clone per feature
         } else {
           a[f.key] = val;
         }
