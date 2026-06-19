@@ -5250,6 +5250,7 @@ body.dark-mode .as-section-header { border-color: #2d2d3d; }
 }
 .as-grid-routelike {
   grid-template-columns:
+    24px            /* select checkbox */
     24px            /* swatch */
     1.4fr           /* name */
     74px            /* direction */
@@ -5278,6 +5279,56 @@ body.dark-mode .as-section-header { border-color: #2d2d3d; }
 .as-col-narrow  { }
 .as-col-num     { }
 .as-col-overrides { justify-self: end; }
+.as-col-check { justify-self: center; }
+
+/* --- Attribute Summary: multi-select + bulk edit (Routes & Lines) --- */
+.as-rowcheck { cursor: pointer; margin: 0; }
+.as-row.as-selected { background: #eef5ff; }
+.as-bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+  padding: 5px 8px;
+  background: #eef5ff;
+  border: 1px solid #cfe0ff;
+  border-radius: 4px;
+  font-size: var(--text-xs);
+}
+.as-bulk-count { flex: 1; font-weight: var(--weight-semibold); color: #2b6cb0; }
+.as-bulk-edit-btn, .as-bulk-clear-btn {
+  background: none;
+  border: 1px solid #2b6cb0;
+  color: #2b6cb0;
+  border-radius: 4px;
+  padding: 2px 10px;
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+.as-bulk-edit-btn:hover { background: #2b6cb0; color: #fff; }
+.as-bulk-clear-btn { border-color: #cbd5e0; color: var(--muted); }
+.as-bulk-clear-btn:hover { background: #f0f4f8; }
+/* Bulk-edit form (inside the shared mini-popup) */
+.as-bulk-form { display: flex; flex-direction: column; gap: 8px; }
+.as-bulk-frow { display: grid; grid-template-columns: 18px 1fr; align-items: center; gap: 6px; }
+.as-bulk-frow .as-input { grid-column: 2; }
+.as-bulk-flabel { font-size: var(--text-xs); color: #333; cursor: pointer; }
+.as-bulk-bands { grid-column: 1 / -1; }
+.as-disabled { opacity: 0.45; pointer-events: none; }
+.as-bulk-apply {
+  margin-top: 4px;
+  align-self: flex-end;
+  background: #2b6cb0;
+  border: none;
+  color: #fff;
+  border-radius: 4px;
+  padding: 5px 14px;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+.as-bulk-apply:hover { background: #245a96; }
 
 /* ============================================================
    Wetland & Channel Mitigation Needs module (.mn- prefix)
