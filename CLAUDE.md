@@ -68,6 +68,7 @@ js/
     editing.js              Feature editing: point click-drag, line/polygon/route vertex editing with orange handles
     features.js             Right-side feature panel: lists features, editable names, per-item color swatches, gear icon (⚙) per row to open the floating attributes popup, right-click context menu with Attributes option. Row click selects/highlights feature on map only. Delete (trash icon) stays in the row with an inline confirm strip. Exports refreshFeaturePanel, openColorPicker, updateFeatureColor.
     feature-attributes.js   Floating draggable attribute popup (singleton, #fp-attr-popup): ATTR_FIELDS config per type, openAttrPopup(featureType, featureIndex, feature), closeAttrPopup(), isAttrPopupOpen(), getAttrPopupFeature(). Popup is 320px wide, position: fixed, draggable by header, clamped within viewport, closes on Escape or X button. Auto-updates when a different feature is selected while open. Attributes stored in feature.properties.attributes (lazy-init). Route/line fields: group (universal grouping key with autocomplete datalist), direction (Both/NB/SB/EB/WB/Inbound/Outbound/Loop/CW/CCW), mode, serviceId (Route Costing pairing key — route+line-only datalist via buildServicePicker; replaces the deprecated routeId field), avgSpeed (default 14 mph, seeded on lazy-init), service bands per day (weekday/saturday/sunday), notes. Polygon fields: group, notes. Point fields: group, stopId, associatedRoutes. **Any change to this attribute schema must be mirrored in `js/projects/attribute-summary.js` and the `.as-grid-*` column templates in `css/style.css` — see "Common Issues to Prevent" above.**
+    layers-panel.js         "Layers" tab on the right feature panel (sibling of the "Features" tab). Unified map-layer manager: a Drawn band (features nested by `attributes.group` with per-group/-feature visibility + color and per-geometry-type opacity), Analysis overlays and Reference/Imported bands (only layers currently on the map) with per-layer show/hide + opacity + constrained drag-reorder + a ⋯ menu (zoom to, open module, remove), and a Basemap selector. Declarative layer manifest (REFERENCE/ANALYSIS) keyed by MapLibre layer id; renders only present layers. Reorder is clamped within a band via map.moveLayer (drawn features stay on top; drawn groups can't z-reorder since a geometry type shares one layer). Two-way visibility sync with the Add Data eye/× icons. Reuses properties.hidden, App.rerenderForType, App.openColorPicker, App._openFpSlider, App.applyFeatureOpacity, App.showContextMenu, basemap API. Exports App.refreshLayersPanel. No own persistence (drawn visibility/color/opacity already ride the session cache; reference/analysis order + visibility are per-session).
     census.js               TIGERweb geometry queries, ACS data fetch, area-weighted aggregation
     lodes.js                LODES .csv.gz download/upload/parse, block-level employment
     cache.js                Session cache: save/restore/reset via localStorage; JSON import/export
@@ -139,6 +140,7 @@ polygons.js (needs App.map)
 editing.js  (needs App.map, App.points, App.lines, App.routes, App.polygons, move/update functions)
 features.js           (needs App.points, App.lines, App.routes, App.polygons, App.removePoint, etc.)
 feature-attributes.js (needs App namespace; defines App.openAttrPopup, App.closeAttrPopup, App.isAttrPopupOpen, App.getAttrPopupFeature)
+layers-panel.js       (needs App.map, App.collectDrawnFeatures, App.rerenderForType, App.openColorPicker, App._openFpSlider, App.applyFeatureOpacity, basemap API, turf; defines App.refreshLayersPanel)
 census.js             (needs App.map, App.bboxStringFromFeature, App.getMeta, turf)
 lodes.js    (needs App.map, App.bboxStringFromFeature, App.bufferUnionPolygon, pako, turf)
 cache.js    (needs App.points, App.lines, App.routes, App.polygons, render/rebuild functions)
@@ -176,7 +178,7 @@ present-overlays.js     (needs App namespace and App.cache; loaded after modules
 Panel config: `{ id, title, html, collapsed (default false), order (default 100) }`
 
 ### map.js
-`map` (MapLibre instance), `switchBasemap(basemapId)`
+`map` (MapLibre instance), `switchBasemap(basemapId)`, `getBasemaps()` (returns `[{id, name}]`), `getCurrentBasemapId()`
 
 Basemap IDs: `"carto-light"` (default), `"carto-dark"`, `"osm"`, `"satellite"`
 
@@ -198,7 +200,10 @@ Route features store `properties.waypoints` (user click points) separately from 
 `_editing` (edit state or null), `exitEditMode()`, `_initEditing()` (called from app.js on map load)
 
 ### features.js
-`refreshFeaturePanel()`
+`refreshFeaturePanel()`, `rerenderForType(type)`, `getTypeDefaultColor(type)`, `showContextMenu(x, y, options)`, `openColorPicker(anchorEl, color, onChange)`, `collectDrawnFeatures()` (returns `[{ feature, type, index }]` across points/lines/routes/polygons — shared with the Layers panel), `UNIVERSAL_GROUP_KEY` (the `attributes.group` key string). The right panel header is a `Features | Layers` tab bar (panes `#fp-tab-features` / `#fp-tab-layers`); the tab toggle calls `App.refreshLayersPanel()` when Layers is shown.
+
+### layers-panel.js
+`refreshLayersPanel()` — rebuilds the Layers tab from current map state (no-op when the tab is hidden). Called from the tab toggle, `App.notifyProject()`, and `App.updateAddDataClearIcons()`. No other public API (the manifest, drag-reorder, and ⋯ actions are private to the module).
 
 ### feature-attributes.js
 `openAttrPopup(featureType, featureIndex, feature)` — opens the floating attributes popup for the given feature. If the same feature is already shown, closes it (toggle). If a different feature was shown, replaces content in place (preserves dragged position). On first open, positions the popup at left: 320px, top: 60px (just right of sidebar, below toolbar).
@@ -269,7 +274,7 @@ Saves session state (points, lines, routes, polygons, buffer radii, form selecti
 Floating widget options: `{ position: "bottom-left"|"bottom-right"|"top-left"|"top-right", width: px, title: string }`
 
 ### app.js
-`drawMode`, `registerModule(config)`, `registerProject(config)` (alias for registerModule), `notifyProject()`, `onFeatureDelete()` (hook, see below)
+`drawMode`, `registerModule(config)`, `registerProject(config)` (alias for registerModule), `notifyProject()`, `onFeatureDelete()` (hook, see below), `openModulePopup(id)` (opens a registered module's popup by id — used by the Layers panel ⋯ menu), `updateAddDataClearIcons()` (refreshes the Add Data dropdown eye/× icons and the Layers panel; the visibility single-source-of-truth bridge), `_openFpSlider(btn, cfg)` (shared vertical slider popover; `cfg = { value|key, values?, min, max, step, unit, onChange(v) }`), `applyFeatureOpacity(type)`, `featureSettings` (per-type opacity/width/buffer settings, 0–100 opacity).
 
 ### tpi-scoring.js (window.TPI namespace, not on App)
 `TPI.FACTORS` (9-factor array with id, label, weight, acsCodes, compute functions), `TPI.batchFetchACS(geoLevel, year, geoids)`, `TPI.aggregateLodesToGeo(lodesData, geoLevel, geoids)`, `TPI.computeQuintiles(values)`, `TPI.computeComposite(factorScores, weights)`, `TPI.computeTPI(options)` (full pipeline: fetch → normalize → score; accepts optional `options.unionPolygon` to restrict the study area instead of using `App.bufferUnionPolygon()`), `TPI.rescoreFromRaw(rawValues, weights, geoids)` (instant re-score from cached data)
@@ -660,6 +665,8 @@ Clicking an analysis module button opens a popup window over the map. The Buffer
 ```
 
 Each feature row is wrapped in a `div.fp-item-wrapper` containing the `div.fp-item` row and a sibling `div.fp-delete-confirm` strip (hidden by default, shown on trash click). Clicking a row selects the feature on the map (highlights it). The gear icon (`.fp-gear-btn`) opens the floating attributes popup (`#fp-attr-popup`); right-clicking the row also offers "Attributes" in the context menu. No inline attribute panel exists in the DOM.
+
+**Features | Layers tabs.** The panel header (`.fp-header`) is a two-button tab bar (`.fp-tab-btn` with `data-fptab="features"|"layers"`). The existing feature list, Labels/Text, and Feature Settings live in `#fp-tab-features`; the `#fp-tab-layers` pane is rendered by `js/core/layers-panel.js` (see that module's File Structure entry). The shared `#fp-slider-popover` sits outside both panes so the opacity slider works from either tab. The Layers tab lists a Drawn band (features nested by `attributes.group`, with group/feature visibility + color and per-type opacity), Analysis overlays and Reference/Imported bands (present layers only, with show/hide, opacity, constrained drag-reorder, and a ⋯ menu), and a Basemap selector. Layer visibility is kept in sync with the Add Data dropdown eye/× icons in both directions.
 
 ## Known Issues
 
