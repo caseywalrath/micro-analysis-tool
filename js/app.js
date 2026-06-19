@@ -85,6 +85,8 @@
         await entry.update(core);
       }
     }
+    // Keep the Layers tab current when features/analysis layers change.
+    if (typeof App.refreshLayersPanel === "function") App.refreshLayersPanel();
   }
   App.notifyProject = notifyProject;
 
@@ -1050,7 +1052,10 @@
           if (loaded) cfg._eyeSpan.innerHTML = cfg.isVisible() ? _EYESVG_OPEN : _EYESVG_CLOSED;
         }
       });
+      // Keep the Layers panel in sync when reference layers load/clear/toggle.
+      if (typeof App.refreshLayersPanel === "function") App.refreshLayersPanel();
     }
+    App.updateAddDataClearIcons = updateAddDataClearIcons;
 
     // Route imported file by extension
     importFileInput.addEventListener("change", function (e) {
