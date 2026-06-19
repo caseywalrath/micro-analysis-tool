@@ -720,9 +720,12 @@
     if (!list) return;
 
     if (!_gtfsData || _gtfsData.size === 0) {
+      // Standardized empty/onboarding state (shared .rf-info-box look).
       list.innerHTML =
-        '<div class="gtfs-empty-state">No GTFS feed loaded.<br>' +
-        'Use Add\u00a0Data\u00a0(+) \u2192 GTFS to load a feed.</div>';
+        '<div class="gtfs-empty-state rf-info-box">' +
+        '<p><strong>Load a GTFS feed to begin.</strong></p>' +
+        '<p class="rf-state-action">Use Add\u00a0Data\u00a0(+) \u2192 GTFS to load a feed (.zip).</p>' +
+        '</div>';
       var mc = document.getElementById("gtfsMapControls");
       if (mc) mc.style.display = "none";
       return;

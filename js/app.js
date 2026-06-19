@@ -27,6 +27,113 @@
   // Backward-compat alias so existing project files still work during migration
   App.registerProject = App.registerModule;
 
+  // ---- Shared module-state UI (stale banner + empty/onboarding state) ----
+  // Standardizes the two cross-cutting popup patterns so every analysis module
+  // looks/behaves the same:
+  //   (1) Stale banner with a working "Re-run" button.
+  //   (2) Friendly empty-state / first-open onboarding hint.
+  // Reuses the shared (despite the rf- prefix) .rf-status / .rf-info-box classes.
+  //
+  // opts = {
+  //   statusEl,            // .rf-status pill element OR its id string
+  //   emptyEl,             // .rf-info-box element OR its id string
+  //   empty:  bool,        // true => show emptyEl + hint, hide pill (wins over all)
+  //   hint:   string | { need, action },  // empty-state / onboarding copy
+  //   stale:  bool,        // true => stale pill with Re-run button
+  //   status: { kind, message },          // explicit pill: kind = running|done|error
+  //   onRerun: function    // wired to the Re-run button (used when stale)
+  // }
+  // Resolves id strings via getElementById and no-ops on missing elements, so it
+  // is safe to call from update() while the popup is closed.
+  App.renderModuleState = function (opts) {
+    opts = opts || {};
+    var statusEl = typeof opts.statusEl === "string"
+      ? document.getElementById(opts.statusEl) : opts.statusEl;
+    var emptyEl = typeof opts.emptyEl === "string"
+      ? document.getElementById(opts.emptyEl) : opts.emptyEl;
+
+    function hide(el) { if (el) el.style.display = "none"; }
+
+    // --- Empty / onboarding state wins ---
+    if (opts.empty) {
+      hide(statusEl);
+      if (emptyEl) {
+        emptyEl.style.display = "";
+        emptyEl.classList.add("rf-info-box");
+        var hint = opts.hint;
+        if (hint && typeof hint === "object") {
+          emptyEl.innerHTML =
+            '<p><strong>' + _escHtml(hint.need || "") + '</strong></p>' +
+            (hint.action ? '<p class="rf-state-action">' + _escHtml(hint.action) + '</p>' : "");
+        } else if (typeof hint === "string" && hint) {
+          emptyEl.innerHTML = '<p>' + hint + '</p>';
+        }
+        // If no hint passed, leave whatever static markup the popup HTML shipped.
+      }
+      return;
+    }
+
+    if (emptyEl) hide(emptyEl);
+    if (!statusEl) return;
+
+    // --- Explicit status pill (neutral / running / done / error) ---
+    if (opts.status) {
+      _paintStatus(statusEl, opts.status.kind || "", opts.status.message || "", null);
+      return;
+    }
+
+    // --- Stale pill with Re-run button ---
+    if (opts.stale) {
+      _paintStatus(
+        statusEl, "stale",
+        "Inputs changed — re-run to update.",
+        typeof opts.onRerun === "function" ? opts.onRerun : null
+      );
+      return;
+    }
+
+    // --- Nothing to show ---
+    hide(statusEl);
+  };
+
+  function _paintStatus(statusEl, kind, message, onRerun) {
+    statusEl.style.display = "";
+    statusEl.className = "rf-status" +
+      (kind === "done"    ? " rf-status-done"    :
+       kind === "stale"   ? " rf-status-stale"   :
+       kind === "error"   ? " rf-status-error"   :
+       kind === "running" ? " rf-status-running" : "");
+
+    // The popup HTML ships a <span id="...StatusText"> inside the pill; keep using
+    // it when present so existing id references stay valid. Otherwise build one.
+    var textEl = statusEl.querySelector("[id$='StatusText'], .rf-status-text");
+    if (!textEl) {
+      statusEl.innerHTML = "";
+      textEl = document.createElement("span");
+      textEl.className = "rf-status-text";
+      statusEl.appendChild(textEl);
+    }
+    textEl.textContent = message || "";
+
+    // Drop any prior Re-run button, then add a fresh one if requested.
+    var oldBtn = statusEl.querySelector(".rf-status-rerun");
+    if (oldBtn) oldBtn.parentNode.removeChild(oldBtn);
+    if (onRerun) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "rf-status-rerun";
+      btn.textContent = "Re-run";
+      btn.addEventListener("click", onRerun);
+      statusEl.appendChild(btn);
+    }
+  }
+
+  function _escHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
   // Override bufferUnionPolygon to include line and route buffers alongside point buffers.
   // Must happen before any user interaction; census.js and lodes.js call this at runtime.
   var _pointUnion = App.bufferUnionPolygon;

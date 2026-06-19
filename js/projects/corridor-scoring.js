@@ -280,16 +280,22 @@
   // ---- Status + stale helpers ----
 
   function setStatus(msg, kind) {
-    // kind: "" | "done" | "stale" | "running"
-    var statusEl = document.getElementById("csStatus");
-    var textEl   = document.getElementById("csStatusText");
-    if (!statusEl || !textEl) return;
-    statusEl.style.display = msg ? "" : "none";
-    textEl.textContent = msg || "";
-    statusEl.className = "rf-status" +
-      (kind === "done"  ? " rf-status-done"  :
-       kind === "stale" ? " rf-status-stale" :
-       kind === "error" ? " rf-status-error" : "");
+    // kind: "" | "done" | "error" | "running" (stale is handled by markStale)
+    App.renderModuleState({
+      statusEl: "csStatus",
+      status: msg ? { kind: kind || "", message: msg } : null
+    });
+  }
+
+  // Context-aware onboarding/empty hint shown when there are no results.
+  function emptyHint() {
+    var n = (App.routes || []).length + (App.lines || []).length;
+    if (!n) {
+      return { need: "Draw a route or line to begin.",
+               action: "Use the Route or Line tool, then reopen this panel." };
+    }
+    return { need: "Select corridors and click Score Corridors.",
+             action: "Each selected route or line gets a ranked composite demand score." };
   }
 
   function markStale() {
@@ -297,7 +303,7 @@
     setExportButtonsEnabled(false);
     if (!isPopupVisible()) return;
     if (_lastResult) {
-      setStatus("Inputs changed — re-run to refresh scores.", "stale");
+      App.renderModuleState({ statusEl: "csStatus", stale: true, onRerun: runScoring });
     }
   }
 
@@ -621,10 +627,16 @@
 
     var rows = (result && result.routeCDIs) || [];
 
-    if (emptyState)  emptyState.style.display  = rows.length ? "none" : "";
-    resultsWrap.style.display = rows.length ? "" : "none";
-
-    if (!rows.length) { container.innerHTML = ""; return; }
+    if (!rows.length) {
+      resultsWrap.style.display = "none";
+      container.innerHTML = "";
+      App.renderModuleState({
+        statusEl: "csStatus", emptyEl: "csEmptyState", empty: true, hint: emptyHint()
+      });
+      return;
+    }
+    if (emptyState) emptyState.style.display = "none";
+    resultsWrap.style.display = "";
 
     var systemAvgs = (result.tpiResult && result.tpiResult.__restoredSystemAverages)
       ? result.tpiResult.__restoredSystemAverages
@@ -880,6 +892,9 @@
       }
     } else {
       setExportButtonsEnabled(false);
+      App.renderModuleState({
+        statusEl: "csStatus", emptyEl: "csEmptyState", empty: true, hint: emptyHint()
+      });
     }
     if (_stale) markStale();
   }
@@ -896,9 +911,9 @@
     if (isPopupVisible()) {
       var resultsEl = document.getElementById("csResults");
       if (resultsEl) resultsEl.style.display = "none";
-      var emptyEl = document.getElementById("csEmptyState");
-      if (emptyEl) emptyEl.style.display = "";
-      setStatus("");
+      App.renderModuleState({
+        statusEl: "csStatus", emptyEl: "csEmptyState", empty: true, hint: emptyHint()
+      });
       setExportButtonsEnabled(false);
       var hideCb = document.getElementById("csHideRouteColoring");
       if (hideCb) hideCb.checked = false;

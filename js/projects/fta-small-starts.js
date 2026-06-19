@@ -390,8 +390,6 @@
     var year      = yearEl  ? yearEl.value  : "2023";
     var geoLevel  = geoEl   ? geoEl.value   : "bg";
 
-    var statusEl = document.getElementById("ftaStatus");
-    var textEl   = document.getElementById("ftaStatusText");
     var runBtn   = document.getElementById("ftaRun");
     if (runBtn) runBtn.disabled = true;
 
@@ -415,17 +413,18 @@
     _lastRatings = null;
 
     if (!unionFeat) {
-      if (statusEl && textEl) {
-        statusEl.style.display = "";
-        statusEl.className     = "rf-status rf-status-stale";
-        textEl.textContent     = "Draw features on the map to define a study area.";
-      }
+      App.renderModuleState({
+        statusEl: "ftaStatus",
+        status: { kind: "stale", message: "Draw features on the map to define a study area." }
+      });
       if (runBtn) runBtn.disabled = false;
       return;
     }
 
-    if (statusEl) { statusEl.style.display = ""; statusEl.className = "rf-status"; }
-    if (textEl)   textEl.textContent = "Computing breakpoint ratings\u2026";
+    App.renderModuleState({
+      statusEl: "ftaStatus",
+      status: { kind: "running", message: "Computing breakpoint ratings\u2026" }
+    });
     App.setStatus("Computing breakpoint ratings\u2026");
 
     var ratings = {
@@ -515,8 +514,10 @@
 
       _lastRatings = ratings;
 
-      if (textEl) textEl.textContent = "Ratings computed successfully.";
-      if (statusEl) statusEl.className = "rf-status rf-status-done";
+      App.renderModuleState({
+        statusEl: "ftaStatus",
+        status: { kind: "done", message: "Ratings computed successfully." }
+      });
       App.setStatus("FTA ratings computed");
 
       // Enable export
@@ -525,8 +526,10 @@
 
     } catch (e) {
       console.error("FTA ratings error:", e);
-      if (textEl) textEl.textContent = "Error: " + (e.message || e);
-      if (statusEl) statusEl.className = "rf-status rf-status-stale";
+      App.renderModuleState({
+        statusEl: "ftaStatus",
+        status: { kind: "error", message: "Error: " + (e.message || e) }
+      });
       App.setStatus("FTA error");
     } finally {
       if (runBtn) runBtn.disabled = false;
@@ -878,13 +881,10 @@
     var exportBtn = document.getElementById("ftaExportCSV");
     if (exportBtn) exportBtn.disabled = false;
 
-    var statusEl = document.getElementById("ftaStatus");
-    var textEl   = document.getElementById("ftaStatusText");
-    if (statusEl && textEl) {
-      statusEl.style.display = "";
-      statusEl.className     = "rf-status rf-status-done";
-      textEl.textContent     = "Ratings computed successfully.";
-    }
+    App.renderModuleState({
+      statusEl: "ftaStatus",
+      status: { kind: "done", message: "Ratings computed successfully." }
+    });
   }
 
   function onClose(core) {

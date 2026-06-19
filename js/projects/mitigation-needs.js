@@ -256,20 +256,25 @@
   // ---- Status -------------------------------------------------------------
 
   function setStatus(msg, kind) {
-    var statusEl = document.getElementById("mnStatus");
-    var textEl   = document.getElementById("mnStatusText");
-    if (!statusEl || !textEl) return;
-    statusEl.style.display = msg ? "" : "none";
-    textEl.textContent = msg || "";
-    statusEl.className = "rf-status" +
-      (kind === "done"  ? " rf-status-done"  :
-       kind === "stale" ? " rf-status-stale" :
-       kind === "error" ? " rf-status-error" : "");
+    // kind: "" | "done" | "error" | "running" (stale is handled by markStale)
+    App.renderModuleState({
+      statusEl: "mnStatus",
+      status: msg ? { kind: kind || "", message: msg } : null
+    });
   }
+
+  // Onboarding/empty hint shown when there are no results.
+  function emptyHint() {
+    return { need: "Select watersheds and click Score.",
+             action: "Each selected HUC-6 basin gets a ranked mitigation-demand score." };
+  }
+
   function markStale() {
     _stale = true;
     setExportEnabled(false);
-    if (isPopupVisible() && _lastResult) setStatus("Inputs changed — re-run to refresh scores.", "stale");
+    if (isPopupVisible() && _lastResult) {
+      App.renderModuleState({ statusEl: "mnStatus", stale: true, onRerun: function () { runScoring(); } });
+    }
   }
 
   // ---- System factor averages (comparison baseline for breakdown bars) ----
@@ -328,9 +333,16 @@
     if (!container || !resultsWrap) return;
 
     var rows = (result && result.rows) || [];
-    if (emptyState)  emptyState.style.display  = rows.length ? "none" : "";
-    resultsWrap.style.display = rows.length ? "" : "none";
-    if (!rows.length) { container.innerHTML = ""; return; }
+    if (!rows.length) {
+      resultsWrap.style.display = "none";
+      container.innerHTML = "";
+      App.renderModuleState({
+        statusEl: "mnStatus", emptyEl: "mnEmptyState", empty: true, hint: emptyHint()
+      });
+      return;
+    }
+    if (emptyState) emptyState.style.display = "none";
+    resultsWrap.style.display = "";
 
     var systemAvgs = computeSystemFactorAverages(rows, result.mode);
     var unitHead = result.mode === "channel" ? "Channel" : "Wetland";
@@ -548,9 +560,9 @@
       readSelectionFromDOM();
       var pool = selectedWatersheds();
       if (!pool.length) {
-        setStatus("No watersheds selected — check at least one basin.", "stale");
         clearChoropleth();
         if (App.popup && App.popup.hideFloatingWidget) App.popup.hideFloatingWidget("mn-legend");
+        // renderResultsTable shows the standardized onboarding/empty hint.
         renderResultsTable({ rows: [], mode: _resourceMode });
         setExportEnabled(false);
         return;
@@ -656,6 +668,9 @@
       if (_stale) markStale();
     } else {
       setExportEnabled(false);
+      App.renderModuleState({
+        statusEl: "mnStatus", emptyEl: "mnEmptyState", empty: true, hint: emptyHint()
+      });
     }
   }
 
@@ -670,12 +685,12 @@
     if (isPopupVisible()) {
       var results = document.getElementById("mnResults");
       if (results) results.style.display = "none";
-      var empty = document.getElementById("mnEmptyState");
-      if (empty) empty.style.display = "";
+      App.renderModuleState({
+        statusEl: "mnStatus", emptyEl: "mnEmptyState", empty: true, hint: emptyHint()
+      });
       var hide = document.getElementById("mnHideColoring");
       if (hide) hide.checked = false;
       buildWatershedChecklist();
-      setStatus("");
       setExportEnabled(false);
     }
   }

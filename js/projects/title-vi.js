@@ -21,6 +21,7 @@
   var _running           = false;
   var _initialized       = false;
   var _activeTab         = "policies";
+  var _core              = null;   // captured in init() for the stale-banner Re-run button
   var _baselineFeatureFilter = null;
 
   // Cached demographics per scenario (for instant threshold re-evaluation)
@@ -549,14 +550,16 @@
 
   function markStale() {
     _stale = true;
-    var banner = document.getElementById("tviStaleWarning");
-    if (banner) banner.style.display = "block";
+    App.renderModuleState({
+      statusEl: "tviStaleWarning",
+      stale: true,
+      onRerun: function () { if (_core) runAnalysis(_core); }
+    });
   }
 
   function clearStale() {
     _stale = false;
-    var banner = document.getElementById("tviStaleWarning");
-    if (banner) banner.style.display = "none";
+    App.renderModuleState({ statusEl: "tviStaleWarning" });
   }
 
   // ---- Baseline computation ----
@@ -1392,6 +1395,7 @@
   function init(core) {
     if (_initialized) return;
     _initialized = true;
+    _core = core;   // captured for the stale-banner Re-run button
 
     // Tab switching
     var tabs = document.querySelectorAll(".tvi-tab");
@@ -1510,10 +1514,7 @@
     updateComparisonTable();
 
     // Show stale warning if needed
-    if (_stale) {
-      var banner = document.getElementById("tviStaleWarning");
-      if (banner) banner.style.display = "block";
-    }
+    if (_stale) markStale();
   }
 
   function onClose() {

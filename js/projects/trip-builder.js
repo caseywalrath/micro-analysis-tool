@@ -45,13 +45,31 @@
 
   function setStatus(msg, kind) {
     if (!isPopupVisible()) return;
-    var el  = document.getElementById("tbStatus");
-    var txt = document.getElementById("tbStatusText");
-    if (!el || !txt) return;
-    if (!msg) { el.style.display = "none"; return; }
-    el.style.display = "block";
-    el.className = "rf-status" + (kind ? " " + kind : "");
-    txt.textContent = msg;
+    // Translate legacy kinds to the standardized status palette.
+    var k = kind === "ok"   ? "done"  :
+            kind === "warn" ? "stale" :
+            kind || "";
+    App.renderModuleState({
+      statusEl: "tbStatus",
+      status: msg ? { kind: k, message: msg } : null
+    });
+  }
+
+  // Stale banner with a working Re-run (Generate) button (shared pattern).
+  function showStale() {
+    if (!isPopupVisible()) return;
+    App.renderModuleState({ statusEl: "tbStatus", stale: true, onRerun: runGenerate });
+  }
+
+  // Context-aware onboarding/empty hint shown when no Service is selected.
+  function emptyHint() {
+    var n = (App.routes || []).length + (App.lines || []).length;
+    if (!n) {
+      return { need: "Draw a route or line to begin.",
+               action: "Set its Direction, Time Bands, and Run time / Avg speed in Attributes." };
+    }
+    return { need: "Select a Service from the left to view its trip schedule.",
+             action: "Services are assembled from drawn routes/lines sharing a Service id." };
   }
 
   // ---- Service assembly ----
@@ -319,11 +337,13 @@
 
     var svc = getSelectedService();
     if (!svc) {
-      empty.style.display    = "";
       hdr.style.display      = "none";
       actions.style.display  = "none";
       results.style.display  = "none";
       exptRow.style.display  = "none";
+      App.renderModuleState({
+        statusEl: "tbStatus", emptyEl: "tbEmptyState", empty: true, hint: emptyHint()
+      });
       return;
     }
 
@@ -681,7 +701,7 @@
       if (App.cache) App.cache.save();
       if (_tripsByService[svc.key]) {
         _stale = true;
-        setStatus("Attributes changed — re-generate to refresh.", "warn");
+        showStale();
       }
       // Re-resolve the service from current feature state so derived fields
       // (length, color, validation) reflect the edits — patterns hold a
@@ -917,7 +937,7 @@
     buildServiceList();
     renderRightSide();
     if (_stale && _selectedKey && _tripsByService[_selectedKey]) {
-      setStatus("Features changed — re-generate to refresh.", "warn");
+      showStale();
     } else {
       setStatus(null);
     }
@@ -938,7 +958,7 @@
     renderRightSide();
     if (_selectedKey && _tripsByService[_selectedKey]) {
       _stale = true;
-      setStatus("Features changed — re-generate to refresh.", "warn");
+      showStale();
     }
   }
 

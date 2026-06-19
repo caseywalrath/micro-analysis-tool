@@ -2973,8 +2973,15 @@ body.dark-mode .cs-feature-badge { background: #2d3748; color: #cbd5e0; }
   gap: 8px;
 }
 
-/* Status bar */
+/* Status bar
+   NOTE: .rf-status / .rf-status-* and .rf-info-box are intentionally SHARED
+   cross-module classes (despite the rf- prefix). Every analysis popup routes its
+   stale/empty/onboarding UI through App.renderModuleState(), which emits these. */
 .rf-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 6px 10px;
@@ -2983,9 +2990,30 @@ body.dark-mode .cs-feature-badge { background: #2d3748; color: #cbd5e0; }
   color: var(--muted);
   background: #f9f9f9;
 }
+.rf-status-text { flex: 1 1 auto; }
 .rf-status-stale { border-color: var(--warnbd); background: var(--warnbg); color: #92400e; }
 .rf-status-done { border-color: #a7f3d0; background: #ecfdf5; color: #065f46; }
 .rf-status-error { border-color: #fca5a5; background: #fef2f2; color: #991b1b; }
+.rf-status-running { border-color: #bfdbfe; background: #eff6ff; color: #1e40af; }
+
+/* Re-run affordance inside a stale status pill (modeled on .cc-refetch-btn) */
+.rf-status-rerun {
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid currentColor;
+  color: inherit;
+  border-radius: 4px;
+  padding: 2px 10px;
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  line-height: var(--leading-normal);
+}
+.rf-status-rerun:hover { background: rgba(0, 0, 0, 0.06); }
+
+/* Standardized empty/onboarding box: tight paragraph spacing */
+.rf-info-box > p { margin: 0; }
+.rf-state-action { margin-top: 4px; color: var(--muted); }
 
 /* CDI card */
 .rf-cdi-card {
@@ -3553,15 +3581,8 @@ body.dark-mode .cs-feature-badge { background: #2d3748; color: #cbd5e0; }
   padding: 10px 12px;
 }
 
-.tvi-stale-banner {
-  background: #fffbeb;
-  border: 1px solid #f6ad55;
-  border-radius: 4px;
-  padding: 8px 10px;
-  font-size: var(--text-sm);
-  color: #7b341e;
-  margin-top: 12px;
-}
+/* .tvi-stale-banner removed — Title VI now uses the shared .rf-status stale
+   banner via App.renderModuleState(). */
 
 .tvi-route-table {
   width: 100%;
@@ -4286,6 +4307,8 @@ body.dark-mode .rf-status { background: #2a2a3d; }
 body.dark-mode .rf-status-stale { color: #fbbf24; }
 body.dark-mode .rf-status-done { background: #1a3a2a; color: #6ee7b7; border-color: #2d6a4f; }
 body.dark-mode .rf-status-error { background: #3a1a1a; color: #fca5a5; border-color: #7f1d1d; }
+body.dark-mode .rf-status-running { background: #1e3a5f; color: #bfdbfe; border-color: #2b6cb0; }
+body.dark-mode .rf-status-rerun:hover { background: rgba(255, 255, 255, 0.1); }
 body.dark-mode .rf-cdi-value,
 body.dark-mode .rf-stat-value,
 body.dark-mode .rf-range-value,
