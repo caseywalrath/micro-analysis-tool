@@ -226,7 +226,10 @@
     eye.addEventListener("click", function (e) {
       e.stopPropagation();
       setEntryVisible(entry, !entryVisible(entry));
-      render();
+      // Keep the Add Data dropdown eye icons in sync (single source of truth);
+      // updateAddDataClearIcons() also re-renders this panel.
+      if (typeof App.updateAddDataClearIcons === "function") App.updateAddDataClearIcons();
+      else render();
     });
     row.appendChild(eye);
 
@@ -305,6 +308,40 @@
     Object.keys(types).forEach(function (t) { App.rerenderForType(t); });
     if (App.cache && typeof App.cache.save === "function") App.cache.save();
     if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+  }
+
+  // Solo: show only the given items, hide every other drawn feature.
+  function soloItems(items) {
+    var keep = {};
+    items.forEach(function (it) { keep[it.type + ":" + it.index] = true; });
+    var all = (typeof App.collectDrawnFeatures === "function") ? App.collectDrawnFeatures() : [];
+    var types = {};
+    all.forEach(function (it) {
+      if (keep[it.type + ":" + it.index]) delete it.feature.properties.hidden;
+      else it.feature.properties.hidden = true;
+      types[it.type] = true;
+    });
+    Object.keys(types).forEach(function (t) { App.rerenderForType(t); });
+    if (App.cache && typeof App.cache.save === "function") App.cache.save();
+    if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+    render();
+  }
+
+  function showAllDrawn() {
+    var all = (typeof App.collectDrawnFeatures === "function") ? App.collectDrawnFeatures() : [];
+    var types = {};
+    all.forEach(function (it) {
+      if (it.feature.properties.hidden) { delete it.feature.properties.hidden; types[it.type] = true; }
+    });
+    Object.keys(types).forEach(function (t) { App.rerenderForType(t); });
+    if (App.cache && typeof App.cache.save === "function") App.cache.save();
+    if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+    render();
+  }
+
+  function anyDrawnHidden() {
+    var all = (typeof App.collectDrawnFeatures === "function") ? App.collectDrawnFeatures() : [];
+    return all.some(function (it) { return !!it.feature.properties.hidden; });
   }
 
   function buildFeatureRow(it) {
@@ -413,7 +450,13 @@
     menu.title = "More";
     menu.addEventListener("click", function (e) {
       e.stopPropagation();
-      var opts = [{ label: "Zoom to group", action: function () { zoomToFeatures(items); } }];
+      var opts = [
+        { label: "Zoom to group", action: function () { zoomToFeatures(items); } },
+        { label: "Solo (hide other features)", action: function () { soloItems(items); } }
+      ];
+      if (anyDrawnHidden()) {
+        opts.push({ label: "Show all features", action: function () { showAllDrawn(); } });
+      }
       if (!isUngrouped) {
         opts.push({ label: "Rename group", action: function () { renameGroup(groupName, items); } });
       }
