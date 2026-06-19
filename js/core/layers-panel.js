@@ -2,8 +2,9 @@
 // "Layers" tab on the right feature panel. A unified manager for everything on
 // the map: drawn features (nested by user group), reference/imported layers
 // (GTFS, OSM, muni boundaries), analysis choropleths (TPI, Corridor Scoring,
-// Ridership), and the basemap. Phase 1: visibility + opacity + basemap. Reorder
-// and per-row actions land in phase 2.
+// Ridership), and the basemap. Visibility + opacity + basemap, constrained
+// drag-reorder within the Reference/Analysis bands, and a per-row ⋯ menu
+// (zoom to, open module, remove, rename group).
 // Depends on: App.map, App.collectDrawnFeatures, App.UNIVERSAL_GROUP_KEY,
 //             App.rerenderForType, App.openColorPicker, App._openFpSlider,
 //             App.applyFeatureOpacity, App.getBasemaps, App.switchBasemap,
@@ -27,22 +28,41 @@
 
   // ---- Reference + analysis layer manifest ----
   // Each entry: { id (presence/detect key), label, layers:[{id, op}] }.
+  function callIf(fn) { return function () { if (typeof App[fn] === "function") App[fn].apply(App, arguments); }; }
+
   var REFERENCE = [
-    { id: "muni-boundaries-line", label: "Municipal boundaries", layers: [{ id: "muni-boundaries-line", op: "line-opacity" }] },
-    { id: "gtfs-shapes-layer",    label: "GTFS routes",          layers: [{ id: "gtfs-shapes-layer", op: "line-opacity" }] },
-    { id: "gtfs-stops-layer",     label: "GTFS stops",           layers: [{ id: "gtfs-stops-layer", op: "circle-opacity" }] },
-    { id: "osm-points-layer",     label: "OSM points",           layers: [{ id: "osm-points-layer", op: "circle-opacity" }] },
-    { id: "osm-lines-layer",      label: "OSM lines",            layers: [{ id: "osm-lines-layer", op: "line-opacity" }] },
-    { id: "osm-poi-layer",        label: "OSM points of interest", layers: [{ id: "osm-poi-layer", op: "circle-opacity" }] }
+    { id: "muni-boundaries-line", label: "Municipal boundaries", layers: [{ id: "muni-boundaries-line", op: "line-opacity" }],
+      clear: function () { if (typeof App.toggleMuniBoundaries === "function") App.toggleMuniBoundaries(false); } },
+    { id: "gtfs-shapes-layer",    label: "GTFS routes",          layers: [{ id: "gtfs-shapes-layer", op: "line-opacity" }],
+      clear: callIf("clearGTFS") },
+    { id: "gtfs-stops-layer",     label: "GTFS stops",           layers: [{ id: "gtfs-stops-layer", op: "circle-opacity" }],
+      clear: callIf("clearGTFS") },
+    { id: "osm-points-layer",     label: "OSM points",           layers: [{ id: "osm-points-layer", op: "circle-opacity" }],
+      clear: function () { if (typeof App.osmToggleCategory === "function") App.osmToggleCategory("bus_stops"); } },
+    { id: "osm-lines-layer",      label: "OSM lines",            layers: [{ id: "osm-lines-layer", op: "line-opacity" }],
+      clear: function () { if (typeof App.osmToggleCategory === "function") App.osmToggleCategory("transit_routes"); } },
+    { id: "osm-poi-layer",        label: "OSM points of interest", layers: [{ id: "osm-poi-layer", op: "circle-opacity" }],
+      clear: callIf("clearOsmPois") }
   ];
   var ANALYSIS = [
-    { id: "tpi-choropleth-fill", label: "Transit Propensity",
+    { id: "tpi-choropleth-fill", label: "Transit Propensity", moduleId: "transit-propensity",
       layers: [{ id: "tpi-choropleth-fill", op: "fill-opacity" }, { id: "tpi-choropleth-line", op: "line-opacity" }] },
-    { id: "corridor-scoring-routes-layer", label: "Corridor Scoring",
+    { id: "corridor-scoring-routes-layer", label: "Corridor Scoring", moduleId: "corridor-scoring",
       layers: [{ id: "corridor-scoring-routes-layer", op: "line-opacity" }] },
-    { id: "rf-choropleth-fill", label: "Ridership Forecast",
+    { id: "rf-choropleth-fill", label: "Ridership Forecast", moduleId: "ridership-forecasting",
       layers: [{ id: "rf-choropleth-fill", op: "fill-opacity" }, { id: "rf-choropleth-line", op: "line-opacity" }, { id: "rf-corridor-cdi-layer", op: "line-opacity" }] }
   ];
+
+  // Per-session band ordering (panel order = map order, top of list = top of map).
+  var _refOrder = REFERENCE.map(function (e) { return e.id; });
+  var _analysisOrder = ANALYSIS.map(function (e) { return e.id; });
+
+  function orderedPresent(entries, order) {
+    var byId = {};
+    entries.forEach(function (e) { byId[e.id] = e; });
+    return order.map(function (id) { return byId[id]; })
+                .filter(function (e) { return e && entryPresent(e); });
+  }
 
   var DRAWN_TYPES = [
     { type: "point",   label: "Points"   },
@@ -88,10 +108,114 @@
     });
   }
 
+  var MENU_SVG =
+    '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">' +
+    '<circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg>';
+  var GRIP_SVG =
+    '<svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor">' +
+    '<circle cx="3" cy="3" r="1.1"/><circle cx="7" cy="3" r="1.1"/><circle cx="3" cy="7" r="1.1"/>' +
+    '<circle cx="7" cy="7" r="1.1"/><circle cx="3" cy="11" r="1.1"/><circle cx="7" cy="11" r="1.1"/></svg>';
+
+  // Fit the map to a layer entry by reading its GeoJSON source data.
+  function zoomToEntry(entry) {
+    var map = App.map;
+    for (var i = 0; i < entry.layers.length; i++) {
+      var sl = map.getLayer(entry.layers[i].id);
+      if (!sl) continue;
+      var src = map.getSource(sl.source);
+      var data = src && src._data;
+      if (!data) continue;
+      try {
+        var bb = turf.bbox(data);
+        if (bb && bb.every(function (n) { return isFinite(n); })) {
+          if (bb[0] === bb[2] && bb[1] === bb[3]) {
+            map.easeTo({ center: [bb[0], bb[1]], zoom: Math.max(map.getZoom(), 14), duration: 600 });
+          } else {
+            map.fitBounds([[bb[0], bb[1]], [bb[2], bb[3]]], { padding: 40, duration: 600 });
+          }
+          return;
+        }
+      } catch (e) { /* fall through */ }
+    }
+    if (typeof App.setStatus === "function") App.setStatus("Could not determine layer extent.");
+  }
+
+  function zoomToFeatures(items) {
+    if (!items.length || typeof turf === "undefined") return;
+    var fc = { type: "FeatureCollection", features: items.map(function (it) { return it.feature; }) };
+    try {
+      var bb = turf.bbox(fc);
+      App.map.fitBounds([[bb[0], bb[1]], [bb[2], bb[3]]], { padding: 60, duration: 600 });
+    } catch (e) { /* ignore */ }
+  }
+
+  // Reorder a band's map layers to match panel order (top of list = top of map),
+  // staying clamped within the band — the layer above the band keeps its place.
+  function applyBandOrder(presentEntries) {
+    var map = App.map;
+    if (!presentEntries.length) return;
+    var allIds = [];
+    presentEntries.forEach(function (e) {
+      e.layers.forEach(function (L) { if (map.getLayer(L.id)) allIds.push(L.id); });
+    });
+    var styleIds = map.getStyle().layers.map(function (l) { return l.id; });
+    var maxIdx = -1;
+    allIds.forEach(function (id) { var i = styleIds.indexOf(id); if (i > maxIdx) maxIdx = i; });
+    var anchor = styleIds[maxIdx + 1]; // layer above the band (or undefined = top)
+    var beforeId = anchor;
+    presentEntries.forEach(function (entry) {
+      entry.layers.forEach(function (L) {
+        if (map.getLayer(L.id)) map.moveLayer(L.id, beforeId);
+      });
+      var bottom = entry.layers[0] && entry.layers[0].id;
+      if (bottom && map.getLayer(bottom)) beforeId = bottom;
+    });
+  }
+
+  // ---- Drag-to-reorder (within a single band) ----
+  var _drag = null; // { band, id }
+
+  function attachDrag(row, bandKey, entryId, order, getPresent) {
+    row.setAttribute("draggable", "true");
+    row.addEventListener("dragstart", function (e) {
+      _drag = { band: bandKey, id: entryId };
+      row.classList.add("lp-dragging");
+      if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
+    });
+    row.addEventListener("dragend", function () {
+      row.classList.remove("lp-dragging");
+      _drag = null;
+    });
+    row.addEventListener("dragover", function (e) {
+      if (!_drag || _drag.band !== bandKey || _drag.id === entryId) return;
+      e.preventDefault();
+      row.classList.add("lp-drop-target");
+    });
+    row.addEventListener("dragleave", function () { row.classList.remove("lp-drop-target"); });
+    row.addEventListener("drop", function (e) {
+      row.classList.remove("lp-drop-target");
+      if (!_drag || _drag.band !== bandKey || _drag.id === entryId) return;
+      e.preventDefault();
+      var from = order.indexOf(_drag.id);
+      var to = order.indexOf(entryId);
+      if (from < 0 || to < 0) return;
+      order.splice(from, 1);
+      order.splice(to, 0, _drag.id);
+      applyBandOrder(getPresent());
+      render();
+    });
+  }
+
   // ---- Generic row builder (reference / analysis) ----
-  function buildLayerRow(entry) {
+  function buildLayerRow(entry, bandKey, order, getPresent) {
     var row = document.createElement("div");
-    row.className = "lp-row";
+    row.className = "lp-row lp-row-draggable";
+
+    var grip = document.createElement("span");
+    grip.className = "lp-grip";
+    grip.innerHTML = GRIP_SVG;
+    grip.title = "Drag to reorder";
+    row.appendChild(grip);
 
     var vis = entryVisible(entry);
     var eye = document.createElement("button");
@@ -127,6 +251,33 @@
     });
     row.appendChild(op);
 
+    var menu = document.createElement("button");
+    menu.type = "button";
+    menu.className = "lp-row-btn lp-row-menu";
+    menu.innerHTML = MENU_SVG;
+    menu.title = "More";
+    menu.addEventListener("click", function (e) {
+      e.stopPropagation();
+      var opts = [{ label: "Zoom to layer", action: function () { zoomToEntry(entry); } }];
+      if (entry.moduleId) {
+        opts.push({ label: "Open module", action: function () {
+          if (typeof App.openModulePopup === "function") App.openModulePopup(entry.moduleId);
+        } });
+      }
+      if (typeof entry.clear === "function") {
+        opts.push({ label: "Remove layer", action: function () {
+          entry.clear();
+          if (typeof App.updateAddDataClearIcons === "function") App.updateAddDataClearIcons();
+          render();
+        } });
+      }
+      if (typeof App.showContextMenu === "function") {
+        App.showContextMenu(e.clientX, e.clientY, opts);
+      }
+    });
+    row.appendChild(menu);
+
+    attachDrag(row, bandKey, entry.id, order, getPresent);
     return row;
   }
 
@@ -254,6 +405,22 @@
     name.textContent = groupName + " (" + items.length + ")";
     header.appendChild(name);
 
+    var isUngrouped = (groupName === "Ungrouped");
+    var menu = document.createElement("button");
+    menu.type = "button";
+    menu.className = "lp-row-btn lp-row-menu";
+    menu.innerHTML = MENU_SVG;
+    menu.title = "More";
+    menu.addEventListener("click", function (e) {
+      e.stopPropagation();
+      var opts = [{ label: "Zoom to group", action: function () { zoomToFeatures(items); } }];
+      if (!isUngrouped) {
+        opts.push({ label: "Rename group", action: function () { renameGroup(groupName, items); } });
+      }
+      if (typeof App.showContextMenu === "function") App.showContextMenu(e.clientX, e.clientY, opts);
+    });
+    header.appendChild(menu);
+
     var body = document.createElement("div");
     body.className = "lp-group-body";
     body.style.display = open ? "" : "none";
@@ -274,6 +441,21 @@
     block.appendChild(header);
     block.appendChild(body);
     return block;
+  }
+
+  function renameGroup(oldName, items) {
+    var nn = window.prompt("Rename group", oldName);
+    if (nn == null) return;
+    nn = nn.trim();
+    if (!nn || nn === oldName) return;
+    var key = App.UNIVERSAL_GROUP_KEY || "group";
+    items.forEach(function (it) {
+      if (!it.feature.properties.attributes) it.feature.properties.attributes = {};
+      it.feature.properties.attributes[key] = nn;
+    });
+    if (App.cache && typeof App.cache.save === "function") App.cache.save();
+    if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+    render();
   }
 
   // ---- Band scaffolding ----
@@ -368,18 +550,24 @@
     host.appendChild(drawnBand);
 
     // Analysis overlays (only those currently on the map)
-    var analysisPresent = ANALYSIS.filter(entryPresent);
+    var getAnalysis = function () { return orderedPresent(ANALYSIS, _analysisOrder); };
+    var analysisPresent = getAnalysis();
     if (analysisPresent.length) {
       var aBand = buildBand("Analysis overlays");
-      analysisPresent.forEach(function (e) { aBand.appendChild(buildLayerRow(e)); });
+      analysisPresent.forEach(function (e) {
+        aBand.appendChild(buildLayerRow(e, "analysis", _analysisOrder, getAnalysis));
+      });
       host.appendChild(aBand);
     }
 
     // Reference / imported (only those currently on the map)
-    var refPresent = REFERENCE.filter(entryPresent);
+    var getRef = function () { return orderedPresent(REFERENCE, _refOrder); };
+    var refPresent = getRef();
     if (refPresent.length) {
       var rBand = buildBand("Reference / Imported");
-      refPresent.forEach(function (e) { rBand.appendChild(buildLayerRow(e)); });
+      refPresent.forEach(function (e) {
+        rBand.appendChild(buildLayerRow(e, "reference", _refOrder, getRef));
+      });
       host.appendChild(rBand);
     }
 

@@ -402,6 +402,13 @@
       });
     }
 
+    // Open a registered module's popup by id (used by the Layers panel ⋯ menu)
+    App.openModulePopup = function (id) {
+      if (App.popup && typeof App.popup.open === "function") {
+        App.popup.open(id, _modules, buildCore);
+      }
+    };
+
     // Populate Analysis toolbar dropdown with module buttons
     var analysisDropdown = document.getElementById("analysis-dropdown");
     if (analysisDropdown && _modules.size > 0) {
