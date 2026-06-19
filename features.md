@@ -15,6 +15,13 @@ Status key: **Implemented**, **Partial**, **Not started**
 ### Midpoint Insertion — Implemented
 Click along an existing route/line/polygon in vertex edit mode to insert a new vertex between existing ones. Implemented via `insertVertex` in `js/core/editing.js` using `turf.nearestPointOnLine` to find the insertion point; supported with undo.
 
+### Segment split in edit mode — Not started
+Split a drawn line/route into two independent features at a clicked vertex (or an arbitrary clicked point along the geometry). Vertex *deletion* already exists (`deleteVertex` / `canDeleteVertex` in `js/core/editing.js`, wired to the Delete key); this adds the complementary "cut here" operation. Reuse the same geometry helpers as midpoint insert (`turf.nearestPointOnLine` to locate the cut, `turf.lineSlice` to produce the two halves), push both new features with undo, and split attributes (each half inherits the original's `attributes`). Useful for breaking a long corridor into separately-costed patterns.
+
+### Snap-to-layer while drawing — Not started
+While drawing a line/route/polygon, snap new vertices to nearby reference geometry — GTFS shape lines (`gtfs-shapes-layer`) and OSM lines — not just the current snap-to-close behavior. Today snapping is limited to closing the shape within `SNAP_PIXELS` of the first/last waypoint (`js/core/lines.js`, `js/core/routes.js`, `js/core/polygons.js`). Reuse the existing rendered layers (already queried for hover/click) to find the nearest candidate within a pixel threshold and snap the cursor/vertex to it. Lets users trace existing service or street alignments precisely when building proposals.
+
+
 ### Walkshed polygons — Low Priority
 Compute an isochrone/walkshed polygon from a selected point (e.g., 10-minute walk). Requires a network analysis service. The walkshed polygon could replace or supplement the circular buffer.
 
@@ -121,8 +128,9 @@ Load curated transit-relevant destination categories from OpenStreetMap via the 
 Upload a GTFS `.zip` via Add Data (+) → GTFS → Load GTFS Feed. Routes (shapes.txt) render as dashed gray reference lines and stops (stops.txt) as hollow circles below user-drawn features. Hovering shows a tooltip (route name + mode, or stop name + ID); clicking shows a full detail popup with route color swatch, GTFS fields, and wheelchair/location-type labels. Route info is pre-joined from trips.txt + routes.txt at load time. The analysis popup shows all files in the ZIP with REQ/OPT badges and a scrollable CSV table viewer (capped at 500 rows). Layer visibility toggles in the popup. Feed is not persisted across sessions (re-upload required).
 
 **Potential future enhancements:**
-- Derive frequency/headway from stop_times.txt for an automatic frequency heatmap overlay
-- Filter displayed routes by route_type or agency
+- **Derive frequency/span from `stop_times.txt`.** Aggregating stop_times by trip and service period yields real headways and service spans. This unlocks two high-leverage things: (1) a **frequency heatmap overlay** (color route segments by observed headway), and (2) letting the existing **"Copy As Line"** action (`js/projects/gtfs.js:505`) carry real service bands — populate `attributes.service` (weekday / saturday / sunday band arrays) on the copied feature so **Route Costing** and **Trip Builder** consume observed service automatically. Closes the loop from observed feed → editable proposal with no manual band entry.
+- **Filter displayed routes by `route_type` / agency, plus a route picker.** Add a route-level selector so users can copy an entire route's pattern (all its shapes) into editable Lines at once, rather than one shape at a time, and toggle visibility by mode/agency.
+- **Use a loaded feed as the "existing service" baseline** for Title VI and Ridership Forecasting — compare a proposed network (drawn features) against the current GTFS network for service-change and equity analysis.
 - Persist GTFS feed across sessions (localStorage is too small; IndexedDB or a re-upload prompt would be needed)
 
 ### Trip Builder — Implemented
@@ -130,6 +138,9 @@ Enabled popup module (`js/projects/trip-builder.js`, `projects/trip-builder-popu
 
 ### Corridor Scoring — Implemented
 Enabled popup module (`js/projects/corridor-scoring.js`, `projects/corridor-scoring-popup.html`) that surfaces the per-route Corridor Demand Index as a ranked, objective composite score per drawn route/line. Ranked table with classification pills and expandable per-factor breakdowns, map line layer colored by composite CDI, Adjust Weights modal, CSV/GeoJSON export, and session persistence.
+
+### Corridor Scoring scenario compare — Not started
+Let users save a scored corridor set as a named scenario and diff two corridor alternatives side by side — a ranked delta table showing which corridors gained/lost score and rank between Scenario A and B. Builds on the module's existing `_lastResult` and session persistence in `corridor-scoring.js`; would add a small scenario store (name + captured `routeCDIs` + weights/settings) and a comparison view. Supports "alternative A vs. alternative B" planning conversations directly in the tool.
 
 ### FTA STOPS-Style Ridership Modeling — Not started
 A new analysis module that replicates or approximates the methodology of FTA's STOPS (Simplified Trips-on-Project Software) model. STOPS is FTA's official ridership forecasting tool for Small Starts and some New Starts projects. It estimates **station-level boardings** by modeling three things: where people want to go (destination attractiveness), how well transit gets them there (accessibility via travel time), and how likely they are to choose transit over driving (mode share).
@@ -195,7 +206,7 @@ Superseded by "Import geospatial data (KML/KMZ/GeoJSON)" above — KML/KMZ, GeoJ
 Encodes the full session state as a compressed URL hash (pako-deflated `#share=` payload) so sharing a link opens the map in view-only mode with all drawn features intact. No backend required. Implemented via `exportShareLink` / share-hash load in `js/core/cache.js`, the `data-format="share-link"` export button, and a view-only banner.
 
 ### Map export (PNG / PDF) — Not started
-Export the current map view as a PNG screenshot (using MapLibre's `map.getCanvas().toBlob()`) or a simple one-page PDF with a legend and key summary stats from the last analysis run. Agencies use this constantly for board presentations and grant documentation. A lightweight PDF library (jsPDF) could handle layout without a backend.
+Export the current map view as a PNG screenshot (using MapLibre's `map.getCanvas().toBlob()`) or a titled, legended one-page PDF that drops straight into a board deck or grant application. High value, low complexity: pair `map.getCanvas().toBlob()` with a lightweight PDF library (jsPDF) — no backend needed. Reuse the present-mode legend, north arrow, and title overlays from `js/core/present-overlays.js` (and the last analysis run's summary stats) so the exported page matches what's on screen in Present mode.
 
 ### Session comments / sticky notes — Not started
 Pin a text annotation to a specific map location. Notes persist in the session cache alongside drawn features. Useful for sharing a session with stakeholders who need to mark feedback or flag questions on the map.
@@ -203,6 +214,9 @@ Pin a text annotation to a specific map location. Notes persist in the session c
 ---
 
 ## UI & Layout
+
+### Stale & empty-state consistency — Not started
+Standardize two cross-cutting popup patterns so the whole suite feels coherent. (1) **Stale banner:** most analysis modules already track a `_stale` flag — surface it as a uniform banner ("Inputs changed since last run — re-run to update") with a re-run affordance, instead of each module styling its own. (2) **Friendly empty states:** when a module has nothing to act on, show a one-line prompt ("Draw a route to begin", "Load a GTFS feed to begin") rather than an empty table. **Onboarding-aware:** given the beginner audience (see `CLAUDE.md`), each module's first open should show a one-line "what this needs" hint and lightweight tooltips on key inputs. Could be a shared helper (e.g., `App.renderModuleState({ stale, empty, hint })`) reused by every popup.
 
 ### Resizable sidebar — Low Priority
 Allow the user to drag the sidebar edge to resize it. Currently the sidebar is a fixed 310px width defined in `css/sidebar-v2.css`.
@@ -233,3 +247,6 @@ Implemented: `Escape` cancels the current draw/measure operation and closes popu
 
 ### Print / presentation mode — Implemented
 A "Present" button hides the sidebar, feature panel, and toolbar to show the map full-screen, with an Exit button and `Escape` to toggle back. Implemented via `App.setPresentMode` (`js/app.js`) and `js/core/present-overlays.js`, which adds draggable/resizable legend, north arrow, and title overlays for screen-sharing and grant documentation.
+
+### Classed & diverging legends with editable breaks — Not started
+In present mode, support classed and diverging choropleth legends with user-editable break values, rather than only the current continuous/auto legend. Lets a presenter set meaningful thresholds (e.g., headway tiers, or a diverging ramp around a midpoint) and have the legend swatches + map classification update together. Builds on the legend overlay in `js/core/present-overlays.js` and pairs naturally with the Frequency / service heatmap idea (which needs classed headway bins).
