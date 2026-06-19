@@ -345,6 +345,10 @@
 
   App.map = map;
   App.switchBasemap = switchBasemap;
+  App.getBasemaps = function () {
+    return BASEMAPS.map(function (b) { return { id: b.id, name: b.name }; });
+  };
+  App.getCurrentBasemapId = function () { return currentBasemapId; };
   App.toggleMuniBoundaries = toggleMuniBoundaries;
   App.setMuniBoundariesLayerVisible = function (visible) {
     var LAYER = "muni-boundaries-line";

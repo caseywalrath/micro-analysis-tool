@@ -306,6 +306,30 @@ button { cursor: pointer; }
   letter-spacing: var(--tracking-md);
   color: var(--muted);
 }
+/* --- Features | Layers tabs --- */
+.fp-tabs {
+  display: flex;
+  gap: 2px;
+  width: 100%;
+}
+.fp-tab-btn {
+  flex: 1;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 4px 6px 6px;
+  cursor: pointer;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-md);
+  color: var(--muted);
+}
+.fp-tab-btn:hover { color: #2b6cb0; }
+.fp-tab-btn.active {
+  color: #2b6cb0;
+  border-bottom-color: #2b6cb0;
+}
 /* --- Floating tab toggle button --- */
 #fp-collapse-btn {
   position: absolute;

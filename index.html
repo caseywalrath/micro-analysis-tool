@@ -244,9 +244,14 @@
           </svg>
         </button>
         <div class="fp-header">
-          <h3>Features</h3>
+          <div class="fp-tabs" role="tablist">
+            <button class="fp-tab-btn active" data-fptab="features" role="tab" type="button">Features</button>
+            <button class="fp-tab-btn" data-fptab="layers" role="tab" type="button">Layers</button>
+          </div>
         </div>
         <div class="fp-content">
+
+          <div id="fp-tab-features" class="fp-tab-pane">
 
           <div id="fp-features" class="fp-list"></div>
 
@@ -273,7 +278,11 @@
             </div>
           </div>
 
-          <!-- Shared vertical slider popover for Feature Settings -->
+          </div><!-- #fp-tab-features -->
+
+          <div id="fp-tab-layers" class="fp-tab-pane" style="display:none"></div>
+
+          <!-- Shared vertical slider popover for Feature Settings + Layers -->
           <div id="fp-slider-popover" style="display:none">
             <span id="fp-slider-value" class="fp-slider-val"></span>
             <input id="fp-slider-input" type="range" class="fp-slider-vert" />

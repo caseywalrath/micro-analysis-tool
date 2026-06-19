@@ -1052,6 +1052,31 @@
   App.getTypeDefaultColor = getTypeDefaultColor;
   App.showContextMenu     = showContextMenu;
   App.rerenderForType     = rerenderForType;
+  // Shared with the Layers panel so it can list/group drawn features
+  // without duplicating the collection + grouping logic.
+  App.collectDrawnFeatures = collectAllFeatures;
+  App.UNIVERSAL_GROUP_KEY  = UNIVERSAL_GROUP_KEY;
+
+  // Wire the Features | Layers tab bar
+  (function () {
+    var tabBtns = document.querySelectorAll(".fp-tab-btn");
+    if (!tabBtns.length) return;
+    function show(tab) {
+      tabBtns.forEach(function (b) {
+        b.classList.toggle("active", b.getAttribute("data-fptab") === tab);
+      });
+      var fEl = document.getElementById("fp-tab-features");
+      var lEl = document.getElementById("fp-tab-layers");
+      if (fEl) fEl.style.display = tab === "features" ? "" : "none";
+      if (lEl) lEl.style.display = tab === "layers" ? "" : "none";
+      if (tab === "layers" && typeof App.refreshLayersPanel === "function") {
+        App.refreshLayersPanel();
+      }
+    }
+    tabBtns.forEach(function (b) {
+      b.addEventListener("click", function () { show(b.getAttribute("data-fptab")); });
+    });
+  })();
 
   // Wire feature panel collapse toggle
   (function () {
