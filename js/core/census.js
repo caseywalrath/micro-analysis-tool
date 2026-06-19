@@ -188,6 +188,7 @@
       if (missing.length) {
         await fetchCountyVarsInto(geoLevel, year, entry, missing, slot);
         _fetchedAt.set(geoLevel + "|" + year, Date.now());
+        try { window.dispatchEvent(new CustomEvent("mat:census-fetch")); } catch (e) {}
       }
     }
 
@@ -399,5 +400,62 @@
     },
     fetchedAt: function (geoLevel, year) { return _fetchedAt.get(geoLevel + "|" + year) || null; },
     stats: function () { return { geoKeys: _geoCache.size, acsCounties: _acsStore.size }; }
+  };
+
+  // ---- Per-module cache status line + Re-fetch (awareness + override) ----
+  // opts = { geoSel, yearSel (option <select> elements), onRefetch (function) }.
+  // Returns a DOM node with an el.refresh() method; auto-refreshes on fetches.
+  App.buildCensusCacheStatus = function (opts) {
+    opts = opts || {};
+    var el = document.createElement("div");
+    el.className = "cc-status";
+    var txt = document.createElement("span");
+    txt.className = "cc-status-text";
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "cc-refetch-btn";
+    btn.textContent = "Re-fetch";
+    btn.title = "Ignore cached census data and fetch fresh";
+    el.appendChild(txt);
+    el.appendChild(btn);
+
+    function glOf() { return opts.geoSel ? opts.geoSel.value : null; }
+    function yrOf() { return opts.yearSel ? opts.yearSel.value : null; }
+    function glLabel(gl) { return gl === "tract" ? "Tract" : (gl === "bg" ? "BG" : (gl || "—")); }
+    function fmtAge(ms) {
+      var s = Math.floor((Date.now() - ms) / 1000);
+      if (s < 10) return "just now";
+      if (s < 60) return s + "s ago";
+      var m = Math.floor(s / 60);
+      if (m < 60) return m + "m ago";
+      return Math.floor(m / 60) + "h ago";
+    }
+
+    el.refresh = function () {
+      var gl = glOf(), yr = yrOf();
+      var at = (gl && yr) ? App.censusCache.fetchedAt(gl, yr) : null;
+      var tail = " · " + glLabel(gl) + " · " + (yr || "—");
+      if (at) {
+        var age = fmtAge(at);
+        txt.textContent = "Census data: " + (age === "just now" ? "fetched just now" : "cached · fetched " + age) + tail;
+        btn.style.display = "";
+      } else {
+        txt.textContent = "Census data: not yet fetched" + tail;
+        btn.style.display = "none";
+      }
+    };
+
+    btn.addEventListener("click", function () {
+      var gl = glOf(), yr = yrOf();
+      if (gl && yr) App.censusCache.invalidate(gl, yr);
+      if (typeof opts.onRefetch === "function") opts.onRefetch();
+    });
+
+    if (opts.geoSel) opts.geoSel.addEventListener("change", el.refresh);
+    if (opts.yearSel) opts.yearSel.addEventListener("change", el.refresh);
+    window.addEventListener("mat:census-fetch", el.refresh);
+
+    el.refresh();
+    return el;
   };
 })();

@@ -824,6 +824,16 @@
     var scoreBtn = document.getElementById("csScoreBtn");
     if (scoreBtn) scoreBtn.addEventListener("click", runScoring);
 
+    // Shared census-cache status line + Re-fetch
+    if (scoreBtn && typeof App.buildCensusCacheStatus === "function") {
+      var ccStatus = App.buildCensusCacheStatus({
+        geoSel: document.getElementById("csGeoLevel"),
+        yearSel: document.getElementById("csYearSelect"),
+        onRefetch: function () { scoreBtn.click(); }
+      });
+      scoreBtn.parentNode.insertBefore(ccStatus, scoreBtn);
+    }
+
     // Exports
     var csvBtn = document.getElementById("csExportCSV");
     if (csvBtn) csvBtn.addEventListener("click", exportCSV);
@@ -852,6 +862,7 @@
   }
 
   function onOpen(core) {
+    document.querySelectorAll(".cc-status").forEach(function (s) { if (s.refresh) s.refresh(); });
     var apportionCb = document.getElementById("csApportionByArea");
     if (apportionCb) apportionCb.checked = _apportionByArea;
 

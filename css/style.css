@@ -422,6 +422,33 @@ button { cursor: pointer; }
   border-radius: 3px;
 }
 .lp-row-menu { margin-left: 2px; }
+/* --- Shared census-cache status line (analysis modules) --- */
+.cc-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 6px 0;
+  padding: 5px 8px;
+  background: #f0f5ff;
+  border: 1px solid #d6e4ff;
+  border-radius: 4px;
+  font-size: var(--text-xs);
+  color: #475569;
+}
+.cc-status-text { flex: 1; }
+.cc-refetch-btn {
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid #2b6cb0;
+  color: #2b6cb0;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+.cc-refetch-btn:hover { background: #2b6cb0; color: #fff; }
 /* --- Floating tab toggle button --- */
 #fp-collapse-btn {
   position: absolute;

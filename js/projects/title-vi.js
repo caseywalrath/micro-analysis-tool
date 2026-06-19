@@ -1421,6 +1421,16 @@
     var baselineBtn = document.getElementById("tviComputeBaseline");
     if (baselineBtn) baselineBtn.addEventListener("click", function () { runBaseline(core); });
 
+    // Shared census-cache status line + Re-fetch (policy geo/year)
+    if (baselineBtn && typeof App.buildCensusCacheStatus === "function") {
+      var ccStatus = App.buildCensusCacheStatus({
+        geoSel: document.getElementById("tviGeoLevel"),
+        yearSel: document.getElementById("tviYearSelect"),
+        onRefetch: function () { baselineBtn.click(); }
+      });
+      baselineBtn.parentNode.insertBefore(ccStatus, baselineBtn);
+    }
+
     // Analysis button
     var analysisBtn = document.getElementById("tviRunAnalysis");
     if (analysisBtn) analysisBtn.addEventListener("click", function () { runAnalysis(core); });
@@ -1469,6 +1479,7 @@
 
   function onOpen(core) {
     writePolicyToDOM();
+    document.querySelectorAll(".cc-status").forEach(function (s) { if (s.refresh) s.refresh(); });
     switchTab(_activeTab);
     populateScenarioDropdown();
 

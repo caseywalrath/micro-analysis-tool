@@ -996,6 +996,16 @@
     var runBtn = document.getElementById("tpiRun");
     if (runBtn) runBtn.addEventListener("click", function () { runTPI(); });
 
+    // Shared census-cache status line + Re-fetch
+    if (runBtn && typeof App.buildCensusCacheStatus === "function") {
+      var ccStatus = App.buildCensusCacheStatus({
+        geoSel: document.getElementById("tpiGeoLevel"),
+        yearSel: document.getElementById("tpiYearSelect"),
+        onRefetch: function () { runBtn.click(); }
+      });
+      runBtn.parentNode.insertBefore(ccStatus, runBtn);
+    }
+
     // Hide Choropleth toggle
     var hideCb = document.getElementById("tpiHideChoropleth");
     if (hideCb) {
@@ -1076,6 +1086,7 @@
   // ---- Popup lifecycle hooks ----
 
   function onOpen(core) {
+    document.querySelectorAll(".cc-status").forEach(function (s) { if (s.refresh) s.refresh(); });
     // Sync checkbox
     var apportionCb = document.getElementById("tpiApportionByArea");
     if (apportionCb) apportionCb.checked = _apportionByArea;

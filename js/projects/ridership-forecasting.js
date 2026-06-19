@@ -2891,6 +2891,16 @@
       showAnalysisConfirm(buildCalibConfirmHTML(), runSystemAnalysis);
     });
 
+    // Shared census-cache status line + Re-fetch (Calibrate context)
+    if (sysBtn && typeof App.buildCensusCacheStatus === "function") {
+      var ccCalib = App.buildCensusCacheStatus({
+        geoSel: document.getElementById("rfCalibGeoLevel"),
+        yearSel: document.getElementById("rfCalibYearSelect"),
+        onRefetch: function () { sysBtn.click(); }
+      });
+      sysBtn.parentNode.insertBefore(ccCalib, sysBtn);
+    }
+
     var calibApportionCb = document.getElementById("rfCalibApportionByArea");
     if (calibApportionCb) {
       calibApportionCb.checked = _apportionByArea;
@@ -3035,6 +3045,16 @@
     if (runBtn) runBtn.addEventListener("click", function () {
       showAnalysisConfirm(buildDemandConfirmHTML(), runDemand);
     });
+
+    // Shared census-cache status line + Re-fetch (Demand context)
+    if (runBtn && typeof App.buildCensusCacheStatus === "function") {
+      var ccDemand = App.buildCensusCacheStatus({
+        geoSel: document.getElementById("rfGeoLevel"),
+        yearSel: document.getElementById("rfYearSelect"),
+        onRefetch: function () { runBtn.click(); }
+      });
+      runBtn.parentNode.insertBefore(ccDemand, runBtn);
+    }
 
     var apportionCb = document.getElementById("rfApportionByArea");
     if (apportionCb) {
@@ -3223,6 +3243,7 @@
   // ---- Popup lifecycle hooks ----
 
   function onOpen(core) {
+    document.querySelectorAll(".cc-status").forEach(function (s) { if (s.refresh) s.refresh(); });
     // Sync apportion checkboxes
     var apportionCb = document.getElementById("rfApportionByArea");
     if (apportionCb) apportionCb.checked = _apportionByArea;
