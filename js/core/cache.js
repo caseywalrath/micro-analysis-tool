@@ -308,6 +308,11 @@
       console.warn("Cache clear failed:", e);
     }
 
+    // 1b. Clear the shared census fetch cache (geos + ACS values).
+    if (App.censusCache && typeof App.censusCache.clear === "function") {
+      App.censusCache.clear();
+    }
+
     // 2. Clear all features
     if (typeof App.exitEditMode === "function") App.exitEditMode();
     App.clearPoints();

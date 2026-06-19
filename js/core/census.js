@@ -9,6 +9,13 @@
 (function () {
   var App = window.App = window.App || {};
 
+  // ---- Shared session fetch cache (transparent memo) ----
+  // Makes repeated TIGERweb/ACS fetches instant and guarantees every analysis
+  // module reports the same numbers. Session-scoped; cleared on Reset Session.
+  var _geoCache = new Map();  // "geoLevel|bbox" -> raw TIGERweb features (pre union-filter)
+  var _acsStore = new Map();  // "geoLevel|year|st-co" -> { vars:Set, data:Map(geoid -> Map(varCode -> value)) }
+  var _fetchedAt = new Map(); // "geoLevel|year" -> ms timestamp of last network ACS fetch
+
   // --- TIGERweb overlay rendering ---
 
   function renderCensusOverlay(geos) {
@@ -75,22 +82,29 @@
 
   async function fetchTigerwebGeos(geoLevel, unionFeat) {
     var bbox = App.bboxStringFromFeature(unionFeat);
-    var layerId = (geoLevel === "tract") ? 0 : 1;
-    var layerUrl = "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Tracts_Blocks/MapServer/" + layerId;
+    // Memoize the (expensive) bbox query; keep the union-intersect filter outside
+    // the cache so different study areas sharing a bbox still reuse the network result.
+    var cacheKey = geoLevel + "|" + bbox;
+    var features = _geoCache.get(cacheKey);
+    if (!features) {
+      var layerId = (geoLevel === "tract") ? 0 : 1;
+      var layerUrl = "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Tracts_Blocks/MapServer/" + layerId;
 
-    var params = new URLSearchParams({
-      where: "1=1",
-      outFields: "GEOID",
-      geometry: bbox,
-      geometryType: "esriGeometryEnvelope",
-      inSR: "4326",
-      spatialRel: "esriSpatialRelIntersects",
-      outSR: "4326",
-      returnGeometry: "true",
-      f: "geojson"
-    });
+      var params = new URLSearchParams({
+        where: "1=1",
+        outFields: "GEOID",
+        geometry: bbox,
+        geometryType: "esriGeometryEnvelope",
+        inSR: "4326",
+        spatialRel: "esriSpatialRelIntersects",
+        outSR: "4326",
+        returnGeometry: "true",
+        f: "geojson"
+      });
 
-    var features = await fetchAllTigerwebFeatures(layerUrl, params);
+      features = await fetchAllTigerwebFeatures(layerUrl, params);
+      _geoCache.set(cacheKey, features);
+    }
     return features.filter(function (f) {
       return turf.booleanIntersects(f, unionFeat);
     });
@@ -106,58 +120,97 @@
     return { state: state, county: county, tract: tract, blkgrp: blkgrp };
   }
 
-  async function fetchACSValues(geoLevel, year, varCode, geoids) {
-    var groups = new Map();
-    for (var gi = 0; gi < geoids.length; gi++) {
-      var p = parseGEOID(geoLevel, geoids[gi]);
-      var key = p.state + "-" + p.county;
-      if (!groups.has(key)) groups.set(key, { state: p.state, county: p.county });
-    }
-
-    var results = new Map();
+  // Fetch one county's missing ACS vars and merge into the store slot.
+  // Pulls the whole county (for:*) so the result is reusable by any study area.
+  async function fetchCountyVarsInto(geoLevel, year, entry, varCodes, slot) {
     var base = "https://api.census.gov/data/" + year + "/acs/acs5";
-
-    for (var entry of groups.values()) {
-      var forClause, inClause;
-      if (geoLevel === "tract") {
-        forClause = "tract:*";
-        inClause = "state:" + entry.state + "%20county:" + entry.county;
-      } else {
-        forClause = "block%20group:*";
-        inClause = "state:" + entry.state + "%20county:" + entry.county + "%20tract:*";
-      }
-
-      var url = base + "?get=NAME," + encodeURIComponent(varCode) + "&for=" + forClause + "&in=" + inClause + (App.CENSUS_API_KEY ? "&key=" + App.CENSUS_API_KEY : "");
+    var forClause, inClause;
+    if (geoLevel === "tract") {
+      forClause = "tract:*";
+      inClause = "state:" + entry.state + "%20county:" + entry.county;
+    } else {
+      forClause = "block%20group:*";
+      inClause = "state:" + entry.state + "%20county:" + entry.county + "%20tract:*";
+    }
+    var CHUNK = 49; // Census API allows ≤50 columns/request; NAME uses one slot
+    for (var ci = 0; ci < varCodes.length; ci += CHUNK) {
+      var chunk = varCodes.slice(ci, ci + CHUNK);
+      var url = base + "?get=NAME," + encodeURIComponent(chunk.join(",")) + "&for=" + forClause + "&in=" + inClause + (App.CENSUS_API_KEY ? "&key=" + App.CENSUS_API_KEY : "");
       var resp = await fetch(url);
       if (!resp.ok) throw new Error("ACS API error " + resp.status + " for state " + entry.state + " county " + entry.county);
       var rows = await resp.json();
-
       var header = rows[0];
-      var idxVar = header.indexOf(varCode);
-      if (idxVar === -1) throw new Error("ACS response missing variable " + varCode);
-
-      for (var i = 1; i < rows.length; i++) {
-        var r = rows[i];
-        var raw = r[idxVar];
-        if (raw === null || raw === undefined || raw === "") continue;
-        var val = Number(raw);
-        // Skip Census sentinel values (negative placeholders like -666666666).
-        if (!Number.isFinite(val) || val < 0) continue;
-
-        if (geoLevel === "tract") {
-          var tract = r[header.indexOf("tract")];
-          var st = r[header.indexOf("state")];
-          var co = r[header.indexOf("county")];
-          results.set(st + co + tract, val);
-        } else {
-          var bg = r[header.indexOf("block group")];
-          var tract2 = r[header.indexOf("tract")];
-          var st2 = r[header.indexOf("state")];
-          var co2 = r[header.indexOf("county")];
-          results.set(st2 + co2 + tract2 + bg, val);
+      var varIdx = {};
+      chunk.forEach(function (v) { var i = header.indexOf(v); if (i !== -1) varIdx[v] = i; });
+      var sIdx = header.indexOf("state"), cIdx = header.indexOf("county"),
+          tIdx = header.indexOf("tract"), bIdx = header.indexOf("block group");
+      for (var ri = 1; ri < rows.length; ri++) {
+        var r = rows[ri];
+        var gid = (geoLevel === "tract")
+          ? r[sIdx] + r[cIdx] + r[tIdx]
+          : r[sIdx] + r[cIdx] + r[tIdx] + r[bIdx];
+        var gm = slot.data.get(gid);
+        if (!gm) { gm = new Map(); slot.data.set(gid, gm); }
+        for (var v in varIdx) {
+          var raw = r[varIdx[v]];
+          if (raw === null || raw === undefined || raw === "") continue;
+          var val = Number(raw);
+          // Skip Census sentinel values (negative placeholders like -666666666).
+          if (Number.isFinite(val) && val >= 0) gm.set(v, val);
         }
       }
+      // Mark the chunk's vars as fetched for this county (a sentinel means
+      // "no value", not "not fetched" — so we never refetch them).
+      chunk.forEach(function (v) { slot.vars.add(v); });
     }
+  }
+
+  // Cached, multi-var ACS fetch shared by TPI (TPI.batchFetchACS) and Title VI
+  // (fetchACSValues). Returns Map(geoid -> Map(varCode -> value)). Only fetches
+  // vars not already cached for each (geoLevel, year, county). opts.force bypasses.
+  async function fetchACSBatchCached(geoLevel, year, varCodes, geoids, opts) {
+    opts = opts || {};
+    var result = new Map();
+    if (!varCodes.length || !geoids.length) return result;
+
+    var counties = new Map();
+    geoids.forEach(function (g) {
+      var st = g.slice(0, 2), co = g.slice(2, 5), k = st + "-" + co;
+      if (!counties.has(k)) counties.set(k, { state: st, county: co });
+    });
+
+    for (var entry of counties.values()) {
+      var storeKey = geoLevel + "|" + year + "|" + entry.state + "-" + entry.county;
+      var slot = _acsStore.get(storeKey);
+      if (opts.force && slot) { _acsStore.delete(storeKey); slot = null; }
+      if (!slot) { slot = { vars: new Set(), data: new Map() }; _acsStore.set(storeKey, slot); }
+      var missing = varCodes.filter(function (v) { return !slot.vars.has(v); });
+      if (missing.length) {
+        await fetchCountyVarsInto(geoLevel, year, entry, missing, slot);
+        _fetchedAt.set(geoLevel + "|" + year, Date.now());
+      }
+    }
+
+    geoids.forEach(function (g) {
+      var st = g.slice(0, 2), co = g.slice(2, 5);
+      var slot = _acsStore.get(geoLevel + "|" + year + "|" + st + "-" + co);
+      if (!slot) return;
+      var gm = slot.data.get(g);
+      if (!gm) return;
+      var out = new Map();
+      varCodes.forEach(function (v) { if (gm.has(v)) out.set(v, gm.get(v)); });
+      if (out.size) result.set(g, out);
+    });
+    return result;
+  }
+
+  // Single-variable convenience wrapper over the cached batch fetcher.
+  async function fetchACSValues(geoLevel, year, varCode, geoids) {
+    var batch = await fetchACSBatchCached(geoLevel, year, [varCode], geoids);
+    var results = new Map();
+    batch.forEach(function (varMap, geoid) {
+      if (varMap.has(varCode)) results.set(geoid, varMap.get(varCode));
+    });
     return results;
   }
 
@@ -326,8 +379,25 @@
   App.fetchTigerwebGeos = fetchTigerwebGeos;
   App.parseGEOID = parseGEOID;
   App.fetchACSValues = fetchACSValues;
+  App.fetchACSBatchCached = fetchACSBatchCached;
   App.fetchACSMultiValues = fetchACSMultiValues;
   App.fetchACSCountyValues = fetchACSCountyValues;
   App.aggregateWithinUnion = aggregateWithinUnion;
   App.computeAcsValueOnly = computeAcsValueOnly;
+
+  // Shared session fetch cache control (awareness + override).
+  App.censusCache = {
+    clear: function () { _geoCache.clear(); _acsStore.clear(); _fetchedAt.clear(); },
+    // Drop cached ACS for a (geoLevel, year) and all geos for that geoLevel so the
+    // next run refetches — backs the per-module "Re-fetch" button.
+    invalidate: function (geoLevel, year) {
+      var acsPrefix = geoLevel + "|" + year + "|";
+      Array.from(_acsStore.keys()).forEach(function (k) { if (k.indexOf(acsPrefix) === 0) _acsStore.delete(k); });
+      var geoPrefix = geoLevel + "|";
+      Array.from(_geoCache.keys()).forEach(function (k) { if (k.indexOf(geoPrefix) === 0) _geoCache.delete(k); });
+      _fetchedAt.delete(geoLevel + "|" + year);
+    },
+    fetchedAt: function (geoLevel, year) { return _fetchedAt.get(geoLevel + "|" + year) || null; },
+    stats: function () { return { geoKeys: _geoCache.size, acsCounties: _acsStore.size }; }
+  };
 })();

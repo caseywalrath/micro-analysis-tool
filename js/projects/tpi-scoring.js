@@ -245,78 +245,16 @@
   // Returns Map(geoid -> Map(varCode -> value))
   // =========================================================================
 
+  // Delegates to the shared session cache in census.js (App.fetchACSBatchCached),
+  // so TPI, Ridership, Corridor Scoring, and Title VI reuse the same fetched ACS
+  // values and agree on the numbers. Same signature and Map(geoid -> Map(varCode
+  // -> value)) return shape as the previous direct-fetch implementation.
   async function batchFetchACS(geoLevel, year, geoids, varCodes) {
     if (varCodes.length === 0 || geoids.length === 0) return new Map();
-
-    // Census API allows max 50 columns per request; NAME always uses one slot.
-    var CHUNK_SIZE = 49;
-    var chunks = [];
-    for (var ci = 0; ci < varCodes.length; ci += CHUNK_SIZE) {
-      chunks.push(varCodes.slice(ci, ci + CHUNK_SIZE));
+    if (typeof App.fetchACSBatchCached !== "function") {
+      throw new Error("census.js App.fetchACSBatchCached unavailable (script load order?)");
     }
-
-    // Group geoids by state-county
-    var groups = new Map();
-    for (var gi = 0; gi < geoids.length; gi++) {
-      var geoid = geoids[gi];
-      var state = geoid.slice(0, 2);
-      var county = geoid.slice(2, 5);
-      var key = state + "-" + county;
-      if (!groups.has(key)) groups.set(key, { state: state, county: county });
-    }
-
-    // Per-geography results: Map(geoid -> Map(varCode -> value))
-    var result = new Map();
-    var base = "https://api.census.gov/data/" + year + "/acs/acs5";
-
-    for (var entry of groups.values()) {
-      var forClause, inClause;
-      if (geoLevel === "tract") {
-        forClause = "tract:*";
-        inClause = "state:" + entry.state + "%20county:" + entry.county;
-      } else {
-        forClause = "block%20group:*";
-        inClause = "state:" + entry.state + "%20county:" + entry.county + "%20tract:*";
-      }
-
-      // Fetch each chunk sequentially; merge into the same Map per GEOID
-      for (var chi = 0; chi < chunks.length; chi++) {
-        var chunk = chunks[chi];
-        var url = base + "?get=NAME," + encodeURIComponent(chunk.join(",")) + "&for=" + forClause + "&in=" + inClause + (App.CENSUS_API_KEY ? "&key=" + App.CENSUS_API_KEY : "");
-        var resp = await fetch(url);
-        if (!resp.ok) throw new Error("ACS batch error " + resp.status + " for state " + entry.state + " county " + entry.county + " (chunk " + (chi + 1) + ")");
-        var rows = await resp.json();
-
-        var header = rows[0];
-        var varIndices = {};
-        for (var vi = 0; vi < chunk.length; vi++) {
-          var idx = header.indexOf(chunk[vi]);
-          if (idx !== -1) varIndices[chunk[vi]] = idx;
-        }
-
-        for (var ri = 1; ri < rows.length; ri++) {
-          var r = rows[ri];
-          var gid;
-          if (geoLevel === "tract") {
-            gid = r[header.indexOf("state")] + r[header.indexOf("county")] + r[header.indexOf("tract")];
-          } else {
-            gid = r[header.indexOf("state")] + r[header.indexOf("county")] + r[header.indexOf("tract")] + r[header.indexOf("block group")];
-          }
-
-          // Create Map for this GEOID on first chunk; reuse on subsequent chunks (merge)
-          if (!result.has(gid)) result.set(gid, new Map());
-          var valMap = result.get(gid);
-          for (var vc in varIndices) {
-            var raw = r[varIndices[vc]];
-            if (raw === null || raw === undefined || raw === "") continue;
-            var val = Number(raw);
-            // Skip Census sentinel values (negative placeholders like -666666666).
-            if (Number.isFinite(val) && val >= 0) valMap.set(vc, val);
-          }
-        }
-      }
-    }
-    return result;
+    return App.fetchACSBatchCached(geoLevel, year, varCodes, geoids);
   }
   TPI.batchFetchACS = batchFetchACS;
 
