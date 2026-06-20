@@ -240,8 +240,8 @@ A keyboard-triggered search overlay that lets users reach any tool, analysis mod
 A dedicated panel listing all drawn feature groups and imported reference layers, with per-layer visibility toggles, opacity sliders, and draw-order control (drag to reorder). Becomes essential once GTFS import and CSV import are added. Modeled on Felt's layers panel.
 
 
-### Keyboard shortcuts — Partial
-Implemented: `Escape` cancels the current draw/measure operation and closes popups; `Ctrl+Z` / `Ctrl+Shift+Z` undo/redo; `Delete`/`Backspace` removes the selected vertex in edit mode (`js/app.js`). Still to do: single-key draw-mode shortcuts (`S` = Station, `L` = Line, `R` = Route, `P` = Polygon), `Enter` to finish a line/route, and tooltip hints.
+### Keyboard shortcuts — Implemented
+Implemented: `Escape` cancels the current draw/measure operation and closes popups; `Ctrl+Z` / `Ctrl+Shift+Z` undo/redo; `Delete`/`Backspace` removes the selected vertex in edit mode; single-key draw-tool toggles (`S` = Point, `L` = Line, `R` = Route, `P` = Polygon, `M` = Measure, `T` = Text Box, `B` = Label — each key programmatically clicks the matching `.tool-btn`, so a second press toggles the tool off); `Enter` finishes an in-progress line/route/polygon via `App.finishDrawing()` (reuses the `saveLine`/`saveRoute`/`savePolygon` commit path); and toolbar tooltip hints showing each key. All wired in `js/app.js` (a dedicated `keydown` listener separate from the Escape/Ctrl+Z/Delete handler; guards skip typing in inputs, modifier combos, and — for tool keys — when a module popup is open). Possible future polish: single-key shortcuts for analysis modules and a help overlay listing all shortcuts.
 
 
 

@@ -207,11 +207,11 @@
     renderPolygonLayers();
 
     if (currentCoords.length === 1) {
-      App.setStatus("Polygon started — click to add vertices, click last point to save");
+      App.setStatus("Polygon started — click to add vertices, click last point or press Enter to finish");
     } else if (currentCoords.length === 2) {
       App.setStatus("2 vertices — need at least 3 to close polygon");
     } else {
-      App.setStatus(currentCoords.length + " vertices — click last point to save");
+      App.setStatus(currentCoords.length + " vertices — click last point or press Enter to finish");
     }
   }
 
@@ -273,7 +273,7 @@
     } else if (currentCoords.length < 3) {
       App.setStatus(currentCoords.length + " vertices — need at least 3 to close polygon");
     } else {
-      App.setStatus(currentCoords.length + " vertices — click last point to save");
+      App.setStatus(currentCoords.length + " vertices — click last point or press Enter to finish");
     }
     if (App.undo) App.undo.updateButtons();
   }
@@ -335,6 +335,7 @@
   App.polygons = polygons;
   App.polygonUnionPolygon = polygonUnionPolygon;
   App.handlePolygonClick = handlePolygonClick;
+  App.savePolygon = savePolygon;
   App.duplicatePolygon = duplicatePolygon;
   App.removePolygon = removePolygon;
   App.clearPolygons = clearPolygons;

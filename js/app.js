@@ -590,6 +590,25 @@
       App.map.getCanvas().style.cursor = "grab";
     };
 
+    // Finish (commit) the in-progress line/route/polygon — the same commit path as
+    // snap-to-close, exposed so the Enter shortcut can reuse it. saveRoute is async.
+    App.finishDrawing = function () {
+      var mode = App.drawMode;
+      function after() {
+        if (App.undo) App.undo.updateButtons();
+        notifyProject();
+        if (typeof App.cache !== "undefined") App.cache.save();
+      }
+      if (mode === "line" && typeof App.saveLine === "function") {
+        App.saveLine(); after();
+      } else if (mode === "polygon" && typeof App.savePolygon === "function") {
+        App.savePolygon(); after();
+      } else if (mode === "route" && typeof App.saveRoute === "function") {
+        var p = App.saveRoute();
+        (p && typeof p.then === "function") ? p.then(after) : after();
+      }
+    };
+
     // Variable checkbox Select All / Clear All — now wired in buffer-summary.js init()
 
     // Dark mode toggle
@@ -668,6 +687,37 @@
           if (typeof App.onFeatureDelete === "function") App.onFeatureDelete();
           e.preventDefault();
         }
+      }
+    });
+
+    // Draw-tool shortcuts (S/L/R/P/M/T/B) + Enter-to-finish. Kept as a separate
+    // listener so it stays isolated from the Escape/Ctrl+Z/Delete handler above.
+    var TOOL_KEYS = {
+      s: "point", l: "line", r: "route", p: "polygon",
+      b: "label", t: "textbox", m: "measure"
+    };
+    document.addEventListener("keydown", function (e) {
+      // Never hijack typing, dropdown navigation, or modifier combos (Ctrl+Z etc.).
+      var tag = e.target.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || e.target.isContentEditable) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+      // Enter finishes an in-progress line / route / polygon.
+      if (e.key === "Enter") {
+        if (App.drawMode === "line" || App.drawMode === "route" || App.drawMode === "polygon") {
+          App.finishDrawing();
+          e.preventDefault();
+        }
+        return;
+      }
+
+      // Single-key tool toggles. Skip while a module popup is open (the map is
+      // behind it, so switching draw mode would be surprising).
+      if (App.popup && App.popup.isOpen()) return;
+      var mode = TOOL_KEYS[(e.key || "").toLowerCase()];
+      if (mode) {
+        var btn = document.querySelector('.tool-btn[data-mode="' + mode + '"]');
+        if (btn) { btn.click(); e.preventDefault(); }
       }
     });
 

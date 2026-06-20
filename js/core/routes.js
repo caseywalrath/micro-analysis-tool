@@ -432,7 +432,7 @@
     if (currentWaypoints.length === 1) {
       // First waypoint — nothing to route yet
       renderRouteLayers();
-      App.setStatus("Route started \u2014 click to add waypoints, click last point to save");
+      App.setStatus("Route started \u2014 click to add waypoints, click last point or press Enter to finish");
       return;
     }
 
@@ -447,7 +447,7 @@
     if (gen !== _fetchGen) return; // stale result, a newer click happened
 
     currentRouteCoords = coords || snapshot;
-    App.setStatus(currentWaypoints.length + " waypoints \u2014 click last point to save");
+    App.setStatus(currentWaypoints.length + " waypoints \u2014 click last point or press Enter to finish");
     renderRouteLayers();
   }
 
@@ -530,7 +530,7 @@
         if (gen !== _fetchGen) return;
         currentRouteCoords = coords || snapshot;
         renderRouteLayers();
-        App.setStatus(currentWaypoints.length + " waypoints \u2014 click last point to save");
+        App.setStatus(currentWaypoints.length + " waypoints \u2014 click last point or press Enter to finish");
       });
     } else {
       currentRouteCoords = [];
@@ -538,7 +538,7 @@
       if (currentWaypoints.length === 0) {
         App.setStatus("Route drawing cancelled");
       } else {
-        App.setStatus("Route started \u2014 click to add waypoints, click last point to save");
+        App.setStatus("Route started \u2014 click to add waypoints, click last point or press Enter to finish");
       }
     }
     if (App.undo) App.undo.updateButtons();
@@ -650,6 +650,7 @@
   App.rebuildRouteBuffers = rebuildRouteBuffers;
   App.routeBufferUnionPolygon = routeBufferUnionPolygon;
   App.handleRouteClick = handleRouteClick;
+  App.saveRoute = saveRoute;
   App.setRoutePreview = setRoutePreview;
   App.duplicateRoute = duplicateRoute;
   App.removeRoute = removeRoute;

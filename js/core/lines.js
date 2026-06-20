@@ -243,9 +243,9 @@
     renderLineLayers();
 
     if (currentCoords.length === 1) {
-      App.setStatus("Line started — click to add waypoints, click last point to save");
+      App.setStatus("Line started — click to add waypoints, click last point or press Enter to finish");
     } else {
-      App.setStatus(currentCoords.length + " waypoints — click last point to save");
+      App.setStatus(currentCoords.length + " waypoints — click last point or press Enter to finish");
     }
   }
 
@@ -386,6 +386,7 @@
   App.rebuildLineBuffers = rebuildLineBuffers;
   App.lineBufferUnionPolygon = lineBufferUnionPolygon;
   App.handleLineClick = handleLineClick;
+  App.saveLine = saveLine;
   App.addLineFromCoords = addLineFromCoords;
   App.duplicateLine = duplicateLine;
   App.removeLine = removeLine;
