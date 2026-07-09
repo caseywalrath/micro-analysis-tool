@@ -5,6 +5,9 @@
 // State model:
 //   _hovered       — { type, index } | null  — transient, set by mousemove / panel mouseenter
 //   _multiSelected — [{ type, index }, ...]  — locked set, toggled by Ctrl/Cmd+click
+//   _anchor        — { type, index } | null  — last row a selection was "started" from
+//                     (set by plain click / Ctrl+click), used as the range start
+//                     for Shift+click
 //
 // Single-select is a special case: _multiSelected with exactly 1 item.
 // App._selected is derived for backward compat (editing.js point-drag gate):
@@ -14,14 +17,16 @@
 // Panel shows: .fp-selected on every multi-selected item, .fp-hovered on hovered item
 //
 // Exports: App.initHighlightLayers, App.setHoveredFeature, App.clearHover,
-//          App.selectFeature, App.toggleMultiSelect, App.clearSelection,
-//          App.applyPanelHighlight, App.isFeatureSelected, App.getSelectedFeatures
+//          App.selectFeature, App.toggleMultiSelect, App.shiftSelectFeature,
+//          App.clearSelection, App.applyPanelHighlight, App.isFeatureSelected,
+//          App.getSelectedFeatures
 
 (function () {
   var App = window.App = window.App || {};
 
   var _hovered = null;        // { type: "point"|"line"|"route"|"polygon"|"label", index: N }
   var _multiSelected = [];    // Array of { type, index }
+  var _anchor = null;         // { type, index } | null — range-select start for Shift+click
 
   var EMPTY_FC = { type: "FeatureCollection", features: [] };
 
@@ -239,6 +244,7 @@
 
   function selectFeature(type, index) {
     _multiSelected = [{ type: type, index: index }];
+    _anchor = { type: type, index: index };
     _hovered = null;
     syncSelectedCompat();
     updateHighlightSources();
@@ -261,6 +267,52 @@
     } else {
       _multiSelected.push({ type: type, index: index });
     }
+    _anchor = { type: type, index: index };
+    _hovered = null;
+    syncSelectedCompat();
+    updateHighlightSources();
+    applyPanelHighlight();
+    syncVertexEditing();
+  }
+
+  // Ordered list of currently visible, selectable panel rows (skips rows
+  // hidden inside a collapsed group), used to compute Shift+click ranges.
+  function getVisibleOrderedItems() {
+    var els = document.querySelectorAll(".fp-item");
+    var out = [];
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i];
+      if (el.offsetParent === null) continue; // hidden (collapsed group / hidden section)
+      var t = el.dataset.featureType;
+      var idx = parseInt(el.dataset.featureIndex, 10);
+      if (t && !isNaN(idx)) out.push({ type: t, index: idx });
+    }
+    return out;
+  }
+
+  function indexOfItem(list, type, index) {
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].type === type && list[i].index === index) return i;
+    }
+    return -1;
+  }
+
+  function shiftSelectFeature(type, index) {
+    var order = getVisibleOrderedItems();
+    var anchorPos = _anchor ? indexOfItem(order, _anchor.type, _anchor.index) : -1;
+    var targetPos = indexOfItem(order, type, index);
+
+    if (anchorPos === -1 || targetPos === -1) {
+      // No usable anchor (or it's hidden in a collapsed group) — fall back
+      // to a plain single-select rather than guessing at a range.
+      selectFeature(type, index);
+      return;
+    }
+
+    var lo = Math.min(anchorPos, targetPos);
+    var hi = Math.max(anchorPos, targetPos);
+    _multiSelected = order.slice(lo, hi + 1);
+    // Anchor stays put so repeated Shift+clicks re-range from the same start.
     _hovered = null;
     syncSelectedCompat();
     updateHighlightSources();
@@ -271,6 +323,7 @@
   function clearSelection() {
     if (!_multiSelected.length && !_hovered) return;
     _multiSelected = [];
+    _anchor = null;
     _hovered = null;
     syncSelectedCompat();
     updateHighlightSources();
@@ -288,6 +341,7 @@
   App.clearHover          = clearHover;
   App.selectFeature       = selectFeature;
   App.toggleMultiSelect   = toggleMultiSelect;
+  App.shiftSelectFeature  = shiftSelectFeature;
   App.clearSelection      = clearSelection;
   App.applyPanelHighlight = applyPanelHighlight;
   App.isFeatureSelected   = isSelected;

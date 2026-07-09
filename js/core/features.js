@@ -489,7 +489,9 @@
       if (typeof App.clearHover === "function") App.clearHover();
     });
     div.addEventListener("click", function (e) {
-      if (e.ctrlKey || e.metaKey) {
+      if (e.shiftKey) {
+        if (typeof App.shiftSelectFeature === "function") App.shiftSelectFeature(featureType, featureIndex);
+      } else if (e.ctrlKey || e.metaKey) {
         if (typeof App.toggleMultiSelect === "function") App.toggleMultiSelect(featureType, featureIndex);
       } else {
         if (typeof App.selectFeature === "function") App.selectFeature(featureType, featureIndex);
