@@ -1625,6 +1625,46 @@ input.fp-attr-input[type="number"] {
   padding-top: 2px;
 }
 
+/* Group picker (right-click "Group…" / "Move to Group…", mounted in #fp-mini-popup) */
+.fp-group-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.fp-group-picker-new,
+.fp-group-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: var(--text-sm);
+  color: #2d3748;
+  cursor: pointer;
+}
+.fp-group-picker-new:hover,
+.fp-group-picker-row:hover { background: #f0f4f8; }
+.fp-group-picker-new { font-weight: var(--weight-medium, 500); }
+.fp-group-picker-divider {
+  margin: 6px 2px 2px;
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-sm);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.fp-group-picker-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
 /* Service schedule (routes + lines): Weekday / Saturday / Sunday time bands */
 .fp-svc {
   margin-top: 8px;
@@ -5128,6 +5168,10 @@ body.dark-mode .fp-mini-popup-header { background: #2a2a3a; border-color: #2d2d3
 body.dark-mode .fp-mini-popup-title { color: #e2e8f0; }
 body.dark-mode .fp-mini-popup-close { color: #a0aec0; }
 body.dark-mode .fp-mini-popup-close:hover { color: #fff; }
+body.dark-mode .fp-group-picker-new,
+body.dark-mode .fp-group-picker-row { color: #e2e8f0; }
+body.dark-mode .fp-group-picker-new:hover,
+body.dark-mode .fp-group-picker-row:hover { background: rgba(255,255,255,0.07); }
 
 /* ===========================================================
    Compact pill badges (route count, bands summary)
