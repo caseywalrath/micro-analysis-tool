@@ -96,6 +96,25 @@ body { margin: 0; font-family: var(--font-sans); background: var(--bg); }
 #toolbar .export-dropdown button:hover {
   background: rgba(0,0,0,0.05);
 }
+.export-scope-row {
+  display: flex;
+  gap: 12px;
+  padding: 6px 14px 8px;
+  font-size: var(--text-sm);
+}
+.export-scope-row label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  color: #333;
+  white-space: nowrap;
+}
+.export-dropdown-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 2px 0 4px;
+}
 #draw-tools {
   display: flex;
   gap: 4px;
@@ -4179,6 +4198,8 @@ body.dark-mode #toolbar .export-dropdown button:hover,
 body.dark-mode #toolbar .add-data-dropdown button:hover,
 body.dark-mode #toolbar .analysis-dropdown button:hover:not(:disabled),
 body.dark-mode #toolbar .save-state-dropdown button:hover { background: rgba(255,255,255,0.07); }
+body.dark-mode .export-scope-row label { color: #e2e8f0; }
+body.dark-mode .export-dropdown-divider { background: #374151; }
 body.dark-mode .save-state-recent-item { color: #e2e8f0; }
 body.dark-mode .save-state-recent-item:hover { background: rgba(255,255,255,0.07); }
 body.dark-mode #toolbar .save-state-dropdown button.save-state-recent-remove { color: #6b7280; }

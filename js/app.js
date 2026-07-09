@@ -1043,6 +1043,18 @@
     var exportDropdown = document.getElementById("export-dropdown");
     var addDataDropdown = document.getElementById("add-data-dropdown");
 
+    // Export scope toggle (All vs Visible only) — read by the format handler below.
+    var exportScope = "all";
+    var exportScopeRow = document.getElementById("export-scope-row");
+    if (exportScopeRow) {
+      // Prevent the document-level "close all dropdowns" click listener (below)
+      // from closing this dropdown before the user can pick a format button.
+      exportScopeRow.addEventListener("click", function (e) { e.stopPropagation(); });
+      exportScopeRow.addEventListener("change", function (e) {
+        if (e.target && e.target.name === "export-scope") exportScope = e.target.value;
+      });
+    }
+
     // Import file button (inside Add Data dropdown) → open file picker
     document.getElementById("import-file-btn").addEventListener("click", function () {
       addDataDropdown.style.display = "none";
@@ -1275,11 +1287,11 @@
         return;
       }
       if (typeof App.cache === "undefined") return;
-      if (fmt === "json-features") App.cache.exportFeaturesOnly();
-      else if (fmt === "json-all") App.cache.exportToFile();
-      else if (fmt === "csv") App.cache.exportCSV();
-      else if (fmt === "kml") App.cache.exportKML();
-      else if (fmt === "shp") App.cache.exportSHP();
+      if (fmt === "json-features") App.cache.exportFeaturesOnly(exportScope);
+      else if (fmt === "json-all") App.cache.exportToFile(exportScope);
+      else if (fmt === "csv") App.cache.exportCSV(exportScope);
+      else if (fmt === "kml") App.cache.exportKML(exportScope);
+      else if (fmt === "shp") App.cache.exportSHP(exportScope);
       else if (fmt === "share-link") App.cache.exportShareLink();
     });
 
