@@ -72,12 +72,19 @@
   function addPoint(lon, lat) {
     if (App.undo && !App.undo.isRestoring()) App.undo.push();
     var idx = points.length + 1;
-    points.push({
+    var feature = {
       type: "Feature",
       properties: { name: "Point " + idx, pointIdx: idx, color: "" },
       geometry: { type: "Point", coordinates: [lon, lat] }
-    });
+    };
+    points.push(feature);
     rebuildBuffers(bufferRadiusMiles);
+    // If the attributes popup is already open (on some other feature), follow
+    // it to this newly-drawn point. Never auto-open it if it wasn't open.
+    if (typeof App.isAttrPopupOpen === "function" && App.isAttrPopupOpen() &&
+        typeof App.openAttrPopup === "function") {
+      App.openAttrPopup("point", points.length - 1, feature);
+    }
   }
 
   function addPointWithOpts(lon, lat, opts) {
