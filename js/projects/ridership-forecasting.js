@@ -1077,7 +1077,7 @@
     var method = document.querySelector('input[name="rfCalibMethod"]:checked');
     var methodVal = method ? method.value : (_calibration ? _calibration.method : "ratio");
     var REF_HEADWAY = 30;
-    var normElast = parseFloat((document.getElementById("rfFreqElastValue") || {}).value) || 0.5;
+    var normElast = parseFloat((document.getElementById("rfFreqElastValue") || {}).value) || 0.6;
 
     // Build lookup: (featureType:featureIndex) → shared-pool CDI entry
     var cdiLookup = {};
@@ -1628,7 +1628,7 @@
     // Reference headway for normalization (same default as Elasticity tab baseline)
     var REF_HEADWAY = 30;
     // Use the Elasticity tab's current elasticity value if available, else 0.5
-    var normElast = parseFloat((document.getElementById("rfFreqElastValue") || {}).value) || 0.5;
+    var normElast = parseFloat((document.getElementById("rfFreqElastValue") || {}).value) || 0.6;
 
     // Build observation array using per-route CDI
     var obs = [];
@@ -1934,7 +1934,7 @@
 
     var baseHeadway = parseFloat(document.getElementById("rfBaseHeadway").value) || 30;
     var newHeadway = parseFloat(document.getElementById("rfNewHeadway").value) || 15;
-    var freqElast = parseFloat(document.getElementById("rfFreqElastValue").value) || 0.5;
+    var freqElast = parseFloat(document.getElementById("rfFreqElastValue").value) || 0.6;
 
     var calibFactor = (_calibration && _calibration.factor) ? _calibration.factor : 1;
     var calibIntercept = (_calibration && Number.isFinite(_calibration.intercept)) ? _calibration.intercept : 0;
@@ -2037,7 +2037,7 @@
     var lengthScale = (_normalizeByLength && _calibration) ? getTargetCorridorLength() : 1;
     var baseMid = Math.max(0, activeCDI * calibFactor * lengthScale,
                               (calibIntercept + activeCDI * calibFactor) * lengthScale);
-    var freqElast = parseFloat((document.getElementById("rfFreqElastValue") || {}).value) || 0.5;
+    var freqElast = parseFloat((document.getElementById("rfFreqElastValue") || {}).value) || 0.6;
 
     // Apply baseline uncertainty band once for the active corridor
     var baseBand = RM.applyBaselineUncertainty(baseMid, _baselineUncertaintyPct);
@@ -2167,7 +2167,7 @@
     var lengthScale = (_normalizeByLength && _calibration) ? routeLength : 1;
     var baseMid = Math.max(0, cdi * calibFactor * lengthScale,
                               (calibIntercept + cdi * calibFactor) * lengthScale);
-    var freqElast = parseFloat((document.getElementById("rfFreqElastValue") || {}).value) || 0.5;
+    var freqElast = parseFloat((document.getElementById("rfFreqElastValue") || {}).value) || 0.6;
     var baseBand = RM.applyBaselineUncertainty(baseMid, _baselineUncertaintyPct);
     var BASELINE_SPAN = 14;
 
