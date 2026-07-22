@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Walkshed Isochrone — Client-Side Spike (Option C)</title>
+
+<!--
+  ============================================================================
+  THROWAWAY DE-RISKING SPIKE — Option C (fully client-side walkshed isochrone)
+  ============================================================================
+  Purpose: answer ONE question — can a coding agent produce a usable walking
+  isochrone entirely in the browser? Everything here is intentionally minimal
+  and disposable; it is NOT the foundation of the real app.
+
+  What it does (matches the spike plan):
+    1. Start from a hardcoded point (downtown Denver) — or click the map.
+    2. Fetch the local walkable street network live from OSM (Overpass API).
+       [In production this network comes from pre-published static tiles.]
+    3. Build a graph from the OSM ways (shared node IDs give exact topology),
+       run Dijkstra out to the time budget (minutes x walking speed).
+    4. Wrap the reachable network in a concave hull -> the walkshed polygon.
+    5. Render on a token-free basemap; optionally overlay an OpenRouteService
+       reference isochrone (paste a free ORS key) for a ground-truth compare.
+
+  PASS BAR to judge "usable":
+    - Shape follows the street grid (not a circle).
+    - Reasonably matches the ORS reference in extent/shape.
+    - Computes in ~1-2 s.
+    - Holds up at several different points (urban core, suburb, network edge).
+
+  External calls (fine for a prototype, NOT for production):
+    - Overpass API (OSM network), CARTO basemap tiles, optional ORS isochrone.
+  ============================================================================
+-->
+
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+
+<style>
+  :root { --panel-w: 320px; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  #map { position: absolute; inset: 0 0 0 var(--panel-w); }
+  #panel {
+    position: absolute; top: 0; left: 0; bottom: 0; width: var(--panel-w);
+    padding: 16px; overflow-y: auto; background: #fff; border-right: 1px solid #ddd;
+    font-size: 13px; color: #222;
+  }
+  h1 { font-size: 15px; margin: 0 0 2px; }
+  .sub { color: #666; font-size: 11px; margin: 0 0 14px; line-height: 1.4; }
+  label { display: block; font-weight: 600; margin: 12px 0 4px; font-size: 12px; }
+  input[type="text"], input[type="number"] {
+    width: 100%; padding: 6px 8px; border: 1px solid #ccc; border-radius: 5px; font-size: 13px;
+  }
+  .row { display: flex; gap: 8px; }
+  .row > div { flex: 1; }
+  button {
+    width: 100%; margin-top: 14px; padding: 9px; border: 0; border-radius: 6px;
+    background: #2563eb; color: #fff; font-weight: 600; font-size: 13px; cursor: pointer;
+  }
+  button:disabled { background: #9db8f0; cursor: default; }
+  .hint { color: #888; font-size: 11px; margin-top: 3px; line-height: 1.35; }
+  #status { margin-top: 14px; padding: 8px 10px; border-radius: 6px; background: #f1f5f9; font-size: 12px; min-height: 18px; }
+  #status.err { background: #fee2e2; color: #991b1b; }
+  #status.ok { background: #dcfce7; color: #166534; }
+  #stats { margin-top: 12px; font-size: 12px; }
+  #stats table { width: 100%; border-collapse: collapse; }
+  #stats td { padding: 3px 0; border-bottom: 1px solid #eee; }
+  #stats td:last-child { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .legend { margin-top: 14px; font-size: 11px; color: #555; }
+  .legend span { display: inline-block; width: 11px; height: 11px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+  details { margin-top: 12px; }
+  summary { cursor: pointer; font-size: 12px; color: #2563eb; }
+</style>
+</head>
+<body>
+<div id="panel">
+  <h1>Walkshed Isochrone — Client-Side Spike</h1>
+  <p class="sub">Option C proof-of-concept. Routing runs entirely in your browser. Click the map to move the start point.</p>
+
+  <div class="row">
+    <div>
+      <label>Minutes</label>
+      <input type="number" id="minutes" value="15" min="1" max="60" step="1" />
+    </div>
+    <div>
+      <label>Walk km/h</label>
+      <input type="number" id="speed" value="4.8" min="1" max="8" step="0.1" />
+    </div>
+  </div>
+
+  <label>Start (lng, lat)</label>
+  <input type="text" id="startpt" value="-104.9903, 39.7392" />
+  <div class="hint">Downtown Denver by default. Or just click anywhere on the map.</div>
+
+  <details>
+    <summary>Advanced</summary>
+    <label>Concave hull max edge (km)</label>
+    <input type="number" id="maxedge" value="0.4" min="0.05" max="3" step="0.05" />
+    <div class="hint">Smaller = tighter boundary that hugs streets; too small can fail (auto-relaxes).</div>
+    <label>ORS API key (optional — for reference overlay)</label>
+    <input type="text" id="orskey" placeholder="paste a free openrouteservice key" />
+    <div class="hint">If provided, overlays an OpenRouteService foot-walking isochrone as the ground-truth benchmark.</div>
+  </details>
+
+  <button id="run">Compute walkshed</button>
+
+  <div id="status">Ready. Move/keep the point and click “Compute walkshed”.</div>
+
+  <div id="stats"></div>
+
+  <div class="legend">
+    <div><span style="background:#2563eb;opacity:.35"></span>Client-side walkshed (this spike)</div>
+    <div><span style="background:#16a34a"></span>Reachable street segments</div>
+    <div><span style="background:#dc2626;opacity:.9;border:1px solid #dc2626"></span>ORS reference isochrone (if key set)</div>
+  </div>
+</div>
+
+<div id="map"></div>
+
+<script>
+/* ---------- basemap: token-free CARTO raster (prototype only) ---------- */
+const map = new maplibregl.Map({
+  container: 'map',
+  style: {
+    version: 8,
+    sources: {
+      carto: {
+        type: 'raster',
+        tiles: [
+          'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+          'https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+          'https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png'
+        ],
+        tileSize: 256,
+        attribution: '© OpenStreetMap contributors © CARTO'
+      }
+    },
+    layers: [{ id: 'carto', type: 'raster', source: 'carto' }]
+  },
+  center: [-104.9903, 39.7392],
+  zoom: 14
+});
+
+let startLngLat = [-104.9903, 39.7392];
+let startMarker = null;
+
+const $ = (id) => document.getElementById(id);
+function setStatus(msg, kind) {
+  const el = $('status'); el.textContent = msg; el.className = kind || '';
+}
+
+/* ---------- tiny binary min-heap for Dijkstra ---------- */
+class MinHeap {
+  constructor() { this.a = []; }
+  get size() { return this.a.length; }
+  push(item) {
+    const a = this.a; a.push(item); let i = a.length - 1;
+    while (i > 0) { const p = (i - 1) >> 1; if (a[p][0] <= a[i][0]) break; [a[p], a[i]] = [a[i], a[p]]; i = p; }
+  }
+  pop() {
+    const a = this.a, top = a[0], last = a.pop();
+    if (a.length) {
+      a[0] = last; let i = 0; const n = a.length;
+      while (true) {
+        let l = 2*i+1, r = 2*i+2, s = i;
+        if (l < n && a[l][0] < a[s][0]) s = l;
+        if (r < n && a[r][0] < a[s][0]) s = r;
+        if (s === i) break;
+        [a[s], a[i]] = [a[i], a[s]]; i = s;
+      }
+    }
+    return top;
+  }
+}
+
+/* ---------- haversine distance in meters ---------- */
+function haversine(lon1, lat1, lon2, lat2) {
+  const R = 6371000, toRad = Math.PI / 180;
+  const dLat = (lat2 - lat1) * toRad, dLon = (lon2 - lon1) * toRad;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*toRad)*Math.cos(lat2*toRad)*Math.sin(dLon/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+/* ---------- fetch walkable network around a point via Overpass ---------- */
+const EXCLUDE = new Set(['motorway','motorway_link','trunk','trunk_link','construction','proposed','raceway']);
+
+async function fetchNetwork(lon, lat, radiusM) {
+  const query = `[out:json][timeout:25];
+(way["highway"](around:${Math.round(radiusM)},${lat},${lon}););
+out geom;`;
+  const res = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: query });
+  if (!res.ok) throw new Error('Overpass HTTP ' + res.status);
+  const data = await res.json();
+  return (data.elements || []).filter(e =>
+    e.type === 'way' && e.geometry && e.nodes &&
+    e.tags && e.tags.highway && !EXCLUDE.has(e.tags.highway) && e.tags.foot !== 'no'
+  );
+}
+
+/* ---------- build adjacency graph (node IDs = shared topology) ---------- */
+function buildGraph(ways) {
+  const coords = new Map();          // nodeId -> [lon,lat]
+  const adj = new Map();             // nodeId -> [[toId, weightMeters], ...]
+  let edgeCount = 0;
+  const addEdge = (a, b, w) => {
+    if (!adj.has(a)) adj.set(a, []);
+    adj.get(a).push([b, w]);
+  };
+  for (const way of ways) {
+    const ns = way.nodes, gm = way.geometry;
+    for (let i = 0; i < ns.length; i++) {
+      if (gm[i] && !coords.has(ns[i])) coords.set(ns[i], [gm[i].lon, gm[i].lat]);
+    }
+    for (let i = 0; i < ns.length - 1; i++) {
+      const a = ns[i], b = ns[i+1], ga = gm[i], gb = gm[i+1];
+      if (!ga || !gb) continue;
+      const w = haversine(ga.lon, ga.lat, gb.lon, gb.lat);
+      addEdge(a, b, w); addEdge(b, a, w); edgeCount++;
+    }
+  }
+  return { coords, adj, edgeCount };
+}
+
+function nearestNode(coords, lon, lat) {
+  let best = null, bestD = Infinity;
+  for (const [id, c] of coords) {
+    const d = haversine(lon, lat, c[0], c[1]);
+    if (d < bestD) { bestD = d; best = id; }
+  }
+  return { id: best, dist: bestD };
+}
+
+/* ---------- Dijkstra shortest-path tree to a distance budget ---------- */
+function dijkstra(adj, startId, budgetM) {
+  const dist = new Map([[startId, 0]]);
+  const heap = new MinHeap(); heap.push([0, startId]);
+  while (heap.size) {
+    const [d, u] = heap.pop();
+    if (d > (dist.get(u) ?? Infinity)) continue;
+    if (d > budgetM) continue;                       // don't expand beyond budget
+    for (const [v, w] of (adj.get(u) || [])) {
+      const nd = d + w;
+      if (nd < (dist.get(v) ?? Infinity)) { dist.set(v, nd); if (nd <= budgetM) heap.push([nd, v]); }
+    }
+  }
+  return dist;
+}
+
+/* ---------- build the walkshed polygon (concave hull, auto-relaxing) ---------- */
+function buildPolygon(points, maxEdgeKm) {
+  if (points.length < 3) return null;
+  const fc = turf.featureCollection(points.map(p => turf.point(p)));
+  for (let e = maxEdgeKm; e <= 3; e += 0.2) {
+    try {
+      const hull = turf.concave(fc, { maxEdge: e, units: 'kilometers' });
+      if (hull) return hull;
+    } catch (_) { /* try a larger edge */ }
+  }
+  try { return turf.convex(fc); } catch (_) { return null; }
+}
+
+/* ---------- map layers ---------- */
+map.on('load', () => {
+  for (const id of ['reach', 'iso', 'ref']) map.addSource(id, { type: 'geojson', data: turf.featureCollection([]) });
+  map.addLayer({ id: 'iso-fill', source: 'iso', type: 'fill', paint: { 'fill-color': '#2563eb', 'fill-opacity': 0.25 } });
+  map.addLayer({ id: 'iso-line', source: 'iso', type: 'line', paint: { 'line-color': '#2563eb', 'line-width': 2 } });
+  map.addLayer({ id: 'reach-line', source: 'reach', type: 'line', paint: { 'line-color': '#16a34a', 'line-width': 1.2, 'line-opacity': 0.7 } });
+  map.addLayer({ id: 'ref-line', source: 'ref', type: 'line', paint: { 'line-color': '#dc2626', 'line-width': 2, 'line-dasharray': [2, 1] } });
+  placeMarker();
+});
+
+function placeMarker() {
+  if (startMarker) startMarker.remove();
+  startMarker = new maplibregl.Marker({ color: '#111' }).setLngLat(startLngLat).addTo(map);
+}
+
+map.on('click', (e) => {
+  startLngLat = [e.lngLat.lng, e.lngLat.lat];
+  $('startpt').value = startLngLat.map(n => n.toFixed(5)).join(', ');
+  placeMarker();
+});
+
+/* ---------- optional ORS reference isochrone ---------- */
+async function fetchORS(lon, lat, minutes, key) {
+  const res = await fetch('https://api.openrouteservice.org/v2/isochrones/foot-walking', {
+    method: 'POST',
+    headers: { 'Authorization': key, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ locations: [[lon, lat]], range: [minutes * 60], range_type: 'time' })
+  });
+  if (!res.ok) throw new Error('ORS HTTP ' + res.status);
+  return res.json();
+}
+
+/* ---------- orchestrate ---------- */
+async function run() {
+  const btn = $('run'); btn.disabled = true; $('stats').innerHTML = '';
+  try {
+    const parts = $('startpt').value.split(',').map(s => parseFloat(s.trim()));
+    if (parts.length === 2 && parts.every(Number.isFinite)) startLngLat = parts;
+    placeMarker();
+
+    const minutes = Math.max(1, parseFloat($('minutes').value) || 15);
+    const speedKmh = Math.max(0.5, parseFloat($('speed').value) || 4.8);
+    const maxEdgeKm = Math.max(0.05, parseFloat($('maxedge').value) || 0.4);
+    const budgetM = (speedKmh * 1000 / 60) * minutes;         // meters reachable in the time budget
+    const radiusM = Math.min(budgetM * 1.15, 6000);           // fetch a touch beyond straight-line reach
+
+    const [lon, lat] = startLngLat;
+    setStatus('Fetching street network from OpenStreetMap…');
+    const t0 = performance.now();
+    const ways = await fetchNetwork(lon, lat, radiusM);
+    if (!ways.length) throw new Error('No walkable network returned here — try a different point.');
+
+    setStatus('Building graph and routing…');
+    const { coords, adj, edgeCount } = buildGraph(ways);
+    const near = nearestNode(coords, lon, lat);
+    if (!near.id) throw new Error('Could not snap the start point to the network.');
+
+    const tCalc0 = performance.now();
+    const dist = dijkstra(adj, near.id, budgetM);
+    const calcMs = performance.now() - tCalc0;
+
+    // reachable node points + reachable street segments (visual proof it follows the grid)
+    const reachablePts = [];
+    for (const [id, d] of dist) if (d <= budgetM) reachablePts.push(coords.get(id));
+    const reachLines = [];
+    for (const [u, edges] of adj) {
+      const du = dist.get(u); if (du === undefined || du > budgetM) continue;
+      for (const [v] of edges) {
+        if (u < v) { const dv = dist.get(v); if (dv !== undefined && dv <= budgetM) reachLines.push(turf.lineString([coords.get(u), coords.get(v)])); }
+      }
+    }
+
+    const poly = buildPolygon(reachablePts, maxEdgeKm);
+    const totalMs = performance.now() - t0;
+
+    map.getSource('reach').setData(turf.featureCollection(reachLines));
+    map.getSource('iso').setData(poly ? turf.featureCollection([poly]) : turf.featureCollection([]));
+
+    const areaKm2 = poly ? turf.area(poly) / 1e6 : 0;
+    const rows = [
+      ['Ways fetched', ways.length],
+      ['Graph nodes', coords.size.toLocaleString()],
+      ['Graph edges', edgeCount.toLocaleString()],
+      ['Reachable nodes', reachablePts.length.toLocaleString()],
+      ['Snap distance', near.dist.toFixed(0) + ' m'],
+      ['Dijkstra time', calcMs.toFixed(0) + ' ms'],
+      ['Total time', (totalMs / 1000).toFixed(2) + ' s'],
+      ['Walkshed area', poly ? (areaKm2.toFixed(2) + ' km² / ' + (areaKm2 * 0.386102).toFixed(2) + ' mi²') : 'n/a']
+    ];
+    $('stats').innerHTML = '<table>' + rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('') + '</table>';
+
+    // optional ORS reference
+    const key = $('orskey').value.trim();
+    if (key) {
+      try {
+        setStatus('Fetching ORS reference isochrone…');
+        const ors = await fetchORS(lon, lat, minutes, key);
+        map.getSource('ref').setData(ors);
+      } catch (err) {
+        setStatus('Walkshed computed. (ORS reference failed: ' + err.message + ')', 'ok');
+        btn.disabled = false; return;
+      }
+    } else {
+      map.getSource('ref').setData(turf.featureCollection([]));
+    }
+
+    // frame the result
+    if (poly) { const bb = turf.bbox(poly); map.fitBounds([[bb[0], bb[1]], [bb[2], bb[3]]], { padding: 60, duration: 600 }); }
+    setStatus('Done — ' + minutes + '-min walkshed in ' + (totalMs / 1000).toFixed(2) + ' s.', 'ok');
+  } catch (err) {
+    setStatus('Error: ' + err.message, 'err');
+  } finally {
+    $('run').disabled = false;
+  }
+}
+
+$('run').addEventListener('click', run);
+</script>
+</body>
+</html>
