@@ -2546,6 +2546,38 @@ body.dark-mode .cs-row:hover { background: #1e293b; }
 body.dark-mode .cs-row-details td { background: #1a2233; }
 body.dark-mode .cs-feature-badge { background: #2d3748; color: #cbd5e0; }
 
+/* ---- Walkshed popup ---- */
+.ws-body {
+  padding: 16px;
+  overflow-y: auto;
+  max-height: 62vh;
+}
+.ws-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+.ws-table thead th {
+  text-align: left;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-md);
+  color: var(--muted);
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.ws-table td {
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+  font-variant-numeric: tabular-nums;
+}
+.ws-table .ws-sub { color: var(--muted); font-size: var(--text-xs); }
+.ws-row-fail td { color: var(--muted); }
+.ws-table .ws-warn { color: #b45309; }
+body.dark-mode .ws-table .ws-warn { color: #fbbf24; }
+
 /* ---- FTA Small Starts popup ---- */
 .fta-tabs { display: flex; gap: 0; border-bottom: 2px solid var(--border); padding: 0 4px; flex-shrink: 0; }
 .fta-tab {
@@ -5332,6 +5364,7 @@ body.dark-mode .as-section-header { border-color: #2d2d3d; }
   grid-template-columns:
     24px            /* swatch */
     1.4fr           /* name */
+    96px            /* service area */
     0.8fr           /* id */
     1fr             /* routes badge */
     96px;           /* overrides (4 icons) */

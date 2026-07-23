@@ -22,8 +22,8 @@ Split a drawn line/route into two independent features at a clicked vertex (or a
 While drawing a line/route/polygon, snap new vertices to nearby reference geometry — GTFS shape lines (`gtfs-shapes-layer`) and OSM lines — not just the current snap-to-close behavior. Today snapping is limited to closing the shape within `SNAP_PIXELS` of the first/last waypoint (`js/core/lines.js`, `js/core/routes.js`, `js/core/polygons.js`). Reuse the existing rendered layers (already queried for hover/click) to find the nearest candidate within a pixel threshold and snap the cursor/vertex to it. Lets users trace existing service or street alignments precisely when building proposals.
 
 
-### Walkshed polygons — Low Priority
-Compute an isochrone/walkshed polygon from a selected point (e.g., 10-minute walk). Requires a network analysis service. The walkshed polygon could replace or supplement the circular buffer.
+### Walkshed polygons — Implemented
+Compute a true street-network walking isochrone from placed Points, entirely in-browser — no external service. The **Walkshed** analysis module (`js/projects/walkshed.js`) uses the offline road-network engine (`App.computeWalkshed` in `js/core/road-network.js`: budget-limited flood Dijkstra + concave-hull polygon) to build a "15-minute walk" area, renders it (with an optional green reachable-streets correctness layer), and exports GeoJSON. A road network must be loaded first (Add Data → Area Roads for Street Routing, or import a saved road-network GeoJSON). A Point can be flagged `attributes.serviceAreaType = "walkshed"` (Features popup / Attribute Summary, or the module's "Use as study areas" button), which substitutes the walkshed polygon for the circular buffer in `rebuildBuffers()` so Buffer-Area Summary, TPI, Title VI, FTA, and the corridor pickers all analyze "demographics within a walk" with no per-module changes.
 
 ### Unmerge dissolved union — Low Priority
 Currently `bufferUnionPolygon()` always dissolves overlapping buffers. Add an option to keep individual buffers separate for per-station analysis or visual comparison.

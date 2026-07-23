@@ -1,0 +1,74 @@
+<!-- Walkshed — 2-column popup body (Settings | Results) -->
+<div class="ws-body">
+  <div class="rf-section-row" style="align-items:flex-start;min-height:380px;">
+
+    <!-- Left: settings column -->
+    <div class="rf-settings-col">
+
+      <div class="rf-section-title">Walk budget</div>
+
+      <label class="tiny">Minutes</label>
+      <input type="number" id="wsMinutes" class="rf-select" min="1" max="60" step="1" value="15">
+
+      <label class="tiny" style="margin-top:8px;">Walk speed (km/h)</label>
+      <input type="number" id="wsSpeed" class="rf-select" min="1" max="12" step="0.1" value="4.8">
+
+      <details style="margin-top:10px;">
+        <summary class="tiny" style="cursor:pointer;color:var(--muted);">Advanced</summary>
+        <label class="tiny" style="margin-top:6px;">Hull detail — max edge (km)</label>
+        <input type="number" id="wsMaxEdge" class="rf-select" min="0.02" max="2" step="0.01" value="0.15">
+        <p class="tiny" style="color:var(--muted);margin-top:4px;">
+          Smaller hugs the streets more tightly; the tool auto-relaxes if the hull comes back empty.
+        </p>
+      </details>
+
+      <div class="rf-section-title" style="margin-top:16px;">Points</div>
+      <div id="wsPointList" class="rf-feature-checklist">
+        <div style="padding:6px;color:var(--muted);font-size:12px;">No points placed.</div>
+      </div>
+
+      <label class="tpi-toggle-row" style="margin-top:10px;">
+        <input type="checkbox" id="wsShowSegments" checked>
+        <span class="tiny">Show reachable streets (correctness check)</span>
+      </label>
+
+      <button id="wsComputeBtn" type="button" class="rf-action-primary" style="margin-top:12px;">
+        Compute
+      </button>
+
+      <p id="wsNetWarn" class="tiny" style="display:none;color:#b45309;margin-top:8px;">
+        Load a road network first: Add&nbsp;Data → Area&nbsp;Roads for Street&nbsp;Routing, or import a saved road-network GeoJSON.
+      </p>
+
+    </div>
+
+    <!-- Right: results column -->
+    <div class="rf-results-col">
+
+      <div id="wsStatus" class="rf-status" style="display:none;">
+        <span id="wsStatusText">Ready</span>
+      </div>
+
+      <div id="wsResults" style="display:none;">
+        <div id="wsResultsTable"></div>
+
+        <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">
+          <button id="wsUseStudyArea" type="button" class="rf-btn-sm" disabled title="Set these points' Service Area to Walkshed so demographic modules use the walkshed instead of a circle.">Use as study areas</button>
+          <button id="wsExportGeoJSON" type="button" class="rf-btn-sm" disabled>Export GeoJSON</button>
+        </div>
+
+        <p class="tiny" style="margin-top:8px;color:var(--muted);">
+          A walkshed is the true street-network area reachable on foot within the time budget — smaller and
+          more irregular than a circular buffer. Click <strong>Use as study areas</strong> to run Buffer-Area
+          Summary, TPI, etc. against the walkshed instead of the circle.
+        </p>
+      </div>
+
+      <div id="wsEmptyState" class="rf-info-box">
+        <p>Load a road network, place points, and click <strong>Compute</strong> to build walking isochrones.</p>
+      </div>
+
+    </div>
+
+  </div>
+</div>

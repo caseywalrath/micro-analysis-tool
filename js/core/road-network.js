@@ -3,7 +3,8 @@
 // Allows local street-snapped routing when OSRM servers are unavailable.
 // Depends on: App.map (map.js), App.setStatus (utils.js), turf (CDN).
 // Exports: roadNetworkLoaded, findLocalRoute, fetchRoadNetwork,
-//          loadRoadNetworkFromFile, exportRoadNetwork, clearRoadNetwork
+//          loadRoadNetworkFromFile, exportRoadNetwork, clearRoadNetwork,
+//          computeWalkshed
 
 (function () {
   "use strict";
@@ -19,6 +20,7 @@
   var _allLines = null;     // turf FeatureCollection of LineStrings (for nearestPointOnLine)
   var _segmentIndex = null; // Array of {feature, startKey, endKey, startCoord, endCoord} per segment
   var _featureCount = 0;
+  var _networkEpoch = 0;    // bumped on every (re)build/clear — lets caches (e.g. walkshed) invalidate
 
   // ---- Byte formatting helper ----
 
@@ -95,6 +97,7 @@
     _allLines = turf.featureCollection(lines);
     _segmentIndex = segments;
     _featureCount = features.length;
+    _networkEpoch++;
   }
 
   // ---- Snap to network ----
@@ -467,6 +470,7 @@
     _allLines = null;
     _segmentIndex = null;
     _featureCount = 0;
+    _networkEpoch++;
     updateUI();
   }
 
@@ -480,13 +484,169 @@
     if (exportBtn) exportBtn.style.display = loaded ? "" : "none";
   }
 
+  // ---- Walkshed (network isochrone) ----
+
+  // Budget-limited flood Dijkstra: settle every node whose cumulative distance
+  // from startKey is <= budgetKm. Unlike dijkstra() there is no endKey early-exit;
+  // we prune any relaxation that would exceed the budget so the search stays local.
+  // Returns a Map<nodeKey, distKm> of all settled nodes within budget.
+  function floodDijkstra(startKey, budgetKm) {
+    var dist = new Map();
+    var heap = new MinHeap();
+
+    dist.set(startKey, 0);
+    heap.push({ node: startKey, dist: 0 });
+
+    while (heap.size() > 0) {
+      var current = heap.pop();
+      if (current.dist > (dist.get(current.node) || Infinity)) continue; // stale
+
+      var neighbors = _graph.get(current.node);
+      if (!neighbors) continue;
+
+      for (var i = 0; i < neighbors.length; i++) {
+        var nb = neighbors[i];
+        var newDist = current.dist + nb.weight;
+        if (newDist > budgetKm) continue; // beyond walk budget — don't settle
+        if (newDist < (dist.get(nb.node) || Infinity)) {
+          dist.set(nb.node, newDist);
+          heap.push({ node: nb.node, dist: newDist });
+        }
+      }
+    }
+    return dist;
+  }
+
+  // Build a walkshed polygon from reachable node coordinates.
+  // v1: concave hull with an auto-relax loop (grow maxEdge until turf.concave
+  // returns non-null), falling back to convex hull, then a small buffer for
+  // degenerate (<3 node) cases so downstream turf.union/intersect always have
+  // a valid Polygon/MultiPolygon to work with.
+  function buildWalkshedPolygon(coords, maxEdgeKm) {
+    if (!coords || coords.length === 0) return null;
+    var pts = [];
+    for (var i = 0; i < coords.length; i++) pts.push(turf.point(coords[i]));
+    var fc = turf.featureCollection(pts);
+
+    if (coords.length < 3) {
+      try { return turf.buffer(fc, 0.03, { units: "kilometers" }); } catch (e) { return null; }
+    }
+
+    var maxEdge = maxEdgeKm && maxEdgeKm > 0 ? maxEdgeKm : 0.15;
+    for (var attempt = 0; attempt < 8; attempt++) {
+      var hull = null;
+      try { hull = turf.concave(fc, { maxEdge: maxEdge, units: "kilometers" }); } catch (e) { hull = null; }
+      if (hull) return hull;
+      maxEdge *= 1.8;
+    }
+    try { return turf.convex(fc); } catch (e2) { return null; }
+  }
+
+  // Compute a network walkshed (walking isochrone) from an arbitrary origin.
+  //   lngLat   : [lng, lat] origin
+  //   budgetKm : maximum network walking distance in km (= speedKmh * minutes/60)
+  //   options  : { maxEdge } — advanced concave-hull edge length (km)
+  // Returns null when no network is loaded or the origin is outside coverage
+  // (snap > SNAP_MAX_KM). Otherwise { polygon, reachableSegments, reachableCount,
+  // snap, computeMs }. The graph is restored (temp origin node removed) in a finally.
+  function computeWalkshed(lngLat, budgetKm, options) {
+    if (!_graph || !(budgetKm > 0)) return null;
+    options = options || {};
+
+    var t0 = (typeof performance !== "undefined" && performance.now)
+      ? performance.now() : Date.now();
+
+    var snap = snapToNetwork(lngLat);
+    if (!snap) return null; // origin outside network coverage
+
+    // Temp origin-node injection (mirrors findLocalRoute's pattern).
+    var tempEdges = [];
+
+    function injectSnapNode(s) {
+      var k = s.key;
+      if (_graph.has(k)) return; // already a real node
+      _graph.set(k, []);
+      var d1 = turf.distance(turf.point(s.coord), turf.point(s.segStartCoord), { units: "kilometers" });
+      var d2 = turf.distance(turf.point(s.coord), turf.point(s.segEndCoord), { units: "kilometers" });
+      _graph.get(k).push({ node: s.segStartKey, weight: d1, coords: [s.coord, s.segStartCoord] });
+      _graph.get(k).push({ node: s.segEndKey, weight: d2, coords: [s.coord, s.segEndCoord] });
+      if (_graph.has(s.segStartKey)) {
+        _graph.get(s.segStartKey).push({ node: k, weight: d1, coords: [s.segStartCoord, s.coord] });
+        tempEdges.push({ mapKey: s.segStartKey, node: k });
+      }
+      if (_graph.has(s.segEndKey)) {
+        _graph.get(s.segEndKey).push({ node: k, weight: d2, coords: [s.segEndCoord, s.coord] });
+        tempEdges.push({ mapKey: s.segEndKey, node: k });
+      }
+      tempEdges.push({ mapKey: k, isNew: true });
+    }
+
+    function cleanupTempNodes() {
+      for (var i = 0; i < tempEdges.length; i++) {
+        var te = tempEdges[i];
+        if (te.isNew) {
+          _graph.delete(te.mapKey);
+        } else {
+          var edges = _graph.get(te.mapKey);
+          if (edges) {
+            for (var j = edges.length - 1; j >= 0; j--) {
+              if (edges[j].node === te.node) { edges.splice(j, 1); break; }
+            }
+          }
+        }
+      }
+    }
+
+    var result = null;
+    try {
+      injectSnapNode(snap);
+      var distMap = floodDijkstra(snap.key, budgetKm);
+
+      // Reachable node coordinates (includes the injected origin).
+      var coords = [];
+      distMap.forEach(function (d, key) { coords.push(keyToCoord(key)); });
+
+      // Reachable street segments: both endpoints settled within budget.
+      var segFeatures = [];
+      for (var si = 0; si < _segmentIndex.length; si++) {
+        var seg = _segmentIndex[si];
+        if (distMap.has(seg.startKey) && distMap.has(seg.endKey)) {
+          segFeatures.push(turf.lineString([seg.startCoord, seg.endCoord]));
+        }
+      }
+      // Origin connector stubs (snap point → its bracketing segment endpoints)
+      // so the reachable-segments layer visibly ties back to the origin.
+      if (distMap.has(snap.segStartKey)) segFeatures.push(turf.lineString([snap.coord, snap.segStartCoord]));
+      if (distMap.has(snap.segEndKey)) segFeatures.push(turf.lineString([snap.coord, snap.segEndCoord]));
+
+      var polygon = buildWalkshedPolygon(coords, options.maxEdge);
+
+      var t1 = (typeof performance !== "undefined" && performance.now)
+        ? performance.now() : Date.now();
+
+      result = {
+        polygon: polygon,
+        reachableSegments: turf.featureCollection(segFeatures),
+        reachableCount: distMap.size,
+        snap: snap,
+        computeMs: Math.round(t1 - t0)
+      };
+    } finally {
+      cleanupTempNodes();
+    }
+
+    return result;
+  }
+
   // ---- Expose on App namespace ----
 
   App.roadNetworkLoaded = function () { return !!_graph; };
+  App.roadNetworkEpoch = function () { return _networkEpoch; };
   App.findLocalRoute = findLocalRoute;
   App.fetchRoadNetwork = fetchRoadNetwork;
   App.loadRoadNetworkFromFile = loadRoadNetworkFromFile;
   App.exportRoadNetwork = exportRoadNetwork;
   App.clearRoadNetwork = clearRoadNetwork;
+  App.computeWalkshed = computeWalkshed;
 
 })();

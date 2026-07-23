@@ -300,7 +300,7 @@
     options.forEach(function (o) {
       var opt = document.createElement("option");
       opt.value = o;
-      opt.textContent = o === "" ? "—" : o;
+      opt.textContent = (opts.labels && (o in opts.labels)) ? opts.labels[o] : (o === "" ? "—" : o);
       if (o === "" ? noVal : current === o) opt.selected = true;
       sel.appendChild(opt);
     });
@@ -372,6 +372,7 @@
     container.appendChild(buildHeader([
       { label: "" },
       { label: "Name" },
+      { label: "Service", title: "Service area type (Circular buffer or Walkshed)" },
       { label: "ID",     title: "Stop ID" },
       { label: "Routes", title: "Associated routes / lines" },
       { label: "",       cls: "as-col-overrides", title: "Overrides" }
@@ -391,6 +392,18 @@
       appendCell(row, buildTextCell(
         function () { return feat.properties.name; },
         function (v) { feat.properties.name = v; saveAndRefreshFeaturePanel(); }
+      ));
+      appendCell(row, buildSelectCell(["", "walkshed"],
+        function () { return attrs.serviceAreaType; },
+        function (v) {
+          if (v == null || v === "") delete attrs.serviceAreaType;
+          else attrs.serviceAreaType = v;
+          if (typeof App.ensurePointWalksheds === "function") App.ensurePointWalksheds();
+          if (typeof App.refreshBuffers === "function") App.refreshBuffers();
+          saveAndRefreshFeaturePanel();
+          if (typeof App.notifyProject === "function") App.notifyProject();
+        },
+        { title: "Circular buffer or Walkshed", labels: { "": "Buffer", "walkshed": "Walkshed" } }
       ));
       appendCell(row, buildTextCell(
         function () { return attrs.stopId; },

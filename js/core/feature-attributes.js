@@ -43,6 +43,10 @@
     line:  ROUTE_FIELDS,
     point: [
       { key: "group",            label: "Group",    type: "text", placeholder: "e.g. North Corridor", groupPicker: true, hidden: true },
+      { key: "serviceAreaType",  label: "Service area", type: "select",
+        options: ["", "walkshed"],
+        optionLabels: { "": "Circular buffer", "walkshed": "Walkshed" },
+        onChange: onServiceAreaChange },
       { key: "stopId",           label: "Stop ID",       type: "text", placeholder: "e.g. 1042" },
       { key: "associatedRoutes", label: "Routes"                                                 }
     ],
@@ -68,6 +72,17 @@
     if (App.cache && typeof App.cache.save === "function") App.cache.save();
   }
 
+  // Fired when a point's Service area type changes (Circular buffer ↔ Walkshed).
+  // Recompute any walkshed-flagged points and rebuild buffers so the study-area
+  // union (and every downstream demographic module) reflects the change. When no
+  // road network is loaded the point stays flagged but falls back to its circle
+  // until a walkshed is computed in the Walkshed module.
+  function onServiceAreaChange() {
+    if (typeof App.ensurePointWalksheds === "function") App.ensurePointWalksheds();
+    if (typeof App.refreshBuffers === "function") App.refreshBuffers();
+    if (typeof App.notifyProject === "function") App.notifyProject();
+  }
+
   /* ---- Field builders ---- */
 
   function buildSelect(field, attrs) {
@@ -78,13 +93,16 @@
     field.options.forEach(function (opt) {
       var o = document.createElement("option");
       o.value = opt;
-      o.textContent = opt === "" ? "—" : opt;
+      o.textContent = (field.optionLabels && (opt in field.optionLabels))
+        ? field.optionLabels[opt]
+        : (opt === "" ? "—" : opt);
       if (opt === "" ? noVal : val === opt) o.selected = true;
       sel.appendChild(o);
     });
     sel.addEventListener("change", function () {
       attrs[field.key] = sel.value === "" ? null : sel.value;
       saveAttrCache();
+      if (typeof field.onChange === "function") field.onChange(attrs);
     });
     return { el: sel, unit: null };
   }
