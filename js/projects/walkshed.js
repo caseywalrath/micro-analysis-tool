@@ -587,7 +587,7 @@
 
   App.registerModule({
     id:         "walkshed",
-    name:       "Walkshed",
+    name:       "Walkshed Analysis",
     enabled:    true,
     popupWidth: 720,
     popupHTML:  "projects/walkshed-popup.html",
