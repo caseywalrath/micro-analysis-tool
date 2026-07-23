@@ -11,12 +11,12 @@
       <input type="number" id="wsMinutes" class="rf-select" min="1" max="60" step="1" value="15">
 
       <label class="tiny" style="margin-top:8px;">Walk speed (mph)</label>
-      <input type="number" id="wsSpeed" class="rf-select" min="0.5" max="7.5" step="0.1" value="3.0">
+      <input type="number" id="wsSpeed" class="rf-select" min="0.5" max="7.5" step="0.1" value="3.1">
 
       <details style="margin-top:10px;">
         <summary class="tiny" style="cursor:pointer;color:var(--muted);">Advanced</summary>
         <label class="tiny" style="margin-top:6px;">Hull detail — max edge (km)</label>
-        <input type="number" id="wsMaxEdge" class="rf-select" min="0.02" max="2" step="0.01" value="0.15">
+        <input type="number" id="wsMaxEdge" class="rf-select" min="0.02" max="2" step="0.01" value="0.3">
         <p class="tiny" style="color:var(--muted);margin-top:4px;">
           Smaller hugs the streets more tightly; the tool auto-relaxes if the hull comes back empty.
         </p>
@@ -29,11 +29,11 @@
 
       <label class="tpi-toggle-row" style="margin-top:10px;">
         <input type="checkbox" id="wsShowSegments" checked>
-        <span class="tiny">Show reachable streets (correctness check)</span>
+        <span class="tiny">Show reachable streets</span>
       </label>
 
       <button id="wsComputeBtn" type="button" class="rf-action-primary" style="margin-top:12px;">
-        Compute
+        Calculate
       </button>
 
       <p id="wsNetWarn" class="tiny" style="display:none;color:#b45309;margin-top:8px;">
@@ -65,7 +65,7 @@
       </div>
 
       <div id="wsEmptyState" class="rf-info-box">
-        <p>Load a road network, place points, and click <strong>Compute</strong> to build walking isochrones.</p>
+        <p>Load a road network, place points, and click <strong>Calculate</strong> to build walking isochrones.</p>
       </div>
 
     </div>

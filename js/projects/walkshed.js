@@ -20,7 +20,7 @@
 
   // ---- Defaults + module-local state (persists across popup open/close) ----
 
-  var DEFAULT_SETTINGS = { minutes: 15, walkSpeedMph: 3.0, maxEdge: 0.15 };
+  var DEFAULT_SETTINGS = { minutes: 15, walkSpeedMph: 3.1, maxEdge: 0.3 };
   var MAX_MINUTES = 60;
   var KM_PER_MILE = 1.609344; // engine graph weights are in km; UI/attributes are in mph
 
@@ -292,9 +292,9 @@
       };
     }
     if (!(App.points || []).length) {
-      return { need: "Place a point to compute a walkshed.", action: "Use the Point tool, then click Compute." };
+      return { need: "Place a point to calculate a walkshed.", action: "Use the Point tool, then click Calculate." };
     }
-    return { need: "Choose points and click Compute.", action: "A walkshed is the true street-network area reachable on foot within your time budget." };
+    return { need: "Choose points and click Calculate.", action: "A walkshed is the true street-network area reachable on foot within your time budget." };
   }
 
   function showEmpty() {
@@ -354,9 +354,9 @@
     if (!targets.length) { setStatus("Select at least one point.", "error"); return; }
 
     _running = true;
-    setStatus("Computing walksheds…", "running");
+    setStatus("Calculating walksheds…", "running");
 
-    // Yield once so the "Computing…" pill paints before the (blocking) flood.
+    // Yield once so the "Calculating…" pill paints before the (blocking) flood.
     setTimeout(function () {
       try {
         var entries = [];
@@ -384,9 +384,9 @@
         if (!ok) {
           setStatus("No walksheds produced — " + bad + " point(s) skipped.", "error");
         } else if (bad) {
-          setStatus("Computed " + ok + " walkshed(s); " + bad + " skipped.", "done");
+          setStatus("Calculated " + ok + " walkshed(s); " + bad + " skipped.", "done");
         } else {
-          setStatus("Computed " + ok + " walkshed(s).", "done");
+          setStatus("Calculated " + ok + " walkshed(s).", "done");
         }
       } finally {
         _running = false;
@@ -406,7 +406,7 @@
       pf.properties.attributes.serviceAreaType = "walkshed";
       applied++;
     });
-    if (!applied) { setStatus("Compute walksheds first.", "error"); return; }
+    if (!applied) { setStatus("Calculate walksheds first.", "error"); return; }
     if (typeof App.refreshBuffers === "function") App.refreshBuffers();
     if (App.cache && App.cache.save) App.cache.save();
     if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();

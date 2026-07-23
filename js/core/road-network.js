@@ -595,7 +595,7 @@
       try { return turf.buffer(fc, 0.03, { units: "kilometers" }); } catch (e) { return null; }
     }
 
-    var maxEdge = maxEdgeKm && maxEdgeKm > 0 ? maxEdgeKm : 0.15;
+    var maxEdge = maxEdgeKm && maxEdgeKm > 0 ? maxEdgeKm : 0.3;
     for (var attempt = 0; attempt < 8; attempt++) {
       var hull = null;
       try { hull = turf.concave(fc, { maxEdge: maxEdge, units: "kilometers" }); } catch (e) { hull = null; }
