@@ -20,8 +20,9 @@
 
   // ---- Defaults + module-local state (persists across popup open/close) ----
 
-  var DEFAULT_SETTINGS = { minutes: 15, walkSpeedKmh: 4.8, maxEdge: 0.15 };
+  var DEFAULT_SETTINGS = { minutes: 15, walkSpeedMph: 3.0, maxEdge: 0.15 };
   var MAX_MINUTES = 60;
+  var KM_PER_MILE = 1.609344; // engine graph weights are in km; UI/attributes are in mph
 
   var _settings      = Object.assign({}, DEFAULT_SETTINGS);
   var _walkshedCache = new Map();  // pointIdx -> entry (see computeForPoint)
@@ -71,12 +72,13 @@
   }
 
   // Per-point walk parameters. Global module settings apply to every point; a
-  // point may optionally carry attributes.walkMinutes / walkSpeedKmh overrides
+  // point may optionally carry attributes.walkMinutes / walkSpeedMph overrides
   // (data model supports it; the current UI only sets the type, not overrides).
+  // `speed` is in mph — converted to km/h at the point of use (computeForPoint).
   function pointSettingsFor(pf) {
     var attrs = (pf.properties && pf.properties.attributes) || {};
     var minutes = (attrs.walkMinutes != null && +attrs.walkMinutes > 0) ? +attrs.walkMinutes : _settings.minutes;
-    var speed   = (attrs.walkSpeedKmh != null && +attrs.walkSpeedKmh > 0) ? +attrs.walkSpeedKmh : _settings.walkSpeedKmh;
+    var speed   = (attrs.walkSpeedMph != null && +attrs.walkSpeedMph > 0) ? +attrs.walkSpeedMph : _settings.walkSpeedMph;
     return { minutes: Math.min(minutes, MAX_MINUTES), speed: speed, maxEdge: _settings.maxEdge };
   }
 
@@ -100,7 +102,7 @@
     if (existing && existing.settingsKey === key && existing.polygon) return existing;
 
     var s = pointSettingsFor(pf);
-    var budgetKm = s.speed * (s.minutes / 60);
+    var budgetKm = (s.speed * KM_PER_MILE) * (s.minutes / 60); // s.speed is mph; engine works in km
     var res = App.computeWalkshed ? App.computeWalkshed(pf.geometry.coordinates, budgetKm, { maxEdge: s.maxEdge }) : null;
 
     if (!res || !res.polygon) {
@@ -433,7 +435,7 @@
     if (!features.length) { setStatus("Nothing to export.", "error"); return; }
     var fc = {
       type: "FeatureCollection",
-      metadata: { generator: "micro-analysis-tool walkshed", generated: new Date().toISOString(), walkSpeedKmh: _settings.walkSpeedKmh, maxEdgeKm: _settings.maxEdge },
+      metadata: { generator: "micro-analysis-tool walkshed", generated: new Date().toISOString(), walkSpeedMph: _settings.walkSpeedMph, maxEdgeKm: _settings.maxEdge },
       features: features
     };
     _triggerDownload(JSON.stringify(fc, null, 2), "application/geo+json", "walkshed-" + _dateStamp() + ".geojson");
@@ -453,7 +455,7 @@
     var s = document.getElementById("wsSpeed");
     var e = document.getElementById("wsMaxEdge");
     if (m && +m.value > 0) _settings.minutes = Math.min(+m.value, MAX_MINUTES);
-    if (s && +s.value > 0) _settings.walkSpeedKmh = +s.value;
+    if (s && +s.value > 0) _settings.walkSpeedMph = +s.value;
     if (e && +e.value > 0) _settings.maxEdge = +e.value;
     if (App.cache && App.cache.save) App.cache.save();
   }
@@ -464,7 +466,7 @@
     var e = document.getElementById("wsMaxEdge");
     var seg = document.getElementById("wsShowSegments");
     if (m) m.value = _settings.minutes;
-    if (s) s.value = _settings.walkSpeedKmh;
+    if (s) s.value = _settings.walkSpeedMph;
     if (e) e.value = _settings.maxEdge;
     if (seg) seg.checked = _showSegments;
   }
@@ -557,9 +559,9 @@
 
   function collect() {
     return {
-      version: 1,
+      version: 2,
       minutes: _settings.minutes,
-      walkSpeedKmh: _settings.walkSpeedKmh,
+      walkSpeedMph: _settings.walkSpeedMph,
       maxEdge: _settings.maxEdge,
       showSegments: _showSegments
     };
@@ -568,7 +570,12 @@
   function apply(data) {
     if (!data) return;
     if (+data.minutes > 0) _settings.minutes = Math.min(+data.minutes, MAX_MINUTES);
-    if (+data.walkSpeedKmh > 0) _settings.walkSpeedKmh = +data.walkSpeedKmh;
+    if (+data.walkSpeedMph > 0) {
+      _settings.walkSpeedMph = +data.walkSpeedMph;
+    } else if (+data.walkSpeedKmh > 0) {
+      // v1 schema migration: saved speed was km/h — convert to mph.
+      _settings.walkSpeedMph = +data.walkSpeedKmh / KM_PER_MILE;
+    }
     if (+data.maxEdge > 0) _settings.maxEdge = +data.maxEdge;
     if (typeof data.showSegments === "boolean") _showSegments = data.showSegments;
   }
