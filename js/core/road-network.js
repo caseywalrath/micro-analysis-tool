@@ -12,6 +12,10 @@
 
   var OVERPASS_URL = "https://overpass-api.de/api/interpreter";
   var SNAP_MAX_KM = 0.5; // max snap distance to road network (500 m)
+  var DOWNLOAD_EXPAND = 1.5;     // grow the map view by this factor (each side) before downloading roads
+  var MAX_AREA_WARN_KM2 = 2000;  // warn before downloading an expanded area larger than this (~a large county)
+  var RDL_SRC = "road-dl-area";       // map source for the downloaded-area outline
+  var RDL_LAYER = "road-dl-area-line"; // map layer for the downloaded-area outline
 
   // ---- Private state ----
 
@@ -21,6 +25,7 @@
   var _segmentIndex = null; // Array of {feature, startKey, endKey, startCoord, endCoord} per segment
   var _featureCount = 0;
   var _networkEpoch = 0;    // bumped on every (re)build/clear — lets caches (e.g. walkshed) invalidate
+  var _downloadedBboxPolygon = null; // turf Polygon of the last Overpass download extent (for the on-map outline)
 
   // ---- Byte formatting helper ----
 
@@ -322,8 +327,28 @@
     var btn = document.getElementById("road-net-download");
     if (btn) btn.disabled = true;
 
+    // Expand the current view by DOWNLOAD_EXPAND on each side (about the view centroid)
+    // so roads just beyond the visible edge are included (routes/walksheds near the edge
+    // otherwise hit missing streets). transformScale(1.5) grows width & height \u00d71.5.
     var b = App.map.getBounds();
-    var south = b.getSouth(), west = b.getWest(), north = b.getNorth(), east = b.getEast();
+    var viewPoly = turf.bboxPolygon([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
+    var scaled = turf.transformScale(viewPoly, DOWNLOAD_EXPAND);
+    var eb = turf.bbox(scaled); // [west, south, east, north]
+    var west = eb[0], south = clampLat(eb[1]), east = eb[2], north = clampLat(eb[3]);
+
+    // Guard against very large downloads. Overpass file size is unknowable up front,
+    // so gate on the expanded area (km\u00b2): warn and let the user cancel above the threshold.
+    var areaKm2 = turf.area(scaled) / 1e6;
+    if (areaKm2 > MAX_AREA_WARN_KM2) {
+      var proceed = window.confirm(
+        "This will download roads for ~" + Math.round(areaKm2).toLocaleString() + " km\u00b2.\n\n" +
+        "That may be a large, slow download and Overpass can time out on very big areas. Continue?");
+      if (!proceed) {
+        if (btn) btn.disabled = false;
+        App.setStatus("Road network download cancelled");
+        return;
+      }
+    }
 
     var query = '[out:json][timeout:60];(' +
       'way["highway"~"^(motorway|trunk|primary|secondary|tertiary|' +
@@ -415,6 +440,7 @@
       // Build graph (synchronous — fast for regional networks)
       buildGraph(geojson);
       _roadGeoJSON = geojson;
+      _downloadedBboxPolygon = scaled; // record the fetched extent for the on-map outline
 
       updateUI();
       App.setStatus(_featureCount.toLocaleString() + " road segments loaded \u2014 local routing enabled");
@@ -439,6 +465,7 @@
         }
         buildGraph(geojson);
         _roadGeoJSON = geojson;
+        _downloadedBboxPolygon = null; // imported file has no "download area" — draw no outline
         updateUI();
         App.setStatus(_featureCount.toLocaleString() + " road segments loaded from " + file.name);
       } catch (err) {
@@ -471,10 +498,43 @@
     _segmentIndex = null;
     _featureCount = 0;
     _networkEpoch++;
+    _downloadedBboxPolygon = null;
     updateUI();
   }
 
   // ---- UI helpers ----
+
+  function clampLat(v) { return Math.max(-90, Math.min(90, v)); }
+
+  // Draw / update / remove the subtle rectangle showing the last downloaded extent.
+  // Mirrors the Municipal Boundaries border style (dashed line) in a distinct fuchsia.
+  // Driven from updateUI() so download / import / clear all stay in sync.
+  function renderDownloadArea() {
+    var map = App.map;
+    if (!map) return;
+    if (!_downloadedBboxPolygon) {
+      if (map.getLayer(RDL_LAYER)) map.removeLayer(RDL_LAYER);
+      if (map.getSource(RDL_SRC)) map.removeSource(RDL_SRC);
+      return;
+    }
+    var fc = { type: "FeatureCollection", features: [_downloadedBboxPolygon] };
+    if (!map.getSource(RDL_SRC)) {
+      map.addSource(RDL_SRC, { type: "geojson", data: fc });
+      map.addLayer({
+        id: RDL_LAYER,
+        type: "line",
+        source: RDL_SRC,
+        paint: {
+          "line-color": "#c026d3",
+          "line-width": 1.5,
+          "line-dasharray": [4, 3],
+          "line-opacity": 0.85
+        }
+      });
+    } else {
+      map.getSource(RDL_SRC).setData(fc);
+    }
+  }
 
   function updateUI() {
     var loaded = !!_graph;
@@ -482,6 +542,9 @@
     // Show/hide export button in Export dropdown
     var exportBtn = document.getElementById("export-road-net");
     if (exportBtn) exportBtn.style.display = loaded ? "" : "none";
+
+    // Reconcile the on-map downloaded-area outline with current state.
+    renderDownloadArea();
   }
 
   // ---- Walkshed (network isochrone) ----
@@ -648,5 +711,7 @@
   App.exportRoadNetwork = exportRoadNetwork;
   App.clearRoadNetwork = clearRoadNetwork;
   App.computeWalkshed = computeWalkshed;
+  // Remove only the downloaded-area outline (leaves the road graph intact) — used by the Layers panel.
+  App.clearRoadDownloadArea = function () { _downloadedBboxPolygon = null; updateUI(); };
 
 })();
