@@ -170,6 +170,8 @@ present-overlays.js     (needs App namespace and App.cache; loaded after modules
 
 **Active modules:** Buffer-Area Summary is enabled (popup-based, settings + results table). TPI is enabled (popup-based, 2-column). FTA Small Starts is enabled (popup-based, 2-tab). Ridership Forecasting is enabled (popup-based, 4-tab). Corridor Scoring is enabled (popup-based, 2-column). Walkshed is enabled (popup-based, 2-column; network isochrones via the offline road-network engine). Route Costing is enabled (popup-based, 2-column). Trip Builder is enabled (popup-based, 2-column). Title VI Service Equity is enabled (popup-based, 3-tab). GTFS Feed Viewer is enabled (popup-based, 2-column file browser + map layers). Attribute Summary is enabled as a **system module** (registered with `system: true` so it is hidden from the Analysis dropdown; opened via the Attribute Summary… button under Feature Settings).
 
+**Dormant module:** *Wetland & Channel Mitigation Needs* (`js/projects/mitigation-needs.js` + `mitigation-needs-data.js`, `projects/mitigation-needs-popup.html` + `mitigation-needs-legend.html`) was built only as an illustration. Its two `<script>` tags in `index.html` are commented out, so the module does not load or appear in the Analysis dropdown. The files are retained; re-enable by uncommenting both tags.
+
 ## App Namespace (Public API)
 
 ### utils.js
