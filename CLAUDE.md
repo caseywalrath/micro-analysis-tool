@@ -187,7 +187,7 @@ Panel config: `{ id, title, html, collapsed (default false), order (default 100)
 ### map.js
 `map` (MapLibre instance), `switchBasemap(basemapId)`, `getBasemaps()` (returns `[{id, name}]`), `getCurrentBasemapId()`
 
-Basemap IDs: `"carto-light"` (default), `"carto-dark"`, `"osm"`, `"satellite"`
+Basemap IDs: `"carto-light"` (default), `"carto-dark"`, `"carto-voyager"`, `"osm"`, `"satellite"`, `"esri-dark-gray"`, `"esri-light-gray"` (the last two are Esri Canvas raster basemaps — muted background, streets emphasized, minimal labels)
 
 ### points.js
 `points` (Point array), `buffers` (Polygon array), `addPoint(lon, lat)`, `addPointWithOpts(lon, lat, opts)`, `rebuildBuffers(radiusMiles)`, `refreshBuffers()` (rebuild at the current radius — used by the Walkshed module), `movePoint(index, lng, lat)`, `removePoint(index)`, `clearPoints()`, `undoLastPoint()`, `duplicatePoint(index)`, `renderPointLayers()`, `bufferUnionPolygon()`, `getUnion()` (alias), `bboxStringFromFeature(feat)`

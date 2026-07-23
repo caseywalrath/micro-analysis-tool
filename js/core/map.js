@@ -67,6 +67,24 @@
       ],
       attribution:
         'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics'
+    },
+    {
+      id: "esri-dark-gray",
+      name: "Esri Dark Gray",
+      tiles: [
+        "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
+      ],
+      attribution:
+        'Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors, and the GIS user community'
+    },
+    {
+      id: "esri-light-gray",
+      name: "Esri Light Gray",
+      tiles: [
+        "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}"
+      ],
+      attribution:
+        'Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors, and the GIS user community'
     }
   ];
 
