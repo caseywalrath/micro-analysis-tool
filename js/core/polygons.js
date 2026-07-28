@@ -207,11 +207,11 @@
     renderPolygonLayers();
 
     if (currentCoords.length === 1) {
-      App.setStatus("Polygon started — click to add vertices, click last point to save");
+      App.setStatus("Polygon started — click to add vertices, click last point or press Enter to finish");
     } else if (currentCoords.length === 2) {
       App.setStatus("2 vertices — need at least 3 to close polygon");
     } else {
-      App.setStatus(currentCoords.length + " vertices — click last point to save");
+      App.setStatus(currentCoords.length + " vertices — click last point or press Enter to finish");
     }
   }
 
@@ -230,17 +230,24 @@
     ring.push(ring[0]); // close the ring
 
     var polyColor = (App.sectionColors && App.sectionColors.polygon) || App.POLYGON_DEFAULT_COLOR || "#b0c4de";
-    polygons.push({
+    var feature = {
       type: "Feature",
       properties: { name: "Polygon " + idx, polyIdx: idx, vertices: nVertices, color: polyColor },
       geometry: { type: "Polygon", coordinates: [ring] }
-    });
+    };
+    polygons.push(feature);
 
     currentCoords.length = 0;
     previewCoord = null;
     renderPolygonLayers();
     App.setStatus("Polygon " + idx + " saved (" + nVertices + " vertices)");
     if (typeof App.exitDrawMode === "function") App.exitDrawMode();
+    // If the attributes popup is already open (on some other feature), follow
+    // it to this newly-drawn polygon. Never auto-open it if it wasn't open.
+    if (typeof App.isAttrPopupOpen === "function" && App.isAttrPopupOpen() &&
+        typeof App.openAttrPopup === "function") {
+      App.openAttrPopup("polygon", polygons.length - 1, feature);
+    }
   }
 
   function cancelPolygonDrawing() {
@@ -273,7 +280,7 @@
     } else if (currentCoords.length < 3) {
       App.setStatus(currentCoords.length + " vertices — need at least 3 to close polygon");
     } else {
-      App.setStatus(currentCoords.length + " vertices — click last point to save");
+      App.setStatus(currentCoords.length + " vertices — click last point or press Enter to finish");
     }
     if (App.undo) App.undo.updateButtons();
   }
@@ -335,6 +342,7 @@
   App.polygons = polygons;
   App.polygonUnionPolygon = polygonUnionPolygon;
   App.handlePolygonClick = handlePolygonClick;
+  App.savePolygon = savePolygon;
   App.duplicatePolygon = duplicatePolygon;
   App.removePolygon = removePolygon;
   App.clearPolygons = clearPolygons;

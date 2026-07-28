@@ -141,6 +141,11 @@
               </svg>
             </button>
             <div id="export-dropdown" class="export-dropdown" style="display:none;">
+              <div class="export-scope-row" id="export-scope-row">
+                <label><input type="radio" name="export-scope" value="all" checked> All</label>
+                <label><input type="radio" name="export-scope" value="visible"> Visible only</label>
+              </div>
+              <div class="export-dropdown-divider"></div>
               <button data-format="json-features">JSON (Features only)</button>
               <button data-format="json-all">JSON (All data)</button>
               <button data-format="csv">CSV</button>
@@ -162,28 +167,28 @@
           </div>
         </div>
         <div id="draw-tools">
-          <button class="tool-btn" data-mode="point" title="Point">
+          <button class="tool-btn" data-mode="point" title="Point (S)">
             <svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" fill="#3182ce"/></svg>
           </button>
-          <button class="tool-btn" data-mode="line" title="Line">
+          <button class="tool-btn" data-mode="line" title="Line (L · Enter to finish)">
             <svg width="22" height="22" viewBox="0 0 24 24"><line x1="4" y1="19" x2="20" y2="5" stroke="#eab308" stroke-width="3.5" stroke-linecap="round"/></svg>
           </button>
-          <button class="tool-btn" data-mode="route" title="Route">
+          <button class="tool-btn" data-mode="route" title="Route (R · Enter to finish)">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M6 18c0-3 2-4 5-4s5-1 5-4" stroke="#22a352" stroke-width="2.5" stroke-linecap="round"/><circle cx="6" cy="18" r="2.5" fill="#22a352"/><rect x="14" y="4" width="6" height="5" rx="1" fill="#22a352"/><circle cx="16" cy="6.5" r="1" fill="white"/><circle cx="18.5" cy="6.5" r="1" fill="white"/></svg>
           </button>
-          <button class="tool-btn" data-mode="polygon" title="Polygon">
+          <button class="tool-btn" data-mode="polygon" title="Polygon (P · Enter to finish)">
             <svg width="22" height="22" viewBox="0 0 24 24"><polygon points="12,4 21,10 18,20 6,20 3,10" fill="#f97316"/></svg>
           </button>
-          <button class="tool-btn" data-mode="label" title="Label">
+          <button class="tool-btn" data-mode="label" title="Label (B)">
             <svg width="22" height="22" viewBox="0 0 24 24"><path d="M4 5h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9l-4 3.5V16H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" fill="#e53e3e"/></svg>
           </button>
-          <button class="tool-btn" data-mode="textbox" title="Text Box">
+          <button class="tool-btn" data-mode="textbox" title="Text Box (T)">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
               <rect x="3" y="3" width="18" height="18" rx="2" stroke="#888" stroke-width="1.8"/>
               <text x="12" y="17" text-anchor="middle" font-size="14" font-weight="700" fill="#888" font-family="serif">T</text>
             </svg>
           </button>
-          <button class="tool-btn" data-mode="measure" title="Measure">
+          <button class="tool-btn" data-mode="measure" title="Measure (M)">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
               <rect x="2" y="6" width="20" height="12" rx="2" stroke="#6b46c1" stroke-width="1.8"/>
               <line x1="6" y1="6" x2="6" y2="11" stroke="#6b46c1" stroke-width="1.5"/>
@@ -206,6 +211,18 @@
           <button id="reset" class="reset-btn" title="Reset Session">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4.5 12a7.5 7.5 0 0 1 13-5.1l1.5-1.5" stroke="#e53e3e" stroke-width="2.5" stroke-linecap="round"/><path d="M19.5 12a7.5 7.5 0 0 1-13 5.1l-1.5 1.5" stroke="#e53e3e" stroke-width="2.5" stroke-linecap="round"/><polygon points="19,2 22,5.5 18,6" fill="#e53e3e"/><polygon points="5,22 2,18.5 6,18" fill="#e53e3e"/><line x1="12" y1="9" x2="12" y2="13" stroke="#e53e3e" stroke-width="2.5" stroke-linecap="round"/><circle cx="12" cy="16" r="1.3" fill="#e53e3e"/></svg>
           </button>
+        </div>
+        <div id="search-wrapper">
+          <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
+               stroke="#a0aec0" stroke-width="2.5" stroke-linecap="round">
+            <circle cx="10.5" cy="10.5" r="7"/>
+            <line x1="15.5" y1="15.5" x2="21" y2="21"/>
+          </svg>
+          <input id="search-input" type="text" placeholder="Search location..."
+                 autocomplete="off" spellcheck="false" aria-label="Search location" />
+          <button id="search-clear" title="Clear search" aria-label="Clear search"
+                  style="display:none;">&times;</button>
+          <div id="search-results" role="listbox" style="display:none;"></div>
         </div>
       </div>
 
@@ -232,9 +249,14 @@
           </svg>
         </button>
         <div class="fp-header">
-          <h3>Features</h3>
+          <div class="fp-tabs" role="tablist">
+            <button class="fp-tab-btn active" data-fptab="features" role="tab" type="button">Features</button>
+            <button class="fp-tab-btn" data-fptab="layers" role="tab" type="button">Layers</button>
+          </div>
         </div>
         <div class="fp-content">
+
+          <div id="fp-tab-features" class="fp-tab-pane">
 
           <div id="fp-features" class="fp-list"></div>
 
@@ -247,42 +269,13 @@
           <div class="fp-section" id="fp-settings-section">
             <div class="fp-section-header fp-settings-header">Feature Settings</div>
             <div class="fp-settings-body">
-              <div class="fp-settings-grid">
-                <!-- Column headers -->
-                <div class="fp-sg-label"></div>
-                <div class="fp-sg-col-hdr">Opacity</div>
-                <div class="fp-sg-col-hdr">Buffer</div>
-                <div class="fp-sg-col-hdr">Width</div>
-                <!-- Points -->
-                <div class="fp-sg-label">Points</div>
-                <div class="fp-sg-cell"><button id="fp-set-pointOpacity"      class="fp-sib" title="Point opacity"></button></div>
-                <div class="fp-sg-cell"><button id="fp-set-bufferRadius"      class="fp-sib" title="Point buffer radius (mi)"></button></div>
-                <div class="fp-sg-cell"><button id="fp-set-pointLineWidth"    class="fp-sib" title="Point size"></button></div>
-                <!-- Lines -->
-                <div class="fp-sg-label">Lines</div>
-                <div class="fp-sg-cell"><button id="fp-set-lineOpacity"       class="fp-sib" title="Line opacity"></button></div>
-                <div class="fp-sg-cell"><button id="fp-set-lineBufferRadius"  class="fp-sib" title="Line buffer radius (mi)"></button></div>
-                <div class="fp-sg-cell"><button id="fp-set-lineLineWidth"     class="fp-sib" title="Line width"></button></div>
-                <!-- Routes -->
-                <div class="fp-sg-label">Routes</div>
-                <div class="fp-sg-cell"><button id="fp-set-routeOpacity"      class="fp-sib" title="Route opacity"></button></div>
-                <div class="fp-sg-cell"><button id="fp-set-routeBufferRadius" class="fp-sib" title="Route buffer radius (mi)"></button></div>
-                <div class="fp-sg-cell"><button id="fp-set-routeLineWidth"    class="fp-sib" title="Route width"></button></div>
-                <!-- Polygons -->
-                <div class="fp-sg-label">Polygons</div>
-                <div class="fp-sg-cell"><button id="fp-set-polygonOpacity"    class="fp-sib" title="Polygon opacity"></button></div>
-                <div class="fp-sg-cell"></div>
-                <div class="fp-sg-cell"><button id="fp-set-polygonLineWidth"  class="fp-sib" title="Polygon border width"></button></div>
-                <!-- Buffers -->
-                <div class="fp-sg-label">Buffers</div>
-                <div class="fp-sg-cell"><button id="fp-set-bufferOpacity"     class="fp-sib" title="Buffer opacity"></button></div>
-                <div class="fp-sg-cell"></div>
-                <div class="fp-sg-cell"><button id="fp-set-bufferLineWidth"   class="fp-sib" title="Buffer border width"></button></div>
-              </div>
               <div class="fp-buffer-row">
                 <label class="fp-buffer-label" for="offsetOverlap">
                   <input type="checkbox" id="offsetOverlap" /> Offset overlapping Lines/Routes
                 </label>
+              </div>
+              <div class="fp-buffer-row">
+                <button id="open-display-settings" class="fp-attr-summary-btn" type="button">Display Settings…</button>
               </div>
               <div class="fp-buffer-row">
                 <button id="open-attribute-summary" class="fp-attr-summary-btn" type="button">Attribute Summary…</button>
@@ -290,7 +283,11 @@
             </div>
           </div>
 
-          <!-- Shared vertical slider popover for Feature Settings -->
+          </div><!-- #fp-tab-features -->
+
+          <div id="fp-tab-layers" class="fp-tab-pane" style="display:none"></div>
+
+          <!-- Shared vertical slider popover for Feature Settings + Layers -->
           <div id="fp-slider-popover" style="display:none">
             <span id="fp-slider-value" class="fp-slider-val"></span>
             <input id="fp-slider-input" type="range" class="fp-slider-vert" />
@@ -354,6 +351,7 @@
     <script src="js/core/utils.js"></script>
     <script src="js/core/sidebar.js"></script>
     <script src="js/core/map.js"></script>
+    <script src="js/core/search.js"></script>
     <script src="js/core/road-network.js"></script>
     <script src="js/core/points.js"></script>
     <script src="js/core/lines.js"></script>
@@ -368,6 +366,7 @@
     <script src="js/core/selection.js"></script>
     <script src="js/core/features.js"></script>
     <script src="js/core/feature-attributes.js"></script>
+    <script src="js/core/layers-panel.js"></script>
     <script src="js/core/census.js"></script>
     <script src="js/core/lodes.js"></script>
     <script src="js/core/projections.js"></script>
@@ -385,12 +384,21 @@
     <script src="js/projects/ridership-scoring.js"></script>
     <script src="js/projects/ridership-forecasting.js"></script>
     <script src="js/projects/corridor-scoring.js"></script>
+    <script src="js/projects/walkshed.js"></script>
+    <!-- DORMANT: Wetland & Channel Mitigation Needs was built only as an illustration.
+         Its module is not loaded, so it does not appear in the Analysis dropdown.
+         Files are retained in js/projects/ (mitigation-needs.js, mitigation-needs-data.js)
+         and projects/ (mitigation-needs-popup.html, mitigation-needs-legend.html).
+         Re-enable by uncommenting both script tags below. -->
+    <!-- <script src="js/projects/mitigation-needs-data.js"></script> -->
+    <!-- <script src="js/projects/mitigation-needs.js"></script> -->
     <script src="js/projects/route-costing.js"></script>
     <script src="js/projects/trip-builder.js"></script>
     <script src="js/projects/title-vi-engine.js"></script>
     <script src="js/projects/title-vi.js"></script>
     <script src="js/projects/gtfs.js"></script>
     <script src="js/projects/attribute-summary.js"></script>
+    <script src="js/projects/display-settings.js"></script>
     <script src="js/core/present-overlays.js"></script>
   </body>
 </html>

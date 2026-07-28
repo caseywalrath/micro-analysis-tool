@@ -421,19 +421,31 @@
     if (csvBtn) csvBtn.disabled = !enabled;
   }
 
-  // ---- Stale indicator ----
+  // ---- Status + stale indicator (shared module-state UI) ----
+
+  function setTpiStatus(msg, kind) {
+    App.renderModuleState({
+      statusEl: "tpiStatus",
+      status: msg ? { kind: kind || "", message: msg } : null
+    });
+  }
+
+  // Context-aware onboarding/empty hint shown when there are no results.
+  function emptyHint() {
+    var n = (App.points || []).length + (App.routes || []).length + (App.lines || []).length;
+    if (!n) {
+      return { need: "Draw a point, route, or line to begin.",
+               action: "Then set a buffer radius and click Analyze System." };
+    }
+    return { need: "Select features and click Analyze System.",
+             action: "Selected features define the normalization pool for scoring." };
+  }
 
   function markStale() {
     if (!_lastResult) return;
     _stale = true;
     if (!isPopupVisible()) return;
-    var statusEl = document.getElementById("tpiStatus");
-    var textEl   = document.getElementById("tpiStatusText");
-    if (statusEl && textEl) {
-      statusEl.style.display = "";
-      textEl.textContent     = "Data has changed \u2014 re-run to update scores.";
-      statusEl.className     = "rf-status rf-status-stale";
-    }
+    App.renderModuleState({ statusEl: "tpiStatus", stale: true, onRerun: function () { runTPI(); } });
   }
 
   // ---- Weight sliders (live inside modal) ----
@@ -551,12 +563,11 @@
     if (_running) return;
     _running = true;
 
-    var statusEl = document.getElementById("tpiStatus");
-    var textEl   = document.getElementById("tpiStatusText");
     var runBtn   = document.getElementById("tpiRun");
 
     if (runBtn)   runBtn.disabled = true;
-    if (statusEl) { statusEl.style.display = ""; statusEl.className = "rf-status"; }
+    setTpiStatus("Computing…", "running");
+    var textEl = document.getElementById("tpiStatusText");
 
     try {
       var geoLevel = document.getElementById("tpiGeoLevel").value;
@@ -610,14 +621,12 @@
       // Display geography list
       displayGeographyList(result, _selectedCorridor);
 
-      if (textEl) textEl.textContent = "TPI computed successfully.";
-      if (statusEl) statusEl.className = "rf-status rf-status-done";
+      setTpiStatus("TPI computed successfully.", "done");
       App.setStatus("TPI computed");
 
     } catch (err) {
       console.error("TPI error:", err);
-      if (textEl) textEl.textContent = "Error: " + (err.message || err);
-      if (statusEl) statusEl.className = "rf-status rf-status-error";
+      setTpiStatus("Error: " + (err.message || err), "error");
       App.setStatus("TPI error");
     } finally {
       _running = false;
@@ -641,13 +650,7 @@
     renderChoropleth(_lastResult);
     if (isPopupVisible()) {
       displayGeographyList(_lastResult, _selectedCorridor);
-      var statusEl = document.getElementById("tpiStatus");
-      var textEl   = document.getElementById("tpiStatusText");
-      if (statusEl && textEl) {
-        statusEl.style.display = "";
-        statusEl.className     = "rf-status rf-status-done";
-        textEl.textContent     = "Scores updated from cached data.";
-      }
+      setTpiStatus("Scores updated from cached data.", "done");
     }
   }
 
@@ -787,10 +790,9 @@
     if (isPopupVisible()) {
       var resultsEl = document.getElementById("tpiResults");
       if (resultsEl) resultsEl.style.display = "none";
-      var statusEl  = document.getElementById("tpiStatus");
-      if (statusEl)  statusEl.style.display  = "none";
-      var emptyEl   = document.getElementById("tpiEmptyState");
-      if (emptyEl)   emptyEl.style.display   = "";
+      App.renderModuleState({
+        statusEl: "tpiStatus", emptyEl: "tpiEmptyState", empty: true, hint: emptyHint()
+      });
       updateExportButtons(false);
       var toggleRow = document.getElementById("tpiChoroplethToggleRow");
       if (toggleRow) toggleRow.style.display = "none";
@@ -996,6 +998,16 @@
     var runBtn = document.getElementById("tpiRun");
     if (runBtn) runBtn.addEventListener("click", function () { runTPI(); });
 
+    // Shared census-cache status line + Re-fetch
+    if (runBtn && typeof App.buildCensusCacheStatus === "function") {
+      var ccStatus = App.buildCensusCacheStatus({
+        geoSel: document.getElementById("tpiGeoLevel"),
+        yearSel: document.getElementById("tpiYearSelect"),
+        onRefetch: function () { runBtn.click(); }
+      });
+      runBtn.parentNode.insertBefore(ccStatus, runBtn);
+    }
+
     // Hide Choropleth toggle
     var hideCb = document.getElementById("tpiHideChoropleth");
     if (hideCb) {
@@ -1076,6 +1088,7 @@
   // ---- Popup lifecycle hooks ----
 
   function onOpen(core) {
+    document.querySelectorAll(".cc-status").forEach(function (s) { if (s.refresh) s.refresh(); });
     // Sync checkbox
     var apportionCb = document.getElementById("tpiApportionByArea");
     if (apportionCb) apportionCb.checked = _apportionByArea;
@@ -1086,6 +1099,10 @@
     // Refresh results display
     if (_lastResult && isPopupVisible()) {
       displayGeographyList(_lastResult, _selectedCorridor);
+    } else if (isPopupVisible()) {
+      App.renderModuleState({
+        statusEl: "tpiStatus", emptyEl: "tpiEmptyState", empty: true, hint: emptyHint()
+      });
     }
     if (_stale) markStale();
 

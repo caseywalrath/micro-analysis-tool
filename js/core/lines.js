@@ -243,9 +243,9 @@
     renderLineLayers();
 
     if (currentCoords.length === 1) {
-      App.setStatus("Line started — click to add waypoints, click last point to save");
+      App.setStatus("Line started — click to add waypoints, click last point or press Enter to finish");
     } else {
-      App.setStatus(currentCoords.length + " waypoints — click last point to save");
+      App.setStatus(currentCoords.length + " waypoints — click last point or press Enter to finish");
     }
   }
 
@@ -263,17 +263,24 @@
     var colorIdx = lines.length + (App.routes ? App.routes.length : 0);
     var color = (App.sectionColors && App.sectionColors.line) ||
                 App.FEATURE_COLORS[colorIdx % App.FEATURE_COLORS.length];
-    lines.push({
+    var feature = {
       type: "Feature",
       properties: { name: "Line " + idx, lineIdx: idx, waypoints: nWaypoints, color: color },
       geometry: { type: "LineString", coordinates: currentCoords.slice() }
-    });
+    };
+    lines.push(feature);
 
     currentCoords.length = 0;
     previewCoord = null;
     rebuildLineBuffers(lineBufferRadiusMiles);
     App.setStatus("Line " + idx + " saved (" + nWaypoints + " waypoints)");
     if (typeof App.exitDrawMode === "function") App.exitDrawMode();
+    // If the attributes popup is already open (on some other feature), follow
+    // it to this newly-drawn line. Never auto-open it if it wasn't open.
+    if (typeof App.isAttrPopupOpen === "function" && App.isAttrPopupOpen() &&
+        typeof App.openAttrPopup === "function") {
+      App.openAttrPopup("line", lines.length - 1, feature);
+    }
   }
 
   function addLineFromCoords(coords, opts) {
@@ -386,6 +393,7 @@
   App.rebuildLineBuffers = rebuildLineBuffers;
   App.lineBufferUnionPolygon = lineBufferUnionPolygon;
   App.handleLineClick = handleLineClick;
+  App.saveLine = saveLine;
   App.addLineFromCoords = addLineFromCoords;
   App.duplicateLine = duplicateLine;
   App.removeLine = removeLine;

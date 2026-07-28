@@ -336,13 +336,20 @@
     }
   }
 
+  // Feature arrays relevant to a given group key: labels only group with
+  // labels (LABEL_GROUP_KEY); points/lines/routes/polygons share the
+  // universal key (UNIVERSAL_GROUP_KEY) and can group across those types.
+  function getGroupArrays(key) {
+    return key === LABEL_GROUP_KEY
+      ? [App.labels || []]
+      : [App.points || [], App.lines || [], App.routes || [], App.polygons || []];
+  }
+
   function generateGroupName(isLabel) {
     var key = isLabel ? LABEL_GROUP_KEY : UNIVERSAL_GROUP_KEY;
     var prefix = isLabel ? "Label Group " : "Group ";
     var existing = {};
-    var allArrays = isLabel ? [App.labels || []] :
-      [App.points || [], App.lines || [], App.routes || [], App.polygons || []];
-    allArrays.forEach(function (arr) {
+    getGroupArrays(key).forEach(function (arr) {
       arr.forEach(function (f) {
         var g = f.properties.attributes && f.properties.attributes[key];
         if (g) existing[g] = true;
@@ -353,32 +360,127 @@
     return prefix + n;
   }
 
-  function groupSelectedFeatures() {
-    var selected = typeof App.getSelectedFeatures === "function" ? App.getSelectedFeatures() : [];
-    if (selected.length < 2) return;
-    // Determine if all are labels (use label group key) or mixed/non-label (use universal key)
-    var allLabels = selected.every(function (s) { return s.type === "label"; });
-    var key = allLabels ? LABEL_GROUP_KEY : UNIVERSAL_GROUP_KEY;
-    var name = generateGroupName(allLabels);
-    // Inherit color from the first feature that has a color
-    var inheritColor = null;
-    for (var i = 0; i < selected.length; i++) {
-      var cf = getFeatureByTypeIndex(selected[i].type, selected[i].index);
-      if (cf && cf.properties.color) { inheritColor = cf.properties.color; break; }
-    }
+  // One entry per distinct existing group name under `key`, with a member
+  // count and a representative color (first member found with a color).
+  function collectGroupSummaries(key) {
+    var byName = {};
+    getGroupArrays(key).forEach(function (arr) {
+      arr.forEach(function (f) {
+        var g = f.properties.attributes && f.properties.attributes[key];
+        if (!g) return;
+        if (!byName[g]) byName[g] = { name: g, count: 0, color: null };
+        byName[g].count++;
+        if (!byName[g].color && f.properties.color) byName[g].color = f.properties.color;
+      });
+    });
+    var names = Object.keys(byName);
+    names.sort(naturalSort);
+    return names.map(function (n) { return byName[n]; });
+  }
+
+  // Resolves a { type, index } selection snapshot to direct feature object
+  // references up front, so a picker left open across a later panel
+  // re-render/index-shift still acts on the right features.
+  function resolveSelection(selected) {
+    var out = [];
     selected.forEach(function (s) {
       var feat = getFeatureByTypeIndex(s.type, s.index);
-      if (!feat) return;
+      if (feat) out.push({ type: s.type, feature: feat });
+    });
+    return out;
+  }
+
+  // Shared "do it" step for both New Group and existing-group picker rows.
+  function assignFeaturesToGroup(resolved, key, name) {
+    if (!name || !resolved.length) return;
+    // Prefer the color already established by the target group (if any);
+    // otherwise fall back to the first resolved feature's own color.
+    var inheritColor = null;
+    getGroupArrays(key).forEach(function (arr) {
+      arr.forEach(function (f) {
+        if (!inheritColor && f.properties.color && f.properties.attributes &&
+            f.properties.attributes[key] === name) {
+          inheritColor = f.properties.color;
+        }
+      });
+    });
+    if (!inheritColor) {
+      for (var i = 0; i < resolved.length; i++) {
+        if (resolved[i].feature.properties.color) { inheritColor = resolved[i].feature.properties.color; break; }
+      }
+    }
+    resolved.forEach(function (r) {
+      var feat = r.feature;
       if (!feat.properties.attributes) feat.properties.attributes = {};
       feat.properties.attributes[key] = name;
       if (inheritColor) feat.properties.color = inheritColor;
     });
-    // Re-render affected types
     var typesChanged = {};
-    selected.forEach(function (s) { typesChanged[s.type] = true; });
+    resolved.forEach(function (r) { typesChanged[r.type] = true; });
     Object.keys(typesChanged).forEach(function (t) { rerenderForType(t); });
     if (App.cache && typeof App.cache.save === "function") App.cache.save();
     if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+  }
+
+  // Builds the floating picker body: "+ New Group" plus a row per existing
+  // group under `key`. Each row acts immediately and closes the popup.
+  function buildGroupPickerContent(resolved, key) {
+    var container = document.createElement("div");
+    container.className = "fp-group-picker";
+
+    var newBtn = document.createElement("button");
+    newBtn.type = "button";
+    newBtn.className = "fp-group-picker-new";
+    newBtn.textContent = "+ New Group";
+    newBtn.addEventListener("click", function () {
+      assignFeaturesToGroup(resolved, key, generateGroupName(key === LABEL_GROUP_KEY));
+      if (typeof App.closeMiniPopup === "function") App.closeMiniPopup();
+    });
+    container.appendChild(newBtn);
+
+    var summaries = collectGroupSummaries(key);
+    if (summaries.length) {
+      var divider = document.createElement("div");
+      divider.className = "fp-group-picker-divider";
+      divider.textContent = "Existing groups";
+      container.appendChild(divider);
+
+      summaries.forEach(function (g) {
+        var row = document.createElement("button");
+        row.type = "button";
+        row.className = "fp-group-picker-row";
+        var dot = document.createElement("span");
+        dot.className = "fp-group-picker-swatch";
+        dot.style.background = g.color || "#999";
+        row.appendChild(dot);
+        row.appendChild(document.createTextNode(g.name + " (" + g.count + ")"));
+        row.addEventListener("click", function () {
+          assignFeaturesToGroup(resolved, key, g.name);
+          if (typeof App.closeMiniPopup === "function") App.closeMiniPopup();
+        });
+        container.appendChild(row);
+      });
+    }
+
+    return container;
+  }
+
+  // Opens the group picker anchored at the context-menu click point (x, y),
+  // reusing App.openMiniPopup's viewport-clamped floating dialog so it can
+  // never spill offscreen the way a hover-submenu could.
+  function openGroupPicker(x, y, selected, key, anyInGroup) {
+    if (typeof App.openMiniPopup !== "function") return;
+    var resolved = resolveSelection(selected);
+    if (!resolved.length) return;
+    var anchor = document.createElement("span");
+    anchor.style.cssText = "position:fixed;left:" + x + "px;top:" + y + "px;width:0;height:0;";
+    document.body.appendChild(anchor);
+    App.openMiniPopup({
+      title: anyInGroup ? "Move to Group" : "Group",
+      content: buildGroupPickerContent(resolved, key),
+      anchor: anchor,
+      onClose: function () { anchor.remove(); }
+    });
   }
 
   function ungroupSelectedFeatures() {
@@ -489,7 +591,9 @@
       if (typeof App.clearHover === "function") App.clearHover();
     });
     div.addEventListener("click", function (e) {
-      if (e.ctrlKey || e.metaKey) {
+      if (e.shiftKey) {
+        if (typeof App.shiftSelectFeature === "function") App.shiftSelectFeature(featureType, featureIndex);
+      } else if (e.ctrlKey || e.metaKey) {
         if (typeof App.toggleMultiSelect === "function") App.toggleMultiSelect(featureType, featureIndex);
       } else {
         if (typeof App.selectFeature === "function") App.selectFeature(featureType, featureIndex);
@@ -528,15 +632,23 @@
           options.push({ label: "Delete", action: function () { onDelete(); } });
         })(featureType, featureIndex, feature);
       }
-      if (selected.length >= 2) {
-        options.push({ label: "Group", action: groupSelectedFeatures });
-      }
       var anyInGroup = selected.some(function (s) {
         var feat = getFeatureByTypeIndex(s.type, s.index);
         if (!feat || !feat.properties.attributes) return false;
         return feat.properties.attributes[UNIVERSAL_GROUP_KEY] ||
                (s.type === "label" && feat.properties.attributes[LABEL_GROUP_KEY]);
       });
+      // Labels and non-labels use separate group namespaces and can never
+      // usefully share a group, so a mixed selection gets no Group action.
+      var mixedLabelSelection = selected.some(function (s) { return s.type === "label"; }) &&
+                                 selected.some(function (s) { return s.type !== "label"; });
+      if (!mixedLabelSelection) {
+        var groupKey = selected[0].type === "label" ? LABEL_GROUP_KEY : UNIVERSAL_GROUP_KEY;
+        options.push({
+          label: anyInGroup ? "Move to Group…" : "Group…",
+          action: function () { openGroupPicker(e.clientX, e.clientY, selected, groupKey, anyInGroup); }
+        });
+      }
       if (anyInGroup) {
         options.push({ label: "Ungroup", action: ungroupSelectedFeatures });
       }
@@ -1052,6 +1164,31 @@
   App.getTypeDefaultColor = getTypeDefaultColor;
   App.showContextMenu     = showContextMenu;
   App.rerenderForType     = rerenderForType;
+  // Shared with the Layers panel so it can list/group drawn features
+  // without duplicating the collection + grouping logic.
+  App.collectDrawnFeatures = collectAllFeatures;
+  App.UNIVERSAL_GROUP_KEY  = UNIVERSAL_GROUP_KEY;
+
+  // Wire the Features | Layers tab bar
+  (function () {
+    var tabBtns = document.querySelectorAll(".fp-tab-btn");
+    if (!tabBtns.length) return;
+    function show(tab) {
+      tabBtns.forEach(function (b) {
+        b.classList.toggle("active", b.getAttribute("data-fptab") === tab);
+      });
+      var fEl = document.getElementById("fp-tab-features");
+      var lEl = document.getElementById("fp-tab-layers");
+      if (fEl) fEl.style.display = tab === "features" ? "" : "none";
+      if (lEl) lEl.style.display = tab === "layers" ? "" : "none";
+      if (tab === "layers" && typeof App.refreshLayersPanel === "function") {
+        App.refreshLayersPanel();
+      }
+    }
+    tabBtns.forEach(function (b) {
+      b.addEventListener("click", function () { show(b.getAttribute("data-fptab")); });
+    });
+  })();
 
   // Wire feature panel collapse toggle
   (function () {

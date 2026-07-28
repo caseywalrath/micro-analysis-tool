@@ -308,6 +308,11 @@
       console.warn("Cache clear failed:", e);
     }
 
+    // 1b. Clear the shared census fetch cache (geos + ACS values).
+    if (App.censusCache && typeof App.censusCache.clear === "function") {
+      App.censusCache.clear();
+    }
+
     // 2. Clear all features
     if (typeof App.exitEditMode === "function") App.exitEditMode();
     App.clearPoints();
@@ -505,15 +510,27 @@
 
   // ---- Export to JSON file ----
 
-  function exportToFile() {
+  function exportToFile(scope) {
     try {
       var state = collectState("full");
+      if (scope === "visible") {
+        // Filter this call's own copy of the collected state — collectState()
+        // itself is untouched, so the localStorage autosave path (and
+        // exportFullState/Save State) keep including hidden features as always.
+        var arrs = getExportArrays(scope);
+        state.points    = arrs.points;
+        state.lines     = arrs.lines;
+        state.routes    = arrs.routes;
+        state.polygons  = arrs.polygons;
+        state.labels    = arrs.labels;
+        state.textBoxes = arrs.textBoxes;
+      }
       var json = JSON.stringify(state, null, 2);
       var blob = new Blob([json], { type: "application/json" });
       var url = URL.createObjectURL(blob);
 
       var now = new Date();
-      var filename = "analysis-" + now.getFullYear() + "-" +
+      var filename = "analysis" + _scopeSuffix(scope) + "-" + now.getFullYear() + "-" +
         String(now.getMonth() + 1).padStart(2, "0") + "-" +
         String(now.getDate()).padStart(2, "0") + ".json";
 
@@ -815,6 +832,7 @@
           }
         }
 
+        if (typeof App._syncDisplaySliders === "function") App._syncDisplaySliders();
         if (typeof App.notifyProject === "function") App.notifyProject();
 
         var nFeatures = App.points.length + App.lines.length +
@@ -869,6 +887,7 @@
         applyState(state);
         save(); // persist imported state to localStorage
 
+        if (typeof App._syncDisplaySliders === "function") App._syncDisplaySliders();
         if (typeof App.notifyProject === "function") App.notifyProject();
 
         var nFeatures = App.points.length + App.lines.length + App.routes.length + App.polygons.length + (App.labels ? App.labels.length : 0);
@@ -909,25 +928,54 @@
       String(d.getDate()).padStart(2, "0");
   }
 
+  // Suffix inserted into export filenames when scope is "visible", so
+  // exporting All then Visible-only back to back doesn't overwrite one file
+  // with the other.
+  function _scopeSuffix(scope) {
+    return scope === "visible" ? "-visible" : "";
+  }
+
+  // ---- Export scope: All vs Visible only ----
+  // Used by every feature-data export (JSON, CSV, KML, SHP) to optionally
+  // drop features hidden via the eye icon (Feature Panel or Layers panel —
+  // same `properties.hidden` flag either way). Does not affect session
+  // save/restore (collectState) or Share Link/Save State, which always
+  // operate on the full, true data set.
+  function getExportArrays(scope) {
+    var visible = scope === "visible";
+    function filt(arr) {
+      return visible ? arr.filter(function (f) { return !f.properties.hidden; }) : arr.slice();
+    }
+    return {
+      points:    filt(App.points),
+      lines:     filt(App.lines),
+      routes:    filt(App.routes),
+      polygons:  filt(App.polygons),
+      labels:    App.labels    ? filt(App.labels)    : [],
+      textBoxes: App.textBoxes ? filt(App.textBoxes) : []
+    };
+  }
+
   // ---- Export: JSON (Features only) ----
 
-  function exportFeaturesOnly() {
+  function exportFeaturesOnly(scope) {
     try {
+      var arrs = getExportArrays(scope);
       var state = {
         version: SCHEMA_VERSION,
         exportType: "features",
-        points: App.points.slice(),
-        lines: App.lines.slice(),
-        routes: App.routes.slice(),
-        polygons: App.polygons.slice(),
-        labels: App.labels ? App.labels.slice() : [],
+        points: arrs.points,
+        lines: arrs.lines,
+        routes: arrs.routes,
+        polygons: arrs.polygons,
+        labels: arrs.labels,
         bufferRadius:      (App.featureSettings && App.featureSettings.bufferRadius      != null) ? App.featureSettings.bufferRadius      : 0.5,
         lineBufferRadius:  (App.featureSettings && App.featureSettings.lineBufferRadius  != null) ? App.featureSettings.lineBufferRadius  : 0.5,
         routeBufferRadius: (App.featureSettings && App.featureSettings.routeBufferRadius != null) ? App.featureSettings.routeBufferRadius : 0.5
       };
       var json = JSON.stringify(state, null, 2);
       var blob = new Blob([json], { type: "application/json" });
-      var filename = "features-" + _dateStamp() + ".json";
+      var filename = "features" + _scopeSuffix(scope) + "-" + _dateStamp() + ".json";
       _triggerDownload(blob, filename);
       App.setStatus("Exported " + filename);
     } catch (e) {
@@ -980,23 +1028,26 @@
     return row;
   }
 
-  function exportCSV() {
+  function exportCSV(scope) {
     try {
+      var hadSource = App.points.length + App.lines.length + App.routes.length +
+        App.polygons.length + (App.labels ? App.labels.length : 0) > 0;
+      var arrs = getExportArrays(scope);
       var rows = [];
-      for (var si = 0; si < App.points.length; si++) rows.push(_featureToCSVRow(App.points[si], "point"));
-      for (var li = 0; li < App.lines.length; li++) rows.push(_featureToCSVRow(App.lines[li], "line"));
-      for (var ri = 0; ri < App.routes.length; ri++) rows.push(_featureToCSVRow(App.routes[ri], "route"));
-      for (var pi = 0; pi < App.polygons.length; pi++) rows.push(_featureToCSVRow(App.polygons[pi], "polygon"));
-      if (App.labels) {
-        for (var lb = 0; lb < App.labels.length; lb++) rows.push(_featureToCSVRow(App.labels[lb], "label"));
-      }
+      for (var si = 0; si < arrs.points.length; si++) rows.push(_featureToCSVRow(arrs.points[si], "point"));
+      for (var li = 0; li < arrs.lines.length; li++) rows.push(_featureToCSVRow(arrs.lines[li], "line"));
+      for (var ri = 0; ri < arrs.routes.length; ri++) rows.push(_featureToCSVRow(arrs.routes[ri], "route"));
+      for (var pi = 0; pi < arrs.polygons.length; pi++) rows.push(_featureToCSVRow(arrs.polygons[pi], "polygon"));
+      for (var lb = 0; lb < arrs.labels.length; lb++) rows.push(_featureToCSVRow(arrs.labels[lb], "label"));
       if (rows.length === 0) {
-        App.setStatus("Nothing to export — no features drawn.");
+        App.setStatus(hadSource && scope === "visible"
+          ? "Nothing to export — all features are hidden."
+          : "Nothing to export — no features drawn.");
         return;
       }
       var csv = Papa.unparse(rows);
       var blob = new Blob([csv], { type: "text/csv" });
-      var filename = "features-" + _dateStamp() + ".csv";
+      var filename = "features" + _scopeSuffix(scope) + "-" + _dateStamp() + ".csv";
       _triggerDownload(blob, filename);
       App.setStatus("Exported " + filename);
     } catch (e) {
@@ -1074,20 +1125,23 @@
     return kml;
   }
 
-  function exportKML() {
+  function exportKML(scope) {
     try {
+      var hadSource = App.points.length + App.lines.length + App.routes.length +
+        App.polygons.length + (App.labels ? App.labels.length : 0) > 0;
+      var arrs = getExportArrays(scope);
       var kml = '<?xml version="1.0" encoding="UTF-8"?>\n';
       kml += '<kml xmlns="http://www.opengis.net/kml/2.2">\n<Document>\n';
       kml += "  <name>Micro Analysis Tool Export</name>\n";
 
       var groups = [
-        { name: "Points", items: App.points, type: "point" },
-        { name: "Lines", items: App.lines, type: "line" },
-        { name: "Routes", items: App.routes, type: "route" },
-        { name: "Polygons", items: App.polygons, type: "polygon" }
+        { name: "Points", items: arrs.points, type: "point" },
+        { name: "Lines", items: arrs.lines, type: "line" },
+        { name: "Routes", items: arrs.routes, type: "route" },
+        { name: "Polygons", items: arrs.polygons, type: "polygon" }
       ];
-      if (App.labels && App.labels.length > 0) {
-        groups.push({ name: "Labels", items: App.labels, type: "label" });
+      if (arrs.labels.length > 0) {
+        groups.push({ name: "Labels", items: arrs.labels, type: "label" });
       }
 
       var totalCount = 0;
@@ -1105,12 +1159,14 @@
       kml += "</Document>\n</kml>";
 
       if (totalCount === 0) {
-        App.setStatus("Nothing to export — no features drawn.");
+        App.setStatus(hadSource && scope === "visible"
+          ? "Nothing to export — all features are hidden."
+          : "Nothing to export — no features drawn.");
         return;
       }
 
       var blob = new Blob([kml], { type: "application/vnd.google-earth.kml+xml" });
-      var filename = "features-" + _dateStamp() + ".kml";
+      var filename = "features" + _scopeSuffix(scope) + "-" + _dateStamp() + ".kml";
       _triggerDownload(blob, filename);
       App.setStatus("Exported " + filename);
     } catch (e) {
@@ -1383,42 +1439,46 @@
     return buf;
   }
 
-  function exportSHP() {
+  function exportSHP(scope) {
     if (typeof JSZip === "undefined") {
       alert("JSZip library not loaded. Please check your internet connection and reload.");
       return;
     }
     try {
+      var hadSource = App.points.length + App.lines.length + App.routes.length + App.polygons.length > 0;
+      var arrs = getExportArrays(scope);
       var points = [], polylines = [], polys = [];
       var pointProps = [], polylineProps = [], polyProps = [];
 
-      for (var si = 0; si < App.points.length; si++) {
-        var s = App.points[si];
+      for (var si = 0; si < arrs.points.length; si++) {
+        var s = arrs.points[si];
         if (!s.geometry) continue;
         points.push({ geometry: s.geometry, properties: s.properties });
         pointProps.push(_featureProps(s, "point"));
       }
-      for (var li = 0; li < App.lines.length; li++) {
-        var l = App.lines[li];
+      for (var li = 0; li < arrs.lines.length; li++) {
+        var l = arrs.lines[li];
         if (!l.geometry) continue;
         polylines.push({ geometry: l.geometry, properties: l.properties });
         polylineProps.push(_featureProps(l, "line"));
       }
-      for (var ri = 0; ri < App.routes.length; ri++) {
-        var r = App.routes[ri];
+      for (var ri = 0; ri < arrs.routes.length; ri++) {
+        var r = arrs.routes[ri];
         if (!r.geometry) continue;
         polylines.push({ geometry: r.geometry, properties: r.properties });
         polylineProps.push(_featureProps(r, "route"));
       }
-      for (var pi = 0; pi < App.polygons.length; pi++) {
-        var p = App.polygons[pi];
+      for (var pi = 0; pi < arrs.polygons.length; pi++) {
+        var p = arrs.polygons[pi];
         if (!p.geometry) continue;
         polys.push({ geometry: p.geometry, properties: p.properties });
         polyProps.push(_featureProps(p, "polygon"));
       }
 
       if (points.length + polylines.length + polys.length === 0) {
-        App.setStatus("Nothing to export — no features drawn.");
+        App.setStatus(hadSource && scope === "visible"
+          ? "Nothing to export — all features are hidden."
+          : "Nothing to export — no features drawn.");
         return;
       }
 
@@ -1447,7 +1507,7 @@
         zip.file("polygons.prj", SHP_PRJ_WGS84);
       }
 
-      var filename = "features-" + _dateStamp() + ".zip";
+      var filename = "features" + _scopeSuffix(scope) + "-" + _dateStamp() + ".zip";
       App.setStatus("Generating shapefile...");
 
       zip.generateAsync({ type: "blob" }).then(function (blob) {
@@ -1819,7 +1879,7 @@
     reader.onload = function (e) {
       var buffer = e.target.result;
       if (ext === "zip") {
-        _importSHPFromZip(buffer);
+        _importSHPFromZip(buffer, file);
       } else if (ext === "shp") {
         _parseSHPBuffers(buffer, null);
       } else {
@@ -1830,7 +1890,7 @@
     reader.readAsArrayBuffer(file);
   }
 
-  function _importSHPFromZip(zipBuffer) {
+  function _importSHPFromZip(zipBuffer, file) {
     if (typeof JSZip === "undefined") {
       alert("JSZip library not loaded. Cannot read ZIP files. Please check your internet connection and reload.");
       return;
@@ -1838,15 +1898,24 @@
 
     JSZip.loadAsync(zipBuffer).then(function (zip) {
       var shpEntry = null, dbfEntry = null, prjEntry = null;
+      var gtfsLike = false;
+      var GTFS_RE = /(^|\/)(agency|stops|routes|trips|stop_times|calendar|calendar_dates)\.txt$/i;
 
       zip.forEach(function (path, entry) {
         var lower = path.toLowerCase();
         if (/\.shp$/.test(lower) && !shpEntry) shpEntry = entry;
         if (/\.dbf$/.test(lower) && !dbfEntry) dbfEntry = entry;
         if (/\.prj$/.test(lower) && !prjEntry) prjEntry = entry;
+        if (GTFS_RE.test(path)) gtfsLike = true;
       });
 
       if (!shpEntry) {
+        // A GTFS feed is also a .zip of .txt files (no .shp). Hand it to the
+        // GTFS loader instead of failing as a malformed shapefile.
+        if (gtfsLike && file && typeof App.loadGTFSFile === "function") {
+          App.loadGTFSFile(file);
+          return;
+        }
         alert("No .shp file found in the ZIP archive.");
         return;
       }

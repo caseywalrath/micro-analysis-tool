@@ -548,13 +548,16 @@
   // =========================================================================
 
   // Frequency elasticity: ridership_change = (new_freq / old_freq) ^ elasticity
-  // elasticity is typically 0.3-0.6, default 0.5
+  // Default 0.6. Consistent with ranges reported in TCRP Report 95 (~0.3-0.6) and
+  // supported by newer empirical evidence (Berrebi et al. 2021: 0.66-0.78 across four
+  // US agencies). The "already-frequent routes respond less" finding in that work
+  // corroborates the diminishing-returns shape of this power curve.
   function computeFrequencyEffect(baseHeadway, newHeadway, elasticity) {
     if (!baseHeadway || !newHeadway || baseHeadway <= 0 || newHeadway <= 0) return 1;
     // Convert headway to frequency: freq = 60 / headway
     var baseFreq = 60 / baseHeadway;
     var newFreq = 60 / newHeadway;
-    return Math.pow(newFreq / baseFreq, elasticity || 0.5);
+    return Math.pow(newFreq / baseFreq, elasticity || 0.6);
   }
   RM.computeFrequencyEffect = computeFrequencyEffect;
 
@@ -586,7 +589,7 @@
     var freqEffect = computeFrequencyEffect(
       params.baseHeadway || 30,
       params.newHeadway || st.defaultHeadway,
-      params.freqElasticity || 0.5
+      params.freqElasticity || 0.6
     );
 
     // Combined service premium (custom override or preset); mid = avg of low and high

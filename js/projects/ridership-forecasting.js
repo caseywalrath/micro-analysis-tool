@@ -420,11 +420,10 @@
     if (_running) return;
     _running = true;
 
-    var statusEl = document.getElementById("rfDemandStatus");
-    var textEl = document.getElementById("rfDemandStatusText");
     var runBtn = document.getElementById("rfRunDemand");
     if (runBtn) runBtn.disabled = true;
-    if (statusEl) { statusEl.style.display = ""; statusEl.className = "rf-status"; }
+    App.renderModuleState({ statusEl: "rfDemandStatus", status: { kind: "running", message: "Running…" } });
+    var textEl = document.getElementById("rfDemandStatusText");
 
     // Show/hide uncalibrated warning
     var uncalibWarn = document.getElementById("rfUncalibratedWarning");
@@ -452,7 +451,7 @@
           if (!proceed) {
             _running = false;
             if (runBtn) runBtn.disabled = false;
-            if (statusEl) statusEl.style.display = "none";
+            App.renderModuleState({ statusEl: "rfDemandStatus" });
             return;
           }
         }
@@ -597,8 +596,7 @@
 
       displayDemandResults(result);
 
-      if (textEl) textEl.textContent = "Demand analysis complete.";
-      if (statusEl) statusEl.className = "rf-status rf-status-done";
+      App.renderModuleState({ statusEl: "rfDemandStatus", status: { kind: "done", message: "Demand analysis complete." } });
       App.setStatus("Demand analysis complete");
 
       // Enable exports
@@ -620,8 +618,7 @@
 
     } catch (err) {
       console.error("Ridership demand error:", err);
-      if (textEl) textEl.textContent = "Error: " + (err.message || err);
-      if (statusEl) statusEl.className = "rf-status rf-status-error";
+      App.renderModuleState({ statusEl: "rfDemandStatus", status: { kind: "error", message: "Error: " + (err.message || err) } });
       App.setStatus("Demand analysis error");
     } finally {
       _running = false;
@@ -1080,7 +1077,7 @@
     var method = document.querySelector('input[name="rfCalibMethod"]:checked');
     var methodVal = method ? method.value : (_calibration ? _calibration.method : "ratio");
     var REF_HEADWAY = 30;
-    var normElast = parseFloat((document.getElementById("rfFreqElastValue") || {}).value) || 0.5;
+    var normElast = parseFloat((document.getElementById("rfFreqElastValue") || {}).value) || 0.6;
 
     // Build lookup: (featureType:featureIndex) → shared-pool CDI entry
     var cdiLookup = {};
@@ -1270,11 +1267,10 @@
     if (_running) return;
     _running = true;
 
-    var statusEl = document.getElementById("rfSystemStatus");
-    var textEl = document.getElementById("rfSystemStatusText");
     var runBtn = document.getElementById("rfRunSystemAnalysis");
     if (runBtn) runBtn.disabled = true;
-    if (statusEl) { statusEl.style.display = ""; statusEl.className = "rf-status"; }
+    App.renderModuleState({ statusEl: "rfSystemStatus", status: { kind: "running", message: "Running…" } });
+    var textEl = document.getElementById("rfSystemStatusText");
 
     try {
       var geoLevel = document.getElementById("rfCalibGeoLevel").value;
@@ -1353,14 +1349,12 @@
       var step2 = document.getElementById("rfCalibStep2");
       if (step2) { step2.style.opacity = "1"; step2.style.pointerEvents = "auto"; }
 
-      if (textEl) textEl.textContent = "System analysis complete.";
-      if (statusEl) statusEl.className = "rf-status rf-status-done";
+      App.renderModuleState({ statusEl: "rfSystemStatus", status: { kind: "done", message: "System analysis complete." } });
       App.setStatus("System analysis complete");
 
     } catch (err) {
       console.error("System analysis error:", err);
-      if (textEl) textEl.textContent = "Error: " + (err.message || err);
-      if (statusEl) statusEl.className = "rf-status rf-status-error";
+      App.renderModuleState({ statusEl: "rfSystemStatus", status: { kind: "error", message: "Error: " + (err.message || err) } });
       App.setStatus("System analysis error");
     } finally {
       _running = false;
@@ -1634,7 +1628,7 @@
     // Reference headway for normalization (same default as Elasticity tab baseline)
     var REF_HEADWAY = 30;
     // Use the Elasticity tab's current elasticity value if available, else 0.5
-    var normElast = parseFloat((document.getElementById("rfFreqElastValue") || {}).value) || 0.5;
+    var normElast = parseFloat((document.getElementById("rfFreqElastValue") || {}).value) || 0.6;
 
     // Build observation array using per-route CDI
     var obs = [];
@@ -1940,7 +1934,7 @@
 
     var baseHeadway = parseFloat(document.getElementById("rfBaseHeadway").value) || 30;
     var newHeadway = parseFloat(document.getElementById("rfNewHeadway").value) || 15;
-    var freqElast = parseFloat(document.getElementById("rfFreqElastValue").value) || 0.5;
+    var freqElast = parseFloat(document.getElementById("rfFreqElastValue").value) || 0.6;
 
     var calibFactor = (_calibration && _calibration.factor) ? _calibration.factor : 1;
     var calibIntercept = (_calibration && Number.isFinite(_calibration.intercept)) ? _calibration.intercept : 0;
@@ -2043,7 +2037,7 @@
     var lengthScale = (_normalizeByLength && _calibration) ? getTargetCorridorLength() : 1;
     var baseMid = Math.max(0, activeCDI * calibFactor * lengthScale,
                               (calibIntercept + activeCDI * calibFactor) * lengthScale);
-    var freqElast = parseFloat((document.getElementById("rfFreqElastValue") || {}).value) || 0.5;
+    var freqElast = parseFloat((document.getElementById("rfFreqElastValue") || {}).value) || 0.6;
 
     // Apply baseline uncertainty band once for the active corridor
     var baseBand = RM.applyBaselineUncertainty(baseMid, _baselineUncertaintyPct);
@@ -2173,7 +2167,7 @@
     var lengthScale = (_normalizeByLength && _calibration) ? routeLength : 1;
     var baseMid = Math.max(0, cdi * calibFactor * lengthScale,
                               (calibIntercept + cdi * calibFactor) * lengthScale);
-    var freqElast = parseFloat((document.getElementById("rfFreqElastValue") || {}).value) || 0.5;
+    var freqElast = parseFloat((document.getElementById("rfFreqElastValue") || {}).value) || 0.6;
     var baseBand = RM.applyBaselineUncertainty(baseMid, _baselineUncertaintyPct);
     var BASELINE_SPAN = 14;
 
@@ -2786,25 +2780,13 @@
     if (_lastResult || _demandSystemResult) _demandStale = true;
     _stale = _calibStale || _demandStale;
     if (!isPopupVisible()) return;
-    // Show stale indicator on Demand tab
+    // Show stale banner (with Re-run) on Demand tab
     if (_demandStale) {
-      var statusEl = document.getElementById("rfDemandStatus");
-      var textEl = document.getElementById("rfDemandStatusText");
-      if (statusEl && textEl) {
-        statusEl.style.display = "";
-        textEl.textContent = "Features changed \u2014 re-run to update.";
-        statusEl.className = "rf-status rf-status-stale";
-      }
+      App.renderModuleState({ statusEl: "rfDemandStatus", stale: true, onRerun: runDemand });
     }
-    // Show stale indicator on Calibrate tab
+    // Show stale banner (with Re-run) on Calibrate tab
     if (_calibStale) {
-      var sysStatusEl = document.getElementById("rfSystemStatus");
-      var sysTextEl = document.getElementById("rfSystemStatusText");
-      if (sysStatusEl && sysTextEl) {
-        sysStatusEl.style.display = "";
-        sysTextEl.textContent = "Features changed \u2014 re-run to update.";
-        sysStatusEl.className = "rf-status rf-status-stale";
-      }
+      App.renderModuleState({ statusEl: "rfSystemStatus", stale: true, onRerun: runSystemAnalysis });
     }
     // On feature deletion, invalidate feature filters since indices may have shifted
     _calibFeatureFilter = null;
@@ -2890,6 +2872,16 @@
     if (sysBtn) sysBtn.addEventListener("click", function () {
       showAnalysisConfirm(buildCalibConfirmHTML(), runSystemAnalysis);
     });
+
+    // Shared census-cache status line + Re-fetch (Calibrate context)
+    if (sysBtn && typeof App.buildCensusCacheStatus === "function") {
+      var ccCalib = App.buildCensusCacheStatus({
+        geoSel: document.getElementById("rfCalibGeoLevel"),
+        yearSel: document.getElementById("rfCalibYearSelect"),
+        onRefetch: function () { sysBtn.click(); }
+      });
+      sysBtn.parentNode.insertBefore(ccCalib, sysBtn);
+    }
 
     var calibApportionCb = document.getElementById("rfCalibApportionByArea");
     if (calibApportionCb) {
@@ -3010,13 +3002,7 @@
         _demandStale = true;
         _stale = true;
         if (isPopupVisible()) {
-          var statusEl = document.getElementById("rfDemandStatus");
-          var textEl = document.getElementById("rfDemandStatusText");
-          if (statusEl && textEl) {
-            statusEl.style.display = "";
-            textEl.textContent = "Normalization mode changed \u2014 re-run to update.";
-            statusEl.className = "rf-status rf-status-stale";
-          }
+          App.renderModuleState({ statusEl: "rfDemandStatus", stale: true, onRerun: runDemand });
         }
       });
     }
@@ -3035,6 +3021,16 @@
     if (runBtn) runBtn.addEventListener("click", function () {
       showAnalysisConfirm(buildDemandConfirmHTML(), runDemand);
     });
+
+    // Shared census-cache status line + Re-fetch (Demand context)
+    if (runBtn && typeof App.buildCensusCacheStatus === "function") {
+      var ccDemand = App.buildCensusCacheStatus({
+        geoSel: document.getElementById("rfGeoLevel"),
+        yearSel: document.getElementById("rfYearSelect"),
+        onRefetch: function () { runBtn.click(); }
+      });
+      runBtn.parentNode.insertBefore(ccDemand, runBtn);
+    }
 
     var apportionCb = document.getElementById("rfApportionByArea");
     if (apportionCb) {
@@ -3223,6 +3219,7 @@
   // ---- Popup lifecycle hooks ----
 
   function onOpen(core) {
+    document.querySelectorAll(".cc-status").forEach(function (s) { if (s.refresh) s.refresh(); });
     // Sync apportion checkboxes
     var apportionCb = document.getElementById("rfApportionByArea");
     if (apportionCb) apportionCb.checked = _apportionByArea;

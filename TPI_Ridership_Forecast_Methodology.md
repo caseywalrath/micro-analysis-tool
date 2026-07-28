@@ -226,21 +226,21 @@ When shared-pool normalization is active (Section 4.5), the calibration is autom
 
 ### 6.1 Frequency Elasticity
 
-The relationship between service frequency and ridership follows a power-curve model, consistent with standard transit elasticity literature (TCRP Report 95, Chapter 9):[^8]
+The relationship between service frequency and ridership follows a power-curve model, a form consistent with the transit elasticity literature synthesized in TCRP Report 95, Chapter 9:[^8]
 
 $$E_{\text{freq}} = \left(\frac{f_{\text{new}}}{f_{\text{base}}}\right)^{\varepsilon_f}$$
 
 where:
 - *f* = 60 / headway (trips per hour)
-- ε_f is the frequency elasticity parameter (default 0.50; user-adjustable range 0.1–1.0)
+- ε_f is the frequency elasticity parameter (default 0.60; user-adjustable range 0.1–1.0)
 
-**Example.** Reducing headway from 30 minutes (2 trips/hr) to 15 minutes (4 trips/hr) at ε_f = 0.5:
+**Example.** Reducing headway from 30 minutes (2 trips/hr) to 15 minutes (4 trips/hr) at ε_f = 0.6:
 
-$$E_{\text{freq}} = (4/2)^{0.5} = 2^{0.5} \approx 1.41$$
+$$E_{\text{freq}} = (4/2)^{0.6} = 2^{0.6} \approx 1.52$$
 
-This indicates a 41% ridership increase from the frequency improvement alone. The power-curve form ensures diminishing marginal returns: doubling frequency from 60 to 30 minutes has a larger proportional effect than doubling from 15 to 7.5 minutes.
+This indicates a 52% ridership increase from the frequency improvement alone. The power-curve form ensures diminishing marginal returns: doubling frequency from 60 to 30 minutes has a larger proportional effect than doubling from 15 to 7.5 minutes. This diminishing-returns behavior is corroborated empirically by Berrebi et al. (2021), who found that routes with already-frequent service showed the smallest ridership response to further frequency increases.[^11]
 
-The typical literature range for frequency elasticity is 0.3–0.6, with 0.5 representing a widely cited mid-range value (TCRP Report 95).[^8]
+The values used here are consistent with the ranges reported in TCRP Report 95 (roughly 0.3–0.6) and are supported by newer empirical evidence. Berrebi et al. (2021), examining four U.S. transit agencies, estimated frequency elasticities of 0.66–0.78 — above the conventional range.[^11] The default of 0.60 is chosen to sit at the upper end of the conventional TCRP range while remaining conservative relative to this more recent evidence; users may raise it toward 0.7–0.8 where local conditions or agency data support a stronger frequency response. These figures characterize broad literature ranges rather than a single authoritative point estimate, and analysts preparing formal deliverables should verify the specific value adopted against the primary sources cited and, where possible, local data.[^8]
 
 ### 6.2 Service Span Elasticity
 
@@ -396,6 +396,10 @@ This methodology is subject to several limitations that users should consider wh
 
 [^10]: Transit Cooperative Research Program. *TCRP Report 118: Bus Rapid Transit Practitioner's Guide.* Transportation Research Board, 2007. See also: Hensher, D.A., and Golob, T.F. "Bus Rapid Transit Systems: A Comparative Assessment." *Transportation* 35, no. 4 (2008): 501–518. **[User note: Users should cite studies relevant to their specific service type assumptions. FTA before/after studies of BRT corridors may provide locally applicable premium values.]**
 
+[^11]: Berrebi, S.J., Joshi, S., and Watkins, K.E. "Sensitivity of Transit Ridership to Frequency: Evidence from Four U.S. Agencies." Findings summarized in Raida, Ohlms, and Chen (2023), *VTRC 23-R16* (see [^12]). Across TriMet (Portland), Miami-Dade Transit, Metro Transit (Minneapolis–St. Paul), and MARTA (Atlanta), a 1% increase in service frequency was associated with ridership increases of 0.66%–0.78%; routes already operating at high frequency showed the smallest marginal response. **[User note: Confirm the primary Berrebi et al. citation and year against the original publication before formal use; the elasticity values here are reported via the VTRC synthesis.]**
+
+[^12]: Raida, A., Ohlms, P.B., and Chen, T.D. *Improving Ridership Projections of Proposed Bus and Rail Transit Projects to Evaluate Congestion Reduction Effects.* Final Report VTRC 23-R16. Virginia Transportation Research Council, 2023. Provides a synthesis of before-after studies on bus stop amenities and service-frequency effects on ridership, plus an original Virginia before-after analysis. Reported stop-level ridership increases from amenity improvements (shelters, benches, real-time information, lighting) ranged from 1.5% to 140%, but the report emphasizes that these effects are highly context-dependent, frequently confounded with concurrent frequency changes and land-use shifts, and largely stop-level (partly redistributive) rather than net corridor-level gains — the route-level effect observed for real-time information was approximately 2%. This tool therefore does not model bus stop amenities as a separate parameter; any amenity-related ridership effect is subsumed within the service-type premiums (Section 6.3), where premium magnitudes are kept deliberately conservative at the corridor level.
+
 ---
 
 ## Appendix A: ACS Variable Reference
@@ -427,7 +431,7 @@ The following table provides the complete ACS variable codes used for each TPI f
 | *P_g* | Estimated population of geography *g* |
 | *k* | Ratio calibration factor |
 | α, β | OLS regression intercept and slope |
-| ε_f | Frequency elasticity parameter (default 0.50) |
+| ε_f | Frequency elasticity parameter (default 0.60) |
 | ε_s | Service span elasticity parameter (default 0.70) |
 | *E*_freq | Frequency effect multiplier |
 | *E*_span | Span effect multiplier |

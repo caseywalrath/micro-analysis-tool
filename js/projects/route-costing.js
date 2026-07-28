@@ -51,13 +51,31 @@
 
   function setStatus(msg, kind) {
     if (!isPopupVisible()) return;
-    var el = document.getElementById("rcStatus");
-    var txt = document.getElementById("rcStatusText");
-    if (!el || !txt) return;
-    if (!msg) { el.style.display = "none"; return; }
-    el.style.display = "block";
-    el.className = "rf-status" + (kind ? " " + kind : "");
-    txt.textContent = msg;
+    // Translate legacy kinds to the standardized status palette.
+    var k = kind === "ok"   ? "done"  :
+            kind === "warn" ? "stale" :
+            kind || "";
+    App.renderModuleState({
+      statusEl: "rcStatus",
+      status: msg ? { kind: k, message: msg } : null
+    });
+  }
+
+  // Stale banner with a working Re-run button (shared pattern).
+  function showStale() {
+    if (!isPopupVisible()) return;
+    App.renderModuleState({ statusEl: "rcStatus", stale: true, onRerun: runCosting });
+  }
+
+  // Context-aware onboarding/empty hint shown when there are no results.
+  function emptyHint() {
+    var n = (App.routes || []).length + (App.lines || []).length;
+    if (!n) {
+      return { need: "Draw a route or line to begin.",
+               action: "Then set its Direction, Time Bands, and Run time / Avg speed in Attributes." };
+    }
+    return { need: "Select one or more Services and click Cost Services.",
+             action: "Services are assembled from drawn routes/lines sharing a Service id." };
   }
 
   // ---- Costing Settings modal ----
@@ -1017,9 +1035,15 @@
 
   function showResultsSection(show) {
     var results = document.getElementById("rcResults");
-    var empty   = document.getElementById("rcEmptyState");
     if (results) results.style.display = show ? "" : "none";
-    if (empty)   empty.style.display   = show ? "none" : "";
+    if (show) {
+      var empty = document.getElementById("rcEmptyState");
+      if (empty) empty.style.display = "none";
+    } else {
+      App.renderModuleState({
+        statusEl: "rcStatus", emptyEl: "rcEmptyState", empty: true, hint: emptyHint()
+      });
+    }
   }
 
   function setExportEnabled(enabled) {
@@ -1219,7 +1243,7 @@
 
   function markStale() {
     _stale = true;
-    if (isPopupVisible()) setStatus("Settings changed — re-run costing.", "warn");
+    showStale();
   }
 
   // ---- Lifecycle ----
@@ -1339,7 +1363,7 @@
       renderSummaryTable(_lastResult.summary);
       showResultsSection(true);
       setExportEnabled(_lastResult.summary.servicesScored > 0);
-      if (_stale) setStatus("Settings or features changed — re-run to refresh.", "warn");
+      if (_stale) showStale();
     } else {
       showResultsSection(false);
       setExportEnabled(false);

@@ -111,12 +111,25 @@
     return apportionByArea ? "Area-weighted average" : "Simple average (all overlapping geos)";
   }
 
+  // Context-aware onboarding/empty hint shown until a summary is calculated.
+  function emptyHint() {
+    var hasFeatures = (App.points || []).length + (App.lines || []).length +
+                      (App.routes || []).length > 0;
+    if (!hasFeatures) {
+      return { need: "Draw a point, line, or route to begin.",
+               action: "Buffers around your features define the area summarized." };
+    }
+    return { need: "Select variables and click Calculate Summary.",
+             action: "Pick Census/LODES variables above to summarize within your buffers." };
+  }
+
   // ---- Summary runner ----
 
   async function runSummary() {
     var selectedVars = expandGroups(App.getSelectedVars());
     if (selectedVars.length === 0) {
       App.setStatus("No variables selected");
+      App.renderModuleState({ emptyEl: "basEmptyState", empty: true, hint: emptyHint() });
       return;
     }
 
@@ -160,6 +173,7 @@
     tbody.innerHTML = "";
     var tableEl = document.getElementById("basResultsTable");
     tableEl.style.display = "";
+    App.renderModuleState({ emptyEl: "basEmptyState" });   // hide onboarding hint
     var progressEl = document.getElementById("basResultsProgress");
     var notesEl = document.getElementById("basResultsNotes");
     notesEl.textContent = "";
@@ -495,9 +509,14 @@
     onOpen: function (core) {
       // Re-apply state each time popup opens (in case restored from cache)
       applyStateToDOM();
-      // Show results table if we have results
+      // Show results table if we have results, else a friendly onboarding hint
       var tableEl = document.getElementById("basResultsTable");
-      if (tableEl && _hasResults) tableEl.style.display = "";
+      if (tableEl && _hasResults) {
+        tableEl.style.display = "";
+        App.renderModuleState({ emptyEl: "basEmptyState" });   // hide hint
+      } else {
+        App.renderModuleState({ emptyEl: "basEmptyState", empty: true, hint: emptyHint() });
+      }
     },
 
     onClose: function (core) {

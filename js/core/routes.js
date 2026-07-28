@@ -432,7 +432,7 @@
     if (currentWaypoints.length === 1) {
       // First waypoint — nothing to route yet
       renderRouteLayers();
-      App.setStatus("Route started \u2014 click to add waypoints, click last point to save");
+      App.setStatus("Route started \u2014 click to add waypoints, click last point or press Enter to finish");
       return;
     }
 
@@ -447,7 +447,7 @@
     if (gen !== _fetchGen) return; // stale result, a newer click happened
 
     currentRouteCoords = coords || snapshot;
-    App.setStatus(currentWaypoints.length + " waypoints \u2014 click last point to save");
+    App.setStatus(currentWaypoints.length + " waypoints \u2014 click last point or press Enter to finish");
     renderRouteLayers();
   }
 
@@ -472,7 +472,7 @@
     var colorIdx = (App.lines ? App.lines.length : 0) + routes.length;
     var color = (App.sectionColors && App.sectionColors.route) ||
                 App.FEATURE_COLORS[colorIdx % App.FEATURE_COLORS.length];
-    routes.push({
+    var feature = {
       type: "Feature",
       properties: {
         name: "Route " + idx,
@@ -481,7 +481,8 @@
         color: color
       },
       geometry: { type: "LineString", coordinates: coords }
-    });
+    };
+    routes.push(feature);
 
     var nWp = currentWaypoints.length;
     currentWaypoints = [];
@@ -490,6 +491,12 @@
     rebuildRouteBuffers(routeBufferRadiusMiles);
     App.setStatus("Route " + idx + " saved (" + nWp + " waypoints)");
     if (typeof App.exitDrawMode === "function") App.exitDrawMode();
+    // If the attributes popup is already open (on some other feature), follow
+    // it to this newly-drawn route. Never auto-open it if it wasn't open.
+    if (typeof App.isAttrPopupOpen === "function" && App.isAttrPopupOpen() &&
+        typeof App.openAttrPopup === "function") {
+      App.openAttrPopup("route", routes.length - 1, feature);
+    }
   }
 
   /* ---- Cancel / remove / clear / undo ---- */
@@ -530,7 +537,7 @@
         if (gen !== _fetchGen) return;
         currentRouteCoords = coords || snapshot;
         renderRouteLayers();
-        App.setStatus(currentWaypoints.length + " waypoints \u2014 click last point to save");
+        App.setStatus(currentWaypoints.length + " waypoints \u2014 click last point or press Enter to finish");
       });
     } else {
       currentRouteCoords = [];
@@ -538,7 +545,7 @@
       if (currentWaypoints.length === 0) {
         App.setStatus("Route drawing cancelled");
       } else {
-        App.setStatus("Route started \u2014 click to add waypoints, click last point to save");
+        App.setStatus("Route started \u2014 click to add waypoints, click last point or press Enter to finish");
       }
     }
     if (App.undo) App.undo.updateButtons();
@@ -650,6 +657,7 @@
   App.rebuildRouteBuffers = rebuildRouteBuffers;
   App.routeBufferUnionPolygon = routeBufferUnionPolygon;
   App.handleRouteClick = handleRouteClick;
+  App.saveRoute = saveRoute;
   App.setRoutePreview = setRoutePreview;
   App.duplicateRoute = duplicateRoute;
   App.removeRoute = removeRoute;

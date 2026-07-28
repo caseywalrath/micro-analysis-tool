@@ -31,6 +31,208 @@
     if (fnName && typeof App[fnName] === "function") App[fnName]();
   }
 
+  /* ---- Multi-select + bulk edit (Routes & Lines only) ---- */
+
+  // Selected feature indices per type. Survives cell edits (which don't rebuild
+  // the grid); cleared by renderAll() on structural change unless preserved.
+  var _selected = { line: new Set(), route: new Set() };
+
+  function tableIdForType(type) {
+    return type === "line" ? "asLinesTable" : "asRoutesTable";
+  }
+
+  function makeCheckbox(cls) {
+    var c = document.createElement("input");
+    c.type = "checkbox";
+    c.className = cls;
+    return c;
+  }
+
+  function updateBulkBar(type) {
+    var bar = el("as-bulk-bar-" + type);
+    if (!bar) return;
+    var n = _selected[type].size;
+    bar.style.display = n > 0 ? "" : "none";
+    var c = bar.querySelector(".as-bulk-count");
+    if (c) c.textContent = n + " selected";
+  }
+
+  function syncRowChecks(type) {
+    var tbl = el(tableIdForType(type));
+    if (!tbl) return;
+    tbl.querySelectorAll(".as-row:not(.as-row-header)").forEach(function (r) {
+      var i = parseInt(r.dataset.featureIndex, 10);
+      var on = _selected[type].has(i);
+      var cb = r.querySelector(".as-rowcheck");
+      if (cb) cb.checked = on;
+      r.classList.toggle("as-selected", on);
+    });
+    var selAll = tbl.querySelector(".as-rowcheck-all");
+    if (selAll) {
+      var total = tbl.querySelectorAll(".as-row:not(.as-row-header)").length;
+      selAll.checked = total > 0 && _selected[type].size === total;
+    }
+    updateBulkBar(type);
+  }
+
+  function onRowToggle(type, idx, row, checked) {
+    if (checked) _selected[type].add(idx); else _selected[type].delete(idx);
+    row.classList.toggle("as-selected", checked);
+    syncRowChecks(type);
+  }
+
+  function toggleAll(type, count, checked) {
+    _selected[type].clear();
+    if (checked) { for (var i = 0; i < count; i++) _selected[type].add(i); }
+    syncRowChecks(type);
+  }
+
+  function clearSelectionType(type) {
+    _selected[type].clear();
+    syncRowChecks(type);
+  }
+
+  function buildBulkBar(type) {
+    var bar = document.createElement("div");
+    bar.className = "as-bulk-bar";
+    bar.id = "as-bulk-bar-" + type;
+    bar.style.display = "none";
+
+    var count = document.createElement("span");
+    count.className = "as-bulk-count";
+    bar.appendChild(count);
+
+    var editBtn = document.createElement("button");
+    editBtn.type = "button";
+    editBtn.className = "as-bulk-edit-btn";
+    editBtn.textContent = "Bulk edit…";
+    editBtn.addEventListener("click", function () { openBulkEditForm(type); });
+    bar.appendChild(editBtn);
+
+    var clearBtn = document.createElement("button");
+    clearBtn.type = "button";
+    clearBtn.className = "as-bulk-clear-btn";
+    clearBtn.textContent = "Clear";
+    clearBtn.addEventListener("click", function () { clearSelectionType(type); });
+    bar.appendChild(clearBtn);
+
+    return bar;
+  }
+
+  // ---- Bulk-edit form (per-field include checkboxes) ----
+  function openBulkEditForm(type) {
+    var indices = Array.from(_selected[type]);
+    if (!indices.length) return;
+    var arr = (type === "line") ? (App.lines || []) : (App.routes || []);
+
+    var form = document.createElement("div");
+    form.className = "as-bulk-form";
+    var fields = [];
+
+    function addField(key, label, inputEl, readFn, opts) {
+      opts = opts || {};
+      var frow = document.createElement("div");
+      frow.className = "as-bulk-frow";
+      var lab = document.createElement("label");
+      lab.className = "as-bulk-flabel";
+      lab.textContent = label;
+      frow.appendChild(lab);
+      frow.appendChild(inputEl);
+      form.appendChild(frow);
+      fields.push({ key: key, read: readFn, opts: opts });
+    }
+
+    function plainSelect(options) {
+      var s = document.createElement("select");
+      s.className = "as-input as-select";
+      options.forEach(function (o) {
+        var opt = document.createElement("option");
+        opt.value = o; opt.textContent = o === "" ? "—" : o;
+        s.appendChild(opt);
+      });
+      return s;
+    }
+    function numInput(ph) {
+      var i = document.createElement("input");
+      i.type = "number"; i.className = "as-input as-input-num"; i.min = 0; i.step = "any";
+      if (ph) i.placeholder = ph;
+      return i;
+    }
+    function textInput(ph) {
+      var i = document.createElement("input");
+      i.type = "text"; i.className = "as-input";
+      if (ph) i.placeholder = ph;
+      return i;
+    }
+
+    var dirSel = plainSelect(DIRECTIONS);
+    addField("direction", "Direction", dirSel, function () { return dirSel.value || null; });
+    var modeSel = plainSelect(MODES);
+    addField("mode", "Mode", modeSel, function () { return modeSel.value || null; });
+    var spd = numInput("14");
+    addField("avgSpeed", "Avg speed (mph)", spd, function () { return spd.value !== "" ? parseFloat(spd.value) : null; });
+    var rt = numInput("e.g. 45");
+    addField("runTime", "Run time (min)", rt, function () { return rt.value !== "" ? parseFloat(rt.value) : null; });
+    var grp = textInput("e.g. Corridor A");
+    addField("group", "Group", grp, function () { return grp.value.trim() || null; });
+
+    // Time bands — reuse the shared editor against a throwaway carrier feature.
+    // Snapshot the editor's default service so we can tell whether the user
+    // actually changed the bands (blank/untouched = no change, like other fields).
+    var carrier = { properties: { attributes: {} } };
+    var bandsWrap = document.createElement("div");
+    bandsWrap.className = "as-bulk-bands";
+    if (typeof App.buildServiceScheduleEditor === "function") {
+      bandsWrap.appendChild(App.buildServiceScheduleEditor(carrier));
+    }
+    var bandsSnapshot = JSON.stringify(carrier.properties.attributes.service || null);
+    addField("service", "Time bands", bandsWrap, function () {
+      var cur = JSON.stringify(carrier.properties.attributes.service || null);
+      return cur === bandsSnapshot ? null : carrier.properties.attributes.service;
+    }, { isBands: true });
+
+    var applyBtn = document.createElement("button");
+    applyBtn.type = "button";
+    applyBtn.className = "as-bulk-apply";
+    applyBtn.textContent = "Apply";
+    applyBtn.addEventListener("click", function () { applyBulk(type, indices, fields); });
+    form.appendChild(applyBtn);
+
+    var label = (type === "line") ? "line" : "route";
+    if (typeof App.openMiniPopup === "function") {
+      App.openMiniPopup({
+        title: "Bulk edit " + indices.length + " " + label + (indices.length > 1 ? "s" : ""),
+        content: form,
+        anchor: el("as-bulk-bar-" + type)
+      });
+    }
+  }
+
+  function applyBulk(type, indices, fields) {
+    var arr = (type === "line") ? (App.lines || []) : (App.routes || []);
+    if (App.undo && !App.undo.isRestoring()) App.undo.push();
+    indices.forEach(function (i) {
+      var feat = arr[i];
+      if (!feat) return;
+      if (!feat.properties.attributes) feat.properties.attributes = {};
+      var a = feat.properties.attributes;
+      fields.forEach(function (f) {
+        var val = f.read();
+        // Blank / unchanged inputs are skipped — only changed values are written.
+        if (val == null || val === "") return;
+        if (f.opts.isBands) {
+          a.service = JSON.parse(JSON.stringify(val)); // deep clone per feature
+        } else {
+          a[f.key] = val;
+        }
+      });
+    });
+    if (App.cache && typeof App.cache.save === "function") App.cache.save();
+    if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+    renderAll({ preserveSelection: true });
+    if (typeof App.closeMiniPopup === "function") App.closeMiniPopup();
+  }
+
   /* ---- Cell builders ---- */
 
   function buildSwatchCell(featureType, featureIndex, feature) {
@@ -98,7 +300,7 @@
     options.forEach(function (o) {
       var opt = document.createElement("option");
       opt.value = o;
-      opt.textContent = o === "" ? "—" : o;
+      opt.textContent = (opts.labels && (o in opts.labels)) ? opts.labels[o] : (o === "" ? "—" : o);
       if (o === "" ? noVal : current === o) opt.selected = true;
       sel.appendChild(opt);
     });
@@ -170,6 +372,7 @@
     container.appendChild(buildHeader([
       { label: "" },
       { label: "Name" },
+      { label: "Service", title: "Service area type (Circular buffer or Walkshed)" },
       { label: "ID",     title: "Stop ID" },
       { label: "Routes", title: "Associated routes / lines" },
       { label: "",       cls: "as-col-overrides", title: "Overrides" }
@@ -189,6 +392,18 @@
       appendCell(row, buildTextCell(
         function () { return feat.properties.name; },
         function (v) { feat.properties.name = v; saveAndRefreshFeaturePanel(); }
+      ));
+      appendCell(row, buildSelectCell(["", "walkshed"],
+        function () { return attrs.serviceAreaType; },
+        function (v) {
+          if (v == null || v === "") delete attrs.serviceAreaType;
+          else attrs.serviceAreaType = v;
+          if (typeof App.ensurePointWalksheds === "function") App.ensurePointWalksheds();
+          if (typeof App.refreshBuffers === "function") App.refreshBuffers();
+          saveAndRefreshFeaturePanel();
+          if (typeof App.notifyProject === "function") App.notifyProject();
+        },
+        { title: "Circular buffer or Walkshed", labels: { "": "Buffer", "walkshed": "Walkshed" } }
       ));
       appendCell(row, buildTextCell(
         function () { return attrs.stopId; },
@@ -215,7 +430,12 @@
   function renderLineLike(container, featureType, features, gridClass) {
     if (!features.length) return false;
     container.innerHTML = "";
-    container.appendChild(buildHeader([
+
+    // Selection action bar (hidden until rows are checked).
+    container.appendChild(buildBulkBar(featureType));
+
+    var hdr = buildHeader([
+      { label: "", cls: "as-col-check" },
       { label: "" },
       { label: "Name" },
       { label: "Direction", cls: "as-col-narrow" },
@@ -225,17 +445,30 @@
       { label: "RunT",      cls: "as-col-num", title: "Run time (minutes, one-way / loop)" },
       { label: "Bands",     cls: "as-col-narrow", title: "Time bands — Weekday · Saturday · Sunday counts" },
       { label: "",          cls: "as-col-overrides", title: "Overrides" }
-    ]));
-    container.firstChild.classList.add(gridClass);
+    ]);
+    hdr.classList.add(gridClass);
+    var selAll = makeCheckbox("as-rowcheck as-rowcheck-all");
+    selAll.title = "Select all";
+    selAll.addEventListener("change", function () { toggleAll(featureType, features.length, selAll.checked); });
+    hdr.children[0].appendChild(selAll);
+    container.appendChild(hdr);
 
     features.forEach(function (feat, idx) {
       var row = document.createElement("div");
       row.className = "as-row " + gridClass;
       row.dataset.featureType = featureType;
       row.dataset.featureIndex = String(idx);
+      if (_selected[featureType].has(idx)) row.classList.add("as-selected");
 
       if (!feat.properties.attributes) feat.properties.attributes = {};
       var attrs = feat.properties.attributes;
+
+      var cb = makeCheckbox("as-rowcheck");
+      cb.checked = _selected[featureType].has(idx);
+      (function (i, rowEl, box) {
+        box.addEventListener("change", function () { onRowToggle(featureType, i, rowEl, box.checked); });
+      })(idx, row, cb);
+      appendCell(row, cb, "as-col-check");
 
       appendCell(row, buildSwatchCell(featureType, idx, feat), "as-cell-swatch");
       appendCell(row, buildTextCell(
@@ -283,6 +516,7 @@
 
       container.appendChild(row);
     });
+    updateBulkBar(featureType);
     return true;
   }
 
@@ -470,8 +704,15 @@
     if (sec) sec.style.display = visible ? "" : "none";
   }
 
-  function renderAll() {
+  function renderAll(opts) {
     if (!isPopupVisible()) return;
+
+    // Selection clears on structural re-render (add/delete shifts indices);
+    // bulk-apply passes preserveSelection so checkboxes survive the rebuild.
+    if (!(opts && opts.preserveSelection)) {
+      _selected.line.clear();
+      _selected.route.clear();
+    }
 
     var any = false;
     var pointsTbl   = el("asPointsTable");

@@ -3,7 +3,8 @@
 // Allows local street-snapped routing when OSRM servers are unavailable.
 // Depends on: App.map (map.js), App.setStatus (utils.js), turf (CDN).
 // Exports: roadNetworkLoaded, findLocalRoute, fetchRoadNetwork,
-//          loadRoadNetworkFromFile, exportRoadNetwork, clearRoadNetwork
+//          loadRoadNetworkFromFile, exportRoadNetwork, clearRoadNetwork,
+//          computeWalkshed
 
 (function () {
   "use strict";
@@ -11,14 +12,22 @@
 
   var OVERPASS_URL = "https://overpass-api.de/api/interpreter";
   var SNAP_MAX_KM = 0.5; // max snap distance to road network (500 m)
+  var DOWNLOAD_EXPAND = 1.5;     // grow the map view by this factor (each side) before downloading roads
+  var MAX_AREA_WARN_KM2 = 2000;  // warn before downloading an expanded area larger than this (~a large county)
+  var RDL_SRC = "road-dl-area";       // map source for the downloaded-area outline
+  var RDL_LAYER = "road-dl-area-line"; // map layer for the downloaded-area outline
 
   // ---- Private state ----
 
   var _roadGeoJSON = null;  // raw GeoJSON FeatureCollection (for export)
   var _graph = null;        // Map<nodeKey, [{node, weight, coords}]>
   var _allLines = null;     // turf FeatureCollection of LineStrings (for nearestPointOnLine)
-  var _segmentIndex = null; // Array of {feature, startKey, endKey, startCoord, endCoord} per segment
+  var _walkLines = null;    // subset a pedestrian may snap to (motorway/trunk excluded)
+  var _carLines = null;     // subset a car may snap to (footway/steps/etc excluded)
+  var _segmentIndex = null; // Array of {feature, startKey, endKey, startCoord, endCoord, pedBlocked, carBlocked} per segment
   var _featureCount = 0;
+  var _networkEpoch = 0;    // bumped on every (re)build/clear — lets caches (e.g. walkshed) invalidate
+  var _downloadedBboxPolygon = null; // turf Polygon of the last Overpass download extent (for the on-map outline)
 
   // ---- Byte formatting helper ----
 
@@ -39,25 +48,62 @@
     return [parseFloat(parts[0]), parseFloat(parts[1])];
   }
 
+  // ---- Pedestrian / vehicle traversability by OSM highway class ----
+  // The offline network is shared by two consumers: the driving route-snapper
+  // (findLocalRoute) and the walking isochrone (computeWalkshed). Each edge and
+  // segment is tagged with pedBlocked / carBlocked so each consumer traverses
+  // only the classes appropriate to its mode — one download, two interpretations.
+
+  // Classes a pedestrian may not use: limited-access highways and their ramps.
+  var PED_FORBIDDEN_HWY = {
+    motorway: 1, trunk: 1, motorway_link: 1, trunk_link: 1
+  };
+  // Pedestrian/bike-only classes a car may not use.
+  var CAR_FORBIDDEN_HWY = {
+    footway: 1, path: 1, steps: 1, pedestrian: 1, cycleway: 1
+  };
+
+  // An explicit foot=* tag overrides the class default in both directions
+  // (e.g. a trunk road signed foot=yes is walkable; a service road foot=no is not).
+  function isPedForbidden(hwy, foot) {
+    if (foot === "yes" || foot === "designated" || foot === "permissive") return false;
+    if (foot === "no") return true;
+    return !!PED_FORBIDDEN_HWY[hwy];
+  }
+
+  function isCarForbidden(hwy) {
+    return !!CAR_FORBIDDEN_HWY[hwy];
+  }
+
   // ---- Graph construction ----
 
   function buildGraph(geojson) {
     var graph = new Map();
-    var lines = [];
+    var lines = [];      // every line (mode-agnostic snap fallback)
+    var walkLines = [];  // lines a pedestrian may use
+    var carLines = [];   // lines a car may use
     var segments = [];
     var features = geojson.features || [];
 
-    function addEdge(fromKey, toKey, weight, coordPair) {
+    function addEdge(fromKey, toKey, weight, coordPair, pedBlocked, carBlocked) {
       if (!graph.has(fromKey)) graph.set(fromKey, []);
-      graph.get(fromKey).push({ node: toKey, weight: weight, coords: coordPair });
+      graph.get(fromKey).push({ node: toKey, weight: weight, coords: coordPair, pedBlocked: pedBlocked, carBlocked: carBlocked });
       if (!graph.has(toKey)) graph.set(toKey, []);
-      graph.get(toKey).push({ node: fromKey, weight: weight, coords: coordPair.slice().reverse() });
+      graph.get(toKey).push({ node: fromKey, weight: weight, coords: coordPair.slice().reverse(), pedBlocked: pedBlocked, carBlocked: carBlocked });
     }
 
     for (var i = 0; i < features.length; i++) {
       var f = features[i];
       var geom = f.geometry;
       if (!geom) continue;
+
+      // Classify this way once; every edge/segment derived from it inherits the flags.
+      // Imported networks may lack a highway/foot tag — treat unknown classes as
+      // traversable by both modes so legacy road-network files still route.
+      var props = f.properties || {};
+      var hwy = props.highway || "";
+      var pedBlocked = isPedForbidden(hwy, props.foot);
+      var carBlocked = isCarForbidden(hwy);
 
       var coordArrays = [];
       if (geom.type === "LineString" && geom.coordinates && geom.coordinates.length >= 2) {
@@ -70,8 +116,10 @@
 
       for (var a = 0; a < coordArrays.length; a++) {
         var coords = coordArrays[a];
-        var lineFeature = turf.lineString(coords);
+        var lineFeature = turf.lineString(coords, { highway: hwy, pedBlocked: pedBlocked, carBlocked: carBlocked });
         lines.push(lineFeature);
+        if (!pedBlocked) walkLines.push(lineFeature);
+        if (!carBlocked) carLines.push(lineFeature);
 
         for (var j = 0; j < coords.length - 1; j++) {
           var c1 = coords[j];
@@ -79,13 +127,15 @@
           var k1 = nodeKey(c1);
           var k2 = nodeKey(c2);
           var dist = turf.distance(turf.point(c1), turf.point(c2), { units: "kilometers" });
-          addEdge(k1, k2, dist, [c1, c2]);
+          addEdge(k1, k2, dist, [c1, c2], pedBlocked, carBlocked);
           segments.push({
             feature: lineFeature,
             startKey: k1,
             endKey: k2,
             startCoord: c1,
-            endCoord: c2
+            endCoord: c2,
+            pedBlocked: pedBlocked,
+            carBlocked: carBlocked
           });
         }
       }
@@ -93,33 +143,42 @@
 
     _graph = graph;
     _allLines = turf.featureCollection(lines);
+    _walkLines = turf.featureCollection(walkLines);
+    _carLines = turf.featureCollection(carLines);
     _segmentIndex = segments;
     _featureCount = features.length;
+    _networkEpoch++;
   }
 
   // ---- Snap to network ----
 
-  function snapToNetwork(lngLat) {
-    if (!_allLines || _allLines.features.length === 0) return null;
+  //   mode: "walk" | "drive" | undefined. Restricts the snap to lines the mode
+  //   can actually traverse (walk excludes motorways; drive excludes footways).
+  //   Undefined falls back to all lines (legacy / mode-agnostic callers).
+  function snapToNetwork(lngLat, mode) {
+    if (!_segmentIndex || _segmentIndex.length === 0) return null;
+
+    var linesFC = _allLines;
+    var blockedField = null;
+    if (mode === "walk") { linesFC = _walkLines; blockedField = "pedBlocked"; }
+    else if (mode === "drive") { linesFC = _carLines; blockedField = "carBlocked"; }
+    if (!linesFC || linesFC.features.length === 0) return null;
 
     var pt = turf.point([lngLat[0], lngLat[1]]);
-    var nearest = turf.nearestPointOnLine(_allLines, pt, { units: "kilometers" });
+    var nearest = turf.nearestPointOnLine(linesFC, pt, { units: "kilometers" });
 
     if (!nearest || nearest.properties.dist > SNAP_MAX_KM) return null;
 
-    // Find the segment this point falls on
-    var lineIdx = nearest.properties.index; // index into _allLines
-    // nearestPointOnLine returns the feature-level index in the multi-line collection,
-    // and the location property tells us where on that line the point sits.
-    // We need the two nodes bracketing this point.
+    // The nearest point sits on a specific segment; find the closest one this
+    // mode can use so the snapped coord and its bracketing nodes stay consistent.
     var snappedCoord = nearest.geometry.coordinates;
     var snappedKey = nodeKey(snappedCoord);
 
-    // The nearest point sits on a specific segment. Find the closest segment.
     var bestDist = Infinity;
     var bestSeg = null;
     for (var i = 0; i < _segmentIndex.length; i++) {
       var seg = _segmentIndex[i];
+      if (blockedField && seg[blockedField]) continue; // skip segments this mode can't use
       var segLine = turf.lineString([seg.startCoord, seg.endCoord]);
       var np = turf.nearestPointOnLine(segLine, pt, { units: "kilometers" });
       if (np.properties.dist < bestDist) {
@@ -203,6 +262,7 @@
 
       for (var i = 0; i < neighbors.length; i++) {
         var nb = neighbors[i];
+        if (nb.carBlocked) continue; // driving router never routes over pedestrian-only ways
         var newDist = current.dist + nb.weight;
         if (newDist < (dist.get(nb.node) || Infinity)) {
           dist.set(nb.node, newDist);
@@ -286,8 +346,8 @@
         var fromWp = waypoints[i];
         var toWp = waypoints[i + 1];
 
-        var snapFrom = snapToNetwork(fromWp);
-        var snapTo = snapToNetwork(toWp);
+        var snapFrom = snapToNetwork(fromWp, "drive");
+        var snapTo = snapToNetwork(toWp, "drive");
 
         if (!snapFrom || !snapTo) return null; // waypoint outside network coverage
 
@@ -319,13 +379,38 @@
     var btn = document.getElementById("road-net-download");
     if (btn) btn.disabled = true;
 
+    // Expand the current view by DOWNLOAD_EXPAND on each side (about the view centroid)
+    // so roads just beyond the visible edge are included (routes/walksheds near the edge
+    // otherwise hit missing streets). transformScale(1.5) grows width & height \u00d71.5.
     var b = App.map.getBounds();
-    var south = b.getSouth(), west = b.getWest(), north = b.getNorth(), east = b.getEast();
+    var viewPoly = turf.bboxPolygon([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
+    var scaled = turf.transformScale(viewPoly, DOWNLOAD_EXPAND);
+    var eb = turf.bbox(scaled); // [west, south, east, north]
+    var west = eb[0], south = clampLat(eb[1]), east = eb[2], north = clampLat(eb[3]);
 
+    // Guard against very large downloads. Overpass file size is unknowable up front,
+    // so gate on the expanded area (km\u00b2): warn and let the user cancel above the threshold.
+    var areaKm2 = turf.area(scaled) / 1e6;
+    if (areaKm2 > MAX_AREA_WARN_KM2) {
+      var proceed = window.confirm(
+        "This will download roads for ~" + Math.round(areaKm2).toLocaleString() + " km\u00b2.\n\n" +
+        "That may be a large, slow download and Overpass can time out on very big areas. Continue?");
+      if (!proceed) {
+        if (btn) btn.disabled = false;
+        App.setStatus("Road network download cancelled");
+        return;
+      }
+    }
+
+    // Pull vehicle roads AND pedestrian-specific ways (footway/path/steps/etc.)
+    // so walksheds follow real walking connections. Each class is later tagged
+    // pedBlocked/carBlocked in buildGraph so drive-routing and walking each use
+    // only the appropriate subset.
     var query = '[out:json][timeout:60];(' +
       'way["highway"~"^(motorway|trunk|primary|secondary|tertiary|' +
       'residential|unclassified|service|motorway_link|trunk_link|' +
-      'primary_link|secondary_link|tertiary_link)$"](' +
+      'primary_link|secondary_link|tertiary_link|' +
+      'living_street|pedestrian|footway|path|steps|cycleway)$"](' +
       south + ',' + west + ',' + north + ',' + east + ');' +
       ');out geom;';
 
@@ -394,7 +479,8 @@
           properties: {
             highway: (el.tags || {}).highway || "",
             name: (el.tags || {}).name || "",
-            oneway: (el.tags || {}).oneway || ""
+            oneway: (el.tags || {}).oneway || "",
+            foot: (el.tags || {}).foot || ""
           },
           geometry: { type: "LineString", coordinates: coords }
         });
@@ -412,6 +498,7 @@
       // Build graph (synchronous — fast for regional networks)
       buildGraph(geojson);
       _roadGeoJSON = geojson;
+      _downloadedBboxPolygon = scaled; // record the fetched extent for the on-map outline
 
       updateUI();
       App.setStatus(_featureCount.toLocaleString() + " road segments loaded \u2014 local routing enabled");
@@ -436,6 +523,7 @@
         }
         buildGraph(geojson);
         _roadGeoJSON = geojson;
+        _downloadedBboxPolygon = null; // imported file has no "download area" — draw no outline
         updateUI();
         App.setStatus(_featureCount.toLocaleString() + " road segments loaded from " + file.name);
       } catch (err) {
@@ -465,12 +553,48 @@
     _roadGeoJSON = null;
     _graph = null;
     _allLines = null;
+    _walkLines = null;
+    _carLines = null;
     _segmentIndex = null;
     _featureCount = 0;
+    _networkEpoch++;
+    _downloadedBboxPolygon = null;
     updateUI();
   }
 
   // ---- UI helpers ----
+
+  function clampLat(v) { return Math.max(-90, Math.min(90, v)); }
+
+  // Draw / update / remove the subtle rectangle showing the last downloaded extent.
+  // Mirrors the Municipal Boundaries border style (dashed line) in a distinct fuchsia.
+  // Driven from updateUI() so download / import / clear all stay in sync.
+  function renderDownloadArea() {
+    var map = App.map;
+    if (!map) return;
+    if (!_downloadedBboxPolygon) {
+      if (map.getLayer(RDL_LAYER)) map.removeLayer(RDL_LAYER);
+      if (map.getSource(RDL_SRC)) map.removeSource(RDL_SRC);
+      return;
+    }
+    var fc = { type: "FeatureCollection", features: [_downloadedBboxPolygon] };
+    if (!map.getSource(RDL_SRC)) {
+      map.addSource(RDL_SRC, { type: "geojson", data: fc });
+      map.addLayer({
+        id: RDL_LAYER,
+        type: "line",
+        source: RDL_SRC,
+        paint: {
+          "line-color": "#c026d3",
+          "line-width": 1.5,
+          "line-dasharray": [4, 3],
+          "line-opacity": 0.85
+        }
+      });
+    } else {
+      map.getSource(RDL_SRC).setData(fc);
+    }
+  }
 
   function updateUI() {
     var loaded = !!_graph;
@@ -478,15 +602,178 @@
     // Show/hide export button in Export dropdown
     var exportBtn = document.getElementById("export-road-net");
     if (exportBtn) exportBtn.style.display = loaded ? "" : "none";
+
+    // Reconcile the on-map downloaded-area outline with current state.
+    renderDownloadArea();
+  }
+
+  // ---- Walkshed (network isochrone) ----
+
+  // Budget-limited flood Dijkstra: settle every node whose cumulative distance
+  // from startKey is <= budgetKm. Unlike dijkstra() there is no endKey early-exit;
+  // we prune any relaxation that would exceed the budget so the search stays local.
+  // Returns a Map<nodeKey, distKm> of all settled nodes within budget.
+  function floodDijkstra(startKey, budgetKm) {
+    var dist = new Map();
+    var heap = new MinHeap();
+
+    dist.set(startKey, 0);
+    heap.push({ node: startKey, dist: 0 });
+
+    while (heap.size() > 0) {
+      var current = heap.pop();
+      if (current.dist > (dist.get(current.node) || Infinity)) continue; // stale
+
+      var neighbors = _graph.get(current.node);
+      if (!neighbors) continue;
+
+      for (var i = 0; i < neighbors.length; i++) {
+        var nb = neighbors[i];
+        if (nb.pedBlocked) continue; // pedestrians can't walk motorways/trunk roads
+        var newDist = current.dist + nb.weight;
+        if (newDist > budgetKm) continue; // beyond walk budget — don't settle
+        if (newDist < (dist.get(nb.node) || Infinity)) {
+          dist.set(nb.node, newDist);
+          heap.push({ node: nb.node, dist: newDist });
+        }
+      }
+    }
+    return dist;
+  }
+
+  // Build a walkshed polygon from reachable node coordinates.
+  // v1: concave hull with an auto-relax loop (grow maxEdge until turf.concave
+  // returns non-null), falling back to convex hull, then a small buffer for
+  // degenerate (<3 node) cases so downstream turf.union/intersect always have
+  // a valid Polygon/MultiPolygon to work with.
+  function buildWalkshedPolygon(coords, maxEdgeKm) {
+    if (!coords || coords.length === 0) return null;
+    var pts = [];
+    for (var i = 0; i < coords.length; i++) pts.push(turf.point(coords[i]));
+    var fc = turf.featureCollection(pts);
+
+    if (coords.length < 3) {
+      try { return turf.buffer(fc, 0.03, { units: "kilometers" }); } catch (e) { return null; }
+    }
+
+    var maxEdge = maxEdgeKm && maxEdgeKm > 0 ? maxEdgeKm : 0.3;
+    for (var attempt = 0; attempt < 8; attempt++) {
+      var hull = null;
+      try { hull = turf.concave(fc, { maxEdge: maxEdge, units: "kilometers" }); } catch (e) { hull = null; }
+      if (hull) return hull;
+      maxEdge *= 1.8;
+    }
+    try { return turf.convex(fc); } catch (e2) { return null; }
+  }
+
+  // Compute a network walkshed (walking isochrone) from an arbitrary origin.
+  //   lngLat   : [lng, lat] origin
+  //   budgetKm : maximum network walking distance in km (= speedKmh * minutes/60)
+  //   options  : { maxEdge } — advanced concave-hull edge length (km)
+  // Returns null when no network is loaded or the origin is outside coverage
+  // (snap > SNAP_MAX_KM). Otherwise { polygon, reachableSegments, reachableCount,
+  // snap, computeMs }. The graph is restored (temp origin node removed) in a finally.
+  function computeWalkshed(lngLat, budgetKm, options) {
+    if (!_graph || !(budgetKm > 0)) return null;
+    options = options || {};
+
+    var t0 = (typeof performance !== "undefined" && performance.now)
+      ? performance.now() : Date.now();
+
+    var snap = snapToNetwork(lngLat, "walk");
+    if (!snap) return null; // origin outside walkable network coverage
+
+    // Temp origin-node injection (mirrors findLocalRoute's pattern).
+    var tempEdges = [];
+
+    function injectSnapNode(s) {
+      var k = s.key;
+      if (_graph.has(k)) return; // already a real node
+      _graph.set(k, []);
+      var d1 = turf.distance(turf.point(s.coord), turf.point(s.segStartCoord), { units: "kilometers" });
+      var d2 = turf.distance(turf.point(s.coord), turf.point(s.segEndCoord), { units: "kilometers" });
+      _graph.get(k).push({ node: s.segStartKey, weight: d1, coords: [s.coord, s.segStartCoord] });
+      _graph.get(k).push({ node: s.segEndKey, weight: d2, coords: [s.coord, s.segEndCoord] });
+      if (_graph.has(s.segStartKey)) {
+        _graph.get(s.segStartKey).push({ node: k, weight: d1, coords: [s.segStartCoord, s.coord] });
+        tempEdges.push({ mapKey: s.segStartKey, node: k });
+      }
+      if (_graph.has(s.segEndKey)) {
+        _graph.get(s.segEndKey).push({ node: k, weight: d2, coords: [s.segEndCoord, s.coord] });
+        tempEdges.push({ mapKey: s.segEndKey, node: k });
+      }
+      tempEdges.push({ mapKey: k, isNew: true });
+    }
+
+    function cleanupTempNodes() {
+      for (var i = 0; i < tempEdges.length; i++) {
+        var te = tempEdges[i];
+        if (te.isNew) {
+          _graph.delete(te.mapKey);
+        } else {
+          var edges = _graph.get(te.mapKey);
+          if (edges) {
+            for (var j = edges.length - 1; j >= 0; j--) {
+              if (edges[j].node === te.node) { edges.splice(j, 1); break; }
+            }
+          }
+        }
+      }
+    }
+
+    var result = null;
+    try {
+      injectSnapNode(snap);
+      var distMap = floodDijkstra(snap.key, budgetKm);
+
+      // Reachable node coordinates (includes the injected origin).
+      var coords = [];
+      distMap.forEach(function (d, key) { coords.push(keyToCoord(key)); });
+
+      // Reachable street segments: both endpoints settled within budget.
+      var segFeatures = [];
+      for (var si = 0; si < _segmentIndex.length; si++) {
+        var seg = _segmentIndex[si];
+        if (seg.pedBlocked) continue; // don't draw motorways/trunk as reachable walking streets
+        if (distMap.has(seg.startKey) && distMap.has(seg.endKey)) {
+          segFeatures.push(turf.lineString([seg.startCoord, seg.endCoord]));
+        }
+      }
+      // Origin connector stubs (snap point → its bracketing segment endpoints)
+      // so the reachable-segments layer visibly ties back to the origin.
+      if (distMap.has(snap.segStartKey)) segFeatures.push(turf.lineString([snap.coord, snap.segStartCoord]));
+      if (distMap.has(snap.segEndKey)) segFeatures.push(turf.lineString([snap.coord, snap.segEndCoord]));
+
+      var polygon = buildWalkshedPolygon(coords, options.maxEdge);
+
+      var t1 = (typeof performance !== "undefined" && performance.now)
+        ? performance.now() : Date.now();
+
+      result = {
+        polygon: polygon,
+        reachableSegments: turf.featureCollection(segFeatures),
+        reachableCount: distMap.size,
+        snap: snap,
+        computeMs: Math.round(t1 - t0)
+      };
+    } finally {
+      cleanupTempNodes();
+    }
+
+    return result;
   }
 
   // ---- Expose on App namespace ----
 
   App.roadNetworkLoaded = function () { return !!_graph; };
+  App.roadNetworkEpoch = function () { return _networkEpoch; };
   App.findLocalRoute = findLocalRoute;
   App.fetchRoadNetwork = fetchRoadNetwork;
   App.loadRoadNetworkFromFile = loadRoadNetworkFromFile;
   App.exportRoadNetwork = exportRoadNetwork;
   App.clearRoadNetwork = clearRoadNetwork;
+  App.computeWalkshed = computeWalkshed;
+  // Remove only the downloaded-area outline (leaves the road graph intact) — used by the Layers panel.
+  App.clearRoadDownloadArea = function () { _downloadedBboxPolygon = null; updateUI(); };
 
 })();

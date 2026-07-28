@@ -209,7 +209,8 @@
         route_type:       route.route_type        || "",
         route_color:      route.route_color       || "",
         route_text_color: route.route_text_color  || "",
-        agency_id:        route.agency_id         || ""
+        agency_id:        route.agency_id         || "",
+        trip_headsign:    r.trip_headsign         || ""
       });
     });
 
@@ -412,6 +413,36 @@
       _layerListeners.push({ event: event, layerId: layerId, handler: handler });
     }
 
+    // Query a small box around the cursor so stacked / near-parallel features
+    // are all captured (the single-pixel e.features only catches the topmost),
+    // deduped by a stable key.
+    function featuresNear(e, layerId, keyFn) {
+      var T = 5; // px tolerance
+      var p = e.point;
+      var box = [[p.x - T, p.y - T], [p.x + T, p.y + T]];
+      var raw = map.queryRenderedFeatures(box, { layers: [layerId] });
+      var seen = {}, out = [];
+      raw.forEach(function (f) {
+        var k = keyFn(f.properties);
+        if (k == null || seen[k]) return;
+        seen[k] = 1;
+        out.push(f);
+      });
+      return out;
+    }
+
+    function keyFor(props, isStop) {
+      return isStop ? props.stop_id : props.shape_id;
+    }
+
+    function shapeName(props) {
+      return props.route_short_name || props.route_long_name || props.shape_id || "";
+    }
+
+    function stopName(props) {
+      return props.stop_name || props.stop_code || props.stop_id || "";
+    }
+
     var layers = [
       { id: "gtfs-shapes-layer", isStop: false },
       { id: "gtfs-stops-layer",  isStop: true  }
@@ -427,12 +458,13 @@
       });
 
       addListener("mousemove", layerId, function (e) {
-        if (!e.features || !e.features.length) return;
+        var feats = featuresNear(e, layerId, function (p) { return keyFor(p, isStop); });
+        if (!feats.length) return;
         if (!App.drawMode) map.getCanvas().style.cursor = "pointer";
         ensurePopups();
         _hoverPopup
           .setLngLat(e.lngLat)
-          .setHTML(buildHoverHTML(e.features[0].properties, isStop))
+          .setHTML(buildHoverHTML(feats, isStop))
           .addTo(map);
       });
 
@@ -452,25 +484,37 @@
       });
 
       addListener("contextmenu", layerId, function (e) {
-        if (!e.features || !e.features.length) return;
+        var feats = featuresNear(e, layerId, function (p) { return keyFor(p, isStop); });
+        if (!feats.length) return;
         e.originalEvent.preventDefault();
         if (_hoverPopup) _hoverPopup.remove();
 
-        var props  = e.features[0].properties;
         var lngLat = e.lngLat;
+        var multiple = feats.length > 1;
+        var flagged = isStop ? {} : flagDuplicateShapes(feats);
         var options = [];
 
-        if (isStop) {
-          options.push({
-            label: "Copy As Point",
-            action: function () { copyStopToPoint(props, lngLat); }
-          });
-        } else {
-          options.push({
-            label: "Copy As Line",
-            action: function () { copyShapeToLine(props); }
-          });
-        }
+        feats.forEach(function (f, idx) {
+          var props = f.properties;
+          if (isStop) {
+            options.push({
+              label: multiple ? "Copy As Point: " + stopName(props) : "Copy As Point",
+              action: function () { copyStopToPoint(props, lngLat); }
+            });
+          } else {
+            var label = "Copy As Line";
+            if (multiple) {
+              var headsign = shapeHeadsign(props);
+              label += ": " + shapeName(props) +
+                       (headsign ? " → " + headsign : "") +
+                       (flagged[idx] ? " [" + props.shape_id + "]" : "");
+            }
+            options.push({
+              label: label,
+              action: function () { copyShapeToLine(props); }
+            });
+          }
+        });
 
         if (typeof App.showContextMenu === "function") {
           App.showContextMenu(
@@ -485,8 +529,33 @@
 
   // ---- Popup HTML builders ----
 
-  function buildHoverHTML(props, isStop) {
-    var html = '<div class="gtfs-hover">';
+  // Shared shape-label helpers (used by hover tooltip + right-click menu).
+  function shapeNameOf(props) {
+    return props.route_short_name || props.route_long_name || props.shape_id || "";
+  }
+  function shapeHeadsign(props) {
+    return (props.trip_headsign || "").trim();
+  }
+  // Given the overlapping feature array, return a set (object) of indexes whose
+  // name + headsign collides with another entry — those need a shape_id suffix
+  // so the listed entries stay distinguishable even without a headsign.
+  function flagDuplicateShapes(feats) {
+    var counts = {}, keys = [];
+    for (var i = 0; i < feats.length; i++) {
+      var p = feats[i].properties;
+      var k = shapeNameOf(p) + " → " + shapeHeadsign(p);
+      keys[i] = k;
+      counts[k] = (counts[k] || 0) + 1;
+    }
+    var flagged = {};
+    for (var j = 0; j < feats.length; j++) {
+      if (counts[keys[j]] > 1) flagged[j] = true;
+    }
+    return flagged;
+  }
+
+  function buildHoverEntry(props, isStop, showShapeId) {
+    var html = "";
     if (isStop) {
       var name = props.stop_name || props.stop_code || props.stop_id || "";
       html += "<b>" + escHtml(name) + "</b>";
@@ -495,12 +564,34 @@
                 escHtml(props.stop_id) + "</span>";
       }
     } else {
-      var routeLabel = props.route_short_name || props.route_long_name || props.shape_id || "";
+      var routeLabel = shapeNameOf(props);
+      var headsign   = shapeHeadsign(props);
       var typeLabel  = ROUTE_TYPE_LABELS[parseInt(props.route_type, 10)] || "";
       html += "<b>" + escHtml(routeLabel) + "</b>";
+      if (headsign) {
+        html += '<br><span style="color:var(--muted)">→ ' + escHtml(headsign) + "</span>";
+      }
       if (typeLabel) {
         html += '<br><span style="color:var(--muted)">' + escHtml(typeLabel) + "</span>";
       }
+      if (showShapeId && props.shape_id) {
+        html += '<br><span style="color:var(--muted)">shape_id: ' +
+                escHtml(props.shape_id) + "</span>";
+      }
+    }
+    return html;
+  }
+
+  // Accepts an array of features so overlapping routes/stops are all listed.
+  function buildHoverHTML(feats, isStop) {
+    var list = Array.isArray(feats) ? feats : [{ properties: feats }];
+    var flagged = isStop ? {} : flagDuplicateShapes(list);
+    var html = '<div class="gtfs-hover">';
+    for (var i = 0; i < list.length; i++) {
+      if (i > 0) {
+        html += '<div style="border-top:1px solid var(--border);margin:4px 0"></div>';
+      }
+      html += buildHoverEntry(list[i].properties, isStop, !!flagged[i]);
     }
     html += "</div>";
     return html;
@@ -629,9 +720,12 @@
     if (!list) return;
 
     if (!_gtfsData || _gtfsData.size === 0) {
+      // Standardized empty/onboarding state (shared .rf-info-box look).
       list.innerHTML =
-        '<div class="gtfs-empty-state">No GTFS feed loaded.<br>' +
-        'Use Add\u00a0Data\u00a0(+) \u2192 GTFS to load a feed.</div>';
+        '<div class="gtfs-empty-state rf-info-box">' +
+        '<p><strong>Load a GTFS feed to begin.</strong></p>' +
+        '<p class="rf-state-action">Use Add\u00a0Data\u00a0(+) \u2192 GTFS to load a feed (.zip).</p>' +
+        '</div>';
       var mc = document.getElementById("gtfsMapControls");
       if (mc) mc.style.display = "none";
       return;

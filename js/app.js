@@ -27,6 +27,113 @@
   // Backward-compat alias so existing project files still work during migration
   App.registerProject = App.registerModule;
 
+  // ---- Shared module-state UI (stale banner + empty/onboarding state) ----
+  // Standardizes the two cross-cutting popup patterns so every analysis module
+  // looks/behaves the same:
+  //   (1) Stale banner with a working "Re-run" button.
+  //   (2) Friendly empty-state / first-open onboarding hint.
+  // Reuses the shared (despite the rf- prefix) .rf-status / .rf-info-box classes.
+  //
+  // opts = {
+  //   statusEl,            // .rf-status pill element OR its id string
+  //   emptyEl,             // .rf-info-box element OR its id string
+  //   empty:  bool,        // true => show emptyEl + hint, hide pill (wins over all)
+  //   hint:   string | { need, action },  // empty-state / onboarding copy
+  //   stale:  bool,        // true => stale pill with Re-run button
+  //   status: { kind, message },          // explicit pill: kind = running|done|error
+  //   onRerun: function    // wired to the Re-run button (used when stale)
+  // }
+  // Resolves id strings via getElementById and no-ops on missing elements, so it
+  // is safe to call from update() while the popup is closed.
+  App.renderModuleState = function (opts) {
+    opts = opts || {};
+    var statusEl = typeof opts.statusEl === "string"
+      ? document.getElementById(opts.statusEl) : opts.statusEl;
+    var emptyEl = typeof opts.emptyEl === "string"
+      ? document.getElementById(opts.emptyEl) : opts.emptyEl;
+
+    function hide(el) { if (el) el.style.display = "none"; }
+
+    // --- Empty / onboarding state wins ---
+    if (opts.empty) {
+      hide(statusEl);
+      if (emptyEl) {
+        emptyEl.style.display = "";
+        emptyEl.classList.add("rf-info-box");
+        var hint = opts.hint;
+        if (hint && typeof hint === "object") {
+          emptyEl.innerHTML =
+            '<p><strong>' + _escHtml(hint.need || "") + '</strong></p>' +
+            (hint.action ? '<p class="rf-state-action">' + _escHtml(hint.action) + '</p>' : "");
+        } else if (typeof hint === "string" && hint) {
+          emptyEl.innerHTML = '<p>' + hint + '</p>';
+        }
+        // If no hint passed, leave whatever static markup the popup HTML shipped.
+      }
+      return;
+    }
+
+    if (emptyEl) hide(emptyEl);
+    if (!statusEl) return;
+
+    // --- Explicit status pill (neutral / running / done / error) ---
+    if (opts.status) {
+      _paintStatus(statusEl, opts.status.kind || "", opts.status.message || "", null);
+      return;
+    }
+
+    // --- Stale pill with Re-run button ---
+    if (opts.stale) {
+      _paintStatus(
+        statusEl, "stale",
+        "Inputs changed — re-run to update.",
+        typeof opts.onRerun === "function" ? opts.onRerun : null
+      );
+      return;
+    }
+
+    // --- Nothing to show ---
+    hide(statusEl);
+  };
+
+  function _paintStatus(statusEl, kind, message, onRerun) {
+    statusEl.style.display = "";
+    statusEl.className = "rf-status" +
+      (kind === "done"    ? " rf-status-done"    :
+       kind === "stale"   ? " rf-status-stale"   :
+       kind === "error"   ? " rf-status-error"   :
+       kind === "running" ? " rf-status-running" : "");
+
+    // The popup HTML ships a <span id="...StatusText"> inside the pill; keep using
+    // it when present so existing id references stay valid. Otherwise build one.
+    var textEl = statusEl.querySelector("[id$='StatusText'], .rf-status-text");
+    if (!textEl) {
+      statusEl.innerHTML = "";
+      textEl = document.createElement("span");
+      textEl.className = "rf-status-text";
+      statusEl.appendChild(textEl);
+    }
+    textEl.textContent = message || "";
+
+    // Drop any prior Re-run button, then add a fresh one if requested.
+    var oldBtn = statusEl.querySelector(".rf-status-rerun");
+    if (oldBtn) oldBtn.parentNode.removeChild(oldBtn);
+    if (onRerun) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "rf-status-rerun";
+      btn.textContent = "Re-run";
+      btn.addEventListener("click", onRerun);
+      statusEl.appendChild(btn);
+    }
+  }
+
+  function _escHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
   // Override bufferUnionPolygon to include line and route buffers alongside point buffers.
   // Must happen before any user interaction; census.js and lodes.js call this at runtime.
   var _pointUnion = App.bufferUnionPolygon;
@@ -85,6 +192,8 @@
         await entry.update(core);
       }
     }
+    // Keep the Layers tab current when features/analysis layers change.
+    if (typeof App.refreshLayersPanel === "function") App.refreshLayersPanel();
   }
   App.notifyProject = notifyProject;
 
@@ -382,13 +491,30 @@
       App.popup.open("attribute-summary", _modules, buildCore);
     };
 
-    // Wire the entry button in Feature Settings
+    // Wire the entry buttons in Feature Settings
     var asBtn = document.getElementById("open-attribute-summary");
     if (asBtn) {
       asBtn.addEventListener("click", function () {
         if (typeof App.openAttributeSummary === "function") App.openAttributeSummary();
       });
     }
+
+    App.openDisplaySettings = function () {
+      App.popup.open("display-settings", _modules, buildCore);
+    };
+    var dsBtn = document.getElementById("open-display-settings");
+    if (dsBtn) {
+      dsBtn.addEventListener("click", function () {
+        if (typeof App.openDisplaySettings === "function") App.openDisplaySettings();
+      });
+    }
+
+    // Open a registered module's popup by id (used by the Layers panel ⋯ menu)
+    App.openModulePopup = function (id) {
+      if (App.popup && typeof App.popup.open === "function") {
+        App.popup.open(id, _modules, buildCore);
+      }
+    };
 
     // Populate Analysis toolbar dropdown with module buttons
     var analysisDropdown = document.getElementById("analysis-dropdown");
@@ -462,6 +588,25 @@
         b.classList.remove("active");
       });
       App.map.getCanvas().style.cursor = "grab";
+    };
+
+    // Finish (commit) the in-progress line/route/polygon — the same commit path as
+    // snap-to-close, exposed so the Enter shortcut can reuse it. saveRoute is async.
+    App.finishDrawing = function () {
+      var mode = App.drawMode;
+      function after() {
+        if (App.undo) App.undo.updateButtons();
+        notifyProject();
+        if (typeof App.cache !== "undefined") App.cache.save();
+      }
+      if (mode === "line" && typeof App.saveLine === "function") {
+        App.saveLine(); after();
+      } else if (mode === "polygon" && typeof App.savePolygon === "function") {
+        App.savePolygon(); after();
+      } else if (mode === "route" && typeof App.saveRoute === "function") {
+        var p = App.saveRoute();
+        (p && typeof p.then === "function") ? p.then(after) : after();
+      }
     };
 
     // Variable checkbox Select All / Clear All — now wired in buffer-summary.js init()
@@ -545,32 +690,38 @@
       }
     });
 
-    // ---- Feature Settings slider popover ----
+    // Draw-tool shortcuts (S/L/R/P/M/T/B) + Enter-to-finish. Kept as a separate
+    // listener so it stays isolated from the Escape/Ctrl+Z/Delete handler above.
+    var TOOL_KEYS = {
+      s: "point", l: "line", r: "route", p: "polygon",
+      b: "label", t: "textbox", m: "measure"
+    };
+    document.addEventListener("keydown", function (e) {
+      // Never hijack typing, dropdown navigation, or modifier combos (Ctrl+Z etc.).
+      var tag = e.target.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || e.target.isContentEditable) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
 
-    var OPACITY_SVG = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="8" cy="8" r="6" stroke-dasharray="3 2"/></svg>';
-    var BUFFER_SVG  = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="2" fill="currentColor" stroke="none"/></svg>';
-    var WIDTH_SVG   = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-linecap="round"><line x1="2" y1="8" x2="14" y2="8" stroke-width="2.5"/></svg>';
+      // Enter finishes an in-progress line / route / polygon.
+      if (e.key === "Enter") {
+        if (App.drawMode === "line" || App.drawMode === "route" || App.drawMode === "polygon") {
+          App.finishDrawing();
+          e.preventDefault();
+        }
+        return;
+      }
 
-    // Populate icon buttons with SVGs
-    var _iconDefs = [
-      ["fp-set-pointOpacity",      OPACITY_SVG],
-      ["fp-set-lineOpacity",       OPACITY_SVG],
-      ["fp-set-routeOpacity",      OPACITY_SVG],
-      ["fp-set-polygonOpacity",    OPACITY_SVG],
-      ["fp-set-bufferOpacity",     OPACITY_SVG],
-      ["fp-set-bufferRadius",      BUFFER_SVG],
-      ["fp-set-lineBufferRadius",  BUFFER_SVG],
-      ["fp-set-routeBufferRadius", BUFFER_SVG],
-      ["fp-set-pointLineWidth",    WIDTH_SVG],
-      ["fp-set-lineLineWidth",     WIDTH_SVG],
-      ["fp-set-routeLineWidth",    WIDTH_SVG],
-      ["fp-set-polygonLineWidth",  WIDTH_SVG],
-      ["fp-set-bufferLineWidth",   WIDTH_SVG]
-    ];
-    _iconDefs.forEach(function (pair) {
-      var el = document.getElementById(pair[0]);
-      if (el) el.innerHTML = pair[1];
+      // Single-key tool toggles. Skip while a module popup is open (the map is
+      // behind it, so switching draw mode would be surprising).
+      if (App.popup && App.popup.isOpen()) return;
+      var mode = TOOL_KEYS[(e.key || "").toLowerCase()];
+      if (mode) {
+        var btn = document.querySelector('.tool-btn[data-mode="' + mode + '"]');
+        if (btn) { btn.click(); e.preventDefault(); }
+      }
     });
+
+    // ---- Feature Settings slider popover ----
 
     var BUFFER_RADIUS_STEPS = [0, 0.125, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
@@ -665,40 +816,6 @@
         _closeFpSlider();
       }
     }, true);
-
-    // Wire each icon button
-    function _wireFpBtn(id, cfg) {
-      var btn = document.getElementById(id);
-      if (!btn) return;
-      btn.addEventListener("click", function (e) { e.stopPropagation(); _openFpSlider(btn, cfg); });
-      btn.addEventListener("dblclick", function (e) {
-        e.stopPropagation();
-        App.featureSettings[cfg.key] = cfg.def;
-        cfg.onChange(cfg.def);
-        if (typeof App.cache !== "undefined") App.cache.save();
-        // If this slider is currently open, sync its display
-        if (_fpActiveBtn === btn) {
-          var slider = document.getElementById("fp-slider-input");
-          var valEl  = document.getElementById("fp-slider-value");
-          if (slider) slider.value = cfg.values ? _valueToIdx(cfg.def, cfg.values) : cfg.def;
-          if (valEl)  valEl.textContent = _fmtSlider(cfg.def, cfg);
-        }
-      });
-    }
-
-    _wireFpBtn("fp-set-pointOpacity",      { key:"pointOpacity",      def:100, min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("point"); } });
-    _wireFpBtn("fp-set-lineOpacity",       { key:"lineOpacity",        def:100, min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("line"); } });
-    _wireFpBtn("fp-set-routeOpacity",      { key:"routeOpacity",       def:100, min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("route"); } });
-    _wireFpBtn("fp-set-polygonOpacity",    { key:"polygonOpacity",     def:50,  min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("polygon"); } });
-    _wireFpBtn("fp-set-bufferOpacity",     { key:"bufferOpacity",      def:50,  min:0, max:100, step:1,   unit:"%",  onChange: function() { App.applyFeatureOpacity("buffer"); } });
-    _wireFpBtn("fp-set-bufferRadius",      { key:"bufferRadius",       def:0,   values:BUFFER_RADIUS_STEPS, unit:"mi", onChange: function(v) { App.rebuildBuffers(v); notifyProject(); } });
-    _wireFpBtn("fp-set-lineBufferRadius",  { key:"lineBufferRadius",   def:0,   values:BUFFER_RADIUS_STEPS, unit:"mi", onChange: function(v) { App.rebuildLineBuffers(v); notifyProject(); } });
-    _wireFpBtn("fp-set-routeBufferRadius", { key:"routeBufferRadius",  def:0,   values:BUFFER_RADIUS_STEPS, unit:"mi", onChange: function(v) { App.rebuildRouteBuffers(v); notifyProject(); } });
-    _wireFpBtn("fp-set-pointLineWidth",    { key:"pointLineWidth",     def:1,   min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyLineWidth("point"); } });
-    _wireFpBtn("fp-set-lineLineWidth",     { key:"lineLineWidth",      def:1,   min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyLineWidth("line"); } });
-    _wireFpBtn("fp-set-routeLineWidth",    { key:"routeLineWidth",     def:1,   min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyLineWidth("route"); } });
-    _wireFpBtn("fp-set-polygonLineWidth",  { key:"polygonLineWidth",   def:1,   min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyLineWidth("polygon"); } });
-    _wireFpBtn("fp-set-bufferLineWidth",   { key:"bufferLineWidth",    def:1,   min:0, max:5,   step:0.1, unit:"×",  onChange: function() { App.applyBufferLineWidth(); } });
 
     // Expose slider infrastructure for per-feature overrides in feature-attributes.js
     App._openFpSlider      = _openFpSlider;
@@ -915,6 +1032,7 @@
         if (typeof App.clearRoadNetwork === "function") App.clearRoadNetwork();
         if (typeof App.clearCensusOverlay === "function") App.clearCensusOverlay();
         if (typeof App.clearPresentOverlays === "function") App.clearPresentOverlays();
+        if (typeof App._syncDisplaySliders === "function") App._syncDisplaySliders();
         clearModules();
         notifyProject();
       });
@@ -924,6 +1042,18 @@
     var importFileInput = document.getElementById("fp-import-file");
     var exportDropdown = document.getElementById("export-dropdown");
     var addDataDropdown = document.getElementById("add-data-dropdown");
+
+    // Export scope toggle (All vs Visible only) — read by the format handler below.
+    var exportScope = "all";
+    var exportScopeRow = document.getElementById("export-scope-row");
+    if (exportScopeRow) {
+      // Prevent the document-level "close all dropdowns" click listener (below)
+      // from closing this dropdown before the user can pick a format button.
+      exportScopeRow.addEventListener("click", function (e) { e.stopPropagation(); });
+      exportScopeRow.addEventListener("change", function (e) {
+        if (e.target && e.target.name === "export-scope") exportScope = e.target.value;
+      });
+    }
 
     // Import file button (inside Add Data dropdown) → open file picker
     document.getElementById("import-file-btn").addEventListener("click", function () {
@@ -1098,7 +1228,10 @@
           if (loaded) cfg._eyeSpan.innerHTML = cfg.isVisible() ? _EYESVG_OPEN : _EYESVG_CLOSED;
         }
       });
+      // Keep the Layers panel in sync when reference layers load/clear/toggle.
+      if (typeof App.refreshLayersPanel === "function") App.refreshLayersPanel();
     }
+    App.updateAddDataClearIcons = updateAddDataClearIcons;
 
     // Route imported file by extension
     importFileInput.addEventListener("change", function (e) {
@@ -1154,11 +1287,11 @@
         return;
       }
       if (typeof App.cache === "undefined") return;
-      if (fmt === "json-features") App.cache.exportFeaturesOnly();
-      else if (fmt === "json-all") App.cache.exportToFile();
-      else if (fmt === "csv") App.cache.exportCSV();
-      else if (fmt === "kml") App.cache.exportKML();
-      else if (fmt === "shp") App.cache.exportSHP();
+      if (fmt === "json-features") App.cache.exportFeaturesOnly(exportScope);
+      else if (fmt === "json-all") App.cache.exportToFile(exportScope);
+      else if (fmt === "csv") App.cache.exportCSV(exportScope);
+      else if (fmt === "kml") App.cache.exportKML(exportScope);
+      else if (fmt === "shp") App.cache.exportSHP(exportScope);
       else if (fmt === "share-link") App.cache.exportShareLink();
     });
 
@@ -1330,6 +1463,7 @@
     }
 
     // Close dropdowns on outside click or Escape
+    var searchResults = document.getElementById("search-results");
     document.addEventListener("click", function () {
       exportDropdown.style.display = "none";
       addDataDropdown.style.display = "none";
@@ -1342,6 +1476,7 @@
         addDataDropdown.style.display = "none";
         if (analysisDropdown) analysisDropdown.style.display = "none";
         if (saveStateDropdown) saveStateDropdown.style.display = "none";
+        if (searchResults) searchResults.style.display = "none";
         if (typeof _closeFpSlider === "function") _closeFpSlider();
       }
     });
@@ -1375,6 +1510,7 @@
       App.setStatus("Session restored");
       notifyProject();
     }
+    if (typeof App._syncDisplaySliders === "function") App._syncDisplaySliders();
 
     // "Start fresh" link in view-only banner
     var _viewOnlyFreshBtn = document.getElementById("view-only-start-fresh");

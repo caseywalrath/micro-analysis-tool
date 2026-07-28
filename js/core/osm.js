@@ -189,7 +189,7 @@
 
   // ---- Popup helpers ----
 
-  function buildHoverHTML(props, keys) {
+  function buildHoverEntry(props, keys) {
     var parts = [];
     for (var i = 0; i < keys.length; i++) {
       var v = props[keys[i]];
@@ -208,7 +208,21 @@
       }
     }
     if (parts.length === 0) parts.push("<i>No tags</i>");
-    return '<div class="osm-hover">' + parts.join("<br>") + "</div>";
+    return parts.join("<br>");
+  }
+
+  // Accepts an array of features so overlapping OSM features are all listed.
+  function buildHoverHTML(feats, keys) {
+    var list = Array.isArray(feats) ? feats : [{ properties: feats }];
+    var html = '<div class="osm-hover">';
+    for (var i = 0; i < list.length; i++) {
+      if (i > 0) {
+        html += '<div style="border-top:1px solid var(--border);margin:4px 0"></div>';
+      }
+      html += buildHoverEntry(list[i].properties, keys);
+    }
+    html += "</div>";
+    return html;
   }
 
   function buildClickHTML(props) {
@@ -268,6 +282,28 @@
     if (_clickPopup) _clickPopup.remove();
   }
 
+  // Query a small box around the cursor so stacked / near-parallel features are
+  // all captured (single-pixel e.features only catches the topmost), deduped by
+  // OSM type/id (falling back to name).
+  function featuresNear(e, layerId) {
+    var map = App.map;
+    var T = 5; // px tolerance
+    var p = e.point;
+    var box = [[p.x - T, p.y - T], [p.x + T, p.y + T]];
+    var raw = map.queryRenderedFeatures(box, { layers: [layerId] });
+    var seen = {}, out = [];
+    raw.forEach(function (f) {
+      var pr = f.properties || {};
+      var k = (pr._osm_id != null)
+        ? (pr._osm_type || "node") + "/" + pr._osm_id
+        : (pr.name || JSON.stringify(pr));
+      if (seen[k]) return;
+      seen[k] = 1;
+      out.push(f);
+    });
+    return out;
+  }
+
   function wireLayerEvents(layerId, hoverKeys) {
     var map = App.map;
 
@@ -277,10 +313,10 @@
 
     map.on("mousemove", layerId, function (e) {
       if (!App.drawMode) map.getCanvas().style.cursor = "pointer";
-      if (e.features && e.features.length > 0) {
-        var props = e.features[0].properties;
+      var feats = featuresNear(e, layerId);
+      if (feats.length > 0) {
         ensurePopups();
-        _hoverPopup.setLngLat(e.lngLat).setHTML(buildHoverHTML(props, hoverKeys)).addTo(map);
+        _hoverPopup.setLngLat(e.lngLat).setHTML(buildHoverHTML(feats, hoverKeys)).addTo(map);
       }
     });
 

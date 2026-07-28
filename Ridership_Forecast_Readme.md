@@ -209,7 +209,7 @@ This tab estimates how ridership changes when you improve service frequency or u
 
 - **Proposed Headway** -- The frequency you are proposing (e.g., 15-minute headways for a new enhanced bus).
 
-- **Frequency Elasticity** -- A slider and input box (range 0.1 to 1.0, default 0.5). This value controls how strongly ridership responds to frequency changes. The typical range from TCRP (Transit Cooperative Research Program) is 0.3 to 0.6. A value of 0.5 means that doubling frequency increases ridership by about 41%.
+- **Frequency Elasticity** -- A slider and input box (range 0.1 to 1.0, default 0.6). This value controls how strongly ridership responds to frequency changes. It is consistent with the ranges reported in TCRP Report 95 (roughly 0.3 to 0.6) and with newer empirical evidence: Berrebi et al. (2021) found frequency elasticities of 0.66 to 0.78 across four U.S. transit agencies, so the default sits at the upper end of the conventional range while remaining conservative relative to that study. A value of 0.6 means that doubling frequency increases ridership by about 52%.
 
 - **Service Span Elasticity** -- A slider and input box (range 0.1 to 1.0, default 0.7). This value controls how strongly ridership responds to changes in service hours per day (span). It is applied in the Scenarios tab when you change the "Span" input for each scenario — ridership estimates adjust relative to the 14-hour local bus baseline. The typical range is 0.5 to 0.9. See [Service Span Elasticity](#service-span-elasticity) below for details.
 
@@ -236,7 +236,7 @@ Once you have run a demand analysis (Tab 1), this section shows three estimates:
 The estimates are shown as index values. They become actual ridership numbers when combined with calibration data and route-specific parameters in the Scenarios tab.
 
 Two additional statistics are shown:
-- **Frequency Effect** -- The multiplier from the headway change alone (e.g., 1.41x for going from 30 to 15 minutes at 0.5 elasticity)
+- **Frequency Effect** -- The multiplier from the headway change alone (e.g., 1.52x for going from 30 to 15 minutes at 0.6 elasticity)
 - **Base CDI** -- The corridor demand score being used as the starting point
 
 ---
@@ -305,10 +305,10 @@ When you improve frequency (reduce headway), ridership increases -- but not prop
 
 Frequency is calculated as 60 divided by the headway in minutes (e.g., 15-minute headway = 4 trips per hour).
 
-**Example**: Going from 30-minute headways (2 trips/hour) to 15-minute headways (4 trips/hour) with an elasticity of 0.5:
-> Effect = (4 / 2) ^ 0.5 = 2 ^ 0.5 = 1.41
+**Example**: Going from 30-minute headways (2 trips/hour) to 15-minute headways (4 trips/hour) with an elasticity of 0.6:
+> Effect = (4 / 2) ^ 0.6 = 2 ^ 0.6 = 1.52
 
-This means a 41% ridership increase from the frequency improvement alone.
+This means a 52% ridership increase from the frequency improvement alone.
 
 ### Service Span Elasticity
 
@@ -502,7 +502,7 @@ The forecasts should be used alongside professional judgment, local knowledge, a
 | **Calibration Factor** | A multiplier derived from observed ridership data that scales the model's output to match real-world performance. |
 | **Census Tract** | A Census geography containing roughly 1,200-8,000 people. Larger than block groups. |
 | **Cost per Boarding** | Annual operating cost divided by annual ridership. Measures cost-effectiveness. |
-| **Elasticity** | How sensitive ridership is to changes in a variable (like frequency). An elasticity of 0.5 means a 10% increase in frequency yields about a 5% increase in ridership. |
+| **Elasticity** | How sensitive ridership is to changes in a variable (like frequency). An elasticity of 0.6 means a 10% increase in frequency yields about a 6% increase in ridership. |
 | **Headway** | Time between consecutive buses at a stop, in minutes. Lower headway = more frequent service. |
 | **LODES** | LEHD Origin-Destination Employment Statistics. Block-level employment data from the Census Bureau. Used to compute the Employment Density factor in TPI scoring. If LODES is not loaded, a warning icon (⚠) appears next to the ACS Year selector in the analysis popups, and the Employment factor is excluded (its weight redistributed to other factors). |
 | **NTD** | National Transit Database. Federal reporting system with system-level ridership and financial data for every US transit agency. |

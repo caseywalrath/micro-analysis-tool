@@ -72,12 +72,19 @@
   function addPoint(lon, lat) {
     if (App.undo && !App.undo.isRestoring()) App.undo.push();
     var idx = points.length + 1;
-    points.push({
+    var feature = {
       type: "Feature",
       properties: { name: "Point " + idx, pointIdx: idx, color: "" },
       geometry: { type: "Point", coordinates: [lon, lat] }
-    });
+    };
+    points.push(feature);
     rebuildBuffers(bufferRadiusMiles);
+    // If the attributes popup is already open (on some other feature), follow
+    // it to this newly-drawn point. Never auto-open it if it wasn't open.
+    if (typeof App.isAttrPopupOpen === "function" && App.isAttrPopupOpen() &&
+        typeof App.openAttrPopup === "function") {
+      App.openAttrPopup("point", points.length - 1, feature);
+    }
   }
 
   function addPointWithOpts(lon, lat, opts) {
@@ -112,6 +119,24 @@
     buffers.length = points.length;
     for (var i = 0; i < points.length; i++) {
       if (points[i].properties.hidden) continue;
+
+      // Walkshed study area: if this point is flagged serviceAreaType === "walkshed"
+      // and the Walkshed module has a valid cached polygon for it, use that polygon
+      // as the buffer (regardless of the circular radius). Falls back to the circle
+      // when no network/walkshed is available. See js/projects/walkshed.js.
+      var attrs = points[i].properties.attributes || {};
+      var ws = (attrs.serviceAreaType === "walkshed" && typeof App.getPointWalkshed === "function")
+        ? App.getPointWalkshed(points[i].properties.pointIdx)
+        : null;
+      if (ws && ws.geometry) {
+        buffers[i] = {
+          type: "Feature",
+          geometry: ws.geometry,
+          properties: { pointIdx: points[i].properties.pointIdx, walkshed: true }
+        };
+        continue;
+      }
+
       var r = (points[i].properties._bufferRadius != null)
         ? points[i].properties._bufferRadius
         : radiusMiles;
@@ -128,6 +153,11 @@
     }
     renderPointLayers();
   }
+
+  // Rebuild buffers at the current radius (no argument needed). Used by the
+  // Walkshed module after it computes/flags walksheds so the buffer union picks
+  // them up without the caller needing to know the current radius.
+  function refreshBuffers() { rebuildBuffers(bufferRadiusMiles); }
 
   function bufferUnionPolygon() {
     var u = null;
@@ -201,6 +231,7 @@
   App.addPoint = addPoint;
   App.addPointWithOpts = addPointWithOpts;
   App.rebuildBuffers = rebuildBuffers;
+  App.refreshBuffers = refreshBuffers;
   App.movePoint = movePoint;
   App.removePoint = removePoint;
   App.clearPoints = clearPoints;
