@@ -22,7 +22,9 @@
   var _roadGeoJSON = null;  // raw GeoJSON FeatureCollection (for export)
   var _graph = null;        // Map<nodeKey, [{node, weight, coords}]>
   var _allLines = null;     // turf FeatureCollection of LineStrings (for nearestPointOnLine)
-  var _segmentIndex = null; // Array of {feature, startKey, endKey, startCoord, endCoord} per segment
+  var _walkLines = null;    // subset a pedestrian may snap to (motorway/trunk excluded)
+  var _carLines = null;     // subset a car may snap to (footway/steps/etc excluded)
+  var _segmentIndex = null; // Array of {feature, startKey, endKey, startCoord, endCoord, pedBlocked, carBlocked} per segment
   var _featureCount = 0;
   var _networkEpoch = 0;    // bumped on every (re)build/clear — lets caches (e.g. walkshed) invalidate
   var _downloadedBboxPolygon = null; // turf Polygon of the last Overpass download extent (for the on-map outline)
@@ -46,25 +48,62 @@
     return [parseFloat(parts[0]), parseFloat(parts[1])];
   }
 
+  // ---- Pedestrian / vehicle traversability by OSM highway class ----
+  // The offline network is shared by two consumers: the driving route-snapper
+  // (findLocalRoute) and the walking isochrone (computeWalkshed). Each edge and
+  // segment is tagged with pedBlocked / carBlocked so each consumer traverses
+  // only the classes appropriate to its mode — one download, two interpretations.
+
+  // Classes a pedestrian may not use: limited-access highways and their ramps.
+  var PED_FORBIDDEN_HWY = {
+    motorway: 1, trunk: 1, motorway_link: 1, trunk_link: 1
+  };
+  // Pedestrian/bike-only classes a car may not use.
+  var CAR_FORBIDDEN_HWY = {
+    footway: 1, path: 1, steps: 1, pedestrian: 1, cycleway: 1
+  };
+
+  // An explicit foot=* tag overrides the class default in both directions
+  // (e.g. a trunk road signed foot=yes is walkable; a service road foot=no is not).
+  function isPedForbidden(hwy, foot) {
+    if (foot === "yes" || foot === "designated" || foot === "permissive") return false;
+    if (foot === "no") return true;
+    return !!PED_FORBIDDEN_HWY[hwy];
+  }
+
+  function isCarForbidden(hwy) {
+    return !!CAR_FORBIDDEN_HWY[hwy];
+  }
+
   // ---- Graph construction ----
 
   function buildGraph(geojson) {
     var graph = new Map();
-    var lines = [];
+    var lines = [];      // every line (mode-agnostic snap fallback)
+    var walkLines = [];  // lines a pedestrian may use
+    var carLines = [];   // lines a car may use
     var segments = [];
     var features = geojson.features || [];
 
-    function addEdge(fromKey, toKey, weight, coordPair) {
+    function addEdge(fromKey, toKey, weight, coordPair, pedBlocked, carBlocked) {
       if (!graph.has(fromKey)) graph.set(fromKey, []);
-      graph.get(fromKey).push({ node: toKey, weight: weight, coords: coordPair });
+      graph.get(fromKey).push({ node: toKey, weight: weight, coords: coordPair, pedBlocked: pedBlocked, carBlocked: carBlocked });
       if (!graph.has(toKey)) graph.set(toKey, []);
-      graph.get(toKey).push({ node: fromKey, weight: weight, coords: coordPair.slice().reverse() });
+      graph.get(toKey).push({ node: fromKey, weight: weight, coords: coordPair.slice().reverse(), pedBlocked: pedBlocked, carBlocked: carBlocked });
     }
 
     for (var i = 0; i < features.length; i++) {
       var f = features[i];
       var geom = f.geometry;
       if (!geom) continue;
+
+      // Classify this way once; every edge/segment derived from it inherits the flags.
+      // Imported networks may lack a highway/foot tag — treat unknown classes as
+      // traversable by both modes so legacy road-network files still route.
+      var props = f.properties || {};
+      var hwy = props.highway || "";
+      var pedBlocked = isPedForbidden(hwy, props.foot);
+      var carBlocked = isCarForbidden(hwy);
 
       var coordArrays = [];
       if (geom.type === "LineString" && geom.coordinates && geom.coordinates.length >= 2) {
@@ -77,8 +116,10 @@
 
       for (var a = 0; a < coordArrays.length; a++) {
         var coords = coordArrays[a];
-        var lineFeature = turf.lineString(coords);
+        var lineFeature = turf.lineString(coords, { highway: hwy, pedBlocked: pedBlocked, carBlocked: carBlocked });
         lines.push(lineFeature);
+        if (!pedBlocked) walkLines.push(lineFeature);
+        if (!carBlocked) carLines.push(lineFeature);
 
         for (var j = 0; j < coords.length - 1; j++) {
           var c1 = coords[j];
@@ -86,13 +127,15 @@
           var k1 = nodeKey(c1);
           var k2 = nodeKey(c2);
           var dist = turf.distance(turf.point(c1), turf.point(c2), { units: "kilometers" });
-          addEdge(k1, k2, dist, [c1, c2]);
+          addEdge(k1, k2, dist, [c1, c2], pedBlocked, carBlocked);
           segments.push({
             feature: lineFeature,
             startKey: k1,
             endKey: k2,
             startCoord: c1,
-            endCoord: c2
+            endCoord: c2,
+            pedBlocked: pedBlocked,
+            carBlocked: carBlocked
           });
         }
       }
@@ -100,6 +143,8 @@
 
     _graph = graph;
     _allLines = turf.featureCollection(lines);
+    _walkLines = turf.featureCollection(walkLines);
+    _carLines = turf.featureCollection(carLines);
     _segmentIndex = segments;
     _featureCount = features.length;
     _networkEpoch++;
@@ -107,27 +152,33 @@
 
   // ---- Snap to network ----
 
-  function snapToNetwork(lngLat) {
-    if (!_allLines || _allLines.features.length === 0) return null;
+  //   mode: "walk" | "drive" | undefined. Restricts the snap to lines the mode
+  //   can actually traverse (walk excludes motorways; drive excludes footways).
+  //   Undefined falls back to all lines (legacy / mode-agnostic callers).
+  function snapToNetwork(lngLat, mode) {
+    if (!_segmentIndex || _segmentIndex.length === 0) return null;
+
+    var linesFC = _allLines;
+    var blockedField = null;
+    if (mode === "walk") { linesFC = _walkLines; blockedField = "pedBlocked"; }
+    else if (mode === "drive") { linesFC = _carLines; blockedField = "carBlocked"; }
+    if (!linesFC || linesFC.features.length === 0) return null;
 
     var pt = turf.point([lngLat[0], lngLat[1]]);
-    var nearest = turf.nearestPointOnLine(_allLines, pt, { units: "kilometers" });
+    var nearest = turf.nearestPointOnLine(linesFC, pt, { units: "kilometers" });
 
     if (!nearest || nearest.properties.dist > SNAP_MAX_KM) return null;
 
-    // Find the segment this point falls on
-    var lineIdx = nearest.properties.index; // index into _allLines
-    // nearestPointOnLine returns the feature-level index in the multi-line collection,
-    // and the location property tells us where on that line the point sits.
-    // We need the two nodes bracketing this point.
+    // The nearest point sits on a specific segment; find the closest one this
+    // mode can use so the snapped coord and its bracketing nodes stay consistent.
     var snappedCoord = nearest.geometry.coordinates;
     var snappedKey = nodeKey(snappedCoord);
 
-    // The nearest point sits on a specific segment. Find the closest segment.
     var bestDist = Infinity;
     var bestSeg = null;
     for (var i = 0; i < _segmentIndex.length; i++) {
       var seg = _segmentIndex[i];
+      if (blockedField && seg[blockedField]) continue; // skip segments this mode can't use
       var segLine = turf.lineString([seg.startCoord, seg.endCoord]);
       var np = turf.nearestPointOnLine(segLine, pt, { units: "kilometers" });
       if (np.properties.dist < bestDist) {
@@ -211,6 +262,7 @@
 
       for (var i = 0; i < neighbors.length; i++) {
         var nb = neighbors[i];
+        if (nb.carBlocked) continue; // driving router never routes over pedestrian-only ways
         var newDist = current.dist + nb.weight;
         if (newDist < (dist.get(nb.node) || Infinity)) {
           dist.set(nb.node, newDist);
@@ -294,8 +346,8 @@
         var fromWp = waypoints[i];
         var toWp = waypoints[i + 1];
 
-        var snapFrom = snapToNetwork(fromWp);
-        var snapTo = snapToNetwork(toWp);
+        var snapFrom = snapToNetwork(fromWp, "drive");
+        var snapTo = snapToNetwork(toWp, "drive");
 
         if (!snapFrom || !snapTo) return null; // waypoint outside network coverage
 
@@ -350,10 +402,15 @@
       }
     }
 
+    // Pull vehicle roads AND pedestrian-specific ways (footway/path/steps/etc.)
+    // so walksheds follow real walking connections. Each class is later tagged
+    // pedBlocked/carBlocked in buildGraph so drive-routing and walking each use
+    // only the appropriate subset.
     var query = '[out:json][timeout:60];(' +
       'way["highway"~"^(motorway|trunk|primary|secondary|tertiary|' +
       'residential|unclassified|service|motorway_link|trunk_link|' +
-      'primary_link|secondary_link|tertiary_link)$"](' +
+      'primary_link|secondary_link|tertiary_link|' +
+      'living_street|pedestrian|footway|path|steps|cycleway)$"](' +
       south + ',' + west + ',' + north + ',' + east + ');' +
       ');out geom;';
 
@@ -422,7 +479,8 @@
           properties: {
             highway: (el.tags || {}).highway || "",
             name: (el.tags || {}).name || "",
-            oneway: (el.tags || {}).oneway || ""
+            oneway: (el.tags || {}).oneway || "",
+            foot: (el.tags || {}).foot || ""
           },
           geometry: { type: "LineString", coordinates: coords }
         });
@@ -495,6 +553,8 @@
     _roadGeoJSON = null;
     _graph = null;
     _allLines = null;
+    _walkLines = null;
+    _carLines = null;
     _segmentIndex = null;
     _featureCount = 0;
     _networkEpoch++;
@@ -569,6 +629,7 @@
 
       for (var i = 0; i < neighbors.length; i++) {
         var nb = neighbors[i];
+        if (nb.pedBlocked) continue; // pedestrians can't walk motorways/trunk roads
         var newDist = current.dist + nb.weight;
         if (newDist > budgetKm) continue; // beyond walk budget — don't settle
         if (newDist < (dist.get(nb.node) || Infinity)) {
@@ -619,8 +680,8 @@
     var t0 = (typeof performance !== "undefined" && performance.now)
       ? performance.now() : Date.now();
 
-    var snap = snapToNetwork(lngLat);
-    if (!snap) return null; // origin outside network coverage
+    var snap = snapToNetwork(lngLat, "walk");
+    if (!snap) return null; // origin outside walkable network coverage
 
     // Temp origin-node injection (mirrors findLocalRoute's pattern).
     var tempEdges = [];
@@ -673,6 +734,7 @@
       var segFeatures = [];
       for (var si = 0; si < _segmentIndex.length; si++) {
         var seg = _segmentIndex[si];
+        if (seg.pedBlocked) continue; // don't draw motorways/trunk as reachable walking streets
         if (distMap.has(seg.startKey) && distMap.has(seg.endKey)) {
           segFeatures.push(turf.lineString([seg.startCoord, seg.endCoord]));
         }

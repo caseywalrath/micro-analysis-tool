@@ -25,6 +25,20 @@ While drawing a line/route/polygon, snap new vertices to nearby reference geomet
 ### Walkshed polygons — Implemented
 Compute a true street-network walking isochrone from placed Points, entirely in-browser — no external service. The **Walkshed** analysis module (`js/projects/walkshed.js`) uses the offline road-network engine (`App.computeWalkshed` in `js/core/road-network.js`: budget-limited flood Dijkstra + concave-hull polygon) to build a "15-minute walk" area, renders it (with an optional green reachable-streets correctness layer), and exports GeoJSON. A road network must be loaded first (Add Data → Area Roads for Street Routing, or import a saved road-network GeoJSON). A Point can be flagged `attributes.serviceAreaType = "walkshed"` (Features popup / Attribute Summary, or the module's "Use as study areas" button), which substitutes the walkshed polygon for the circular buffer in `rebuildBuffers()` so Buffer-Area Summary, TPI, Title VI, FTA, and the corridor pickers all analyze "demographics within a walk" with no per-module changes.
 
+### Walkshed sidewalk & access refinement — Not started
+A further precision pass on the walkshed network, building on the class-aware traversal already in place (`js/core/road-network.js` tags every edge/segment `pedBlocked`/`carBlocked` from the OSM `highway` class and `foot` tag, so motorways/trunk roads and their ramps are already excluded from walksheds, pedestrian ways — footway/path/steps/pedestrian/cycleway/living_street — are already included, and driving routes still ignore pedestrian-only ways).
+
+**What this adds:** lean on OSM sidewalk and access tagging to refine *which* segments a pedestrian can actually use, rather than relying on the highway class alone.
+- **Sidewalk data (two forms).** OSM encodes sidewalks either as `sidewalk=both/left/right/no/none` tags on a road centerline, or as separately-mapped `highway=footway` + `footway=sidewalk` ways. The separately-mapped form already flows into the network via the footway class; the centerline `sidewalk=*` tag is not yet captured. Capturing it would let a walkshed prefer/weight streets known to have sidewalks and down-weight or exclude `sidewalk=no` arterials.
+- **Access tags.** Extend the existing `foot=*` override to also honor `access=private`, `access=no`, and `foot=private` so technically-mapped-but-un-walkable segments (gated service roads, private drives) are dropped. Cheap once the tags are captured — the classifier hook (`isPedForbidden`) is already the single choke point.
+
+**⚠ Caveats (why this is "nice if present, never required"):**
+- **Coverage is wildly inconsistent.** Sidewalk tagging is excellent in a handful of well-mapped cities and essentially absent across most of the US. Logic that *depends* on `sidewalk=*` would make the tool behave very differently region to region — a walkshed that looks precise in Seattle and empty in a mid-size county — which is hard to explain to the beginner audience (see `CLAUDE.md`). Treat sidewalk tags as an optional refinement signal, never a hard requirement: absent tag ⇒ fall back to today's class-based behavior, don't exclude the street.
+- **Directionality (`sidewalk=left/right`) is rarely worth modeling** given the network is undirected and pedestrians cross freely; collapse to a simple present/absent signal.
+- **Don't silently change results.** Because coverage is spotty, any sidewalk-aware mode should be surfaced to the user (e.g. an opt-in toggle or a footnote noting how many segments carried sidewalk tags) rather than quietly reshaping the walkshed.
+
+**Files to touch:** `js/core/road-network.js` — capture `sidewalk` (and the extra `access`/`foot` values) in the Overpass→GeoJSON conversion and in `loadRoadNetworkFromFile`'s pass-through, then extend `isPedForbidden` / add a soft-weighting hook; optionally expose the opt-in toggle + footnote in `js/projects/walkshed.js` / `projects/walkshed-popup.html`.
+
 ### Unmerge dissolved union — Low Priority
 Currently `bufferUnionPolygon()` always dissolves overlapping buffers. Add an option to keep individual buffers separate for per-station analysis or visual comparison.
 
