@@ -129,6 +129,17 @@ A new analysis module for Title VI civil rights compliance reporting. Title VI o
 
 **Files (anticipated):** `js/projects/title-vi.js`, `projects/title-vi-popup.html`
 
+**TODO — golden-value test coverage (deferred):** The `test/` golden harness now
+covers the Ridership, TPI, Route Costing, Trip Builder, and Corridor Scoring
+engines, but **not** Title VI (`title-vi-engine.js`, `window.TitleVI`). It was
+skipped deliberately: the module is still evolving, so pinning its outputs now
+would mostly generate churn. Once the engine's math stabilizes, add a
+`test/cases/title-vi.mjs` for the pure pieces — `defaultPolicy`, `createScenario`,
+`computeDivergence`, `evaluateMajorChange`, `evaluateFindings` — which take plain
+inputs and need no map/DOM (the fetch/geometry paths stay out of scope). Most
+`TitleVI.*` functions are already on the global namespace, so little or no
+test-only export hook should be needed. See `test/README.md` for the workflow.
+
 ### OSM Points of Interest — Implemented
 
 Load curated transit-relevant destination categories from OpenStreetMap via the Overpass API. Available under Add Data (+) → ONLINE → "Points of Interest (OSM)". A category picker popup lets users select from 15 destination types grouped into Health, Education, Transit, Retail, Government, and Recreation. Selected categories are fetched for the current map viewport and re-fetched automatically on pan/zoom (debounced 2 s). Each POI renders as a purple circle; size reflects importance (Hospital/University/Rail Station = large, School/Stadium = medium, others = small). Hide (eye) and Clear (×) icons follow the same Add Data pattern as GTFS and LODES. No session persistence — categories must be re-selected each session. Loaded POI features are exposed as `App.osmPoiFeatures` for downstream use by analysis modules (see TPI Destinations factor below).

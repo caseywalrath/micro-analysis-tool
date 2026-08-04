@@ -18,8 +18,10 @@ node test/run-golden.mjs ridership  # only case files matching "ridership"
 node test/run-golden.mjs --update   # re-record golden values from current code
 ```
 
-The final line is a one-glance tally, e.g. `PASS — 54/54 cases passed across 4 module(s)`.
-Currently covered: Ridership Forecasting, TPI scoring, Route Costing, Trip Builder.
+The final line is a one-glance tally, e.g. `PASS — 73/73 cases passed across 5 module(s)`.
+Currently covered: Ridership Forecasting, TPI scoring, Route Costing, Trip Builder,
+Corridor Scoring. (Title VI is deliberately deferred until its engine stabilizes —
+see the note in `features.md`.)
 
 `--update` is the only command that writes anything. Use it **only** when you have
 deliberately changed a formula, then review the golden diff before committing —
