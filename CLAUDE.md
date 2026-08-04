@@ -44,6 +44,19 @@ Project onboarding for Claude Code sessions. Read this first.
   - `js/projects/attribute-summary.js` — explicit `renderPoints` / `renderLineLike` / `renderPolygons` / `renderMarkers` build each row's columns.
 
   When you add, remove, rename, or change the type of any `feature.properties.attributes.*` field (or any direct `feature.properties.*` field surfaced in the UI), update **both** files in the same change so the two surfaces stay in sync. Also update the column grid template in `css/style.css` (`.as-grid-points` / `.as-grid-routelike` / `.as-grid-polygons` / `.as-grid-marker`) if you add or remove a column — header rows and data rows share the same grid, so column count and order must match. If you add a multi-row editor (like Time Bands or Route Picker), build a shared helper in `feature-attributes.js` (pattern: `App.buildXBadge(...)` + `App.openXPopup(...)`) so both surfaces call the same code rather than duplicating the editor UI.
+
+## Testing — golden-value checks
+
+**After changing any formula, elasticity, constant, or pure helper in a calculation engine, run the golden-value tests before committing.** The `test/` folder holds a zero-install harness (pure Node — no npm, no browser, no build) that pins the numeric output of the pure calculation functions so a silent math change is caught instead of shipped.
+
+- **Command:** `node test/run-golden.mjs` (or `bash test/run-tests.sh`). It runs in this environment as-is. A clean run ends with `PASS — N/N cases passed across M module(s)`.
+- **If it FAILS and you did NOT intend to change any numbers:** that is a regression — fix the code. Do **not** edit the golden files to make it pass.
+- **If it FAILS because you DELIBERATELY changed a formula/constant:** review the reported diff to confirm the new numbers are what you intended, then re-record with `node test/run-golden.mjs --update` and commit the changed `test/golden/*.json` **in the same commit** as the code change, noting in the message which numbers moved and why.
+- **Record the outcome in the commit message** — a `Verified: node test/run-golden.mjs → N/N` line — so the check is part of the record.
+- **Added or changed a pure calculation function?** Add or extend the matching `test/cases/<module>.mjs` and seed it with `--update`; a new engine module gets a new case file. Functions private to a module's IIFE closure need a small `__MAT_TEST__`-guarded `App._xxTest` export hook (see the existing hooks in `route-costing.js` / `trip-builder.js` / `corridor-scoring.js`). Full workflow: `test/README.md`.
+
+**Covered engines:** Ridership Forecasting, TPI scoring, Route Costing, Trip Builder, Corridor Scoring. **Deferred intentionally:** Title VI (see the note in `features.md`). The harness pins only *pure* math — no map, DOM, Census/LODES API, or turf geometry; those paths are out of scope by design, so not every code change needs a test run, only ones touching calculation logic.
+
 ## Overview
 
 Browser-based geospatial analysis tool. Pure front-end (no build step, no backend, no npm). Open `index.html` in a browser and it works. All data stays client-side; Census APIs are called directly.

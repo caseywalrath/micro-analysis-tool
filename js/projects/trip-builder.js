@@ -392,6 +392,17 @@
     return out;
   }
 
+  // Test-only: expose the pure schedule helpers to the golden harness
+  // (test/run-golden.mjs). Guarded by __MAT_TEST__ so it has no effect in the
+  // browser. See test/README.md.
+  if (typeof window !== "undefined" && window.__MAT_TEST__) {
+    App._tbTest = {
+      parseHHMMtoMin: parseHHMMtoMin,
+      formatMin: formatMin,
+      mergeIntervals: mergeIntervals
+    };
+  }
+
   // Build the per-day rollup used by the summary table.
   // For each day: Span string, Frequency string, Run Time string, Avg Speed string.
   // For paired services, values are combined across patterns (slash-joined when

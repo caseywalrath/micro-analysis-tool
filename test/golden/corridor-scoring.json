@@ -1,0 +1,30 @@
+{
+  "factorAvgs/two-factors": {
+    "pop_density": 4,
+    "employment": 3
+  },
+  "factorAvgs/skips-nonfinite": {
+    "poverty": 3
+  },
+  "factorAvgs/empty-scoremap": {
+    "senior": {
+      "__num__": "NaN"
+    }
+  },
+  "factorAvgs/no-result": {},
+  "pill/high": "pill high",
+  "pill/medium": "pill med",
+  "pill/low-medium": "pill ml",
+  "pill/low": "pill low",
+  "pill/unknown": "pill na",
+  "formatScore/value": "3.14",
+  "formatScore/zero": "0.00",
+  "formatScore/nan": "—",
+  "escapeHTML/markup": "&lt;b&gt;a &amp; &quot;b&quot; &#39;c&#39;&lt;/b&gt;",
+  "escapeHTML/null": "",
+  "csv/plain": "plain",
+  "csv/has-comma": "\"a,b\"",
+  "csv/has-quote": "\"quote\"\"here\"",
+  "csv/has-newline": "\"line\nbreak\"",
+  "csv/null": ""
+}

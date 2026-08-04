@@ -619,6 +619,19 @@
     return Number.isFinite(cdi) ? cdi.toFixed(2) : "—";
   }
 
+  // Test-only: expose the pure scoring/formatting helpers to the golden harness
+  // (test/run-golden.mjs). Guarded by __MAT_TEST__ so it has no effect in the
+  // browser. See test/README.md.
+  if (typeof window !== "undefined" && window.__MAT_TEST__) {
+    App._csTest = {
+      computeSystemFactorAverages: computeSystemFactorAverages,
+      pillClassFor: pillClassFor,
+      formatScore: formatScore,
+      escapeHTML: escapeHTML,
+      _csvField: _csvField
+    };
+  }
+
   function renderResultsTable(result) {
     var container = document.getElementById("csResultsTable");
     var resultsWrap = document.getElementById("csResults");

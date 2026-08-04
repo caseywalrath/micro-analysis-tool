@@ -129,6 +129,17 @@ A new analysis module for Title VI civil rights compliance reporting. Title VI o
 
 **Files (anticipated):** `js/projects/title-vi.js`, `projects/title-vi-popup.html`
 
+**TODO — golden-value test coverage (deferred):** The `test/` golden harness now
+covers the Ridership, TPI, Route Costing, Trip Builder, and Corridor Scoring
+engines, but **not** Title VI (`title-vi-engine.js`, `window.TitleVI`). It was
+skipped deliberately: the module is still evolving, so pinning its outputs now
+would mostly generate churn. Once the engine's math stabilizes, add a
+`test/cases/title-vi.mjs` for the pure pieces — `defaultPolicy`, `createScenario`,
+`computeDivergence`, `evaluateMajorChange`, `evaluateFindings` — which take plain
+inputs and need no map/DOM (the fetch/geometry paths stay out of scope). Most
+`TitleVI.*` functions are already on the global namespace, so little or no
+test-only export hook should be needed. See `test/README.md` for the workflow.
+
 ### OSM Points of Interest — Implemented
 
 Load curated transit-relevant destination categories from OpenStreetMap via the Overpass API. Available under Add Data (+) → ONLINE → "Points of Interest (OSM)". A category picker popup lets users select from 15 destination types grouped into Health, Education, Transit, Retail, Government, and Recreation. Selected categories are fetched for the current map viewport and re-fetched automatically on pan/zoom (debounced 2 s). Each POI renders as a purple circle; size reflects importance (Hospital/University/Rail Station = large, School/Stadium = medium, others = small). Hide (eye) and Clear (×) icons follow the same Add Data pattern as GTFS and LODES. No session persistence — categories must be re-selected each session. Loaded POI features are exposed as `App.osmPoiFeatures` for downstream use by analysis modules (see TPI Destinations factor below).
@@ -264,3 +275,11 @@ A "Present" button hides the sidebar, feature panel, and toolbar to show the map
 
 ### Classed & diverging legends with editable breaks — Not started
 In present mode, support classed and diverging choropleth legends with user-editable break values, rather than only the current continuous/auto legend. Lets a presenter set meaningful thresholds (e.g., headway tiers, or a diverging ramp around a midpoint) and have the legend swatches + map classification update together. Builds on the legend overlay in `js/core/present-overlays.js` and pairs naturally with the Frequency / service heatmap idea (which needs classed headway bins).
+
+## Development & Tooling
+
+### Golden-value test harness — Implemented
+Zero-install Node harness in `test/` that pins the numeric output of the pure calculation functions so a silent formula change is caught instead of shipped. Loads the real app `.js` files into a Node `vm` sandbox — no browser, no npm, no build step. Covers Ridership Forecasting, TPI, Route Costing, Trip Builder, and Corridor Scoring; Title VI is intentionally deferred (see its entry above). Run with `node test/run-golden.mjs` (or `bash test/run-tests.sh`); `--update` re-records the golden values after a deliberate change. `CLAUDE.md` instructs the agent to run it after any calculation change and before committing. Full workflow in `test/README.md`.
+
+### Automated test runs on push (GitHub Actions CI) — Not started (future decision)
+Today the golden tests run only when a person or the agent invokes them — the `CLAUDE.md` instruction makes that a reliable *habit*, but not a hard gate: if a session skips it, nothing physically blocks a bad number from being committed. A small GitHub Actions workflow (~15 lines) would run `node test/run-golden.mjs` automatically on every push / pull request, showing a green check or red ✗ on the branch and optionally blocking merge when red — a server-side guarantee that holds regardless of whether any session remembers. Because the harness needs no install (just Node), the workflow is minimal: check out the repo, set up Node, run the one command. **Recorded as a future decision, not a blocker** — the habit route is already live. Worth adding when a hard gate becomes valuable (e.g., more people/agents touching the calculation engines, or ahead of a release). No app-code impact: it is a single `.github/workflows/*.yml` file and changes nothing about the buildless, static nature of the app.

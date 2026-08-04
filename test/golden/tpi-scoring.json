@@ -1,0 +1,70 @@
+{
+  "quintiles/standard-5": {
+    "__map__": {
+      "A": 1,
+      "B": 2,
+      "C": 3,
+      "D": 4,
+      "E": 5
+    }
+  },
+  "quintiles/few-equal-interval": {
+    "__map__": {
+      "A": 1,
+      "B": 3,
+      "C": 5
+    }
+  },
+  "quintiles/all-equal": {
+    "__map__": {
+      "A": 3,
+      "B": 3,
+      "C": 3
+    }
+  },
+  "quintiles/drops-nonfinite": {
+    "__map__": {
+      "A": 1,
+      "C": 5
+    }
+  },
+  "quintiles/empty": {
+    "__map__": {}
+  },
+  "composite/two-factors": {
+    "__map__": {
+      "A": {
+        "composite": 4.5,
+        "factors": {
+          "pop_density": 5,
+          "employment": 4
+        }
+      },
+      "B": {
+        "composite": 2.5,
+        "factors": {
+          "pop_density": 2,
+          "employment": 3
+        }
+      }
+    }
+  },
+  "composite/missing-factor-redistributes": {
+    "__map__": {
+      "A": {
+        "composite": 4.5,
+        "factors": {
+          "pop_density": 5,
+          "employment": 4
+        }
+      },
+      "B": {
+        "composite": 2,
+        "factors": {
+          "pop_density": 2,
+          "employment": null
+        }
+      }
+    }
+  }
+}
