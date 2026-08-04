@@ -1,0 +1,194 @@
+{
+  "classify/high": {
+    "label": "High",
+    "level": 3
+  },
+  "classify/medium-boundary": {
+    "label": "Medium",
+    "level": 2
+  },
+  "classify/lowmed-boundary": {
+    "label": "Low-Medium",
+    "level": 1
+  },
+  "classify/low": {
+    "label": "Low",
+    "level": 0
+  },
+  "classify/object-form": {
+    "label": "High",
+    "level": 3
+  },
+  "classify/nan": {
+    "label": "N/A",
+    "level": 0
+  },
+  "freq/double-service": 1.515716566510398,
+  "freq/no-change": 1,
+  "freq/guard-zero": 1,
+  "freq/cut-to-10": 1.7320508075688772,
+  "span/extend": 1.1923427864134686,
+  "span/no-change": 1,
+  "span/shrink": 0.7901515111571373,
+  "elasticity/brt-frequent": {
+    "low": 2.029841147178351,
+    "mid": 2.223159351671527,
+    "high": 2.416477556164703,
+    "freqEffect": 1.9331820449317627,
+    "serviceType": {
+      "id": "brt",
+      "label": "BRT-Style",
+      "servicePremium": {
+        "low": 0.05,
+        "high": 0.25
+      },
+      "defaultSpeed": 22,
+      "defaultHeadway": 10,
+      "defaultSpan": 18,
+      "defaultStopSpacing": 0.5
+    }
+  },
+  "elasticity/local-nochange": {
+    "low": 1,
+    "mid": 1,
+    "high": 1,
+    "freqEffect": 1,
+    "serviceType": {
+      "id": "local_bus",
+      "label": "Local Bus (Baseline)",
+      "servicePremium": {
+        "low": 0,
+        "high": 0
+      },
+      "defaultSpeed": 12,
+      "defaultHeadway": 30,
+      "defaultSpan": 14,
+      "defaultStopSpacing": 0.125
+    }
+  },
+  "elasticity/custom-premium": {
+    "low": 326.81045062710064,
+    "mid": 371.3755120762507,
+    "high": 415.94057352540074,
+    "freqEffect": 1.1884016386440022,
+    "serviceType": {
+      "id": "enhanced_bus",
+      "label": "Enhanced Bus",
+      "servicePremium": {
+        "low": 0.05,
+        "high": 0.15
+      },
+      "defaultSpeed": 14,
+      "defaultHeadway": 20,
+      "defaultSpan": 16,
+      "defaultStopSpacing": 0.2
+    }
+  },
+  "uncertainty/quarter": {
+    "low": 750,
+    "mid": 1000,
+    "high": 1250
+  },
+  "uncertainty/zero-base": {
+    "low": 0,
+    "mid": 0,
+    "high": 0
+  },
+  "uncertainty/default-pct": {
+    "low": 375,
+    "mid": 500,
+    "high": 625
+  },
+  "scenario/with-elasticity": {
+    "name": "BRT corridor",
+    "serviceTypeId": "brt",
+    "routeLengthMiles": 8,
+    "headway": 10,
+    "span": 18,
+    "avgSpeed": 22,
+    "costPerRevenueHour": 165,
+    "serviceDaysPerYear": 312,
+    "vehiclesNeeded": 5,
+    "revenueHoursPerDay": 90,
+    "annualRevenueHours": 28080,
+    "annualOperatingCost": 4633200,
+    "dailyRidership": {
+      "low": 990.0000000000001,
+      "mid": 1320,
+      "high": 1760.0000000000002
+    },
+    "annualRidership": {
+      "low": 308880.00000000006,
+      "mid": 411840,
+      "high": 549120.0000000001
+    },
+    "boardingsPerRevHr": {
+      "low": 11.000000000000002,
+      "mid": 14.666666666666666,
+      "high": 19.55555555555556
+    },
+    "costPerBoarding": {
+      "low": 8.437499999999998,
+      "mid": 11.25,
+      "high": 14.999999999999996
+    }
+  },
+  "scenario/from-cdi": {
+    "name": "Local baseline",
+    "serviceTypeId": "local_bus",
+    "routeLengthMiles": 5,
+    "headway": 30,
+    "span": 14,
+    "avgSpeed": 12,
+    "costPerRevenueHour": 150,
+    "serviceDaysPerYear": 260,
+    "vehiclesNeeded": 2,
+    "revenueHoursPerDay": 28,
+    "annualRevenueHours": 7280,
+    "annualOperatingCost": 1092000,
+    "dailyRidership": {
+      "low": 640,
+      "mid": 800,
+      "high": 960
+    },
+    "annualRidership": {
+      "low": 166400,
+      "mid": 208000,
+      "high": 249600
+    },
+    "boardingsPerRevHr": {
+      "low": 22.857142857142858,
+      "mid": 28.571428571428573,
+      "high": 34.285714285714285
+    },
+    "costPerBoarding": {
+      "low": 4.375,
+      "mid": 5.25,
+      "high": 6.5625
+    }
+  },
+  "calibrate/ratio": {
+    "factor": 253.33333333333334,
+    "n": 3,
+    "rSquared": 0.9950460014154282
+  },
+  "calibrate/ratio-empty": {
+    "factor": 1,
+    "n": 0,
+    "rSquared": null
+  },
+  "calibrate/regression": {
+    "intercept": 20,
+    "slope": 250,
+    "rSquared": 0.9955399808856323,
+    "n": 4,
+    "warning": "Small sample size (4 points) — interpret with caution"
+  },
+  "calibrate/regression-too-few": {
+    "intercept": 0,
+    "slope": 1,
+    "rSquared": null,
+    "n": 2,
+    "warning": "Need at least 3 data points"
+  }
+}
