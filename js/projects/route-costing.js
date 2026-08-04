@@ -429,6 +429,19 @@
     return settings.layoverValue / 60;  // minutes → hours
   }
 
+  // Test-only: expose the pure cost-math helpers to the golden harness
+  // (test/run-golden.mjs). Guarded by __MAT_TEST__ so it has no effect in the
+  // browser. See test/README.md.
+  if (typeof window !== "undefined" && window.__MAT_TEST__) {
+    App._rcTest = {
+      parseBandTime: parseBandTime,
+      oneWayRuntimeHrs: oneWayRuntimeHrs,
+      oneWayRuntimeHrsFromSettings: oneWayRuntimeHrsFromSettings,
+      computeRoundTrip: computeRoundTrip,
+      computeLayoverHrs: computeLayoverHrs
+    };
+  }
+
   // Compute one Service's full cost picture. Returns a result object.
   // If the Service has blocking warnings, returns { skipped:true, warnings, name }.
   function computeService(svc, settings) {

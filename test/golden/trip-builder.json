@@ -1,0 +1,27 @@
+{
+  "parseHHMM/valid": 390,
+  "parseHHMM/midnight-end": 1440,
+  "parseHHMM/garbage": {
+    "__num__": "NaN"
+  },
+  "formatMin/morning": "6:30",
+  "formatMin/wrap-past-midnight": "1:00",
+  "formatMin/negative-wrap": "23:30",
+  "merge/overlap-and-gap": [
+    {
+      "from": 360,
+      "to": 660
+    },
+    {
+      "from": 800,
+      "to": 900
+    }
+  ],
+  "merge/single": [
+    {
+      "from": 100,
+      "to": 200
+    }
+  ],
+  "merge/empty": []
+}

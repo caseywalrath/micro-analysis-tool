@@ -12,10 +12,14 @@ command.
 ## Run it
 
 ```bash
+bash test/run-tests.sh              # check everything (wrapper; same as below)
 node test/run-golden.mjs            # check every case file (this is the "CI" run)
 node test/run-golden.mjs ridership  # only case files matching "ridership"
 node test/run-golden.mjs --update   # re-record golden values from current code
 ```
+
+The final line is a one-glance tally, e.g. `PASS — 54/54 cases passed across 4 module(s)`.
+Currently covered: Ridership Forecasting, TPI scoring, Route Costing, Trip Builder.
 
 `--update` is the only command that writes anything. Use it **only** when you have
 deliberately changed a formula, then review the golden diff before committing —
@@ -47,18 +51,44 @@ test.
    };
    ```
 
-2. Seed its golden file once: `node test/run-golden.mjs --update`.
+2. Seed its golden file once: `node test/run-golden.mjs --update <name>`.
 3. Commit `test/cases/<name>.mjs` **and** `test/golden/<name>.json` together.
 
 `scripts` are loaded in order into one sandbox, so if a module needs a helper
 module loaded first (e.g. a scoring engine that reads `window.TPI` at call time),
-list that file first.
+list that file first. The sandbox seeds a no-op `App.registerModule`, so
+*registered* modules (Route Costing, Trip Builder) load without a real app.
+
+### Two kinds of function
+
+- **Already on a global namespace** (`window.TPI`, `window.RidershipModel`, most
+  of `window.App`): call it directly, e.g. `"RidershipModel.classifyCDI"`. No app
+  change needed.
+- **Private to a module's closure** (e.g. Route Costing's `computeRoundTrip`,
+  Trip Builder's `mergeIntervals`): the module needs a tiny **test-only export
+  hook**, guarded so it does nothing in the browser:
+
+  ```js
+  if (typeof window !== "undefined" && window.__MAT_TEST__) {
+    App._rcTest = { computeRoundTrip: computeRoundTrip, /* ... */ };
+  }
+  ```
+
+  Then reference it as `"App._rcTest.computeRoundTrip"`. See the hooks near
+  `computeLayoverHrs` in `route-costing.js` and `mergeIntervals` in
+  `trip-builder.js` for the pattern.
+
+Maps and Sets (TPI returns Maps of geoid→score) are stored in the golden as
+`{ "__map__": { ... } }` / `{ "__set__": [ ... ] }`, and `Infinity`/`NaN` as
+`{ "__num__": "Infinity" }`. You don't need to do anything — the harness handles
+these automatically on both sides of the comparison.
 
 ## Layout
 
 ```
 test/
   run-golden.mjs        the runner (sandbox loader + tolerant comparator + CLI)
+  run-tests.sh          convenience wrapper around run-golden.mjs
   cases/                one file per module: the inputs you choose to pin
   golden/               the recorded known-good outputs (committed; regenerated with --update)
   README.md

@@ -1,0 +1,38 @@
+{
+  "parseBandTime/valid": 6.5,
+  "parseBandTime/midnight-end": 24,
+  "parseBandTime/out-of-range": {
+    "__num__": "NaN"
+  },
+  "parseBandTime/garbage": {
+    "__num__": "NaN"
+  },
+  "oneWay/speed": 0.5,
+  "oneWay/no-speed": 0,
+  "oneWaySettings/runTime-mode": 0.75,
+  "oneWaySettings/speed-mode": 0.3333333333333333,
+  "roundTrip/two-pattern": {
+    "rtHrs": 1,
+    "rtMiles": 12,
+    "oneWays": [
+      0.5,
+      0.5
+    ]
+  },
+  "roundTrip/one-pattern-both": {
+    "rtHrs": 1,
+    "rtMiles": 10,
+    "oneWays": [
+      0.5
+    ]
+  },
+  "roundTrip/one-pattern-loop": {
+    "rtHrs": 0.5,
+    "rtMiles": 5,
+    "oneWays": [
+      0.5
+    ]
+  },
+  "layover/percent": 0.1,
+  "layover/minutes": 0.2
+}

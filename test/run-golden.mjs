@@ -78,17 +78,39 @@ function fmt(v) {
   return JSON.stringify(v);
 }
 
-// ---- JSON with non-finite number support --------------------------------
-// JSON can't hold Infinity/NaN (buildScenario's cost/boarding can be Infinity),
-// so encode them as sentinel strings on write and decode on read.
-const encode = (_k, v) =>
-  typeof v === "number" && !Number.isFinite(v)
-    ? { __num__: Number.isNaN(v) ? "NaN" : v > 0 ? "Infinity" : "-Infinity" }
-    : v;
-const decode = (_k, v) =>
-  v && typeof v === "object" && typeof v.__num__ === "string"
-    ? { NaN: NaN, Infinity: Infinity, "-Infinity": -Infinity }[v.__num__]
-    : v;
+// ---- canonicalize for storage + comparison ------------------------------
+// Plain JSON can't hold Map/Set or Infinity/NaN, all of which the engines
+// produce (TPI returns Maps of geoid→score; buildScenario can return Infinity).
+// Convert everything to JSON-safe structures, applied to BOTH the recorded value
+// and the golden so the comparison is apples-to-apples. Tags: __map__ (object
+// form when all keys are strings, else [key,value] pairs), __set__, __num__.
+// tagOf works ACROSS realms (values returned from the vm sandbox have a
+// different Map/Set constructor, so `instanceof` would miss them); the
+// Symbol.toStringTag brand does not, so "[object Map]" is reliable.
+const tagOf = (v) => Object.prototype.toString.call(v).slice(8, -1);
+
+function canon(v) {
+  if (typeof v === "number")
+    return Number.isFinite(v) ? v : { __num__: Number.isNaN(v) ? "NaN" : v > 0 ? "Infinity" : "-Infinity" };
+  const t = tagOf(v);
+  if (t === "Map") {
+    const keys = [...v.keys()];
+    if (keys.every((k) => typeof k === "string")) {
+      const o = {};
+      for (const [k, val] of v) o[k] = canon(val);
+      return { __map__: o };
+    }
+    return { __map__: [...v.entries()].map(([k, val]) => [canon(k), canon(val)]) };
+  }
+  if (t === "Set") return { __set__: [...v].map(canon) };
+  if (Array.isArray(v)) return v.map(canon);
+  if (v && typeof v === "object") {
+    const o = {};
+    for (const k of Object.keys(v)) o[k] = canon(v[k]);
+    return o;
+  }
+  return v; // string, boolean, null, undefined
+}
 
 // ---- sandbox loader -----------------------------------------------------
 // Build one browser-ish global, run each app script into it in order, and hand
@@ -99,6 +121,14 @@ function loadScripts(scriptPaths) {
   sandbox.window = sandbox;
   sandbox.globalThis = sandbox;
   sandbox.self = sandbox;
+  // Minimal bootstrap so *registered* modules (Route Costing, Trip Builder) load
+  // without a real app: a no-op registerModule is the only App call they make at
+  // load time (cache.registerModule is guarded by an `if`). The flag unlocks each
+  // module's test-only export hook (App._rcTest / App._tbTest). Engine modules
+  // (RidershipModel, TPI) don't touch any of this and are unaffected.
+  const noop = () => {};
+  sandbox.App = { registerModule: noop, registerProject: noop };
+  sandbox.__MAT_TEST__ = true;
   vm.createContext(sandbox);
   for (const rel of scriptPaths) {
     const abs = resolve(REPO_ROOT, rel);
@@ -142,14 +172,16 @@ async function runCaseFile(file, { update }) {
 
   if (update) {
     if (!existsSync(GOLDEN_DIR)) mkdirSync(GOLDEN_DIR, { recursive: true });
-    writeFileSync(goldenPath, JSON.stringify(results, encode, 2) + "\n");
+    const out = {};
+    for (const k of Object.keys(results)) out[k] = canon(results[k]);
+    writeFileSync(goldenPath, JSON.stringify(out, null, 2) + "\n");
     return { name, updated: Object.keys(results).length, failures: [] };
   }
 
   if (!existsSync(goldenPath)) {
     return { name, failures: [{ id: "(golden)", msgs: [`no golden file — run: node test/run-golden.mjs --update`] }] };
   }
-  const golden = JSON.parse(readFileSync(goldenPath, "utf8"), decode);
+  const golden = JSON.parse(readFileSync(goldenPath, "utf8"));
   for (const c of mod.cases) {
     if (!(c.id in results)) continue; // already recorded as a failure (threw / missing)
     if (!(c.id in golden)) {
@@ -157,7 +189,7 @@ async function runCaseFile(file, { update }) {
       continue;
     }
     const msgs = [];
-    diff(results[c.id], golden[c.id], "", msgs);
+    diff(canon(results[c.id]), golden[c.id], "", msgs);
     if (msgs.length) failures.push({ id: c.id, msgs });
   }
   const passed = mod.cases.length - failures.length;
@@ -182,12 +214,18 @@ async function main() {
   }
 
   let anyFail = false;
+  let modules = 0;
+  let passedTotal = 0;
+  let caseTotal = 0;
   for (const file of files) {
     const r = await runCaseFile(file, { update });
     if (update) {
       console.log(`  ~ ${r.name}: wrote ${r.updated} golden value(s)`);
       continue;
     }
+    modules++;
+    passedTotal += r.passed ?? 0;
+    caseTotal += r.total ?? r.failures.length;
     if (r.failures.length === 0) {
       console.log(`✓ ${r.name}: ${r.passed}/${r.total} passed`);
     } else {
@@ -203,7 +241,7 @@ async function main() {
     console.log("\nGolden files updated. Review the diff before committing.");
     return;
   }
-  console.log(anyFail ? "\nFAIL" : "\nPASS");
+  console.log(`\n${anyFail ? "FAIL" : "PASS"} — ${passedTotal}/${caseTotal} cases passed across ${modules} module(s)`);
   process.exit(anyFail ? 1 : 0);
 }
 
