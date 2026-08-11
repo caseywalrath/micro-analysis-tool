@@ -2546,6 +2546,9 @@ body.dark-mode .cs-row:hover { background: #1e293b; }
 body.dark-mode .cs-row-details td { background: #1a2233; }
 body.dark-mode .cs-feature-badge { background: #2d3748; color: #cbd5e0; }
 
+/* ---- Transit Coverage popup body (reuses .cs-results-table) ---- */
+.tc-results-table td:nth-child(n+2) { text-align: right; }
+
 /* ---- Walkshed popup ---- */
 .ws-body {
   padding: 16px;

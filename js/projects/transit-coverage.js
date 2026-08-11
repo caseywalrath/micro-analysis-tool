@@ -593,20 +593,214 @@
     }
   }
 
-  // ---- Results rendering (stub — filled in by Step 6) ----
+  // ---- Results rendering ----
 
-  function renderResults(result) {
-    // Implemented in Step 6.
+  function buildResultsRow(label, popValue, jobsValue, popDen, jobsDen) {
+    return '<tr>' +
+      '<td>' + escapeHTML(label) + '</td>' +
+      '<td>' + formatCount(popValue) + '</td>' +
+      '<td>' + formatPct(popValue, popDen) + '</td>' +
+      '<td>' + (jobsValue == null ? "—" : formatCount(jobsValue)) + '</td>' +
+      '<td>' + (jobsValue == null ? "—" : formatPct(jobsValue, jobsDen)) + '</td>' +
+    '</tr>';
   }
 
-  // ---- Exports (stubs — filled in by Step 6) ----
+  function renderResults(result) {
+    var container   = document.getElementById("tcResultsTable");
+    var resultsWrap = document.getElementById("tcResults");
+    var emptyState  = document.getElementById("tcEmptyState");
+    if (!container || !resultsWrap) return;
+
+    if (!result) {
+      resultsWrap.style.display = "none";
+      container.innerHTML = "";
+      App.renderModuleState({
+        statusEl: "tcStatus", emptyEl: "tcEmptyState", empty: true, hint: emptyHint()
+      });
+      return;
+    }
+    if (emptyState) emptyState.style.display = "none";
+    resultsWrap.style.display = "";
+
+    var hasThreshold = result.thresholdMin != null;
+
+    var html = '<table class="cs-results-table tc-results-table">' +
+      '<thead><tr>' +
+        '<th>Row</th>' +
+        '<th>Population</th>' +
+        '<th>Pop %</th>' +
+        '<th>Jobs</th>' +
+        '<th>Jobs %</th>' +
+      '</tr></thead><tbody>';
+
+    html += buildResultsRow("Service area", result.popTotal, result.jobsTotal, result.popTotal, result.jobsTotal);
+    html += buildResultsRow(
+      "Within " + result.bufferMiles + " mi of selected transit",
+      result.popCovered, result.jobsCovered, result.popTotal, result.jobsTotal);
+    if (hasThreshold) {
+      html += buildResultsRow(
+        "Within " + result.bufferMiles + " mi of ≤" + result.thresholdMin + "-min transit",
+        result.popThreshold, result.jobsThreshold, result.popTotal, result.jobsTotal);
+    }
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+
+    var statEl = document.getElementById("tcStatSentence");
+    if (statEl) {
+      statEl.textContent = buildStatSentence({
+        bufferMiles:      result.bufferMiles,
+        headwayThreshold: result.thresholdMin,
+        popTotal:         result.popTotal,
+        popCovered:       result.popCovered,
+        popThreshold:     result.popThreshold,
+        hasThreshold:     hasThreshold
+      });
+    }
+
+    var headwayListEl = document.getElementById("tcHeadwayList");
+    if (headwayListEl) {
+      var rows = result.headwayRows || [];
+      var itemsHtml = rows.map(function (r) {
+        var headwayText = (r.peakHeadway != null) ? (r.peakHeadway + " min") : "no service";
+        var meetsText = hasThreshold ? (r.qualifies ? " — meets threshold" : " — does not meet threshold") : "";
+        return '<div class="tiny">' + escapeHTML(r.name) + ': ' + headwayText + meetsText + '</div>';
+      }).join("");
+      headwayListEl.innerHTML =
+        '<details><summary>Peak headways (' + rows.length + ' feature' + (rows.length === 1 ? "" : "s") + ')</summary>' +
+        itemsHtml +
+        '</details>';
+    }
+  }
+
+  // ---- Exports ----
+
+  function _pctField(num, den) {
+    if (!Number.isFinite(den) || den <= 0 || !Number.isFinite(num)) return "";
+    return (100 * num / den).toFixed(1);
+  }
+
+  function _pctValue(num, den) {
+    if (!Number.isFinite(den) || den <= 0 || !Number.isFinite(num)) return null;
+    return parseFloat((100 * num / den).toFixed(1));
+  }
 
   function exportCSV() {
-    // Implemented in Step 6.
+    if (!_lastResult) return;
+    var r = _lastResult;
+    var hasThreshold = r.thresholdMin != null;
+
+    function dataRow(label, popVal, jobsVal, popDen, jobsDen) {
+      return [
+        _csvField(label),
+        Number.isFinite(popVal) ? Math.round(popVal) : "",
+        _pctField(popVal, popDen),
+        (jobsVal == null) ? "" : Math.round(jobsVal),
+        (jobsVal == null) ? "" : _pctField(jobsVal, jobsDen)
+      ].join(",");
+    }
+
+    var lines = [];
+    lines.push("# Micro Analysis Tool — Transit Coverage Export");
+    lines.push("# Exported: "              + new Date().toISOString());
+    lines.push("# Geography: "             + (r.geoLevel || ""));
+    lines.push("# ACS Year: "               + (r.year || ""));
+    lines.push("# Buffer distance (mi): "  + r.bufferMiles);
+    lines.push("# Day type: "               + r.dayType);
+    lines.push("# Headway threshold (min): " + (hasThreshold ? r.thresholdMin : ""));
+    lines.push("# Apportion by area: "     + (r.apportionByArea ? "yes" : "no"));
+
+    lines.push("row,population,pop_pct,jobs,jobs_pct");
+    lines.push(dataRow("Service area", r.popTotal, r.jobsTotal, r.popTotal, r.jobsTotal));
+    lines.push(dataRow("Within " + r.bufferMiles + " mi of selected transit",
+      r.popCovered, r.jobsCovered, r.popTotal, r.jobsTotal));
+    if (hasThreshold) {
+      lines.push(dataRow("Within " + r.bufferMiles + " mi of ≤" + r.thresholdMin + "-min transit",
+        r.popThreshold, r.jobsThreshold, r.popTotal, r.jobsTotal));
+    }
+
+    lines.push("");
+    lines.push("feature,peak_headway_min,meets_threshold");
+    var headwayRows = r.headwayRows || [];
+    for (var i = 0; i < headwayRows.length; i++) {
+      var hr = headwayRows[i];
+      lines.push([
+        _csvField(hr.name),
+        (hr.peakHeadway != null) ? hr.peakHeadway : "",
+        hasThreshold ? (hr.qualifies ? "yes" : "no") : ""
+      ].join(","));
+    }
+
+    _triggerDownload(lines.join("\n"), "text/csv", "transit-coverage-" + _dateStamp() + ".csv");
   }
 
   function exportGeoJSON() {
-    // Implemented in Step 6.
+    if (!_lastResult) return;
+    var r = _lastResult;
+    var hasThreshold = r.thresholdMin != null;
+    var features = [];
+
+    if (r.serviceAreaUnion && r.serviceAreaUnion.geometry) {
+      features.push({
+        type: "Feature",
+        geometry: r.serviceAreaUnion.geometry,
+        properties: {
+          kind:          "service-area",
+          population:    Number.isFinite(r.popTotal) ? r.popTotal : null,
+          populationPct: _pctValue(r.popTotal, r.popTotal),
+          jobs:          r.jobsTotal,
+          jobsPct:       _pctValue(r.jobsTotal, r.jobsTotal)
+        }
+      });
+    }
+    if (r.coverageClipped && r.coverageClipped.geometry) {
+      features.push({
+        type: "Feature",
+        geometry: r.coverageClipped.geometry,
+        properties: {
+          kind:          "coverage",
+          population:    Number.isFinite(r.popCovered) ? r.popCovered : null,
+          populationPct: _pctValue(r.popCovered, r.popTotal),
+          jobs:          r.jobsCovered,
+          jobsPct:       _pctValue(r.jobsCovered, r.jobsTotal)
+        }
+      });
+    }
+    if (hasThreshold && r.thresholdClipped && r.thresholdClipped.geometry) {
+      features.push({
+        type: "Feature",
+        geometry: r.thresholdClipped.geometry,
+        properties: {
+          kind:          "threshold",
+          population:    Number.isFinite(r.popThreshold) ? r.popThreshold : null,
+          populationPct: _pctValue(r.popThreshold, r.popTotal),
+          jobs:          r.jobsThreshold,
+          jobsPct:       _pctValue(r.jobsThreshold, r.jobsTotal)
+        }
+      });
+    }
+
+    var geojson = {
+      type: "FeatureCollection",
+      metadata: {
+        tool:                "Micro Analysis Tool",
+        module:              "Transit Coverage",
+        exportedAt:          new Date().toISOString(),
+        geoLevel:            r.geoLevel,
+        acsYear:             r.year,
+        apportionByArea:     r.apportionByArea,
+        bufferMiles:         r.bufferMiles,
+        dayType:             r.dayType,
+        headwayThresholdMin: r.thresholdMin
+      },
+      features: features
+    };
+
+    _triggerDownload(
+      JSON.stringify(geojson, null, 2),
+      "application/geo+json",
+      "transit-coverage-" + _dateStamp() + ".geojson"
+    );
   }
 
   // ---- Popup lifecycle ----
