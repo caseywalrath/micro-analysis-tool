@@ -255,6 +255,90 @@
     }
   }
 
+  // ---- Pure helpers (no DOM/App state — testable via App._tcTest) ----
+
+  function computePeakHeadway(service, dayType) {
+    var bands = App.getEffectiveServiceBands ? App.getEffectiveServiceBands(service, dayType) : [];
+    var min = null;
+    for (var i = 0; i < bands.length; i++) {
+      var f = parseFloat(bands[i] && bands[i].frequency);
+      if (Number.isFinite(f) && f > 0) {
+        if (min === null || f < min) min = f;
+      }
+    }
+    return min;
+  }
+
+  function formatPct(num, den) {
+    if (!Number.isFinite(den) || den <= 0 || !Number.isFinite(num)) return "—";
+    return (100 * num / den).toFixed(1) + "%";
+  }
+
+  function formatCount(v) {
+    if (!Number.isFinite(v)) return "—";
+    return Math.round(v).toLocaleString();
+  }
+
+  function buildStatSentence(summary) {
+    var s = summary || {};
+    if (!Number.isFinite(s.popTotal) || s.popTotal <= 0) {
+      return "No population found in the selected service area.";
+    }
+    var sentence = formatPct(s.popCovered, s.popTotal) +
+      " of residents are within " + s.bufferMiles + " mi of selected transit";
+    if (s.hasThreshold) {
+      sentence += "; " + formatPct(s.popThreshold, s.popTotal) +
+        " within " + s.bufferMiles + " mi of " + s.headwayThreshold + "-min-or-better service.";
+    } else {
+      sentence += ".";
+    }
+    return sentence;
+  }
+
+  function escapeHTML(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+
+  function _csvField(val) {
+    if (val == null) return "";
+    var s = String(val);
+    if (s.indexOf(",") !== -1 || s.indexOf('"') !== -1 || s.indexOf("\n") !== -1) {
+      s = '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+  }
+
+  function _dateStamp() {
+    var d = new Date();
+    return d.getFullYear() + "-" +
+      String(d.getMonth() + 1).padStart(2, "0") + "-" +
+      String(d.getDate()).padStart(2, "0");
+  }
+
+  function _triggerDownload(content, mimeType, filename) {
+    var blob = new Blob([content], { type: mimeType });
+    var url  = URL.createObjectURL(blob);
+    var a    = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+  }
+
+  // Test-only: expose the pure helpers to the golden harness
+  // (test/run-golden.mjs). Guarded by __MAT_TEST__ so it has no effect in the
+  // browser. See test/README.md.
+  if (typeof window !== "undefined" && window.__MAT_TEST__) {
+    App._tcTest = {
+      computePeakHeadway: computePeakHeadway,
+      formatPct:          formatPct,
+      formatCount:        formatCount,
+      buildStatSentence:  buildStatSentence,
+      _csvField:          _csvField
+    };
+  }
+
   // ---- Coverage compute flow (stub — filled in by Step 5) ----
 
   async function runCoverage() {
