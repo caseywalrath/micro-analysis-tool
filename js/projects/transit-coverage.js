@@ -737,6 +737,10 @@
   function exportGeoJSON() {
     if (!_lastResult) return;
     var r = _lastResult;
+    if (!r.serviceAreaUnion && !r.coverageClipped && !r.thresholdClipped) {
+      setStatus("Re-run the analysis to regenerate geometry for export.", "error");
+      return;
+    }
     var hasThreshold = r.thresholdMin != null;
     var features = [];
 
@@ -936,6 +940,137 @@
     if (_lastResult) markStale();
   }
 
+  // ---- Session persistence ----
+
+  function saveTcState(mode) {
+    var settings = {
+      bufferMiles:      null,
+      dayType:          null,
+      headwayThreshold: null,
+      geoLevel:         null,
+      year:             null,
+      apportionByArea:  _apportionByArea
+    };
+
+    var bufferEl    = document.getElementById("tcBufferMiles");
+    var dayTypeEl   = document.getElementById("tcDayType");
+    var thresholdEl = document.getElementById("tcHeadwayThreshold");
+    var geoLevelEl  = document.getElementById("tcGeoLevel");
+    var yearEl      = document.getElementById("tcYearSelect");
+
+    settings.bufferMiles = bufferEl ? parseFloat(bufferEl.value)
+      : (_lastResult ? _lastResult.bufferMiles : null);
+    settings.dayType = dayTypeEl ? dayTypeEl.value
+      : (_lastResult ? _lastResult.dayType : null);
+    if (thresholdEl) {
+      var t = parseFloat(thresholdEl.value);
+      settings.headwayThreshold = (Number.isFinite(t) && t > 0) ? t : null;
+    } else {
+      settings.headwayThreshold = _lastResult ? _lastResult.thresholdMin : null;
+    }
+    settings.geoLevel = geoLevelEl ? geoLevelEl.value
+      : (_lastResult ? _lastResult.geoLevel : null);
+    settings.year = yearEl ? yearEl.value
+      : (_lastResult ? _lastResult.year : null);
+
+    // Prefer the live checklist state if the popup is initialized.
+    var selections;
+    if (document.getElementById("tcFeatureList")) {
+      var featSel = getSelectedFeatures();
+      var areaSel = getSelectedAreas();
+      selections = {
+        routeIndices:   featSel.routeIndices,
+        lineIndices:    featSel.lineIndices,
+        polygonIndices: areaSel.polygonIndices
+      };
+    } else {
+      selections = _savedSelections || { routeIndices: [], lineIndices: [], polygonIndices: [] };
+    }
+
+    var data = {
+      version:     1,
+      settings:    settings,
+      selections:  JSON.parse(JSON.stringify(selections)),
+      lastSummary: null
+    };
+
+    if (_lastResult) {
+      data.lastSummary = {
+        geoLevel:        _lastResult.geoLevel,
+        year:            _lastResult.year,
+        apportionByArea: _lastResult.apportionByArea,
+        bufferMiles:     _lastResult.bufferMiles,
+        dayType:         _lastResult.dayType,
+        thresholdMin:    _lastResult.thresholdMin,
+        popTotal:        _lastResult.popTotal,
+        popCovered:      _lastResult.popCovered,
+        popThreshold:    _lastResult.popThreshold,
+        jobsTotal:       _lastResult.jobsTotal,
+        jobsCovered:     _lastResult.jobsCovered,
+        jobsThreshold:   _lastResult.jobsThreshold,
+        headwayRows:     _lastResult.headwayRows || []
+      };
+    }
+
+    return data;
+  }
+
+  function restoreTcState(data) {
+    if (!data) return;
+
+    if (data.selections) _savedSelections = data.selections;
+
+    var settings = data.settings || {};
+    if (settings.apportionByArea != null) _apportionByArea = !!settings.apportionByArea;
+
+    var bufferEl    = document.getElementById("tcBufferMiles");
+    var dayTypeEl   = document.getElementById("tcDayType");
+    var thresholdEl = document.getElementById("tcHeadwayThreshold");
+    var geoLevelEl  = document.getElementById("tcGeoLevel");
+    var yearEl      = document.getElementById("tcYearSelect");
+    var apportionCb = document.getElementById("tcApportionByArea");
+
+    if (bufferEl && Number.isFinite(settings.bufferMiles)) bufferEl.value = String(settings.bufferMiles);
+    if (dayTypeEl && settings.dayType)                      dayTypeEl.value = settings.dayType;
+    if (thresholdEl) {
+      thresholdEl.value = (settings.headwayThreshold != null) ? String(settings.headwayThreshold) : "";
+    }
+    if (geoLevelEl && settings.geoLevel) geoLevelEl.value = settings.geoLevel;
+    if (yearEl && settings.year)         yearEl.value     = settings.year;
+    if (apportionCb)                     apportionCb.checked = _apportionByArea;
+
+    if (!data.lastSummary) return;
+    var s = data.lastSummary;
+
+    _lastResult = {
+      geoLevel:         s.geoLevel,
+      year:             s.year,
+      apportionByArea:  s.apportionByArea,
+      bufferMiles:      s.bufferMiles,
+      dayType:          s.dayType,
+      thresholdMin:     s.thresholdMin,
+      popTotal:         s.popTotal,
+      popCovered:       s.popCovered,
+      popThreshold:     s.popThreshold,
+      jobsTotal:        s.jobsTotal,
+      jobsCovered:      s.jobsCovered,
+      jobsThreshold:    s.jobsThreshold,
+      headwayRows:      s.headwayRows || [],
+      // Geometry is not persisted — Re-run regenerates it.
+      coverageClipped:  null,
+      thresholdClipped: null,
+      serviceAreaUnion: null,
+      featSel:          null,
+      areaSel:          null
+    };
+    _stale = false;
+
+    if (isPopupVisible()) {
+      renderResults(_lastResult);
+      setExportButtonsEnabled(true);
+    }
+  }
+
   // ---- Register as analysis module ----
 
   App.registerModule({
@@ -951,5 +1086,13 @@
     clear:   function ()     { clearAll(); },
     update:  async function (core) { await update(core); }
   });
+
+  // Register with session cache
+  if (App.cache && App.cache.registerModule) {
+    App.cache.registerModule("transit-coverage", {
+      collect: saveTcState,
+      apply:   restoreTcState
+    });
+  }
 
 })();
