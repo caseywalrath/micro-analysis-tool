@@ -416,10 +416,181 @@
     return foldUnion(polys);
   }
 
-  // ---- Coverage compute flow (stub — filled in by Step 5) ----
+  // ---- Map overlay (coverage / threshold / service-area fills) ----
+
+  var TC_SOURCE           = "transit-coverage-fill";
+  var TC_COVERAGE_LAYER   = "transit-coverage-coverage-layer";
+  var TC_THRESHOLD_LAYER  = "transit-coverage-threshold-layer";
+  var TC_AREA_LAYER       = "transit-coverage-area-layer";
+
+  function buildOverlayFeatureCollection(result) {
+    var features = [];
+    if (result.serviceAreaUnion) {
+      features.push({ type: "Feature", geometry: result.serviceAreaUnion.geometry, properties: { kind: "area" } });
+    }
+    if (result.coverageClipped) {
+      features.push({ type: "Feature", geometry: result.coverageClipped.geometry, properties: { kind: "coverage" } });
+    }
+    if (result.thresholdClipped) {
+      features.push({ type: "Feature", geometry: result.thresholdClipped.geometry, properties: { kind: "threshold" } });
+    }
+    return { type: "FeatureCollection", features: features };
+  }
+
+  function renderMapOverlay(result) {
+    var map = App.map;
+    if (!map || !result) return;
+    var fc = buildOverlayFeatureCollection(result);
+
+    if (!map.getSource(TC_SOURCE)) {
+      map.addSource(TC_SOURCE, { type: "geojson", data: fc });
+      map.addLayer({
+        id: TC_COVERAGE_LAYER,
+        type: "fill",
+        source: TC_SOURCE,
+        filter: ["==", ["get", "kind"], "coverage"],
+        paint: { "fill-color": "#93c5fd", "fill-opacity": 0.35 }
+      });
+      map.addLayer({
+        id: TC_THRESHOLD_LAYER,
+        type: "fill",
+        source: TC_SOURCE,
+        filter: ["==", ["get", "kind"], "threshold"],
+        paint: { "fill-color": "#1d4ed8", "fill-opacity": 0.35 }
+      });
+      map.addLayer({
+        id: TC_AREA_LAYER,
+        type: "line",
+        source: TC_SOURCE,
+        filter: ["==", ["get", "kind"], "area"],
+        paint: { "line-color": "#374151", "line-width": 2, "line-dasharray": [2, 2] }
+      });
+    } else {
+      map.getSource(TC_SOURCE).setData(fc);
+    }
+  }
+
+  function clearMapOverlay() {
+    var map = App.map;
+    if (!map) return;
+    if (map.getLayer(TC_COVERAGE_LAYER))  map.removeLayer(TC_COVERAGE_LAYER);
+    if (map.getLayer(TC_THRESHOLD_LAYER)) map.removeLayer(TC_THRESHOLD_LAYER);
+    if (map.getLayer(TC_AREA_LAYER))      map.removeLayer(TC_AREA_LAYER);
+    if (map.getSource(TC_SOURCE))         map.removeSource(TC_SOURCE);
+  }
+
+  // ---- Coverage compute flow ----
 
   async function runCoverage() {
-    // Implemented in Step 5.
+    if (_running) return;
+    _running = true;
+    var runBtn = document.getElementById("tcRunBtn");
+    if (runBtn) runBtn.disabled = true;
+    setStatus("Analyzing…", "running");
+    clearMapOverlay(); // wipe any prior run so selection changes are visible
+
+    try {
+      var geoLevel = document.getElementById("tcGeoLevel").value;
+      var year     = document.getElementById("tcYearSelect").value;
+
+      var bufferMiles = parseFloat(document.getElementById("tcBufferMiles").value);
+      if (!Number.isFinite(bufferMiles) || bufferMiles < 0.05 || bufferMiles > 5) {
+        throw new Error("Buffer distance must be between 0.05 and 5 miles.");
+      }
+
+      var dayType = document.getElementById("tcDayType").value;
+
+      var thresholdRaw = parseFloat(document.getElementById("tcHeadwayThreshold").value);
+      var thresholdMin = (Number.isFinite(thresholdRaw) && thresholdRaw > 0) ? thresholdRaw : null;
+
+      var featSel = getSelectedFeatures();
+      if (!featSel.routeIndices.length && !featSel.lineIndices.length) {
+        throw new Error("Select at least one route or line.");
+      }
+      var areaSel = getSelectedAreas();
+      if (!areaSel.polygonIndices.length) {
+        throw new Error("Select at least one service-area polygon.");
+      }
+
+      var serviceAreaUnion = buildServiceAreaUnion(areaSel);
+      if (!serviceAreaUnion) {
+        throw new Error("Could not build a service area from the selected polygons.");
+      }
+
+      var unions = buildCoverageUnions(featSel, bufferMiles, dayType, thresholdMin);
+      var coverageUnion  = unions.coverageUnion;
+      var thresholdUnion = unions.thresholdUnion;
+      var headwayRows     = unions.headwayRows;
+      if (!coverageUnion) {
+        throw new Error("Could not build buffers for the selected features.");
+      }
+
+      var coverageClipped  = clipToServiceArea(coverageUnion, serviceAreaUnion);
+      var thresholdClipped = clipToServiceArea(thresholdUnion, serviceAreaUnion);
+
+      setStatus("Fetching geographies…", "running");
+      var geos = await App.fetchTigerwebGeos(geoLevel, serviceAreaUnion);
+      var geoids = geos.map(function (f) { return f.properties.GEOID; }).filter(Boolean);
+
+      setStatus("Fetching population…", "running");
+      var popMap = await App.fetchACSValues(geoLevel, year, "B01003_001E", geoids);
+      var opts = { apportionByArea: _apportionByArea };
+      var popTotal     = App.aggregateWithinUnion(serviceAreaUnion, geos, popMap, "sum", opts).value;
+      var popCovered   = coverageClipped  ? App.aggregateWithinUnion(coverageClipped,  geos, popMap, "sum", opts).value : 0;
+      var popThreshold = (thresholdMin == null) ? null
+                       : (thresholdClipped ? App.aggregateWithinUnion(thresholdClipped, geos, popMap, "sum", opts).value : 0);
+
+      setStatus("Computing LODES employment…", "running");
+      async function sumJobsInUnion(unionFeat) {
+        if (!unionFeat) return 0;
+        var blocksInside = await App.fetchBlocksInternalPointsInUnion(unionFeat);
+        var sum = 0;
+        for (var geoid of blocksInside) {
+          var v = App.lodesData.get(geoid);
+          if (v != null) sum += v;
+        }
+        return sum;
+      }
+
+      var jobsTotal, jobsCovered, jobsThreshold;
+      if (!App.lodesData) {
+        jobsTotal = null; jobsCovered = null; jobsThreshold = null;
+      } else {
+        jobsTotal     = await sumJobsInUnion(serviceAreaUnion);
+        jobsCovered   = await sumJobsInUnion(coverageClipped);
+        jobsThreshold = (thresholdMin == null) ? null : await sumJobsInUnion(thresholdClipped);
+      }
+
+      _lastResult = {
+        geoLevel: geoLevel, year: year, apportionByArea: _apportionByArea,
+        bufferMiles: bufferMiles, dayType: dayType, thresholdMin: thresholdMin,
+        popTotal: popTotal, popCovered: popCovered, popThreshold: popThreshold,
+        jobsTotal: jobsTotal, jobsCovered: jobsCovered, jobsThreshold: jobsThreshold,
+        headwayRows: headwayRows,
+        coverageClipped: coverageClipped, thresholdClipped: thresholdClipped,
+        serviceAreaUnion: serviceAreaUnion,
+        featSel: featSel, areaSel: areaSel
+      };
+      _stale = false;
+
+      renderResults(_lastResult);
+      renderMapOverlay(_lastResult);
+      if (App.popup && App.popup.showFloatingWidget) {
+        App.popup.showFloatingWidget("tc-legend", "projects/transit-coverage-legend.html", {
+          position: "bottom-left",
+          width: 200,
+          title: "Transit Coverage"
+        });
+      }
+      setExportButtonsEnabled(true);
+      setStatus("Analyzed coverage — " + geos.length + " geographies.", "done");
+    } catch (err) {
+      console.error("Transit Coverage error:", err);
+      setStatus("Error: " + (err.message || err), "error");
+    } finally {
+      _running = false;
+      if (runBtn) runBtn.disabled = false;
+    }
   }
 
   // ---- Results rendering (stub — filled in by Step 6) ----
@@ -544,7 +715,8 @@
   }
 
   function clearAll() {
-    // Map overlay/legend teardown added in Step 5-6.
+    clearMapOverlay();
+    if (App.popup && App.popup.hideFloatingWidget) App.popup.hideFloatingWidget("tc-legend");
     _lastResult = null;
     _stale = false;
     if (isPopupVisible()) {
