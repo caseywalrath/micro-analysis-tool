@@ -4,7 +4,7 @@
 // selected transit routes/lines, clipped to a user-selected service area.
 // Depends on: App namespace, App.popup (popup.js), App.cache (cache.js),
 //   App.getEffectiveServiceBands (service-assembly.js), census.js, lodes.js, turf (CDN).
-// Step 1: scaffolding + static Settings column.
+// Step 2: checklists + input wiring + stale lifecycle.
 // No public API.
 
 (function () {
@@ -24,6 +24,193 @@
 
   function isPopupVisible() {
     return App.popup && App.popup.isOpen() && App.popup.currentModuleId() === "transit-coverage";
+  }
+
+  // ---- Feature checklist (routes + lines) ----
+
+  function buildFeatureChecklist() {
+    var el = document.getElementById("tcFeatureList");
+    if (!el) return;
+
+    // Capture current check state before rebuilding
+    var prevState = {};
+    var prev = el.querySelectorAll("input[type=checkbox]");
+    for (var pi = 0; pi < prev.length; pi++) {
+      prevState[prev[pi].getAttribute("data-type") + ":" + prev[pi].getAttribute("data-idx")] = prev[pi].checked;
+    }
+
+    el.innerHTML = "";
+    var hasFeatures = false;
+
+    function addRow(type, idx, name, badge) {
+      hasFeatures = true;
+      var key = type + ":" + idx;
+      var checked = (key in prevState) ? prevState[key] : true;
+      var row = document.createElement("div");
+      row.className = "rf-feature-check-row";
+
+      var cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.setAttribute("data-type", type);
+      cb.setAttribute("data-idx", String(idx));
+      cb.checked = checked;
+
+      var lbl = document.createElement("label");
+      lbl.style.cssText = "flex:1;cursor:pointer;";
+      lbl.textContent = name;
+
+      var badgeEl = document.createElement("span");
+      badgeEl.className = "rf-feature-type-badge";
+      badgeEl.textContent = badge;
+
+      lbl.addEventListener("click", function (e) { e.preventDefault(); cb.checked = !cb.checked; markStale(); });
+      cb.addEventListener("change", markStale);
+
+      row.appendChild(cb);
+      row.appendChild(lbl);
+      row.appendChild(badgeEl);
+      el.appendChild(row);
+    }
+
+    var routes = App.routes || [];
+    var lines  = App.lines  || [];
+
+    for (var ri = 0; ri < routes.length; ri++) {
+      addRow("route", ri,
+        (routes[ri].properties && routes[ri].properties.name) || ("Route " + (ri + 1)),
+        "R");
+    }
+    for (var li = 0; li < lines.length; li++) {
+      addRow("line", li,
+        (lines[li].properties && lines[li].properties.name) || ("Line " + (li + 1)),
+        "L");
+    }
+
+    if (!hasFeatures) {
+      el.innerHTML = '<div style="padding:6px;color:var(--muted);font-size:12px;">No routes or lines drawn.</div>';
+    }
+  }
+
+  // ---- Service-area checklist (drawn polygons) ----
+
+  function buildAreaChecklist() {
+    var el = document.getElementById("tcAreaList");
+    if (!el) return;
+
+    var prevState = {};
+    var prev = el.querySelectorAll("input[type=checkbox]");
+    for (var pi = 0; pi < prev.length; pi++) {
+      prevState[prev[pi].getAttribute("data-idx")] = prev[pi].checked;
+    }
+
+    el.innerHTML = "";
+    var hasAreas = false;
+
+    function addRow(idx, name) {
+      hasAreas = true;
+      var key = String(idx);
+      var checked = (key in prevState) ? prevState[key] : true;
+      var row = document.createElement("div");
+      row.className = "rf-feature-check-row";
+
+      var cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.setAttribute("data-type", "polygon");
+      cb.setAttribute("data-idx", String(idx));
+      cb.checked = checked;
+
+      var lbl = document.createElement("label");
+      lbl.style.cssText = "flex:1;cursor:pointer;";
+      lbl.textContent = name;
+
+      var badgeEl = document.createElement("span");
+      badgeEl.className = "rf-feature-type-badge";
+      badgeEl.textContent = "P";
+
+      lbl.addEventListener("click", function (e) { e.preventDefault(); cb.checked = !cb.checked; markStale(); });
+      cb.addEventListener("change", markStale);
+
+      row.appendChild(cb);
+      row.appendChild(lbl);
+      row.appendChild(badgeEl);
+      el.appendChild(row);
+    }
+
+    var polygons = App.polygons || [];
+    for (var i = 0; i < polygons.length; i++) {
+      addRow(i, (polygons[i].properties && polygons[i].properties.name) || ("Polygon " + (i + 1)));
+    }
+
+    if (!hasAreas) {
+      el.innerHTML = '<div style="padding:6px;color:var(--muted);font-size:12px;">No polygons drawn.</div>';
+    }
+  }
+
+  // ---- Selection readers/writers (explicit index arrays — never "null = all") ----
+
+  function getSelectedFeatures() {
+    var el = document.getElementById("tcFeatureList");
+    var routeIndices = [], lineIndices = [];
+    if (!el) return { routeIndices: routeIndices, lineIndices: lineIndices };
+    var boxes = el.querySelectorAll("input[type=checkbox]");
+    for (var i = 0; i < boxes.length; i++) {
+      var cb = boxes[i];
+      if (!cb.checked) continue;
+      var type = cb.getAttribute("data-type");
+      var idx  = parseInt(cb.getAttribute("data-idx"), 10);
+      if      (type === "route") routeIndices.push(idx);
+      else if (type === "line")  lineIndices.push(idx);
+    }
+    return { routeIndices: routeIndices, lineIndices: lineIndices };
+  }
+
+  function getSelectedAreas() {
+    var el = document.getElementById("tcAreaList");
+    var polygonIndices = [];
+    if (!el) return { polygonIndices: polygonIndices };
+    var boxes = el.querySelectorAll("input[type=checkbox]");
+    for (var i = 0; i < boxes.length; i++) {
+      var cb = boxes[i];
+      if (!cb.checked) continue;
+      polygonIndices.push(parseInt(cb.getAttribute("data-idx"), 10));
+    }
+    return { polygonIndices: polygonIndices };
+  }
+
+  function applySelections(sel) {
+    if (!sel) return;
+    var routeSet = new Set((sel.routeIndices   || []).map(Number));
+    var lineSet  = new Set((sel.lineIndices    || []).map(Number));
+    var polySet  = new Set((sel.polygonIndices || []).map(Number));
+
+    var featEl = document.getElementById("tcFeatureList");
+    if (featEl) {
+      var featBoxes = featEl.querySelectorAll("input[type=checkbox]");
+      for (var i = 0; i < featBoxes.length; i++) {
+        var cb   = featBoxes[i];
+        var type = cb.getAttribute("data-type");
+        var idx  = parseInt(cb.getAttribute("data-idx"), 10);
+        if (type === "route") cb.checked = routeSet.has(idx);
+        if (type === "line")  cb.checked = lineSet.has(idx);
+      }
+    }
+
+    var areaEl = document.getElementById("tcAreaList");
+    if (areaEl) {
+      var areaBoxes = areaEl.querySelectorAll("input[type=checkbox]");
+      for (var j = 0; j < areaBoxes.length; j++) {
+        var acb  = areaBoxes[j];
+        var aidx = parseInt(acb.getAttribute("data-idx"), 10);
+        acb.checked = polySet.has(aidx);
+      }
+    }
+  }
+
+  // ---- LODES warning icon visibility ----
+
+  function updateLodesWarnings() {
+    var warnBtn = document.getElementById("tcLodesWarnBtn");
+    if (warnBtn) warnBtn.style.display = App.lodesData ? "none" : "";
   }
 
   // ---- Status + stale helpers ----
@@ -74,19 +261,121 @@
     // Implemented in Step 5.
   }
 
+  // ---- Results rendering (stub — filled in by Step 6) ----
+
+  function renderResults(result) {
+    // Implemented in Step 6.
+  }
+
+  // ---- Exports (stubs — filled in by Step 6) ----
+
+  function exportCSV() {
+    // Implemented in Step 6.
+  }
+
+  function exportGeoJSON() {
+    // Implemented in Step 6.
+  }
+
   // ---- Popup lifecycle ----
 
   function init(core) {
     if (_initialized) return;
     _initialized = true;
-    // Input wiring added in Step 2.
+
+    // Geography level / ACS year
+    var geoLevel = document.getElementById("tcGeoLevel");
+    if (geoLevel) geoLevel.addEventListener("change", markStale);
+
+    var yearSel = document.getElementById("tcYearSelect");
+    if (yearSel) yearSel.addEventListener("change", markStale);
+
+    // Coverage settings
+    var bufferInput = document.getElementById("tcBufferMiles");
+    if (bufferInput) bufferInput.addEventListener("change", markStale);
+
+    var dayTypeSel = document.getElementById("tcDayType");
+    if (dayTypeSel) dayTypeSel.addEventListener("change", markStale);
+
+    var thresholdInput = document.getElementById("tcHeadwayThreshold");
+    if (thresholdInput) thresholdInput.addEventListener("change", markStale);
+
+    // Apportion-by-area checkbox
+    var apportionCb = document.getElementById("tcApportionByArea");
+    if (apportionCb) {
+      apportionCb.checked = _apportionByArea;
+      apportionCb.addEventListener("change", function () {
+        _apportionByArea = apportionCb.checked;
+        markStale();
+      });
+    }
+
+    // Transit features select all / clear
+    var featSelectAll = document.getElementById("tcFeatSelectAll");
+    if (featSelectAll) {
+      featSelectAll.addEventListener("click", function (e) {
+        e.preventDefault();
+        document.querySelectorAll("#tcFeatureList input[type=checkbox]").forEach(function (cb) { cb.checked = true; });
+        markStale();
+      });
+    }
+    var featSelectNone = document.getElementById("tcFeatSelectNone");
+    if (featSelectNone) {
+      featSelectNone.addEventListener("click", function (e) {
+        e.preventDefault();
+        document.querySelectorAll("#tcFeatureList input[type=checkbox]").forEach(function (cb) { cb.checked = false; });
+        markStale();
+      });
+    }
+
+    // Service-area select all / clear
+    var areaSelectAll = document.getElementById("tcAreaSelectAll");
+    if (areaSelectAll) {
+      areaSelectAll.addEventListener("click", function (e) {
+        e.preventDefault();
+        document.querySelectorAll("#tcAreaList input[type=checkbox]").forEach(function (cb) { cb.checked = true; });
+        markStale();
+      });
+    }
+    var areaSelectNone = document.getElementById("tcAreaSelectNone");
+    if (areaSelectNone) {
+      areaSelectNone.addEventListener("click", function (e) {
+        e.preventDefault();
+        document.querySelectorAll("#tcAreaList input[type=checkbox]").forEach(function (cb) { cb.checked = false; });
+        markStale();
+      });
+    }
+
+    // Analyze Coverage
+    var runBtn = document.getElementById("tcRunBtn");
+    if (runBtn) runBtn.addEventListener("click", runCoverage);
+
+    // Exports
+    var csvBtn = document.getElementById("tcExportCSV");
+    if (csvBtn) csvBtn.addEventListener("click", exportCSV);
+    var gjBtn = document.getElementById("tcExportGeoJSON");
+    if (gjBtn) gjBtn.addEventListener("click", exportGeoJSON);
   }
 
   function onOpen(core) {
-    // Checklist rebuild + result restore added in Step 2.
-    App.renderModuleState({
-      statusEl: "tcStatus", emptyEl: "tcEmptyState", empty: true, hint: emptyHint()
-    });
+    buildFeatureChecklist();
+    buildAreaChecklist();
+    if (_savedSelections) applySelections(_savedSelections);
+    updateLodesWarnings();
+
+    var apportionCb = document.getElementById("tcApportionByArea");
+    if (apportionCb) apportionCb.checked = _apportionByArea;
+
+    if (_lastResult) {
+      renderResults(_lastResult);
+      setExportButtonsEnabled(!_stale);
+    } else {
+      setExportButtonsEnabled(false);
+      App.renderModuleState({
+        statusEl: "tcStatus", emptyEl: "tcEmptyState", empty: true, hint: emptyHint()
+      });
+    }
+    if (_stale) markStale();
   }
 
   function onClose(core) {
@@ -108,8 +397,16 @@
   }
 
   async function update(core) {
-    // Checklist rebuild + stale detection added in Step 2.
+    var noFeatures = (App.routes || []).length === 0 && (App.lines || []).length === 0;
+    var noAreas    = (App.polygons || []).length === 0;
+    if (_lastResult && (noFeatures || noAreas)) {
+      clearAll();
+    }
     if (!isPopupVisible()) return;
+    buildFeatureChecklist();
+    buildAreaChecklist();
+    updateLodesWarnings();
+    if (_lastResult) markStale();
   }
 
   // ---- Register as analysis module ----
