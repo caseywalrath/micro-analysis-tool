@@ -339,6 +339,83 @@
     };
   }
 
+  // ---- Geometry: private buffers, unions, clipping ----
+  // These build the module's OWN buffers via turf — they never read or
+  // mutate App.routeBuffers / App.lineBuffers (those belong to the shared
+  // Feature Settings buffer radius, a different concern).
+
+  function foldUnion(polys) {
+    if (!polys || !polys.length) return null;
+    var union = polys[0];
+    for (var i = 1; i < polys.length; i++) {
+      try { union = turf.union(union, polys[i]); } catch (e) { /* skip */ }
+    }
+    return union;
+  }
+
+  function buildPrivateBuffer(feature, miles) {
+    try { return turf.buffer(feature, miles, { units: "miles", steps: 64 }); }
+    catch (e) { return null; }
+  }
+
+  function buildCoverageUnions(sel, miles, dayType, thresholdMin) {
+    var headwayRows = [];
+    var allBuffers = [];
+    var qualifyingBuffers = [];
+
+    function processFeature(type, idx, feature) {
+      if (!feature) return;
+      var name = (feature.properties && feature.properties.name) ||
+        (type.charAt(0).toUpperCase() + type.slice(1) + " " + (idx + 1));
+      var attrs = (feature.properties && feature.properties.attributes) || {};
+      var peak = computePeakHeadway(attrs.service, dayType);
+      var qualifies = thresholdMin != null && peak != null && peak <= thresholdMin;
+      headwayRows.push({
+        name: name, featureType: type, featureIndex: idx,
+        peakHeadway: peak, qualifies: qualifies
+      });
+
+      var buf = buildPrivateBuffer(feature, miles);
+      if (buf) {
+        allBuffers.push(buf);
+        if (qualifies) qualifyingBuffers.push(buf);
+      }
+    }
+
+    var routes = App.routes || [];
+    var lines  = App.lines  || [];
+    var routeIndices = (sel && sel.routeIndices) || [];
+    var lineIndices  = (sel && sel.lineIndices)  || [];
+    var i;
+    for (i = 0; i < routeIndices.length; i++) {
+      processFeature("route", routeIndices[i], routes[routeIndices[i]]);
+    }
+    for (i = 0; i < lineIndices.length; i++) {
+      processFeature("line", lineIndices[i], lines[lineIndices[i]]);
+    }
+
+    var coverageUnion  = foldUnion(allBuffers);
+    var thresholdUnion = (thresholdMin == null) ? null : foldUnion(qualifyingBuffers);
+
+    return { coverageUnion: coverageUnion, thresholdUnion: thresholdUnion, headwayRows: headwayRows };
+  }
+
+  function clipToServiceArea(unionFeat, serviceAreaUnion) {
+    if (!unionFeat || !serviceAreaUnion) return null;
+    try { return turf.intersect(unionFeat, serviceAreaUnion); }
+    catch (e) { return null; }
+  }
+
+  function buildServiceAreaUnion(sel) {
+    var polygons = App.polygons || [];
+    var idxs = (sel && sel.polygonIndices) || [];
+    var polys = [];
+    for (var i = 0; i < idxs.length; i++) {
+      if (polygons[idxs[i]]) polys.push(polygons[idxs[i]]);
+    }
+    return foldUnion(polys);
+  }
+
   // ---- Coverage compute flow (stub — filled in by Step 5) ----
 
   async function runCoverage() {
