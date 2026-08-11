@@ -17,7 +17,6 @@
   var _stale            = false;
   var _running          = false;
   var _initialized       = false;
-  var _apportionByArea   = false;
   var _savedSelections   = null;  // { routeIndices, lineIndices, polygonIndices } restored from session cache (Step 7)
 
   // ---- DOM guard: only touch DOM when popup is open for this module ----
@@ -534,7 +533,7 @@
 
       setStatus("Fetching population…", "running");
       var popMap = await App.fetchACSValues(geoLevel, year, "B01003_001E", geoids);
-      var opts = { apportionByArea: _apportionByArea };
+      var opts = { apportionByArea: true };
       var popTotal     = App.aggregateWithinUnion(serviceAreaUnion, geos, popMap, "sum", opts).value;
       var popCovered   = coverageClipped  ? App.aggregateWithinUnion(coverageClipped,  geos, popMap, "sum", opts).value : 0;
       var popThreshold = (thresholdMin == null) ? null
@@ -562,7 +561,7 @@
       }
 
       _lastResult = {
-        geoLevel: geoLevel, year: year, apportionByArea: _apportionByArea,
+        geoLevel: geoLevel, year: year,
         bufferMiles: bufferMiles, dayType: dayType, thresholdMin: thresholdMin,
         popTotal: popTotal, popCovered: popCovered, popThreshold: popThreshold,
         jobsTotal: jobsTotal, jobsCovered: jobsCovered, jobsThreshold: jobsThreshold,
@@ -708,7 +707,7 @@
     lines.push("# Buffer distance (mi): "  + r.bufferMiles);
     lines.push("# Day type: "               + r.dayType);
     lines.push("# Headway threshold (min): " + (hasThreshold ? r.thresholdMin : ""));
-    lines.push("# Apportion by area: "     + (r.apportionByArea ? "yes" : "no"));
+    lines.push("# Population is apportioned by area; jobs are counted by whole LODES block.");
 
     lines.push("row,population,pop_pct,jobs,jobs_pct");
     lines.push(dataRow("Service area", r.popTotal, r.jobsTotal, r.popTotal, r.jobsTotal));
@@ -792,7 +791,6 @@
         exportedAt:          new Date().toISOString(),
         geoLevel:            r.geoLevel,
         acsYear:             r.year,
-        apportionByArea:     r.apportionByArea,
         bufferMiles:         r.bufferMiles,
         dayType:             r.dayType,
         headwayThresholdMin: r.thresholdMin
@@ -829,16 +827,6 @@
 
     var thresholdInput = document.getElementById("tcHeadwayThreshold");
     if (thresholdInput) thresholdInput.addEventListener("change", markStale);
-
-    // Apportion-by-area checkbox
-    var apportionCb = document.getElementById("tcApportionByArea");
-    if (apportionCb) {
-      apportionCb.checked = _apportionByArea;
-      apportionCb.addEventListener("change", function () {
-        _apportionByArea = apportionCb.checked;
-        markStale();
-      });
-    }
 
     // Transit features select all / clear
     var featSelectAll = document.getElementById("tcFeatSelectAll");
@@ -893,9 +881,6 @@
     if (_savedSelections) applySelections(_savedSelections);
     updateLodesWarnings();
 
-    var apportionCb = document.getElementById("tcApportionByArea");
-    if (apportionCb) apportionCb.checked = _apportionByArea;
-
     if (_lastResult) {
       renderResults(_lastResult);
       setExportButtonsEnabled(!_stale);
@@ -948,8 +933,7 @@
       dayType:          null,
       headwayThreshold: null,
       geoLevel:         null,
-      year:             null,
-      apportionByArea:  _apportionByArea
+      year:             null
     };
 
     var bufferEl    = document.getElementById("tcBufferMiles");
@@ -998,7 +982,6 @@
       data.lastSummary = {
         geoLevel:        _lastResult.geoLevel,
         year:            _lastResult.year,
-        apportionByArea: _lastResult.apportionByArea,
         bufferMiles:     _lastResult.bufferMiles,
         dayType:         _lastResult.dayType,
         thresholdMin:    _lastResult.thresholdMin,
@@ -1021,14 +1004,12 @@
     if (data.selections) _savedSelections = data.selections;
 
     var settings = data.settings || {};
-    if (settings.apportionByArea != null) _apportionByArea = !!settings.apportionByArea;
 
     var bufferEl    = document.getElementById("tcBufferMiles");
     var dayTypeEl   = document.getElementById("tcDayType");
     var thresholdEl = document.getElementById("tcHeadwayThreshold");
     var geoLevelEl  = document.getElementById("tcGeoLevel");
     var yearEl      = document.getElementById("tcYearSelect");
-    var apportionCb = document.getElementById("tcApportionByArea");
 
     if (bufferEl && Number.isFinite(settings.bufferMiles)) bufferEl.value = String(settings.bufferMiles);
     if (dayTypeEl && settings.dayType)                      dayTypeEl.value = settings.dayType;
@@ -1037,7 +1018,6 @@
     }
     if (geoLevelEl && settings.geoLevel) geoLevelEl.value = settings.geoLevel;
     if (yearEl && settings.year)         yearEl.value     = settings.year;
-    if (apportionCb)                     apportionCb.checked = _apportionByArea;
 
     if (!data.lastSummary) return;
     var s = data.lastSummary;
@@ -1045,7 +1025,6 @@
     _lastResult = {
       geoLevel:         s.geoLevel,
       year:             s.year,
-      apportionByArea:  s.apportionByArea,
       bufferMiles:      s.bufferMiles,
       dayType:          s.dayType,
       thresholdMin:     s.thresholdMin,
