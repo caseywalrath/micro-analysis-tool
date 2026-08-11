@@ -1,0 +1,18 @@
+{
+  "peakHeadway/basic-min": 15,
+  "peakHeadway/skips-zero-negative-nonnumeric": 20,
+  "peakHeadway/sunday-mirrors-saturday": 45,
+  "peakHeadway/empty-day": null,
+  "peakHeadway/null-service": null,
+  "formatPct/normal": "25.0%",
+  "formatPct/zero-denominator": "—",
+  "formatPct/nan-numerator": "—",
+  "formatCount/value": "12,346",
+  "formatCount/nan": "—",
+  "statSentence/with-threshold": "60.0% of residents are within 0.25 mi of selected transit; 30.0% within 0.25 mi of 15-min-or-better service.",
+  "statSentence/without-threshold": "25.0% of residents are within 0.5 mi of selected transit.",
+  "statSentence/zero-population": "No population found in the selected service area.",
+  "csv/plain": "plain",
+  "csv/has-comma": "\"a,b\"",
+  "csv/has-quote": "\"quote\"\"here\""
+}
