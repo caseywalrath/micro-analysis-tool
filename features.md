@@ -216,6 +216,15 @@ Upload a GTFS `.zip` via Add Data (+) → GTFS. Renders shapes.txt as dashed ref
 ### Trip Builder — Implemented
 Enabled popup module (`js/projects/trip-builder.js`, `projects/trip-builder-popup.html`) that generates a high-level trip schedule (start/end times per direction per day type) for each Service from its underlying Time Bands, frequency, and run time / avg speed. Same Service assembly as Route Costing (`attributes.serviceId` buckets). Per-trip deletion and CSV export per Service.
 
+### Trip Builder bulk trip generation — Not started
+Currently Trip Builder generates trips one Service at a time via the "Generate Trips" button (per-Service control). Enhance with:
+
+1. **"Generate for all" button:** Iterates over every drawn route/line whose service definition is complete (no blank frequency bands, no validation errors) and regenerates trips for each in sequence. Useful when building proposals with many routes that have similar service patterns and need uniform trip generation across the fleet.
+
+2. **Per-route exclusion toggle:** Checkbox or "Exclude from regeneration" flag on each Service row, so the bulk generator skips already-tuned routes. Allows selective regeneration (e.g., regenerate new routes but preserve manually edited schedules on existing routes).
+
+Particularly valuable for scenario planning where dozens of routes share the same service bands and need consistent headway logic applied at scale.
+
 ### Corridor Scoring — Implemented
 Enabled popup module (`js/projects/corridor-scoring.js`, `projects/corridor-scoring-popup.html`) that surfaces the per-route Corridor Demand Index as a ranked, objective composite score per drawn route/line. Ranked table with classification pills and expandable per-factor breakdowns, map line layer colored by composite CDI, Adjust Weights modal, CSV/GeoJSON export, and session persistence.
 
@@ -495,6 +504,16 @@ The Analysis sidebar dropdown (`buildAnalysisButtonsHTML()`, `js/app.js`) is a s
 - **Additional menu-bar buttons** — split "Analysis" into more than one top-level toolbar entry instead of one growing dropdown.
 - **A sidebar-style switcher inside the module popup itself** — every module already opens in the same `#module-popup` shell (`js/core/popup.js`), so the popup could gain a persistent left-hand list of modules (mirroring the app's own left sidebar) letting users jump between analyses without backing out to the dropdown each time.
 - A searchable/filterable list, which converges with the Command Palette idea below, once the count gets large enough that browsing linearly stops scaling.
+
+### Top menu layout and hierarchy — Not started
+The top toolbar currently groups mode toggles (light/dark mode, presentation mode) alongside core workflow actions (save/export/upload/reset) and analysis access in an undifferentiated row. **Exploratory question:** should mode toggles (light/dark, presentation) have the same visual prominence and toolbar real-estate as session-level actions (save/upload/reset) and analysis access?
+
+Worth a design pass to evaluate whether:
+- Mode toggles warrant relocation to a collapsible settings panel or dedicated control strip
+- Presentation mode (full-screen map, Esc to exit) has sufficient discovery / affordance as a standalone toggle
+- The toolbar could be hierarchically organized (primary workflow actions vs. secondary view modes)
+
+No decision yet — frame as exploratory UX question for a future design review.
 
 ### Command palette (Ctrl+K) — Not started
 A keyboard-triggered search overlay that lets users reach any tool, analysis module, or action by typing. Increasingly standard in modern web tools (Figma, Linear, Notion, Arc). Especially valuable as the feature set grows. Could be implemented as a simple filtered list over a flat registry of labeled actions. One possible convergent answer to the Analysis dropdown crowding above — a typed search sidesteps the grouping question entirely.
