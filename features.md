@@ -31,6 +31,7 @@ A further precision pass on the walkshed network, building on the class-aware tr
 **What this adds:** lean on OSM sidewalk and access tagging to refine *which* segments a pedestrian can actually use, rather than relying on the highway class alone.
 - **Sidewalk data (two forms).** OSM encodes sidewalks either as `sidewalk=both/left/right/no/none` tags on a road centerline, or as separately-mapped `highway=footway` + `footway=sidewalk` ways. The separately-mapped form already flows into the network via the footway class; the centerline `sidewalk=*` tag is not yet captured. Capturing it would let a walkshed prefer/weight streets known to have sidewalks and down-weight or exclude `sidewalk=no` arterials.
 - **Access tags.** Extend the existing `foot=*` override to also honor `access=private`, `access=no`, and `foot=private` so technically-mapped-but-un-walkable segments (gated service roads, private drives) are dropped. Cheap once the tags are captured — the classifier hook (`isPedForbidden`) is already the single choke point.
+- **High-stress arterial-crossing penalty (AECOM TLOS).** Beyond a binary include/exclude, apply an edge-weight *multiplier* in `buildGraph` for segments that cross or run along high-stress arterials, so the walkshed is pruned where a pedestrian realistically won't cross (a freeway or 6-lane arterial makes a nominally-close stop unreachable). Same soft-weighting hook as the sidewalk signal; degrades gracefully to today's behavior where the classifying tags are absent.
 
 **⚠ Caveats (why this is "nice if present, never required"):**
 - **Coverage is wildly inconsistent.** Sidewalk tagging is excellent in a handful of well-mapped cities and essentially absent across most of the US. Logic that *depends* on `sidewalk=*` would make the tool behave very differently region to region — a walkshed that looks precise in Seattle and empty in a mid-size county — which is hard to explain to the beginner audience (see `CLAUDE.md`). Treat sidewalk tags as an optional refinement signal, never a hard requirement: absent tag ⇒ fall back to today's class-based behavior, don't exclude the street.
@@ -149,6 +150,9 @@ Delivered as **Route Costing** (`js/projects/route-costing.js`): service/revenue
 ### More census categories — Partial
 `VAR_META` (`js/core/utils.js`) has grown to ~60 ACS/LODES variables across Demographics, Equity, Travel, Housing, and Employment. Open-ended — can keep growing.
 
+### Ridership vs. Coverage Allocator — Not started
+Jarrett Walker's hallmark budget-philosophy split: tag each drawn route/line as **"Ridership"** (frequent service on dense corridors) or **"Coverage"** (lifeline service everywhere), then report what share of total revenue hours / miles goes to each — updating live as the user draws routes or changes frequency. Add a single `purpose` enum attribute (Ridership | Coverage | unset) alongside the existing `direction`/`mode`/`serviceId` fields in `js/core/feature-attributes.js`; the Attribute Summary table and Copy Attributes pick it up like any other field. Route Costing already computes per-Service `revHrs`/`miles`/`platHrs` per day and annualized (`computeService` / `computeSystemSummary` in `js/projects/route-costing.js`), so the split is a pure group-by-`purpose` aggregation of numbers we already have — surface it as a section in the Route Costing results or a lightweight system dashboard. The split-ratio math is a pure function → golden-value test case per the testing policy.
+
 
 ### FTA Small Starts popup UI — Implemented
 Popup module (`js/projects/fta-small-starts.js`, `projects/fta-small-starts-popup.html`), 2-tab (Ratings | Data Inputs): CRE/ESS/LBAR uploads with column mapping, five rating cards, breakpoint classification, session persistence, CSV export.
@@ -167,6 +171,14 @@ service loss/gain map overlay, scenario comparison, CSV/GeoJSON/JSON export.
 **TODO — golden-value tests deferred:** add `test/cases/title-vi.mjs` once
 the engine's math stabilizes (pure pieces: `defaultPolicy`, `createScenario`,
 `computeDivergence`, `evaluateMajorChange`, `evaluateFindings`).
+
+**Potential enhancement — New-vs-Old job-access matrix:** the module today
+compares demographics of the *impacted area*. A stronger equity output disaggregates
+the **change in job access** (not just area demographics) for zero-vehicle,
+low-income, and minority populations under a proposed vs. existing network. That
+needs job *access* via the planned Transit Travelshed Engine (buffer overlap isn't
+accessibility) and the New-vs-Old comparison via Scenario Save & Compare — the
+demographic-disaggregation half already lives here.
 
 ### OSM Points of Interest — Implemented
 
@@ -278,6 +290,12 @@ Conceptual pipeline (all pieces named in the Transit Travelshed Engine entry):
 4. The "% more" framing is a before/after comparison → falls straight out of
    the Scenario Save & Compare System.
 
+**Opportunity types (beyond jobs):** the same "count what's inside the
+travelshed" step generalizes past LODES jobs — count reachable **healthcare
+facilities from loaded OSM POIs** (`App.osmPoiFeatures` already carries
+hospital/clinic categories) and **low-income households** (ACS), so the headline
+can be framed for whichever opportunity a client cares about, not just employment.
+
 **Data we'd want eventually but don't need for v1:** real GTFS-derived
 headways for the *existing* network (we already parse GTFS; deriving headways
 from `stop_times.txt` is a bounded follow-up), giving an honest "existing
@@ -287,6 +305,22 @@ from `stop_times.txt` is a bounded follow-up), giving an honest "existing
 Transit Travelshed Engine + existing LODES machinery + Scenario Save & Compare.
 Methodology disclosure matters for consulting use: frequency-based not
 schedule-based, average-wait assumption, transfer cap, no reliability/crowding.
+
+### Transit / Auto Opportunity Ratio — Not started
+Kimley-Horn's Access2Opportunity framing (also central to Jarrett Walker's
+work): the ratio of opportunities — jobs, healthcare facilities, essential
+services — reachable within 30/45/60 minutes **by transit vs. by private auto**,
+surfacing the "opportunity gap" and proving where transit is a viable
+alternative to driving and where it fails. The transit half is the
+Cumulative-Opportunity Transit Accessibility computation above (travelshed ∩
+opportunities). The **auto half is feasible entirely offline**: `js/core/road-network.js`
+already carries a car-mode Dijkstra (`findLocalRoute`, class-aware `carBlocked`
+traversal), so a drive-time travelshed can be flooded from the same origin on
+the same graph — no OSRM travel-time matrix, no public-server rate-limit
+fragility. Ratio = opportunities(transit-shed) / opportunities(auto-shed),
+rendered as a per-origin metric or a choropleth of the gap. Depends on the
+Transit Travelshed Engine; the auto comparator is a modest add on the existing
+car-mode graph. High consulting-differentiator value.
 
 ### FTA STOPS-Style Ridership Modeling — Not started
 A new analysis module that replicates or approximates the methodology of FTA's STOPS (Simplified Trips-on-Project Software) model. STOPS is FTA's official ridership forecasting tool for Small Starts and some New Starts projects. It estimates **station-level boardings** by modeling three things: where people want to go (destination attractiveness), how well transit gets them there (accessibility via travel time), and how likely they are to choose transit over driving (mode share).
@@ -322,11 +356,19 @@ Upload a CSV with lat/lon columns (auto-detected) via Add Data (+) → Spatial D
 ### Frequency / service heatmap — Not started
 Color route segments by headway or span drawn directly from the route attributes already stored per feature (frequency field in minutes, spanStart/spanEnd). Visual equivalent of a GTFS-based frequency map for proposed service. Could use a diverging color ramp (green = frequent, red = infrequent).
 
+### Frequent Transit Network (FTN) & span visualizer — Not started
+A time-of-day slider that filters the drawn network to display only routes running at a chosen headway threshold (e.g. ≤15-min) at the selected time, visually highlighting the **core network** a rider can use without checking a schedule — and emphasizing **span** (how many hours a day that frequency actually holds), which increasingly matters for proving a network serves non-commute trips. Pure client-side: time bands already carry `from`/`to` + `frequency` per day type, and `getEffectiveServiceBands` (`js/core/service-assembly.js`) resolves the active band at any probe time. Complements the Frequency / service heatmap (which colors segments by headway) and the Transit Coverage module (single peak-headway snapshot); the novel pieces are the time-of-day slider and the span roll-up. Could live as a present-mode map overlay or extend Transit Coverage. No new data.
+
 ### Transfer connectivity scoring — Not started
 Given multiple drawn routes, identify overlap zones and score transfer quality based on shared stop proximity and frequency pairing. Output: a map overlay flagging strong/weak transfer nodes and a summary table.
 
-### Stop spacing analyzer — Not started
-Flag segments of a drawn route where stop spacing is too tight (below a minimum threshold) or too wide (above a maximum) vs. a user-configurable target distance. Highlights problematic segments on the map in a distinct color.
+### Stop spacing analyzer & consolidation optimizer — Not started
+Flag segments of a drawn route where stop spacing is too tight (below a minimum threshold) or too wide (above a maximum) vs. a user-configurable target distance, highlighting problematic segments on the map in a distinct color.
+
+**Consolidation economics (Nelson\Nygaard "Smart Stops" framing):** speeding up a route by removing closely-spaced stops is politically contentious, so ground it in data. Given stop Points along a route (they carry `stopId` / `associatedRoutes`), compute average spacing, flag consolidation candidates (e.g. under ¼ mile), and estimate the **run-time saved** per removed stop (a dwell + accel/decel knob, same style as the travelshed boarding penalty) → feed Route Costing's rev-hour math (`js/projects/route-costing.js`) to show **annual operating cost recovery**. Selecting *which* low-ridership stops to cut can use an imported per-stop boardings CSV (CSV point import). No new external data if stops are placed as Points.
+
+### Segment-level delay heatmap — Not started (needs external speed data)
+Nelson\Nygaard's right-of-way selling point: map average bus speed vs. posted limit at the segment level to flag "choke points" where transit-priority interventions (bus lanes, signal priority) yield the highest cost savings. **Requires historical AVL or GTFS-RT speed data, which the app does not ingest** — our routes are drawn proposals, not operating vehicles, and GTFS-RT is a streaming feed needing a backend/CORS proxy (against the "just open index.html" model). The only lightweight path: let the user **import a segment-speed CSV** (existing CSV import) keyed to route segments and render it as a heatmap. Deferred until that data path is worth building.
 
 ### Multi-variable equity index builder — Not started
 Extend TPI to a fully user-composable index: select any 3–5 ACS variables from the existing `VAR_META` catalog, assign weights, and output a scored choropleth. Removes the constraint of TPI's fixed 9 factors while reusing all existing ACS fetch and quintile normalization infrastructure.
