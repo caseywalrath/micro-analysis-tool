@@ -74,27 +74,28 @@
 
   // Build a union polygon from a subset of drawn features' buffers.
   // featureFilter: { routeIndices: [0,2,...], lineIndices: [1,3,...] }
+  // bufferSet (optional): an App.buildAnalysisBufferSet() result — when given,
+  //   buffers are read from it (module-owned analysis distance) instead of
+  //   the shared App.routeBuffers/App.lineBuffers (Feature Settings radius).
   // Returns a single union Polygon/MultiPolygon, or null if no buffers found.
-  function buildUnionFromFeatures(featureFilter) {
+  function buildUnionFromFeatures(featureFilter, bufferSet) {
     if (!featureFilter) return null;
     var union = null;
-    var routeBuffers = App.routeBuffers || [];
-    var lineBuffers = App.lineBuffers || [];
+    var routeBuffers = bufferSet ? null : (App.routeBuffers || []);
+    var lineBuffers = bufferSet ? null : (App.lineBuffers || []);
 
     if (featureFilter.routeIndices) {
       for (var i = 0; i < featureFilter.routeIndices.length; i++) {
         var idx = featureFilter.routeIndices[i];
-        if (idx < routeBuffers.length && routeBuffers[idx]) {
-          union = union ? turf.union(union, routeBuffers[idx]) : routeBuffers[idx];
-        }
+        var buf = bufferSet ? bufferSet.get("route", idx) : ((idx < routeBuffers.length) ? routeBuffers[idx] : null);
+        if (buf) union = union ? turf.union(union, buf) : buf;
       }
     }
     if (featureFilter.lineIndices) {
       for (var i = 0; i < featureFilter.lineIndices.length; i++) {
         var idx = featureFilter.lineIndices[i];
-        if (idx < lineBuffers.length && lineBuffers[idx]) {
-          union = union ? turf.union(union, lineBuffers[idx]) : lineBuffers[idx];
-        }
+        var buf = bufferSet ? bufferSet.get("line", idx) : ((idx < lineBuffers.length) ? lineBuffers[idx] : null);
+        if (buf) union = union ? turf.union(union, buf) : buf;
       }
     }
     return union;
@@ -105,6 +106,8 @@
   // options: {
   //   geoLevel, year, weights, lodesData, apportionByArea, onProgress,
   //   segmentMiles  (e.g. 0.5 — length of each corridor segment)
+  //   segmentBufferMiles (optional — buffer distance around each segment chunk;
+  //     defaults to 0.5 when not given, see computeSegments)
   // }
   // Returns: { tpiResult, corridorCDI, segments: [ { geometry, cdi, geoCount } ], classification }
 
@@ -133,7 +136,7 @@
 
     if (segmentMiles > 0) {
       onProgress("Analyzing corridor segments...");
-      segments = computeSegments(tpiResult, segmentMiles);
+      segments = computeSegments(tpiResult, segmentMiles, null, options.segmentBufferMiles);
     }
 
     // Step 4: Classification
@@ -190,35 +193,39 @@
   // aggregating only the geographies overlapping each individual buffer.
   // featureFilter (optional): { routeIndices: [0,2,...], lineIndices: [1,3,...] }
   // If null/undefined, all routes and lines are included (backward compatible).
-  function computePerRouteCDI(tpiResult, featureFilter) {
+  // bufferSet (optional): an App.buildAnalysisBufferSet() result — when given,
+  //   each feature's buffer is read from it instead of App.routeBuffers/App.lineBuffers.
+  function computePerRouteCDI(tpiResult, featureFilter, bufferSet) {
     var results = [];
     var popRaw = tpiResult.rawValues.get("pop_density");
 
     // Collect routes + lines with their buffers
     var features = [];
     var routes = App.routes || [];
-    var routeBuffers = App.routeBuffers || [];
+    var routeBuffers = bufferSet ? null : (App.routeBuffers || []);
     for (var ri = 0; ri < routes.length; ri++) {
       if (featureFilter && featureFilter.routeIndices && featureFilter.routeIndices.indexOf(ri) === -1) continue;
-      if (ri < routeBuffers.length && routeBuffers[ri]) {
+      var rBuf = bufferSet ? bufferSet.get("route", ri) : ((ri < routeBuffers.length) ? routeBuffers[ri] : null);
+      if (rBuf) {
         features.push({
           name: (routes[ri].properties && routes[ri].properties.name) || ("Route " + (ri + 1)),
           type: "route",
           index: ri,
-          buffer: routeBuffers[ri]
+          buffer: rBuf
         });
       }
     }
     var lines = App.lines || [];
-    var lineBuffers = App.lineBuffers || [];
+    var lineBuffers = bufferSet ? null : (App.lineBuffers || []);
     for (var li = 0; li < lines.length; li++) {
       if (featureFilter && featureFilter.lineIndices && featureFilter.lineIndices.indexOf(li) === -1) continue;
-      if (li < lineBuffers.length && lineBuffers[li]) {
+      var lBuf = bufferSet ? bufferSet.get("line", li) : ((li < lineBuffers.length) ? lineBuffers[li] : null);
+      if (lBuf) {
         features.push({
           name: (lines[li].properties && lines[li].properties.name) || ("Line " + (li + 1)),
           type: "line",
           index: li,
-          buffer: lineBuffers[li]
+          buffer: lBuf
         });
       }
     }
@@ -326,6 +333,9 @@
   // options.unionPolygon (optional): custom study area polygon (passed to TPI.computeTPI)
   // options.featureFilter (optional): { routeIndices: [...], lineIndices: [...] } to restrict
   //   which routes/lines are included in per-route CDI computation.
+  // options.bufferSet (optional): an App.buildAnalysisBufferSet() result — forwarded to
+  //   computePerRouteCDI so per-route buffers come from the module's own analysis
+  //   distance instead of the shared Feature Settings buffers.
   // Returns: { tpiResult, systemCDI, routeCDIs[], geoLevel, year }
   async function computeSystemDemand(options) {
     var onProgress = options.onProgress || function () {};
@@ -346,7 +356,7 @@
     var systemCDI = computeCorridorCDI(tpiResult);
 
     onProgress("Computing per-route demand indices...");
-    var routeCDIs = computePerRouteCDI(tpiResult, options.featureFilter || null);
+    var routeCDIs = computePerRouteCDI(tpiResult, options.featureFilter || null, options.bufferSet || null);
 
     return {
       tpiResult: tpiResult,
@@ -398,7 +408,10 @@
   // Segment analysis: split routes/lines into equal chunks, compute CDI per segment.
   // selectedCorridor: "all" or falsy = process all routes + lines;
   //                   "route:N" or "line:N" = only that feature (faster single-corridor view).
-  function computeSegments(tpiResult, segmentMiles, selectedCorridor) {
+  // segBufferMiles (optional): buffer distance around each segment chunk; defaults to 0.5
+  //   (the historical hardcoded value) when not given or <= 0.
+  function computeSegments(tpiResult, segmentMiles, selectedCorridor, segBufferMiles) {
+    var effSegBufferMiles = (segBufferMiles > 0) ? segBufferMiles : 0.5;
     var routes = App.routes || [];
     var lines  = App.lines  || [];
 
@@ -446,7 +459,7 @@
         var chunk = chunks.features[ci];
         var segBuffer;
         try {
-          segBuffer = turf.buffer(chunk, 0.5, { units: "miles" });
+          segBuffer = turf.buffer(chunk, effSegBufferMiles, { units: "miles" });
         } catch (_) { continue; }
 
         if (!segBuffer) continue;

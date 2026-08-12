@@ -21,6 +21,7 @@
   var _rescoreTimer = null;
   var _initialized = false;
   var _apportionByArea = false;
+  var _bufferMiles = App.ANALYSIS_BUFFER_DEFAULT_MILES;
 
   function getTpiClass(score) {
     if (!Number.isFinite(score)) return "N/A";
@@ -39,65 +40,26 @@
 
   // ---- Feature filter & union polygon helpers ----
 
+  // Set by buildUnionFromFilter(), consumed immediately by runTPI() and
+  // stashed on the result so getGeosInCorridor() can re-filter without a
+  // re-run — gives access to the full buffer set (and its .count) without
+  // changing buildUnionFromFilter's return type (still just the union polygon).
+  var _lastBufferSet = null;
+
   function buildUnionFromFilter(filter) {
-    if (!filter) return App.bufferUnionPolygon();
-    var polys = [];
-    var routeBuffers = App.routeBuffers || [];
-    var lineBuffers  = App.lineBuffers  || [];
-    var pointBufs    = App.buffers      || [];
-    var polygons     = App.polygons     || [];
-    var i, idx;
-
-    if (filter.routeIndices) {
-      for (i = 0; i < filter.routeIndices.length; i++) {
-        idx = filter.routeIndices[i];
-        if (routeBuffers[idx]) polys.push(routeBuffers[idx]);
-      }
-    }
-    if (filter.lineIndices) {
-      for (i = 0; i < filter.lineIndices.length; i++) {
-        idx = filter.lineIndices[i];
-        if (lineBuffers[idx]) polys.push(lineBuffers[idx]);
-      }
-    }
-    if (filter.pointIndices) {
-      for (i = 0; i < filter.pointIndices.length; i++) {
-        idx = filter.pointIndices[i];
-        if (pointBufs[idx]) polys.push(pointBufs[idx]);
-      }
-    }
-    if (filter.polygonIndices) {
-      for (i = 0; i < filter.polygonIndices.length; i++) {
-        idx = filter.polygonIndices[i];
-        if (polygons[idx]) polys.push(polygons[idx]);
-      }
-    }
-    if (!polys.length) return null;
-    var union = polys[0];
-    for (i = 1; i < polys.length; i++) {
-      try { union = turf.union(union, polys[i]); } catch (e) { /* skip invalid */ }
-    }
-    return union;
-  }
-
-  function hasBufferIssue(filter) {
-    var routes = App.routes || [];
-    var lines  = App.lines  || [];
-    var rb = App.routeBuffers || [];
-    var lb = App.lineBuffers  || [];
-    var rIdxs = filter ? filter.routeIndices : routes.map(function(_,i){ return i; });
-    var lIdxs = filter ? filter.lineIndices  : lines.map(function(_,i){ return i; });
-    return (rIdxs.length > 0 && rIdxs.some(function(i){ return !rb[i]; })) ||
-           (lIdxs.length > 0 && lIdxs.some(function(i){ return !lb[i]; }));
+    var set = App.buildAnalysisBufferSet(filter, _bufferMiles);
+    _lastBufferSet = set;
+    return set.union;
   }
 
   function getFeatureFilter() {
     var el = document.getElementById("tpiFeatureChecklist");
-    if (!el) return null;
-    var boxes = el.querySelectorAll("input[type=checkbox]");
-    if (!boxes.length) return null;
     var routeIndices = [], lineIndices = [], pointIndices = [], polygonIndices = [];
-    var allChecked = true;
+    if (!el) {
+      return { routeIndices: routeIndices, lineIndices: lineIndices,
+               pointIndices: pointIndices, polygonIndices: polygonIndices };
+    }
+    var boxes = el.querySelectorAll("input[type=checkbox]");
     for (var i = 0; i < boxes.length; i++) {
       var cb = boxes[i];
       var type = cb.getAttribute("data-type");
@@ -107,11 +69,8 @@
         else if (type === "line")    lineIndices.push(idx);
         else if (type === "point")   pointIndices.push(idx);
         else if (type === "polygon") polygonIndices.push(idx);
-      } else {
-        allChecked = false;
       }
     }
-    if (allChecked) return null; // no filter needed
     return { routeIndices: routeIndices, lineIndices: lineIndices,
              pointIndices: pointIndices, polygonIndices: polygonIndices };
   }
@@ -234,11 +193,7 @@
     var parts = corridor.split(":");
     var type  = parts[0];
     var idx   = parseInt(parts[1], 10);
-    var bufferPoly;
-    if      (type === "route")   bufferPoly = (App.routeBuffers || [])[idx];
-    else if (type === "line")    bufferPoly = (App.lineBuffers  || [])[idx];
-    else if (type === "point")   bufferPoly = (App.buffers      || [])[idx];
-    else if (type === "polygon") bufferPoly = (App.polygons     || [])[idx];
+    var bufferPoly = (result && result.bufferSet) ? result.bufferSet.get(type, idx) : null;
     if (!bufferPoly) return result.geos;
     return result.geos.filter(function (geo) {
       try { return turf.booleanIntersects(geo, bufferPoly); } catch (e) { return false; }
@@ -572,12 +527,13 @@
     try {
       var geoLevel = document.getElementById("tpiGeoLevel").value;
       var year     = document.getElementById("tpiYearSelect").value;
+      _bufferMiles  = App.readAnalysisBufferMiles("tpiBufferMiles", App.ANALYSIS_BUFFER_DEFAULT_MILES);
 
       var featureFilter = getFeatureFilter();
       var unionPolygon  = buildUnionFromFilter(featureFilter);
 
-      if (hasBufferIssue(featureFilter)) {
-        throw new Error("No buffers defined for selected features. Set a buffer radius in the Features panel.");
+      if (!_lastBufferSet || _lastBufferSet.count === 0) {
+        throw new Error("Could not build buffers for the selected features.");
       }
 
       if (!unionPolygon) {
@@ -598,8 +554,10 @@
         }
       });
 
-      result.geoLevel = geoLevel;
-      result.year     = year;
+      result.geoLevel    = geoLevel;
+      result.year        = year;
+      result.bufferMiles = _bufferMiles;
+      result.bufferSet   = _lastBufferSet;
       _lastResult     = result;
       _stale          = false;
 
@@ -806,25 +764,34 @@
 
   function _buildGeoFeatureMap(geos) {
     var allFeatures = [];
-    var pts          = App.points       || [];
-    var pointBufs    = App.buffers      || [];
-    var lines        = App.lines        || [];
-    var lineBuffers  = App.lineBuffers  || [];
-    var routes       = App.routeBuffers ? App.routes || [] : [];
-    var routeBuffers = App.routeBuffers || [];
-    var polys        = App.polygons     || [];
+    var pts    = App.points   || [];
+    var lines  = App.lines    || [];
+    var routes = App.routes   || [];
+    var polys  = App.polygons || [];
+
+    // "Covered by" annotation checks every drawn feature, not just the ones
+    // selected for this run — build a private buffer set (module's own
+    // analysis distance) covering all of them rather than reading the
+    // shared Feature Settings buffers.
+    var allFilter = {
+      routeIndices:   routes.map(function (_, i) { return i; }),
+      lineIndices:    lines.map(function (_, i) { return i; }),
+      pointIndices:   pts.map(function (_, i) { return i; }),
+      polygonIndices: polys.map(function (_, i) { return i; })
+    };
+    var bufferSet = App.buildAnalysisBufferSet(allFilter, _bufferMiles);
 
     for (var si = 0; si < pts.length; si++) {
-      if (si < pointBufs.length && pointBufs[si])
-        allFeatures.push({ name: (pts[si].properties && pts[si].properties.name) || ("Point " + (si + 1)), coverage: pointBufs[si] });
+      var pb = bufferSet.get("point", si);
+      if (pb) allFeatures.push({ name: (pts[si].properties && pts[si].properties.name) || ("Point " + (si + 1)), coverage: pb });
     }
     for (var li = 0; li < lines.length; li++) {
-      if (li < lineBuffers.length && lineBuffers[li])
-        allFeatures.push({ name: (lines[li].properties && lines[li].properties.name) || ("Line " + (li + 1)), coverage: lineBuffers[li] });
+      var lb = bufferSet.get("line", li);
+      if (lb) allFeatures.push({ name: (lines[li].properties && lines[li].properties.name) || ("Line " + (li + 1)), coverage: lb });
     }
     for (var ri = 0; ri < routes.length; ri++) {
-      if (ri < routeBuffers.length && routeBuffers[ri])
-        allFeatures.push({ name: (routes[ri].properties && routes[ri].properties.name) || ("Route " + (ri + 1)), coverage: routeBuffers[ri] });
+      var rb = bufferSet.get("route", ri);
+      if (rb) allFeatures.push({ name: (routes[ri].properties && routes[ri].properties.name) || ("Route " + (ri + 1)), coverage: rb });
     }
     for (var pi = 0; pi < polys.length; pi++) {
       if (polys[pi] && polys[pi].geometry)
@@ -868,7 +835,8 @@
       exportedAt:     new Date().toISOString(),
       geoLevel:       _lastResult ? _lastResult.geoLevel : null,
       acsYear:        _lastResult ? _lastResult.year : null,
-      apportionByArea: _apportionByArea
+      apportionByArea: _apportionByArea,
+      bufferMiles:    _lastResult ? _lastResult.bufferMiles : App.ANALYSIS_BUFFER_DEFAULT_MILES
     };
   }
 
@@ -879,6 +847,7 @@
     if (meta.geoLevel) lines.push("# Geography: " + meta.geoLevel);
     if (meta.acsYear)  lines.push("# ACS Year: "  + meta.acsYear);
     lines.push("# Apportion by Area: " + (meta.apportionByArea ? "yes" : "no"));
+    lines.push("# Buffer distance (mi): " + meta.bufferMiles);
     return lines.join("\n");
   }
 
@@ -1081,6 +1050,14 @@
       });
     }
 
+    // Buffer distance (mi) — module-owned analysis distance, independent of
+    // the Feature Settings global buffer radius.
+    var bufferMilesEl = document.getElementById("tpiBufferMiles");
+    if (bufferMilesEl) {
+      bufferMilesEl.value = String(_bufferMiles);
+      bufferMilesEl.addEventListener("change", markStale);
+    }
+
     // Build weight sliders (in modal) with current _weights
     buildWeightSliders();
   }
@@ -1092,6 +1069,8 @@
     // Sync checkbox
     var apportionCb = document.getElementById("tpiApportionByArea");
     if (apportionCb) apportionCb.checked = _apportionByArea;
+    var bufferMilesEl = document.getElementById("tpiBufferMiles");
+    if (bufferMilesEl) bufferMilesEl.value = String(_bufferMiles);
 
     // Rebuild checklist (features may have changed since last open)
     buildFeatureChecklist();
@@ -1142,6 +1121,7 @@
     var data = {
       weights:          Object.assign({}, _weights),
       apportionByArea:  _apportionByArea,
+      bufferMiles:      _bufferMiles,
       selectedCorridor: _selectedCorridor,
       tpiFeatureFilter: _tpiFeatureFilter ? JSON.parse(JSON.stringify(_tpiFeatureFilter)) : null
     };
@@ -1150,6 +1130,7 @@
     data.result = {
       geoLevel:             tpi.geoLevel,
       year:                 tpi.year,
+      bufferMiles:          tpi.bufferMiles,
       geoids:               tpi.geoids ? tpi.geoids.slice() : [],
       effectiveWeights:     tpi.effectiveWeights ? Object.assign({}, tpi.effectiveWeights) : {},
       tractFallbackFactors: tpi.tractFallbackFactors ? tpi.tractFallbackFactors.slice() : [],
@@ -1168,14 +1149,19 @@
     if (!data) return;
     if (data.weights)          _weights          = Object.assign({}, data.weights);
     if (data.apportionByArea != null) _apportionByArea = !!data.apportionByArea;
+    if (data.bufferMiles != null) _bufferMiles = data.bufferMiles;
     if (data.selectedCorridor) _selectedCorridor = data.selectedCorridor;
     if (data.tpiFeatureFilter !== undefined) _tpiFeatureFilter = data.tpiFeatureFilter;
+
+    var bufferMilesEl = document.getElementById("tpiBufferMiles");
+    if (bufferMilesEl) bufferMilesEl.value = String(_bufferMiles);
 
     if (!data.result) return;
     var r = data.result;
     var restored = {
       geoLevel:             r.geoLevel,
       year:                 r.year,
+      bufferMiles:          r.bufferMiles != null ? r.bufferMiles : App.ANALYSIS_BUFFER_DEFAULT_MILES,
       geoids:               r.geoids || [],
       geos:                 r.geos   || [],
       effectiveWeights:     r.effectiveWeights     || {},

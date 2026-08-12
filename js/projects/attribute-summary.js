@@ -233,6 +233,412 @@
     if (typeof App.closeMiniPopup === "function") App.closeMiniPopup();
   }
 
+  /* ---- Copy Attributes (Points / Lines / Routes / Polygons) ---- */
+  // A small "copy" icon button on each row opens #asCopyModal, letting the
+  // user copy that row's (the source's) attribute values onto one or more
+  // other compatible features. Routes and Lines share one target pool (same
+  // attribute schema); Points and Polygons only target their own type.
+  // `serviceId` is deliberately excluded — it's the Route Costing / Trip
+  // Builder pairing key, and copying it onto other routes/lines would
+  // silently merge them into the same Service.
+
+  var COPY_FIELDS_POINT = [
+    { key: "group",            label: "Group",              kind: "text" },
+    { key: "serviceAreaType",  label: "Service Area Type",  kind: "select" },
+    { key: "stopId",           label: "Stop ID",             kind: "text" },
+    { key: "associatedRoutes", label: "Associated Routes",   kind: "routearray" }
+  ];
+  var COPY_FIELDS_ROUTELIKE = [
+    { key: "group",     label: "Group",      kind: "text" },
+    { key: "direction", label: "Direction",  kind: "select" },
+    { key: "mode",      label: "Mode",       kind: "select" },
+    { key: "avgSpeed",  label: "Avg Speed",  kind: "number" },
+    { key: "runTime",   label: "Run Time",   kind: "number" },
+    { key: "service",   label: "Time Bands", kind: "bands" }
+  ];
+  var COPY_FIELDS_POLYGON = [
+    { key: "group", label: "Group", kind: "text" },
+    { key: "notes", label: "Notes", kind: "text" }
+  ];
+  var COPY_FIELD_DEFS = {
+    point:   COPY_FIELDS_POINT,
+    line:    COPY_FIELDS_ROUTELIKE,
+    route:   COPY_FIELDS_ROUTELIKE,
+    polygon: COPY_FIELDS_POLYGON
+  };
+
+  function copyFieldGetValue(fieldDef, attrs) {
+    return attrs ? attrs[fieldDef.key] : undefined;
+  }
+
+  function copyFieldHasValue(fieldDef, attrs) {
+    var v = attrs ? attrs[fieldDef.key] : undefined;
+    if (fieldDef.kind === "number")     return v != null && !isNaN(v);
+    if (fieldDef.kind === "routearray") return Array.isArray(v) && v.length > 0;
+    if (fieldDef.kind === "bands") {
+      if (!v) return false;
+      var w = (v.weekday  || []).length;
+      var s = (v.saturday || []).length;
+      var u = v.sundayMirrorsSaturday ? s : (v.sunday || []).length;
+      return (w + s + u) > 0;
+    }
+    return v != null && v !== ""; // text / select
+  }
+
+  function copyFieldSetValue(fieldDef, attrs, val) {
+    if (fieldDef.kind === "bands" || fieldDef.kind === "routearray") {
+      attrs[fieldDef.key] = JSON.parse(JSON.stringify(val)); // deep clone per target
+    } else {
+      attrs[fieldDef.key] = val;
+    }
+  }
+
+  function copySourceArray(type) {
+    if (type === "point")   return App.points   || [];
+    if (type === "polygon") return App.polygons || [];
+    if (type === "line")    return App.lines    || [];
+    if (type === "route")   return App.routes   || [];
+    return [];
+  }
+
+  var _COPY_ATTRS_SVG = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="8" height="8" rx="1.5"/><path d="M3.5 10.5V4a1.5 1.5 0 0 1 1.5-1.5h6.5"/></svg>';
+
+  function buildCopyButton(featureType, idx, feat) {
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "fp-sib";
+    var noun = featureType === "point" ? "points" : featureType === "polygon" ? "polygons" : "routes/lines";
+    btn.title = "Copy attributes to other " + noun;
+    btn.innerHTML = _COPY_ATTRS_SVG;
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      openCopyModal(featureType, idx);
+    });
+    return btn;
+  }
+
+  // Which feature is the current copy source ({ type, idx }) while the modal is open.
+  var _copySource = null;
+
+  function getCopyTargets(sourceType, sourceIdx) {
+    var targets = [];
+    if (sourceType === "line" || sourceType === "route") {
+      (App.routes || []).forEach(function (f, i) {
+        if (!(sourceType === "route" && i === sourceIdx)) targets.push({ type: "route", idx: i, feat: f });
+      });
+      (App.lines || []).forEach(function (f, i) {
+        if (!(sourceType === "line" && i === sourceIdx)) targets.push({ type: "line", idx: i, feat: f });
+      });
+    } else {
+      copySourceArray(sourceType).forEach(function (f, i) {
+        if (i !== sourceIdx) targets.push({ type: sourceType, idx: i, feat: f });
+      });
+    }
+    return targets;
+  }
+
+  function buildCopyAttrChecklist(sourceType, sourceAttrs) {
+    var wrap = document.createElement("div");
+    wrap.className = "as-copy-attr-list";
+    var fields = COPY_FIELD_DEFS[sourceType] || [];
+
+    fields.forEach(function (fd) {
+      var has = copyFieldHasValue(fd, sourceAttrs);
+      var row = document.createElement("label");
+      row.className = "as-copy-attr-row" + (has ? "" : " as-copy-attr-disabled");
+
+      var cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.disabled = !has;
+      cb.setAttribute("data-field-key", fd.key);
+      cb.addEventListener("change", updateCopyState);
+      row.appendChild(cb);
+
+      var span = document.createElement("span");
+      span.textContent = fd.label;
+      row.appendChild(span);
+
+      if (!has) {
+        var hint = document.createElement("span");
+        hint.className = "as-copy-attr-hint";
+        hint.textContent = "(no value to copy)";
+        row.appendChild(hint);
+      }
+
+      wrap.appendChild(row);
+    });
+
+    if (!fields.length) {
+      wrap.innerHTML = '<div style="padding:6px;color:var(--muted);font-size:12px;">No copyable attributes.</div>';
+    }
+    return wrap;
+  }
+
+  function buildCopyTargetChecklist(sourceType, sourceIdx) {
+    var col = document.createElement("div");
+
+    var actions = document.createElement("div");
+    actions.className = "rf-feature-select-actions";
+    actions.style.marginBottom = "4px";
+    var selAll = document.createElement("a");
+    selAll.href = "#"; selAll.textContent = "Select all";
+    var selNone = document.createElement("a");
+    selNone.href = "#"; selNone.textContent = "Clear";
+    actions.appendChild(selAll);
+    actions.appendChild(document.createTextNode(" "));
+    var sep = document.createElement("span");
+    sep.style.color = "var(--muted)";
+    sep.textContent = "|";
+    actions.appendChild(sep);
+    actions.appendChild(document.createTextNode(" "));
+    actions.appendChild(selNone);
+    col.appendChild(actions);
+
+    var list = document.createElement("div");
+    list.className = "rf-feature-checklist";
+    list.id = "asCopyTargetList";
+
+    var targets = getCopyTargets(sourceType, sourceIdx);
+    if (!targets.length) {
+      var noun = sourceType === "point" ? "points" : sourceType === "polygon" ? "polygons" : "routes or lines";
+      list.innerHTML = '<div style="padding:6px;color:var(--muted);font-size:12px;">No other ' + noun + ' to copy to.</div>';
+    } else {
+      targets.forEach(function (t) {
+        var row = document.createElement("div");
+        row.className = "rf-feature-check-row";
+
+        var cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.setAttribute("data-type", t.type);
+        cb.setAttribute("data-idx", String(t.idx));
+        cb.addEventListener("change", updateCopyState);
+
+        var lbl = document.createElement("label");
+        lbl.style.cssText = "flex:1;cursor:pointer;";
+        lbl.textContent = (t.feat.properties && t.feat.properties.name) ||
+          (t.type.charAt(0).toUpperCase() + t.type.slice(1) + " " + (t.idx + 1));
+        lbl.addEventListener("click", function (e) { e.preventDefault(); cb.checked = !cb.checked; updateCopyState(); });
+
+        row.appendChild(cb);
+        row.appendChild(lbl);
+
+        if (sourceType === "route" || sourceType === "line") {
+          var badgeEl = document.createElement("span");
+          badgeEl.className = "rf-feature-type-badge";
+          badgeEl.textContent = t.type === "route" ? "R" : "L";
+          row.appendChild(badgeEl);
+        }
+
+        list.appendChild(row);
+      });
+    }
+    col.appendChild(list);
+
+    selAll.addEventListener("click", function (e) {
+      e.preventDefault();
+      list.querySelectorAll("input[type=checkbox]").forEach(function (cb) { cb.checked = true; });
+      updateCopyState();
+    });
+    selNone.addEventListener("click", function (e) {
+      e.preventDefault();
+      list.querySelectorAll("input[type=checkbox]").forEach(function (cb) { cb.checked = false; });
+      updateCopyState();
+    });
+
+    return col;
+  }
+
+  function computeOverwriteWarning(checkedFieldDefs, sourceAttrs, targets) {
+    if (!checkedFieldDefs.length || !targets.length) return null;
+    var affectedLabels = [];
+    var affectedTargetKeys = {};
+    checkedFieldDefs.forEach(function (fd) {
+      if (!copyFieldHasValue(fd, sourceAttrs)) return; // blank source → nothing will be written for this field
+      var anyConflict = false;
+      targets.forEach(function (t) {
+        var tAttrs = (t.feat.properties && t.feat.properties.attributes) || {};
+        if (copyFieldHasValue(fd, tAttrs)) {
+          anyConflict = true;
+          affectedTargetKeys[t.type + ":" + t.idx] = true;
+        }
+      });
+      if (anyConflict) affectedLabels.push(fd.label);
+    });
+    if (!affectedLabels.length) return null;
+    var count = Object.keys(affectedTargetKeys).length;
+    return {
+      count: count,
+      total: targets.length,
+      labels: affectedLabels,
+      message: count + " of " + targets.length + " selected targets already have data for: " +
+        affectedLabels.join(", ") + ". Applying will overwrite these values."
+    };
+  }
+
+  function buildCopyModalContent(sourceType, sourceIdx, sourceFeat) {
+    var sourceAttrs = sourceFeat.properties.attributes || {};
+    var wrap = document.createElement("div");
+
+    var columns = document.createElement("div");
+    columns.className = "as-copy-columns";
+
+    var attrCol = document.createElement("div");
+    attrCol.className = "as-copy-col";
+    var attrTitle = document.createElement("div");
+    attrTitle.className = "rf-section-title";
+    attrTitle.textContent = "Attributes to copy";
+    attrCol.appendChild(attrTitle);
+    attrCol.appendChild(buildCopyAttrChecklist(sourceType, sourceAttrs));
+
+    var targetCol = document.createElement("div");
+    targetCol.className = "as-copy-col";
+    var targetTitle = document.createElement("div");
+    targetTitle.className = "rf-section-title";
+    targetTitle.textContent = "Copy to";
+    targetCol.appendChild(targetTitle);
+    targetCol.appendChild(buildCopyTargetChecklist(sourceType, sourceIdx));
+
+    columns.appendChild(attrCol);
+    columns.appendChild(targetCol);
+    wrap.appendChild(columns);
+
+    var warn = document.createElement("div");
+    warn.className = "as-copy-warning";
+    warn.id = "asCopyWarning";
+    warn.style.display = "none";
+    wrap.appendChild(warn);
+
+    return wrap;
+  }
+
+  function updateCopyState() {
+    var modal = el("asCopyModal");
+    if (!modal || !_copySource) return;
+    var sourceType = _copySource.type, sourceIdx = _copySource.idx;
+    var sourceFeat = copySourceArray(sourceType)[sourceIdx];
+    if (!sourceFeat) { closeCopyModal(); return; }
+    var sourceAttrs = sourceFeat.properties.attributes || {};
+    var fieldDefs = COPY_FIELD_DEFS[sourceType] || [];
+
+    var checkedFieldDefs = [];
+    modal.querySelectorAll(".as-copy-attr-list input[type=checkbox]:checked").forEach(function (cb) {
+      var key = cb.getAttribute("data-field-key");
+      for (var i = 0; i < fieldDefs.length; i++) {
+        if (fieldDefs[i].key === key) { checkedFieldDefs.push(fieldDefs[i]); break; }
+      }
+    });
+
+    var checkedTargets = [];
+    modal.querySelectorAll("#asCopyTargetList input[type=checkbox]:checked").forEach(function (cb) {
+      var t = cb.getAttribute("data-type");
+      var i = parseInt(cb.getAttribute("data-idx"), 10);
+      var feat = copySourceArray(t)[i];
+      if (feat) checkedTargets.push({ type: t, idx: i, feat: feat });
+    });
+
+    var warnEl = el("asCopyWarning");
+    if (warnEl) {
+      var summary = computeOverwriteWarning(checkedFieldDefs, sourceAttrs, checkedTargets);
+      if (summary) {
+        warnEl.textContent = summary.message;
+        warnEl.style.display = "";
+      } else {
+        warnEl.style.display = "none";
+      }
+    }
+
+    var applyBtn = el("asCopyApplyBtn");
+    if (applyBtn) {
+      var n = checkedTargets.length;
+      applyBtn.disabled = !(checkedFieldDefs.length > 0 && n > 0);
+      applyBtn.textContent = n > 0 ? ("Apply to " + n + " feature" + (n === 1 ? "" : "s")) : "Apply";
+    }
+  }
+
+  function openCopyModal(sourceType, sourceIdx) {
+    var sourceFeat = copySourceArray(sourceType)[sourceIdx];
+    if (!sourceFeat) return;
+    if (!sourceFeat.properties.attributes) sourceFeat.properties.attributes = {};
+
+    _copySource = { type: sourceType, idx: sourceIdx };
+
+    var titleEl = el("asCopyModalTitle");
+    if (titleEl) titleEl.textContent = "Copy Attributes — " + (sourceFeat.properties.name || "");
+
+    var bodyEl = el("asCopyModalBody");
+    if (bodyEl) {
+      bodyEl.innerHTML = "";
+      bodyEl.appendChild(buildCopyModalContent(sourceType, sourceIdx, sourceFeat));
+    }
+
+    updateCopyState();
+
+    var modal = el("asCopyModal");
+    if (modal) modal.style.display = "";
+  }
+
+  function closeCopyModal() {
+    var modal = el("asCopyModal");
+    if (modal) modal.style.display = "none";
+    _copySource = null;
+  }
+
+  function applyCopyAttributes() {
+    if (!_copySource) return;
+    var sourceType = _copySource.type, sourceIdx = _copySource.idx;
+    var sourceFeat = copySourceArray(sourceType)[sourceIdx];
+    var modal = el("asCopyModal");
+    if (!sourceFeat || !modal) { closeCopyModal(); return; }
+    var sourceAttrs = sourceFeat.properties.attributes || {};
+    var fieldDefs = COPY_FIELD_DEFS[sourceType] || [];
+
+    var checkedFieldDefs = [];
+    modal.querySelectorAll(".as-copy-attr-list input[type=checkbox]:checked").forEach(function (cb) {
+      var key = cb.getAttribute("data-field-key");
+      for (var i = 0; i < fieldDefs.length; i++) {
+        if (fieldDefs[i].key === key) { checkedFieldDefs.push(fieldDefs[i]); break; }
+      }
+    });
+
+    var targets = [];
+    modal.querySelectorAll("#asCopyTargetList input[type=checkbox]:checked").forEach(function (cb) {
+      var t = cb.getAttribute("data-type");
+      var i = parseInt(cb.getAttribute("data-idx"), 10);
+      var feat = copySourceArray(t)[i];
+      if (feat) targets.push(feat);
+    });
+
+    if (!checkedFieldDefs.length || !targets.length) return;
+
+    if (App.undo && !App.undo.isRestoring()) App.undo.push();
+
+    var touchedServiceAreaType = false;
+    targets.forEach(function (feat) {
+      if (!feat.properties.attributes) feat.properties.attributes = {};
+      var attrs = feat.properties.attributes;
+      checkedFieldDefs.forEach(function (fd) {
+        if (!copyFieldHasValue(fd, sourceAttrs)) return; // blank source — skip, never overwrite with emptiness
+        copyFieldSetValue(fd, attrs, copyFieldGetValue(fd, sourceAttrs));
+        if (fd.key === "serviceAreaType") touchedServiceAreaType = true;
+      });
+    });
+
+    // serviceAreaType has side effects (walkshed geometry) normally triggered
+    // by its cell's own onChange handler — replicate them since we wrote the
+    // attribute directly.
+    if (touchedServiceAreaType) {
+      if (typeof App.ensurePointWalksheds === "function") App.ensurePointWalksheds();
+      if (typeof App.refreshBuffers === "function") App.refreshBuffers();
+    }
+
+    if (App.cache && typeof App.cache.save === "function") App.cache.save();
+    if (typeof App.refreshFeaturePanel === "function") App.refreshFeaturePanel();
+    renderAll({ preserveSelection: true });
+    closeCopyModal();
+
+    if (touchedServiceAreaType && typeof App.notifyProject === "function") App.notifyProject();
+  }
+
   /* ---- Cell builders ---- */
 
   function buildSwatchCell(featureType, featureIndex, feature) {
@@ -375,6 +781,7 @@
       { label: "Service", title: "Service area type (Circular buffer or Walkshed)" },
       { label: "ID",     title: "Stop ID" },
       { label: "Routes", title: "Associated routes / lines" },
+      { label: "",       cls: "as-col-copy", title: "Copy attributes" },
       { label: "",       cls: "as-col-overrides", title: "Overrides" }
     ]));
     container.firstChild.classList.add("as-grid-points");
@@ -418,6 +825,7 @@
         ? App.buildPointRouteBadge(feat)
         : document.createTextNode("—");
       appendCell(row, badge, "as-cell-badge");
+      appendCell(row, buildCopyButton("point", idx, feat), "as-col-copy");
       appendOverridesCell(row, "point", feat);
 
       container.appendChild(row);
@@ -444,6 +852,7 @@
       { label: "Avg Spd",   cls: "as-col-num", title: "Average speed (mph)" },
       { label: "RunT",      cls: "as-col-num", title: "Run time (minutes, one-way / loop)" },
       { label: "Bands",     cls: "as-col-narrow", title: "Time bands — Weekday · Saturday · Sunday counts" },
+      { label: "",          cls: "as-col-copy", title: "Copy attributes" },
       { label: "",          cls: "as-col-overrides", title: "Overrides" }
     ]);
     hdr.classList.add(gridClass);
@@ -512,6 +921,7 @@
         ? App.buildTimeBandsBadge(feat)
         : document.createTextNode("—");
       appendCell(row, bandsBtn, "as-col-narrow as-cell-badge");
+      appendCell(row, buildCopyButton(featureType, idx, feat), "as-col-copy");
       appendOverridesCell(row, featureType, feat);
 
       container.appendChild(row);
@@ -596,6 +1006,7 @@
       { label: "" },
       { label: "Name" },
       { label: "Notes" },
+      { label: "", cls: "as-col-copy", title: "Copy attributes" },
       { label: "", cls: "as-col-overrides", title: "Overrides" }
     ]));
     container.firstChild.classList.add("as-grid-polygons");
@@ -623,6 +1034,7 @@
         },
         { placeholder: "" }
       ));
+      appendCell(row, buildCopyButton("polygon", idx, feat), "as-col-copy");
       appendOverridesCell(row, "polygon", feat);
 
       container.appendChild(row);
@@ -753,7 +1165,12 @@
 
     init: function (/* core */) {
       // App.notifyProject() (called after feature add/delete and cache restore)
-      // invokes our update() hook, which re-renders. Nothing to wire here.
+      // invokes our update() hook, which re-renders. Nothing else to wire here
+      // besides the Copy Attributes modal's Cancel/Apply buttons.
+      var cancelBtn = el("asCopyCancelBtn");
+      if (cancelBtn) cancelBtn.addEventListener("click", closeCopyModal);
+      var applyBtn = el("asCopyApplyBtn");
+      if (applyBtn) applyBtn.addEventListener("click", applyCopyAttributes);
     },
 
     onOpen: function (/* core */) {
@@ -761,7 +1178,10 @@
     },
 
     onClose: function (/* core */) {
-      // Nothing to clean up — feature state lives on the features themselves.
+      // Feature state lives on the features themselves — nothing to clean up
+      // there, but close the Copy Attributes modal so it doesn't pop back up
+      // the next time this popup opens.
+      closeCopyModal();
     },
 
     update: function (/* core */) {

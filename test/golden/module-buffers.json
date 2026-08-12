@@ -1,0 +1,12 @@
+{
+  "readBuffer/valid-value": 1.5,
+  "readBuffer/below-min": 0.5,
+  "readBuffer/above-max": 0.5,
+  "readBuffer/non-numeric": 0.5,
+  "readBuffer/blank": 0.5,
+  "readBuffer/missing-element-string-id": 0.5,
+  "readBuffer/null-element": 0.5,
+  "readBuffer/explicit-fallback-honored": 0.75,
+  "readBuffer/at-min-boundary": 0.05,
+  "readBuffer/at-max-boundary": 5
+}

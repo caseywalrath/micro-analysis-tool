@@ -13,7 +13,7 @@ Status key: **Implemented**, **Partial**, **Not started**
 
 
 ### Midpoint Insertion — Implemented
-Click along an existing route/line/polygon in vertex edit mode to insert a new vertex between existing ones. Implemented via `insertVertex` in `js/core/editing.js` using `turf.nearestPointOnLine` to find the insertion point; supported with undo.
+Click along an existing route/line/polygon in vertex edit mode to insert a new vertex. `insertVertex` in `js/core/editing.js` (`turf.nearestPointOnLine`), undo-supported.
 
 ### Segment split in edit mode — Not started
 Split a drawn line/route into two independent features at a clicked vertex (or an arbitrary clicked point along the geometry). Vertex *deletion* already exists (`deleteVertex` / `canDeleteVertex` in `js/core/editing.js`, wired to the Delete key); this adds the complementary "cut here" operation. Reuse the same geometry helpers as midpoint insert (`turf.nearestPointOnLine` to locate the cut, `turf.lineSlice` to produce the two halves), push both new features with undo, and split attributes (each half inherits the original's `attributes`). Useful for breaking a long corridor into separately-costed patterns.
@@ -23,7 +23,7 @@ While drawing a line/route/polygon, snap new vertices to nearby reference geomet
 
 
 ### Walkshed polygons — Implemented
-Compute a true street-network walking isochrone from placed Points, entirely in-browser — no external service. The **Walkshed** analysis module (`js/projects/walkshed.js`) uses the offline road-network engine (`App.computeWalkshed` in `js/core/road-network.js`: budget-limited flood Dijkstra + concave-hull polygon) to build a "15-minute walk" area, renders it (with an optional green reachable-streets correctness layer), and exports GeoJSON. A road network must be loaded first (Add Data → Area Roads for Street Routing, or import a saved road-network GeoJSON). A Point can be flagged `attributes.serviceAreaType = "walkshed"` (Features popup / Attribute Summary, or the module's "Use as study areas" button), which substitutes the walkshed polygon for the circular buffer in `rebuildBuffers()` so Buffer-Area Summary, TPI, Title VI, FTA, and the corridor pickers all analyze "demographics within a walk" with no per-module changes.
+True street-network walking isochrones from placed Points, entirely in-browser. **Walkshed** module (`js/projects/walkshed.js`) uses `App.computeWalkshed` (`js/core/road-network.js`: budget-limited flood Dijkstra + concave-hull polygon); requires a loaded road network. Points flagged `attributes.serviceAreaType = "walkshed"` substitute the walkshed for the circular buffer in `rebuildBuffers()`, so every study-area consumer (BAS, TPI, Title VI, FTA, corridor pickers) picks it up automatically.
 
 ### Walkshed sidewalk & access refinement — Not started
 A further precision pass on the walkshed network, building on the class-aware traversal already in place (`js/core/road-network.js` tags every edge/segment `pedBlocked`/`carBlocked` from the OSM `highway` class and `foot` tag, so motorways/trunk roads and their ramps are already excluded from walksheds, pedestrian ways — footway/path/steps/pedestrian/cycleway/living_street — are already included, and driving routes still ignore pedestrian-only ways).
@@ -31,6 +31,7 @@ A further precision pass on the walkshed network, building on the class-aware tr
 **What this adds:** lean on OSM sidewalk and access tagging to refine *which* segments a pedestrian can actually use, rather than relying on the highway class alone.
 - **Sidewalk data (two forms).** OSM encodes sidewalks either as `sidewalk=both/left/right/no/none` tags on a road centerline, or as separately-mapped `highway=footway` + `footway=sidewalk` ways. The separately-mapped form already flows into the network via the footway class; the centerline `sidewalk=*` tag is not yet captured. Capturing it would let a walkshed prefer/weight streets known to have sidewalks and down-weight or exclude `sidewalk=no` arterials.
 - **Access tags.** Extend the existing `foot=*` override to also honor `access=private`, `access=no`, and `foot=private` so technically-mapped-but-un-walkable segments (gated service roads, private drives) are dropped. Cheap once the tags are captured — the classifier hook (`isPedForbidden`) is already the single choke point.
+- **High-stress arterial-crossing penalty (AECOM TLOS).** Beyond a binary include/exclude, apply an edge-weight *multiplier* in `buildGraph` for segments that cross or run along high-stress arterials, so the walkshed is pruned where a pedestrian realistically won't cross (a freeway or 6-lane arterial makes a nominally-close stop unreachable). Same soft-weighting hook as the sidewalk signal; degrades gracefully to today's behavior where the classifying tags are absent.
 
 **⚠ Caveats (why this is "nice if present, never required"):**
 - **Coverage is wildly inconsistent.** Sidewalk tagging is excellent in a handful of well-mapped cities and essentially absent across most of the US. Logic that *depends* on `sidewalk=*` would make the tool behave very differently region to region — a walkshed that looks precise in Seattle and empty in a mid-size county — which is hard to explain to the beginner audience (see `CLAUDE.md`). Treat sidewalk tags as an optional refinement signal, never a hard requirement: absent tag ⇒ fall back to today's class-based behavior, don't exclude the street.
@@ -39,14 +40,68 @@ A further precision pass on the walkshed network, building on the class-aware tr
 
 **Files to touch:** `js/core/road-network.js` — capture `sidewalk` (and the extra `access`/`foot` values) in the Overpass→GeoJSON conversion and in `loadRoadNetworkFromFile`'s pass-through, then extend `isPedForbidden` / add a soft-weighting hook; optionally expose the opt-in toggle + footnote in `js/projects/walkshed.js` / `projects/walkshed-popup.html`.
 
+### Transit Travelshed Engine — Not started
+The strategic centerpiece. Reuses the walkshed engine's bones and unlocks
+the Cumulative-Opportunity Transit Accessibility entry above.
+
+#### Architecture sketch (extends `road-network.js` + `walkshed.js` patterns)
+
+**Inputs:** origin (clicked point or existing Point feature), total time
+budget T (e.g. 45 min), walk speed, day type + time period (to select the
+active band per route via `getEffectiveServiceBands`), boarding penalty
+(default ~1–2 min), transfer cap (v1: 1).
+
+**Algorithm — layered floods rather than a true multimodal graph:**
+1. **Initial walk flood** from the origin using the existing budget-limited
+   Dijkstra, but keeping per-node *arrival times* (the engine already settles
+   nodes with costs; we expose them instead of only polygonizing).
+2. **Boarding points:** Point features with `associatedRoutes` (real stops);
+   for routes with no stop points, synthesize stops by sampling the geometry
+   at the service type's `defaultStopSpacing`. Snap to network
+   (`snapToNetwork` exists, walk mode).
+3. **Ride:** for each boarding point reached at time t₀ < T: wait = headway/2
+   (from the selected period's band) + boarding penalty, then propagate along
+   the route geometry at `avgSpeed` (or proportional `runTime`) to each
+   downstream stop. **The `direction` attribute governs propagation** — "Both"
+   propagates both ways; Loop/CW/CCW propagates one way around. (Note how
+   this makes the directionality multiplier's effect *visible* rather than
+   assumed.)
+   DEVELOPER NOTE: I wonder if headway/2 is the best measure for low-frequency routes where users are more likely to time their departure around the bus schedule; are we unfairly penalizing these routes here? Need further research.
+5. **Egress walk floods:** from each alighting stop with remaining budget,
+   run another walk flood; the travelshed is the union of all reached nodes
+   across all floods. One transfer = repeat step 3 from boarding points
+   newly reached by egress floods.
+6. **Polygonize** with the existing concave-hull auto-relax loop; optionally
+   render banded isochrones (15/30/45) by thresholding node arrival times.
+
+**The key performance design decision:** per-stop walk floods must be
+computed **once at full budget, storing per-node distances**, then *thresholded*
+per query — not re-flooded per remaining-budget value. That makes a single
+travelshed cost ~(stops reached) cheap floods with heavy cache reuse, and it's
+what makes the batch accessibility mode (hundreds of origins) feasible at all.
+Cache keyed like the walkshed module: settings + network epoch + feature geometry.
+
+#### What we're missing / assuming
+- **Real stop locations** for drawn scenarios (mitigated by `associatedRoutes`
+  points where placed, sampled spacing otherwise — disclose which was used).
+- **Schedules**: frequency-based wait assumption, as discussed above.
+- **Dwell times, transfer reliability**: fold into the boarding penalty knob.
+- **Speed realism**: `avgSpeed` is user-asserted; `runTime` where entered is
+  better. Both already exist as attributes.
+
+**Effort:** large — the biggest single lift on this list (new engine
+surface in `road-network.js`, a new module, careful caching) — but it's
+incremental on proven code, not greenfield, and it's the prerequisite for the
+highest-value consulting outputs (the accessibility headline stats above).
+
 ### Unmerge dissolved union — Low Priority
 Currently `bufferUnionPolygon()` always dissolves overlapping buffers. Add an option to keep individual buffers separate for per-station analysis or visual comparison.
 
 ### Import geospatial data (KML/KMZ/GeoJSON) — Implemented
-Upload KML, KMZ, GeoJSON, JSON, CSV, or shapefile (.shp/.zip) via Add Data (+) → Spatial Data. Imported geometries become editable features. Wired in `js/app.js` (extension router) to `importKML` / `importFromFile` / `importCSV` / `importSHP` in `js/core/cache.js`. The Features-panel Import/Export buttons are enabled and functional.
+Upload KML, KMZ, GeoJSON, JSON, CSV, or shapefile (.shp/.zip) via Add Data (+) → Spatial Data as editable features. `js/app.js` extension router → `importKML`/`importFromFile`/`importCSV`/`importSHP` in `js/core/cache.js`.
 
 ### Floating attributes popup — Implemented
-Feature attributes (name, direction, mode, frequency, span, stop ID, notes, etc.) now open in a floating draggable popup (`#fp-attr-popup`) rather than an inline slide-down panel. The popup is 320px wide, position: fixed, clamped within viewport on drag and resize, closes on Escape or X button, and auto-updates when the user selects a different feature. Opened via the gear icon (⚙) that appears on each feature row on hover, or via right-click → "Attributes". Row click now selects only; the trash icon stays in the row with its inline confirm strip.
+Feature attributes open in a floating draggable popup (`#fp-attr-popup`, 320px, clamped to viewport, Escape/X to close, auto-updates on selection change). Opened via the row's gear icon (⚙) or right-click → "Attributes".
 
 ### Concentric buffer rings — Not started
 Draw multiple concentric rings at user-defined distances (e.g. 0.25/0.5/1 mi) around a point or line, distinct from the current single-radius buffer. Useful for graduated service-area visualizations and walking-distance comparisons.
@@ -55,7 +110,10 @@ Draw multiple concentric rings at user-defined distances (e.g. 0.25/0.5/1 mi) ar
 Draw lines and polygons by holding and dragging rather than click-by-click vertex placement. Useful for sketching irregular study areas or approximate corridors quickly.
 
 ### Copy / paste features — Implemented
-Duplicate a drawn feature in place via the right-click context menu ("Duplicate"). Creates an independent copy with a new name. Implemented for every feature type (`duplicatePoint`/`duplicateLine`/`duplicateRoute`/`duplicatePolygon`/`duplicateLabel`/`duplicateTextBox`). Remaining nice-to-have: a Ctrl+D keyboard shortcut (not yet wired).
+Right-click → "Duplicate" creates an independent copy of any feature type (`duplicatePoint`/`duplicateLine`/`duplicateRoute`/`duplicatePolygon`/`duplicateLabel`/`duplicateTextBox`). Remaining nice-to-have: a Ctrl+D shortcut.
+
+### Copy Attributes (Attribute Summary) — Implemented
+Per-row Copy button in the Attribute Summary popup (`js/projects/attribute-summary.js`) opens a modal to copy a source feature's attributes onto one or more compatible targets (Points/Lines/Routes/Polygons; `serviceId` excluded), with per-attribute/per-target selection, an overwrite warning, and one undo step for the whole batch.
 
 ---
 
@@ -88,61 +146,44 @@ For each block group, compute `score_i = Σ (importance_j / turf.distance(centro
 - `js/core/osm-pois.js` — `App.osmPoiFeatures` already exposed; no changes needed
 
 ### Transit Costing module — Partial
-Delivered as the **Route Costing** module (`js/projects/route-costing.js`, enabled). Produces estimates for service/revenue miles, revenue and platform hours (daily + annualized), layover/deadhead, peak vehicle pullout, and fleet total with spares. Still missing: staffing estimates, and blocking/interlines fleet pooling (the interline logic is built but the UI button is disabled pending review).
+Delivered as **Route Costing** (`js/projects/route-costing.js`): service/revenue miles, rev/plat hours (daily + annualized), layover/deadhead, peak pullout, fleet + spares. Missing: staffing estimates; interlines fleet pooling is built but UI-disabled pending review.
 
 ### More census categories — Partial
-Expand `VAR_META` in utils.js with additional ACS variables (e.g., vehicle ownership, commute mode, housing tenure, age distribution). Each entry needs a variable code, label, category, aggregation mode, and format. `VAR_META` has been substantially expanded (~60 ACS/LODES variables across Demographics, Equity, Travel, Housing, and Employment); this is an open-ended item that can keep growing.
+`VAR_META` (`js/core/utils.js`) has grown to ~60 ACS/LODES variables across Demographics, Equity, Travel, Housing, and Employment. Open-ended — can keep growing.
+
+### Ridership vs. Coverage Allocator — Not started
+Jarrett Walker's hallmark budget-philosophy split: tag each drawn route/line as **"Ridership"** (frequent service on dense corridors) or **"Coverage"** (lifeline service everywhere), then report what share of total revenue hours / miles goes to each — updating live as the user draws routes or changes frequency. Add a single `purpose` enum attribute (Ridership | Coverage | unset) alongside the existing `direction`/`mode`/`serviceId` fields in `js/core/feature-attributes.js`; the Attribute Summary table and Copy Attributes pick it up like any other field. Route Costing already computes per-Service `revHrs`/`miles`/`platHrs` per day and annualized (`computeService` / `computeSystemSummary` in `js/projects/route-costing.js`), so the split is a pure group-by-`purpose` aggregation of numbers we already have — surface it as a section in the Route Costing results or a lightweight system dashboard. The split-ratio math is a pure function → golden-value test case per the testing policy.
 
 
 ### FTA Small Starts popup UI — Implemented
-FTA Small Starts is an enabled popup-based module (`js/projects/fta-small-starts.js`, `projects/fta-small-starts-popup.html`) with a 2-tab layout (Ratings | Data Inputs): CRE/ESS/LBAR uploads with column mapping, five color-coded rating cards, breakpoint classification, session persistence, and CSV export.
+Popup module (`js/projects/fta-small-starts.js`, `projects/fta-small-starts-popup.html`), 2-tab (Ratings | Data Inputs): CRE/ESS/LBAR uploads with column mapping, five rating cards, breakpoint classification, session persistence, CSV export.
 
 ### Simplified LBAR Housing Inventory workflow — Not started
 The current LBAR workflow requires uploading a pre-formatted inventory file with lat/lon/units/county columns. A simpler flow might allow uploading a basic address list, geocoding it, and auto-detecting the county FIPS. Requires conceptual planning — the geocoding step is the main complexity (no backend, so would need a client-side or free API solution).
 
 
 ### Title VI Analysis Module — Implemented
-Implemented as an enabled popup module (`js/projects/title-vi.js` + engine `js/projects/title-vi-engine.js` + `projects/title-vi-popup.html`) with a 3-tab layout (Policies & Inputs | Analysis | Scenarios): route-alteration pairing, major-service-change rules, disparate-impact / disproportionate-burden findings against a system baseline, service loss/gain map overlay, scenario comparison, and CSV/GeoJSON/JSON export. Original planning notes retained below for reference.
+Popup module (`js/projects/title-vi.js` + engine `title-vi-engine.js` +
+`projects/title-vi-popup.html`), 3-tab (Policies & Inputs | Analysis |
+Scenarios): route-alteration pairing, major-service-change rules,
+disparate-impact/disproportionate-burden findings vs. a system baseline,
+service loss/gain map overlay, scenario comparison, CSV/GeoJSON/JSON export.
 
-A new analysis module for Title VI civil rights compliance reporting. Title VI of the Civil Rights Act of 1964 requires that federally funded transit projects do not disproportionately burden minority and low-income populations. This module would leverage existing TPI/ACS infrastructure to automate the demographic analysis portion of a Title VI equity assessment. See document Title_VI_Module_Overview.md
+**TODO — golden-value tests deferred:** add `test/cases/title-vi.mjs` once
+the engine's math stabilizes (pure pieces: `defaultPolicy`, `createScenario`,
+`computeDivergence`, `evaluateMajorChange`, `evaluateFindings`).
 
-**Core concept:** Compare demographic composition inside the project corridor (buffer union) against a reference area (county, metro area, or user-defined region) to identify whether protected populations are disproportionately affected.
-
-**Key populations to analyze:**
-- Minority (non-white) population share
-- Low-income households (below poverty threshold)
-- Limited English Proficiency (LEP) households
-- Senior (65+) population
-- Zero-vehicle households
-- People with disabilities
-
-**Potential features:**
-- Side-by-side comparison table: corridor demographics vs. reference area demographics
-- Disparate impact flagging when corridor shares exceed reference area thresholds (e.g., corridor minority % > reference minority %)
-- Multiple reference area options: county-level (auto-detected from corridor location), MSA-level, or custom polygon
-- Map overlay showing Title VI population concentrations within the corridor
-- Exportable summary suitable for inclusion in Title VI reports (CSV/PDF)
-- Integration with existing ACS fetch infrastructure — most required variables are already in VAR_META or TPI factors
-- FTA reporting format alignment where applicable
-
-**Dependencies:** Builds on `census.js` (ACS fetch + aggregation), `tpi-scoring.js` (factor definitions, batch ACS), and the popup module system (`App.registerModule`). Would register as a new popup-based module in the Analysis panel.
-
-**Files (anticipated):** `js/projects/title-vi.js`, `projects/title-vi-popup.html`
-
-**TODO — golden-value test coverage (deferred):** The `test/` golden harness now
-covers the Ridership, TPI, Route Costing, Trip Builder, and Corridor Scoring
-engines, but **not** Title VI (`title-vi-engine.js`, `window.TitleVI`). It was
-skipped deliberately: the module is still evolving, so pinning its outputs now
-would mostly generate churn. Once the engine's math stabilizes, add a
-`test/cases/title-vi.mjs` for the pure pieces — `defaultPolicy`, `createScenario`,
-`computeDivergence`, `evaluateMajorChange`, `evaluateFindings` — which take plain
-inputs and need no map/DOM (the fetch/geometry paths stay out of scope). Most
-`TitleVI.*` functions are already on the global namespace, so little or no
-test-only export hook should be needed. See `test/README.md` for the workflow.
+**Potential enhancement — New-vs-Old job-access matrix:** the module today
+compares demographics of the *impacted area*. A stronger equity output disaggregates
+the **change in job access** (not just area demographics) for zero-vehicle,
+low-income, and minority populations under a proposed vs. existing network. That
+needs job *access* via the planned Transit Travelshed Engine (buffer overlap isn't
+accessibility) and the New-vs-Old comparison via Scenario Save & Compare — the
+demographic-disaggregation half already lives here.
 
 ### OSM Points of Interest — Implemented
 
-Load curated transit-relevant destination categories from OpenStreetMap via the Overpass API. Available under Add Data (+) → ONLINE → "Points of Interest (OSM)". A category picker popup lets users select from 15 destination types grouped into Health, Education, Transit, Retail, Government, and Recreation. Selected categories are fetched for the current map viewport and re-fetched automatically on pan/zoom (debounced 2 s). Each POI renders as a purple circle; size reflects importance (Hospital/University/Rail Station = large, School/Stadium = medium, others = small). Hide (eye) and Clear (×) icons follow the same Add Data pattern as GTFS and LODES. No session persistence — categories must be re-selected each session. Loaded POI features are exposed as `App.osmPoiFeatures` for downstream use by analysis modules (see TPI Destinations factor below).
+Loads curated transit-relevant destination categories from OSM via Overpass (Add Data → ONLINE → "Points of Interest (OSM)"). Category picker (15 types across Health/Education/Transit/Retail/Government/Recreation), auto re-fetched on pan/zoom, rendered as importance-sized purple circles. No session persistence. Exposed as `App.osmPoiFeatures` for downstream modules (see TPI Destinations factor below).
 
 **Potential future enhancements:**
 - Filter loaded POIs by importance tier (show only High, Medium, or both)
@@ -150,7 +191,7 @@ Load curated transit-relevant destination categories from OpenStreetMap via the 
 - Auto-populate `destinationImportance` attribute on new user-placed Points based on proximity to loaded OSM POIs
 
 ### GTFS import — Implemented
-Upload a GTFS `.zip` via Add Data (+) → GTFS → Load GTFS Feed. Routes (shapes.txt) render as dashed gray reference lines and stops (stops.txt) as hollow circles below user-drawn features. Hovering shows a tooltip (route name + mode, or stop name + ID); clicking shows a full detail popup with route color swatch, GTFS fields, and wheelchair/location-type labels. Route info is pre-joined from trips.txt + routes.txt at load time. The analysis popup shows all files in the ZIP with REQ/OPT badges and a scrollable CSV table viewer (capped at 500 rows). Layer visibility toggles in the popup. Feed is not persisted across sessions (re-upload required).
+Upload a GTFS `.zip` via Add Data (+) → GTFS. Renders shapes.txt as dashed reference lines and stops.txt as hollow circles, with hover tooltips and click detail popups (route info pre-joined from trips.txt + routes.txt). Analysis popup shows the file directory (REQ/OPT badges) + scrollable CSV table viewer (capped 500 rows). No session persistence.
 
 **Potential future enhancements:**
 - **Derive frequency/span from `stop_times.txt`.** Aggregating stop_times by trip and service period yields real headways and service spans. This unlocks two high-leverage things: (1) a **frequency heatmap overlay** (color route segments by observed headway), and (2) letting the existing **"Copy As Line"** action (`js/projects/gtfs.js:505`) carry real service bands — populate `attributes.service` (weekday / saturday / sunday band arrays) on the copied feature so **Route Costing** and **Trip Builder** consume observed service automatically. Closes the loop from observed feed → editable proposal with no manual band entry.
@@ -164,8 +205,123 @@ Enabled popup module (`js/projects/trip-builder.js`, `projects/trip-builder-popu
 ### Corridor Scoring — Implemented
 Enabled popup module (`js/projects/corridor-scoring.js`, `projects/corridor-scoring-popup.html`) that surfaces the per-route Corridor Demand Index as a ranked, objective composite score per drawn route/line. Ranked table with classification pills and expandable per-factor breakdowns, map line layer colored by composite CDI, Adjust Weights modal, CSV/GeoJSON export, and session persistence.
 
+### Ridership Forecasting Directionality Multiplier — Not started
+Agreed that full granularity (trunk-with-one-way-loop-ends) exceeds the model's
+current fidelity — and importantly, it also exceeds the fidelity of the
+*calibration data* (route-level observed ridership), so a segment-level
+directionality model would be precision we can't validate.
+
+**What's defensible now — a route-level "directionality factor":**
+- We already have the pattern for exactly this kind of adjustment: service
+  type premiums (user-adjustable sliders, documented defaults, flow through
+  `applyElasticity`). Add a **direction multiplier** derived from the existing
+  `direction` attribute / Service pairing: bidirectional (paired patterns or
+  "Both") = 1.0; one-way loop (Loop/CW/CCW solo) = default ~0.7,
+  user-adjustable with a stated basis. The rationale to document: a one-way
+  loop imposes out-of-direction travel for roughly half of trip pairs,
+  degrading effective in-vehicle time even at identical headways; empirical
+  literature is thin, so the default is a judgment value the user can tune —
+  same epistemic status as our service premiums, presented the same way.
+- **Calibration-consistency guard (cheap, valuable):** if calibration routes
+  are predominantly bidirectional and a scenario is a one-way loop (or vice
+  versa), show a warning note — the calibration factor silently embeds the
+  direction profile of the routes it was fit on. This costs almost nothing
+  (direction attributes are on the features already) and prevents the most
+  likely real-world misuse.
+- **Hybrid trunk+loops:** representable today as a Service (paired trunk
+  patterns) plus loop features, and `computeSegments` shows how per-segment
+  treatment *could* work — but defer. A length-weighted blend of per-pattern
+  multipliers within a Service is the eventual v2 if demand materializes.
+- **Longer-term principled path:** once a transit travelshed engine exists,
+  directionality stops being a fudge factor — a one-way loop's travelshed is
+  visibly smaller/asymmetric, and accessibility-based demand adjustment
+  becomes possible.
+
+**Testing note:** any change to `applyElasticity` or a new multiplier function
+is calculation-engine math → golden-value test cases and a
+`Verified: node test/run-golden.mjs` line in the commit, per the testing policy.
+
+**Effort:** multiplier + warning = small. Methodology write-up (in
+`TPI_Ridership_Forecast_Methodology.md` + the user-facing readme) is the real
+deliverable; without it the number is indefensible in front of a client.
+
 ### Corridor Scoring scenario compare — Not started
 Let users save a scored corridor set as a named scenario and diff two corridor alternatives side by side — a ranked delta table showing which corridors gained/lost score and rank between Scenario A and B. Builds on the module's existing `_lastResult` and session persistence in `corridor-scoring.js`; would add a small scenario store (name + captured `routeCDIs` + weights/settings) and a comparison view. Supports "alternative A vs. alternative B" planning conversations directly in the tool.
+
+### Transit Coverage module — Implemented
+Combines Ideas 1+2 from the (now-deleted) brainstorm doc — residents & jobs
+near frequent transit. Popup module (`js/projects/transit-coverage.js`,
+`projects/transit-coverage-popup.html`): geography/ACS year, module-owned
+buffer distance (`js/core/module-buffers.js`), day type + optional peak-headway
+threshold (`App.getEffectiveServiceBands`), routes+lines checklist (transit
+sources), drawn-polygons checklist (service area/denominator). Coverage/
+threshold unions clipped to the service area (`turf.intersect`); aggregates
+ACS population (area-apportioned) and LODES jobs (whole-block) into a results
+table, stat sentence, map overlay, CSV/GeoJSON export, session persistence.
+
+**Potential future enhancements** (from the original brainstorm, not built):
+- User-configurable frequency tiers (≤15/≤30/any) with a "sustained over a
+  qualifying span" definition option, vs. today's single threshold
+- Municipal boundary polygon as an alternative service-area denominator
+- Network walkshed option for buffers (vs. crow-fly) when a road network is loaded
+- Buffer from a route's associated stops instead of the line (stop-sparse service)
+
+### Cumulative-Opportunity Transit Accessibility — Not started
+What the agencies are showing is **cumulative-opportunity accessibility**,
+usually computed with schedule-based multimodal routing (Conveyal/R5: GTFS +
+street network, departure-time sampling). We can't and shouldn't replicate
+that fidelity client-side — but there is a legitimate, well-established
+lighter-weight variant that our data model happens to support almost exactly:
+**frequency-based (headway-based) accessibility**, where expected wait =
+headway/2 instead of consulting a timetable. Conveyal itself offers this mode
+for sketch networks that don't have schedules yet — which is precisely what a
+drawn scenario network is.
+
+Conceptual pipeline (all pieces named in the Transit Travelshed Engine entry):
+1. Transit travelshed from an origin with budget T (walk → wait → ride →
+   walk, ≤1 transfer).
+2. "Jobs within T" = LODES jobs within the travelshed polygon (existing
+   union-based LODES computation).
+3. The headline stat ("the *average resident* reaches 39% more jobs") is the
+   population-weighted mean of (2) across many origins — one travelshed per
+   populated block-group centroid in the service area. That's the expensive
+   part: N origins × multi-flood routing. Tractable as a batch run with a
+   progress bar *if* per-stop walk floods are cached and reused across origins
+   (design note in the Travelshed entry), or by sampling origins.
+4. The "% more" framing is a before/after comparison → falls straight out of
+   the Scenario Save & Compare System.
+
+**Opportunity types (beyond jobs):** the same "count what's inside the
+travelshed" step generalizes past LODES jobs — count reachable **healthcare
+facilities from loaded OSM POIs** (`App.osmPoiFeatures` already carries
+hospital/clinic categories) and **low-income households** (ACS), so the headline
+can be framed for whichever opportunity a client cares about, not just employment.
+
+**Data we'd want eventually but don't need for v1:** real GTFS-derived
+headways for the *existing* network (we already parse GTFS; deriving headways
+from `stop_times.txt` is a bounded follow-up), giving an honest "existing
+(GTFS) vs proposed (drawn)" comparison.
+
+**Verdict:** don't build this directly. It is the *composition* of the
+Transit Travelshed Engine + existing LODES machinery + Scenario Save & Compare.
+Methodology disclosure matters for consulting use: frequency-based not
+schedule-based, average-wait assumption, transfer cap, no reliability/crowding.
+
+### Transit / Auto Opportunity Ratio — Not started
+Kimley-Horn's Access2Opportunity framing (also central to Jarrett Walker's
+work): the ratio of opportunities — jobs, healthcare facilities, essential
+services — reachable within 30/45/60 minutes **by transit vs. by private auto**,
+surfacing the "opportunity gap" and proving where transit is a viable
+alternative to driving and where it fails. The transit half is the
+Cumulative-Opportunity Transit Accessibility computation above (travelshed ∩
+opportunities). The **auto half is feasible entirely offline**: `js/core/road-network.js`
+already carries a car-mode Dijkstra (`findLocalRoute`, class-aware `carBlocked`
+traversal), so a drive-time travelshed can be flooded from the same origin on
+the same graph — no OSRM travel-time matrix, no public-server rate-limit
+fragility. Ratio = opportunities(transit-shed) / opportunities(auto-shed),
+rendered as a per-origin metric or a choropleth of the gap. Depends on the
+Transit Travelshed Engine; the auto comparator is a modest add on the existing
+car-mode graph. High consulting-differentiator value.
 
 ### FTA STOPS-Style Ridership Modeling — Not started
 A new analysis module that replicates or approximates the methodology of FTA's STOPS (Simplified Trips-on-Project Software) model. STOPS is FTA's official ridership forecasting tool for Small Starts and some New Starts projects. It estimates **station-level boardings** by modeling three things: where people want to go (destination attractiveness), how well transit gets them there (accessibility via travel time), and how likely they are to choose transit over driving (mode share).
@@ -195,17 +351,25 @@ A new analysis module that replicates or approximates the methodology of FTA's S
 **Files (anticipated):** `js/projects/fta-stops.js`, `projects/fta-stops-popup.html`, and potentially a standalone helper script (Python or Node) for travel time matrix generation.
 
 ### CSV point import — Implemented
-Upload a CSV with lat/lon columns (auto-detected) via Add Data (+) → Spatial Data and plot as point features. Implemented in `importCSV` (`js/core/cache.js`), which also recognizes a geometry_type column for lines/polygons. Common uses: existing stop-level boardings, peer-system data, community facility inventories.
+Upload a CSV with lat/lon columns (auto-detected) via Add Data (+) → Spatial Data → point features. `importCSV` (`js/core/cache.js`) also recognizes a geometry_type column for lines/polygons.
 
 
 ### Frequency / service heatmap — Not started
 Color route segments by headway or span drawn directly from the route attributes already stored per feature (frequency field in minutes, spanStart/spanEnd). Visual equivalent of a GTFS-based frequency map for proposed service. Could use a diverging color ramp (green = frequent, red = infrequent).
 
+### Frequent Transit Network (FTN) & span visualizer — Not started
+A time-of-day slider that filters the drawn network to display only routes running at a chosen headway threshold (e.g. ≤15-min) at the selected time, visually highlighting the **core network** a rider can use without checking a schedule — and emphasizing **span** (how many hours a day that frequency actually holds), which increasingly matters for proving a network serves non-commute trips. Pure client-side: time bands already carry `from`/`to` + `frequency` per day type, and `getEffectiveServiceBands` (`js/core/service-assembly.js`) resolves the active band at any probe time. Complements the Frequency / service heatmap (which colors segments by headway) and the Transit Coverage module (single peak-headway snapshot); the novel pieces are the time-of-day slider and the span roll-up. Could live as a present-mode map overlay or extend Transit Coverage. No new data.
+
 ### Transfer connectivity scoring — Not started
 Given multiple drawn routes, identify overlap zones and score transfer quality based on shared stop proximity and frequency pairing. Output: a map overlay flagging strong/weak transfer nodes and a summary table.
 
-### Stop spacing analyzer — Not started
-Flag segments of a drawn route where stop spacing is too tight (below a minimum threshold) or too wide (above a maximum) vs. a user-configurable target distance. Highlights problematic segments on the map in a distinct color.
+### Stop spacing analyzer & consolidation optimizer — Not started
+Flag segments of a drawn route where stop spacing is too tight (below a minimum threshold) or too wide (above a maximum) vs. a user-configurable target distance, highlighting problematic segments on the map in a distinct color.
+
+**Consolidation economics (Nelson\Nygaard "Smart Stops" framing):** speeding up a route by removing closely-spaced stops is politically contentious, so ground it in data. Given stop Points along a route (they carry `stopId` / `associatedRoutes`), compute average spacing, flag consolidation candidates (e.g. under ¼ mile), and estimate the **run-time saved** per removed stop (a dwell + accel/decel knob, same style as the travelshed boarding penalty) → feed Route Costing's rev-hour math (`js/projects/route-costing.js`) to show **annual operating cost recovery**. Selecting *which* low-ridership stops to cut can use an imported per-stop boardings CSV (CSV point import). No new external data if stops are placed as Points.
+
+### Segment-level delay heatmap — Not started (needs external speed data)
+Nelson\Nygaard's right-of-way selling point: map average bus speed vs. posted limit at the segment level to flag "choke points" where transit-priority interventions (bus lanes, signal priority) yield the highest cost savings. **Requires historical AVL or GTFS-RT speed data, which the app does not ingest** — our routes are drawn proposals, not operating vehicles, and GTFS-RT is a streaming feed needing a backend/CORS proxy (against the "just open index.html" model). The only lightweight path: let the user **import a segment-speed CSV** (existing CSV import) keyed to route segments and render it as a heatmap. Deferred until that data path is worth building.
 
 ### Multi-variable equity index builder — Not started
 Extend TPI to a fully user-composable index: select any 3–5 ACS variables from the existing `VAR_META` catalog, assign weights, and output a scored choropleth. Removes the constraint of TPI's fixed 9 factors while reusing all existing ACS fetch and quintile normalization infrastructure.
@@ -225,10 +389,56 @@ Click any census tract or block group on a choropleth overlay to get a floating 
 
 
 ### External Data Import — Implemented
-Superseded by "Import geospatial data (KML/KMZ/GeoJSON)" above — KML/KMZ, GeoJSON, JSON, CSV, and shapefile import are all wired through Add Data (+) → Spatial Data.
+Superseded by "Import geospatial data (KML/KMZ/GeoJSON)" above.
 
 ### Read-only share link — Implemented
-Encodes the full session state as a compressed URL hash (pako-deflated `#share=` payload) so sharing a link opens the map in view-only mode with all drawn features intact. No backend required. Implemented via `exportShareLink` / share-hash load in `js/core/cache.js`, the `data-format="share-link"` export button, and a view-only banner.
+Compressed URL hash (pako-deflated `#share=`) encodes full session state, opening in view-only mode with no backend. `exportShareLink` / share-hash load in `js/core/cache.js`.
+
+### Scenario Save & Compare System — Not started
+The instinct here is right, and it's also the architecturally cheap answer: we
+already have whole-session export/import with per-module `collect/apply`
+persistence, and per-module scenario managers (RF Scenarios tab, Title VI
+Scenarios) have proven to be the *expensive* pattern — each one is bespoke UI.
+
+Recommended ladder:
+
+1. **Named session slots (build soon, low effort).** Today localStorage holds
+   exactly one session (`"mat-session"`), and file export/import is the only
+   way to keep alternatives. Add "Save as scenario…" / "Switch scenario"
+   backed by multiple named localStorage keys (same schema, plus a name and
+   timestamp). For a non-technical user this converts a fiddly
+   export-file-then-reimport dance into a dropdown. Watch localStorage quota
+   (~5MB) — sessions are small since LODES isn't cached, but cap slot count
+   or fall back to file export gracefully.
+
+2. **Scenario Comparison module (the real payoff).** A system module (like
+   Attribute Summary) that loads 2+ scenario states **read-only** and renders
+   a side-by-side table of *persisted module results* — not live recomputes.
+   This is the key design decision: several modules already persist their last
+   summary (`route-costing` lastSummary, `corridor-scoring` lastSummary, RF
+   calibration + demand). Comparing those requires **zero Census/LODES calls**
+   and no map juggling. Requirements it imposes on new modules: the Transit
+   Coverage module should persist its results table in `collect()` from day
+   one, specifically so scenarios can be compared (it already does). Each
+   compared column shows the run timestamp and a stale flag (results in a
+   saved state may predate the features in it — surface that honestly rather
+   than recomputing silently).
+
+3. **Side-by-side maps** — defer. High UI cost, and the comparison table plus
+   switching scenarios covers most of the consulting need.
+
+**Shortcomings**
+- Comparing persisted results means comparing *what was last run*, not a
+  guaranteed-fresh computation. Mitigation: prominent timestamps/stale badges,
+  and a per-scenario "open & re-run" affordance.
+- Cross-scenario normalization: scores like TPI/CDI are normalized within
+  their own run's pool, so comparing raw composite scores across scenarios is
+  not apples-to-apples (this is the same problem shared-pool mode solves in
+  RF). Coverage %, costs, rev-hours, and ridership are absolute and compare
+  cleanly — lead with those in the comparison table; badge normalized scores
+  with a warning.
+
+**Effort:** slots = small; comparison module = moderate.
 
 ### Map export (PNG / PDF) — Not started
 Export the current map view as a PNG screenshot (using MapLibre's `map.getCanvas().toBlob()`) or a titled, legended one-page PDF that drops straight into a board deck or grant application. High value, low complexity: pair `map.getCanvas().toBlob()` with a lightweight PDF library (jsPDF) — no backend needed. Reuse the present-mode legend, north arrow, and title overlays from `js/core/present-overlays.js` (and the last analysis run's summary stats) so the exported page matches what's on screen in Present mode.
@@ -266,12 +476,12 @@ A dedicated panel listing all drawn feature groups and imported reference layers
 
 
 ### Keyboard shortcuts — Implemented
-Implemented: `Escape` cancels the current draw/measure operation and closes popups; `Ctrl+Z` / `Ctrl+Shift+Z` undo/redo; `Delete`/`Backspace` removes the selected vertex in edit mode; single-key draw-tool toggles (`S` = Point, `L` = Line, `R` = Route, `P` = Polygon, `M` = Measure, `T` = Text Box, `B` = Label — each key programmatically clicks the matching `.tool-btn`, so a second press toggles the tool off); `Enter` finishes an in-progress line/route/polygon via `App.finishDrawing()` (reuses the `saveLine`/`saveRoute`/`savePolygon` commit path); and toolbar tooltip hints showing each key. All wired in `js/app.js` (a dedicated `keydown` listener separate from the Escape/Ctrl+Z/Delete handler; guards skip typing in inputs, modifier combos, and — for tool keys — when a module popup is open). Possible future polish: single-key shortcuts for analysis modules and a help overlay listing all shortcuts.
+`Escape` cancel/close, `Ctrl+Z`/`Ctrl+Shift+Z` undo/redo, `Delete`/`Backspace` vertex removal, single-key draw-tool toggles (`S`/`L`/`R`/`P`/`M`/`T`/`B`), `Enter` finishes drawing via `App.finishDrawing()`. Wired in `js/app.js`. Possible future polish: shortcuts for analysis modules, a help overlay.
 
 
 
 ### Print / presentation mode — Implemented
-A "Present" button hides the sidebar, feature panel, and toolbar to show the map full-screen, with an Exit button and `Escape` to toggle back. Implemented via `App.setPresentMode` (`js/app.js`) and `js/core/present-overlays.js`, which adds draggable/resizable legend, north arrow, and title overlays for screen-sharing and grant documentation.
+"Present" button hides sidebar/feature panel/toolbar for a full-screen map (Exit button, `Escape` to toggle back). `App.setPresentMode` (`js/app.js`) + `js/core/present-overlays.js` (draggable legend, north arrow, title overlays).
 
 ### Classed & diverging legends with editable breaks — Not started
 In present mode, support classed and diverging choropleth legends with user-editable break values, rather than only the current continuous/auto legend. Lets a presenter set meaningful thresholds (e.g., headway tiers, or a diverging ramp around a midpoint) and have the legend swatches + map classification update together. Builds on the legend overlay in `js/core/present-overlays.js` and pairs naturally with the Frequency / service heatmap idea (which needs classed headway bins).
@@ -279,7 +489,7 @@ In present mode, support classed and diverging choropleth legends with user-edit
 ## Development & Tooling
 
 ### Golden-value test harness — Implemented
-Zero-install Node harness in `test/` that pins the numeric output of the pure calculation functions so a silent formula change is caught instead of shipped. Loads the real app `.js` files into a Node `vm` sandbox — no browser, no npm, no build step. Covers Ridership Forecasting, TPI, Route Costing, Trip Builder, and Corridor Scoring; Title VI is intentionally deferred (see its entry above). Run with `node test/run-golden.mjs` (or `bash test/run-tests.sh`); `--update` re-records the golden values after a deliberate change. `CLAUDE.md` instructs the agent to run it after any calculation change and before committing. Full workflow in `test/README.md`.
+Zero-install Node harness (`test/`) that pins pure calculation-function output in a Node `vm` sandbox (no browser/npm/build). Covers Ridership Forecasting, TPI, Route Costing, Trip Builder, Corridor Scoring, Transit Coverage, and Module Buffers; Title VI is intentionally deferred (see its entry above). Run with `node test/run-golden.mjs`; `--update` re-records after a deliberate change. Full workflow in `test/README.md`.
 
 ### Automated test runs on push (GitHub Actions CI) — Not started (future decision)
 Today the golden tests run only when a person or the agent invokes them — the `CLAUDE.md` instruction makes that a reliable *habit*, but not a hard gate: if a session skips it, nothing physically blocks a bad number from being committed. A small GitHub Actions workflow (~15 lines) would run `node test/run-golden.mjs` automatically on every push / pull request, showing a green check or red ✗ on the branch and optionally blocking merge when red — a server-side guarantee that holds regardless of whether any session remembers. Because the harness needs no install (just Node), the workflow is minimal: check out the repo, set up Node, run the one command. **Recorded as a future decision, not a blocker** — the habit route is already live. Worth adding when a hard gate becomes valuable (e.g., more people/agents touching the calculation engines, or ahead of a release). No app-code impact: it is a single `.github/workflows/*.yml` file and changes nothing about the buildless, static nature of the app.
