@@ -66,11 +66,12 @@ active band per route via `getEffectiveServiceBands`), boarding penalty
    propagates both ways; Loop/CW/CCW propagates one way around. (Note how
    this makes the directionality multiplier's effect *visible* rather than
    assumed.)
-4. **Egress walk floods:** from each alighting stop with remaining budget,
+   DEVELOPER NOTE: I wonder if headway/2 is the best measure for low-frequency routes where users are more likely to time their departure around the bus schedule; are we unfairly penalizing these routes here? Need further research.
+5. **Egress walk floods:** from each alighting stop with remaining budget,
    run another walk flood; the travelshed is the union of all reached nodes
    across all floods. One transfer = repeat step 3 from boarding points
    newly reached by egress floods.
-5. **Polygonize** with the existing concave-hull auto-relax loop; optionally
+6. **Polygonize** with the existing concave-hull auto-relax loop; optionally
    render banded isochrones (15/30/45) by thresholding node arrival times.
 
 **The key performance design decision:** per-stop walk floods must be
