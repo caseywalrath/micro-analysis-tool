@@ -40,59 +40,73 @@ A further precision pass on the walkshed network, building on the class-aware tr
 
 **Files to touch:** `js/core/road-network.js` — capture `sidewalk` (and the extra `access`/`foot` values) in the Overpass→GeoJSON conversion and in `loadRoadNetworkFromFile`'s pass-through, then extend `isPedForbidden` / add a soft-weighting hook; optionally expose the opt-in toggle + footnote in `js/projects/walkshed.js` / `projects/walkshed-popup.html`.
 
-### Transit Travelshed Engine — Not started
-The strategic centerpiece. Reuses the walkshed engine's bones and unlocks
-the Cumulative-Opportunity Transit Accessibility entry above.
+### Transit Travelshed Engine — Implemented
+Computes everywhere reachable from a clicked map origin via walk → wait →
+ride drawn transit routes/lines → walk, with at most one transfer, rendered
+as 1–3 banded isochrones. Extends the walkshed engine's bones:
+`js/core/road-network.js` gained per-node cost-map primitives
+(`computeWalkCostMap`, `polygonizeNodeSet`, `snapWalk`, `nodeKeyToCoord`,
+`fetchRoadNetworkForExtent`) shared with `computeWalkshed`; a new pure
+calculation engine `js/core/travelshed.js` (`window.Travelshed`) does the
+layered-flood arrival-time math on plain JSON so it's golden-testable with
+no turf/DOM; `js/projects/transit-travelshed.js` is the module (origin
+probe pattern — a clicked map point, not an `App.points` feature — stop
+resolution, chunked-async per-stop flood caching, scoped
+prompt-to-download street acquisition, banded rendering). Full design +
+phase-by-phase build log: `docs/transit-travelshed-plan.md`.
 
-#### Architecture sketch (extends `road-network.js` + `walkshed.js` patterns)
+**Answering the DEVELOPER NOTE above about `headway/2`:** the literature
+splits by boarding type. Classic half-headway wait assumes riders arrive at
+a stop uniformly at random, which real ridership data (Ingvardson et al.
+2018 Copenhagen smart-card data; Lam & Morrall Calgary; Salek & Machemehl /
+Fan & Machemehl Austin; TfL's operational 12/15-min timetabled cutoff; Chen
+et al. 2025) shows holds only for frequent service — at longer headways
+riders increasingly time their arrival to the schedule, so observed
+*physical* wait flattens instead of growing linearly with headway. The
+model adopted: **initial (unlinked) wait = `min(headway/2, Wmax)`**, `Wmax`
+user-adjustable (default 10 min, defensible calibration range 8–12).
+**Transfer wait stays uncapped `headway/2`**: a transferring rider's
+arrival is dictated by the feeder vehicle's schedule, not something they
+can time (absent modeled timed transfers). A fixed boarding penalty
+(default 1 min) applies at every boarding, initial or transfer. Full
+empirical basis + citations: `docs/transit-travelshed-plan.md` Appendix A.
+**Disclosed limitation:** this captures *physical* reachability only — it
+does not capture the schedule-delay/flexibility cost of infrequent service
+(an hourly route forces a departure-time adjustment even when the stop
+wait itself is short). A future generalized-cost or demand use of these
+travel times should add a separate schedule-delay penalty rather than
+uncapping `headway/2`.
 
-**Inputs:** origin (clicked point or existing Point feature), total time
-budget T (e.g. 45 min), walk speed, day type + time period (to select the
-active band per route via `getEffectiveServiceBands`), boarding penalty
-(default ~1–2 min), transfer cap (v1: 1).
+**Disclosure behaviors:** the module never silently drops or approximates —
+every choice is surfaced per route in the results panel: which service
+band and headway applied at the chosen analysis day/time (or excluded as
+"no service at HH:MM" if none), the wait-model arithmetic actually used,
+whether stops were **real** (Points whose `associatedRoutes` reference the
+feature) or **sampled** (synthetic, spaced at the assumed stop-spacing
+setting, used when a feature has zero real stops), and how direction/loop
+geometry was propagated (Both = both ways; Loop/CW/CCW = one-way,
+wrapping only if the drawn geometry is actually closed — an open "loop"
+rides linear, disclosed). Off-network stops (snapped >0.5 km from the
+loaded network) are skipped and counted rather than silently ignored.
 
-**Algorithm — layered floods rather than a true multimodal graph:**
-1. **Initial walk flood** from the origin using the existing budget-limited
-   Dijkstra, but keeping per-node *arrival times* (the engine already settles
-   nodes with costs; we expose them instead of only polygonizing).
-2. **Boarding points:** Point features with `associatedRoutes` (real stops);
-   for routes with no stop points, synthesize stops by sampling the geometry
-   at the service type's `defaultStopSpacing`. Snap to network
-   (`snapToNetwork` exists, walk mode).
-3. **Ride:** for each boarding point reached at time t₀ < T: wait = headway/2
-   (from the selected period's band) + boarding penalty, then propagate along
-   the route geometry at `avgSpeed` (or proportional `runTime`) to each
-   downstream stop. **The `direction` attribute governs propagation** — "Both"
-   propagates both ways; Loop/CW/CCW propagates one way around. (Note how
-   this makes the directionality multiplier's effect *visible* rather than
-   assumed.)
-   DEVELOPER NOTE: I wonder if headway/2 is the best measure for low-frequency routes where users are more likely to time their departure around the bus schedule; are we unfairly penalizing these routes here? Need further research.
-5. **Egress walk floods:** from each alighting stop with remaining budget,
-   run another walk flood; the travelshed is the union of all reached nodes
-   across all floods. One transfer = repeat step 3 from boarding points
-   newly reached by egress floods.
-6. **Polygonize** with the existing concave-hull auto-relax loop; optionally
-   render banded isochrones (15/30/45) by thresholding node arrival times.
-
-**The key performance design decision:** per-stop walk floods must be
-computed **once at full budget, storing per-node distances**, then *thresholded*
-per query — not re-flooded per remaining-budget value. That makes a single
-travelshed cost ~(stops reached) cheap floods with heavy cache reuse, and it's
-what makes the batch accessibility mode (hundreds of origins) feasible at all.
-Cache keyed like the walkshed module: settings + network epoch + feature geometry.
-
-#### What we're missing / assuming
-- **Real stop locations** for drawn scenarios (mitigated by `associatedRoutes`
-  points where placed, sampled spacing otherwise — disclose which was used).
-- **Schedules**: frequency-based wait assumption, as discussed above.
-- **Dwell times, transfer reliability**: fold into the boarding penalty knob.
-- **Speed realism**: `avgSpeed` is user-asserted; `runTime` where entered is
-  better. Both already exist as attributes.
-
-**Effort:** large — the biggest single lift on this list (new engine
-surface in `road-network.js`, a new module, careful caching) — but it's
-incremental on proven code, not greenfield, and it's the prerequisite for the
-highest-value consulting outputs (the accessibility headline stats above).
+**v2 (out of scope for this pass):**
+- Street-crossing / sidewalk access penalties (undirected graph stands;
+  folds into the Walkshed sidewalk & access refinement entry above).
+- Transfer cap > 1 (the engine loop already generalizes for this; only a
+  UI knob is missing).
+- Batch/cumulative-opportunity accessibility (many origins) — this
+  engine's per-stop flood-cache design is its prerequisite; the mode
+  itself is the separate Cumulative-Opportunity Transit Accessibility
+  entry.
+- Schedule-based (timetable) waits; re-selecting the active band at a
+  simulated later clock time for downstream boardings (v1 freezes the
+  analysis-time band for the whole run).
+- Riding past the drawn end of an open (non-closed) loop; Service-paired
+  pattern awareness (each feature propagates independently in v1 — no
+  Route Costing-style pattern pairing).
+- Opportunity counts inside bands (population/jobs — natural follow-on
+  via census.js/lodes.js); departure-time profiles; per-point
+  walk-speed overrides.
 
 ### Unmerge dissolved union — Low Priority
 Currently `bufferUnionPolygon()` always dissolves overlapping buffers. Add an option to keep individual buffers separate for per-station analysis or visual comparison.
@@ -177,7 +191,7 @@ the engine's math stabilizes (pure pieces: `defaultPolicy`, `createScenario`,
 compares demographics of the *impacted area*. A stronger equity output disaggregates
 the **change in job access** (not just area demographics) for zero-vehicle,
 low-income, and minority populations under a proposed vs. existing network. That
-needs job *access* via the planned Transit Travelshed Engine (buffer overlap isn't
+needs job *access* via the Transit Travelshed Engine (buffer overlap isn't
 accessibility) and the New-vs-Old comparison via Scenario Save & Compare — the
 demographic-disaggregation half already lives here.
 
