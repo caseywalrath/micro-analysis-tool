@@ -108,8 +108,10 @@ loaded network) are skipped and counted rather than silently ignored.
   via census.js/lodes.js); departure-time profiles; per-point
   walk-speed overrides.
 
-### Transit Travelshed performance & simplification brainstorm — Not started
+### Transit Travelshed performance & simplification brainstorm — Partially implemented
 Current implementation computes a full per-stop walk-cost flood at every stop reachable by transit, then layers transfer boarding on top, producing accurate 1–3 banded isochrones. Depending on use cases and iteration velocity, several simplifications and speedups are worth exploring:
+
+**Outcome so far:** `docs/transit-travelshed-v2-walk-caps-plan.md` shrank the origin and per-stop flood radii to the relevant walk cap (access, or the larger of egress/transfer) whenever `"transit"` shed mode is active, cutting per-stop flood work roughly 50–90× at typical settings — and, as a side effect of the same pass, replaced the single per-band concave hull with a union of per-cluster polygons so it can no longer bridge unreachable space between disjoint stop clusters. This is a **model-correctness fix** (walking legs are meant to be capped in the "transit-served shed" model), not an approximation, but it happens to land the biggest, cheapest win from the "Computation shortcuts" and "Large-budget truncation" ideas below. The remaining brainstorm items (sampling mode, grid approximation, per-network-epoch memoization, progressive rendering, etc.) are deferred until it's measured whether the capped floods are fast enough in practice — see that plan's §8 verification checklist item comparing `computeMs` between `"transit"` and `"door"` modes, and its §9 "explicitly deferred" list.
 
 **Computation shortcuts (approximate but fast):**
 - **Sampling mode:** Instead of flooding from every stop, sample every Nth stop along each route (e.g., every 2nd or 3rd stop). Reduces compute time linearly with sample rate; accuracy degrades gracefully for widely-spaced stops but remains reasonable for frequent stop patterns.

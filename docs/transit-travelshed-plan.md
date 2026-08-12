@@ -1,5 +1,8 @@
 # Transit Travelshed Engine — Implementation Plan
 
+Superseded in part by `transit-travelshed-v2-walk-caps-plan.md` for the
+walk-cap model and polygonization.
+
 Sequenced build plan for the **Transit Travelshed** feature (`features.md`
 "Transit Travelshed Engine"). From a user-clicked origin, compute everywhere
 reachable within a total time budget by **walk → wait → ride drawn transit
