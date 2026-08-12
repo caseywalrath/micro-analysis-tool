@@ -4,6 +4,25 @@
 accessibility pass — then update the project docs and refresh the screenshot baselines
 to the new look.
 
+## 0. Consider fixing the dark-mode no-flash bug here
+
+Phase 0 found that `index.html`'s "no-flash" `<head>` script reads
+`document.body.classList` before `<body>` exists, so it throws on every load
+(a real `pageerror`, not a sandboxed-environment artifact) and never applies
+the class — dark mode currently reverts to light on every reload for real
+users, only surviving via the `#darkmode-btn` click handler for the rest of
+the tab session. See the README's known-risk register for the full writeup.
+This phase already relocates that button, so it's a natural place to also fix
+it: move the one-line script from just before `</head>` to the first line
+inside `<body>` (still runs before any other body content paints — same
+no-flash effect — but `document.body` exists there). Not required, but flag
+the decision to the developer rather than leaving it silently broken. **If
+fixed, update `capture.mjs` too**: it unconditionally clicks `#darkmode-btn`
+for the dark pass today because that's the only thing that currently works;
+once the no-flash script correctly pre-applies the class, that same click
+would toggle dark mode back *off* instead. Guard it — only click when
+`!document.body.classList.contains("dark-mode")`.
+
 ## 1. Toolbar hierarchy
 
 Today `#file-actions` mixes view toggles (dark mode, present) with workflow actions
@@ -64,6 +83,15 @@ today. JS UI change → run golden harness.
   `.form-section`, `.btn-row`, `.u-*`), Inter, de-modalized popup behavior (live map,
   dock-right, collapse), and the screenshot harness (`test/ui-screens/`) as the visual
   verification tool.
+- **CLAUDE.md — correct the stale sidebar description** (phase 0 finding): the
+  "Panel-based sidebar" Conventions bullet and the Layout section's ASCII
+  diagram both describe `#sidebar-wrap` / the Analysis panel as if live, but
+  `App.sidebar.render()` is never called anywhere and the Analysis panel is
+  actually the toolbar dropdown built by `buildAnalysisButtonsHTML()`. If §1's
+  toolbar work or phase 4 didn't revive the sidebar, update both spots (plus
+  the `sidebar.js` file-structure entry) to say so plainly instead of
+  describing dead code as current behavior; if it *was* revived along the way,
+  update to match whatever it now does.
 - **features.md:** mark "Modern UI refresh" done (link to `docs/ui-refresh/`), and note
   that "Analysis dropdown navigation" and "Top menu layout and hierarchy" were partially
   delivered here (grouping + toolbar hierarchy); leave the vertical icon rail and

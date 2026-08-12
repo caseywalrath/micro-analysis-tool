@@ -4,6 +4,14 @@
 all modules inherit at once. This is the phase the developer originally asked for; the
 prior phases exist so this one is written once, in tokens.
 
+**Before starting — dead-sidebar note (see README's known-risk register):**
+phase 0 confirmed `#sidebar-wrap` is `display:none` in `index.html` and nothing
+calls `App.sidebar.render()` — the left sidebar this phase's §1/§4 touch
+(`sidebar-v2.css`, `.var-checklist`) is currently unreachable by any user.
+Styling it is still correct (tokens should cover it either way), but skip it
+in checkpoint screenshots and confirm with the developer whether to leave it
+dead, style it on spec, or revive it now instead of waiting for phase 7.
+
 ## 1. Text/number/select controls
 
 Restyle **in place** (do not rename): `.rf-select`, `.rf-number-input`, `.rf-text-input`

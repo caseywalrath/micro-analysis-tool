@@ -97,3 +97,32 @@ refresh ships, the baseline set is refreshed to the new look and the old set del
 - **Phase 6:** flows that arm a one-shot map click while the popup is open (Transit
   Travelshed "Pick origin on map") change feel when the map is live — test that flow
   end-to-end.
+- **Phase 4 — dead sidebar:** phase 0 confirmed `#sidebar-wrap` ships
+  `display:none` in `index.html` and nothing in the codebase ever calls
+  `App.sidebar.render()` to reveal it — the left "Data Inputs" sidebar is
+  unreachable dead code (superseded by the buffer-summary popup and the toolbar
+  Analysis dropdown). Phase 4 §1 and §4 plan to restyle `sidebar-v2.css`
+  controls/checklists anyway; that's not wrong (tokens should cover it either
+  way if it's ever revived) but don't burn checkpoint time screenshotting
+  something no user can see, and flag to the developer whether to leave it
+  dead, style it on spec, or use phase 7's toolbar pass to revive it.
+- **Phase 7 — dark mode doesn't persist across reload:** phase 0 found that
+  `index.html`'s "no-flash" `<head>` script
+  (`if (localStorage.getItem("mat-dark-mode")==="1") document.body.classList.add(...)`)
+  runs while the parser is still inside `<head>`, so `document.body` is `null`
+  and it throws every time (confirmed via a real `pageerror` during phase 0's
+  dark captures). Pre-seeded `localStorage` therefore never applies on first
+  paint — a real, pre-existing bug, not something this refresh introduces.
+  Dark mode currently only takes effect for the rest of the current tab
+  session, via the `#darkmode-btn` click handler (`app.js`), and reverts to
+  light on every reload. The screenshot harness already works around this by
+  clicking the real button instead of relying on the pre-seed (see
+  `test/ui-screens/capture.mjs`), so it doesn't block any phase's
+  verification — only real users are affected. Phase 7 already touches this
+  button's toolbar placement; consider fixing it there. Minimal fix: relocate
+  that one `<script>` line from just before `</head>` to the first line inside
+  `<body>` — same no-flash effect (still runs before any other body content
+  paints), but `document.body` exists by then. (Swapping to
+  `document.documentElement.classList` instead would NOT be a drop-in fix —
+  every dark-mode rule in `style.css` is keyed off `body.dark-mode …`, so that
+  approach would require re-keying the whole stylesheet.)
