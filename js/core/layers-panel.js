@@ -52,7 +52,9 @@
     { id: "corridor-scoring-routes-layer", label: "Corridor Scoring", moduleId: "corridor-scoring",
       layers: [{ id: "corridor-scoring-routes-layer", op: "line-opacity" }] },
     { id: "rf-choropleth-fill", label: "Ridership Forecast", moduleId: "ridership-forecasting",
-      layers: [{ id: "rf-choropleth-fill", op: "fill-opacity" }, { id: "rf-choropleth-line", op: "line-opacity" }, { id: "rf-corridor-cdi-layer", op: "line-opacity" }] }
+      layers: [{ id: "rf-choropleth-fill", op: "fill-opacity" }, { id: "rf-choropleth-line", op: "line-opacity" }, { id: "rf-corridor-cdi-layer", op: "line-opacity" }] },
+    { id: "ts-travelshed-fill", label: "Transit Travelshed", moduleId: "transit-travelshed",
+      layers: [{ id: "ts-travelshed-fill", op: "fill-opacity" }, { id: "ts-travelshed-line", op: "line-opacity" }] }
   ];
 
   // Per-session band ordering (panel order = map order, top of list = top of map).
