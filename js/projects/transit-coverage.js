@@ -339,23 +339,11 @@
   }
 
   // ---- Geometry: private buffers, unions, clipping ----
-  // These build the module's OWN buffers via turf — they never read or
-  // mutate App.routeBuffers / App.lineBuffers (those belong to the shared
+  // These build the module's OWN buffers via turf (via the shared
+  // App.buildAnalysisBuffer/App.foldAnalysisUnion helpers in
+  // js/core/module-buffers.js) — they never read or mutate
+  // App.routeBuffers / App.lineBuffers (those belong to the shared
   // Feature Settings buffer radius, a different concern).
-
-  function foldUnion(polys) {
-    if (!polys || !polys.length) return null;
-    var union = polys[0];
-    for (var i = 1; i < polys.length; i++) {
-      try { union = turf.union(union, polys[i]); } catch (e) { /* skip */ }
-    }
-    return union;
-  }
-
-  function buildPrivateBuffer(feature, miles) {
-    try { return turf.buffer(feature, miles, { units: "miles", steps: 64 }); }
-    catch (e) { return null; }
-  }
 
   function buildCoverageUnions(sel, miles, dayType, thresholdMin) {
     var headwayRows = [];
@@ -374,7 +362,7 @@
         peakHeadway: peak, qualifies: qualifies
       });
 
-      var buf = buildPrivateBuffer(feature, miles);
+      var buf = App.buildAnalysisBuffer(feature, miles);
       if (buf) {
         allBuffers.push(buf);
         if (qualifies) qualifyingBuffers.push(buf);
@@ -393,8 +381,8 @@
       processFeature("line", lineIndices[i], lines[lineIndices[i]]);
     }
 
-    var coverageUnion  = foldUnion(allBuffers);
-    var thresholdUnion = (thresholdMin == null) ? null : foldUnion(qualifyingBuffers);
+    var coverageUnion  = App.foldAnalysisUnion(allBuffers);
+    var thresholdUnion = (thresholdMin == null) ? null : App.foldAnalysisUnion(qualifyingBuffers);
 
     return { coverageUnion: coverageUnion, thresholdUnion: thresholdUnion, headwayRows: headwayRows };
   }
@@ -412,7 +400,7 @@
     for (var i = 0; i < idxs.length; i++) {
       if (polygons[idxs[i]]) polys.push(polygons[idxs[i]]);
     }
-    return foldUnion(polys);
+    return App.foldAnalysisUnion(polys);
   }
 
   // ---- Map overlay (coverage / threshold / service-area fills) ----
@@ -492,10 +480,7 @@
       var geoLevel = document.getElementById("tcGeoLevel").value;
       var year     = document.getElementById("tcYearSelect").value;
 
-      var bufferMiles = parseFloat(document.getElementById("tcBufferMiles").value);
-      if (!Number.isFinite(bufferMiles) || bufferMiles < 0.05 || bufferMiles > 5) {
-        throw new Error("Buffer distance must be between 0.05 and 5 miles.");
-      }
+      var bufferMiles = App.readAnalysisBufferMiles("tcBufferMiles", App.ANALYSIS_BUFFER_DEFAULT_MILES);
 
       var dayType = document.getElementById("tcDayType").value;
 
