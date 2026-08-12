@@ -108,6 +108,34 @@ loaded network) are skipped and counted rather than silently ignored.
   via census.js/lodes.js); departure-time profiles; per-point
   walk-speed overrides.
 
+### Transit Travelshed performance & simplification brainstorm — Not started
+Current implementation computes a full per-stop walk-cost flood at every stop reachable by transit, then layers transfer boarding on top, producing accurate 1–3 banded isochrones. Depending on use cases and iteration velocity, several simplifications and speedups are worth exploring:
+
+**Computation shortcuts (approximate but fast):**
+- **Sampling mode:** Instead of flooding from every stop, sample every Nth stop along each route (e.g., every 2nd or 3rd stop). Reduces compute time linearly with sample rate; accuracy degrades gracefully for widely-spaced stops but remains reasonable for frequent stop patterns.
+- **Grid-based approximation:** Divide the study area into a regular grid (e.g., 0.1 mi × 0.1 mi cells), compute reachability only for grid cell centers rather than stop-accurate positions, and interpolate the remaining cells. Orders of magnitude faster for large networks; useful as a rough "opportunity accessibility" layer before drilling into per-stop detail.
+- **Stop-only mode:** Render the travelshed as discrete stop buffers (point radius = walk budget) rather than computing walk-to-every-node polygons — single-hop approximation, useful for quick "can I walk to transit" screening. Skips the road-network flood entirely.
+- **Large-budget truncation:** For budgets > ~60 minutes, the isochrone area grows with the square of the budget; compute at a smaller budget (e.g., 45 min) and scale the geometry rather than recomputing. Rough but fast for exploratory "does this service reach [far zone]" questions.
+
+**Caching & precomputation:**
+- **Memoize per-network-epoch:** The current cache is keyed `stopKey|networkEpoch|budgetKm`, meaning every origin re-floods every stop. Consider caching per-stop walk costs *per network* once (no origin-dependence), reusing them across all travelshed runs, clearing only on network reload. Huge if there's geographic overlap (many origins near the same stops).
+- **Pre-seed key corridors:** For common analysis geographies (a city, a region), pre-compute and embed walk floods for a grid of "representative" stops so initial runs are instant, with lazy on-demand computation for unrepresented stops. Breaks the "always fresh" assumption but acceptable if results are timestamped.
+
+**UI/UX efficiency (same accuracy, better perceived speed):**
+- **Progressive rendering:** Stream bands to the map as they complete (band 1 at 15 min while band 2 floods). User sees *something* while waiting, reducing perceived staleness.
+- **Result caching by coordinate:** If the user re-runs from the same origin (within a snap threshold), reuse the cached result rather than re-flooding.
+- **One-band quick-run mode:** Offer a "Show 15-min isochrone only" option that skips 30/45-min computation; user can opt into full 3-band later. Common for "is this stop walkable" screening.
+
+**Architectural simplifications (lower fidelity, much simpler code):**
+- **Single-mode (walk-only, no transfer):** A walk-only isochrone from the origin (already computed as the first step) without any transit boarding. Useful as a baseline or for "how far can I walk?" without committing to the full travelshed engine. Trivial to implement — just render the walk-budget polygon.
+- **Linear corridor only:** Assume all transit is a single corridor (one route/line) so transfer is not modeled. Reduces from layered-flood to a simple walk-→-buffer-route-→-walk computation. High fidelity for the single-route case; degenerate for network analysis.
+
+**Future coordination:**
+- Integration with the Cumulative-Opportunity Transit Accessibility entry above — the sampling and grid modes are perfect for many-origins batch computation.
+- Interplay with Operation Abort — a long-running travelshed can be canceled, but incremental results (completed bands, per-stop costs) could be selectively kept rather than discarded entirely.
+
+No recommendation yet — frame as a menu of tradeoffs (speed vs. accuracy, implementation complexity vs. user value) to revisit when performance bottlenecks are observed or compute budgets tighten.
+
 ### Unmerge dissolved union — Low Priority
 Currently `bufferUnionPolygon()` always dissolves overlapping buffers. Add an option to keep individual buffers separate for per-station analysis or visual comparison.
 
