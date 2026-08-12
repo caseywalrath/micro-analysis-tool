@@ -372,14 +372,67 @@
     if (b) b.disabled = !on;
   }
 
-  // ---- Network availability (walkshed-style hard disable; Phase 7 relaxes this) ----
+  // ---- Network availability ----
+  // As of Phase 7, no-network no longer hard-disables Calculate — it routes
+  // into the scoped prompt-to-download offer instead (see computeRequiredExtent
+  // and the coverage check in runTravelshed). #tsNetWarn is purely informational.
 
   function refreshNetWarn() {
     var loaded = App.roadNetworkLoaded && App.roadNetworkLoaded();
     var warn = document.getElementById("tsNetWarn");
-    if (warn) warn.style.display = loaded ? "none" : "";
-    var btn = document.getElementById("tsRunBtn");
-    if (btn) btn.disabled = !loaded;
+    if (warn) {
+      warn.style.display = loaded ? "none" : "";
+      if (!loaded) warn.textContent = "No street network loaded — Calculate will offer a scoped download. Or load one via Add Data.";
+    }
+  }
+
+  // ---- 7. Prompt-to-download extent ----
+
+  var _pendingDownloadExtent = null; // Feature<Polygon> | null — set by the last coverage check, consumed by #tsDownloadBtn
+
+  // Rectangle covering everything the analysis could touch: the origin's
+  // full-budget walk circle, unioned with a full-budget-walk buffer around
+  // each selected route/line. Egress buffer = full-budget walk distance — any
+  // egress walk is bounded by the total remaining budget at walk speed.
+  // Coarse (ignores wait/ride time already spent) but safe: it only ever asks
+  // for MORE coverage than strictly needed, never less.
+  function computeRequiredExtent(originLngLat, selectedFeatures, maxBudgetMin, walkSpeedMph) {
+    var maxWalkKm = walkSpeedMph * KM_PER_MILE * (maxBudgetMin / 60);
+    var pieces = [turf.circle(originLngLat, maxWalkKm, { units: "kilometers", steps: 16 })];
+    selectedFeatures.forEach(function (f) {
+      var b = null;
+      try { b = turf.buffer(f.feature, maxWalkKm, { units: "kilometers" }); } catch (e) { /* skip */ }
+      if (b) pieces.push(b);
+    });
+    var union = App.foldAnalysisUnion(pieces);
+    return union ? turf.bboxPolygon(turf.bbox(union)) : null;
+  }
+
+  function setCoverageWarn(msg) {
+    var el = document.getElementById("tsCoverageWarn");
+    if (!el) return;
+    if (msg) { el.textContent = msg; el.style.display = ""; }
+    else { el.style.display = "none"; }
+  }
+
+  function showDownloadBtn(show) {
+    var btn = document.getElementById("tsDownloadBtn");
+    if (btn) btn.style.display = show ? "" : "none";
+  }
+
+  // Downloads roads for the last computed required extent, then re-runs
+  // automatically on success — the flood cache self-invalidates via the
+  // network epoch embedded in its keys, so nothing needs manual clearing.
+  async function downloadNetworkForPendingExtent() {
+    if (!_pendingDownloadExtent || !App.fetchRoadNetworkForExtent) return;
+    var btn = document.getElementById("tsDownloadBtn");
+    if (btn) btn.disabled = true;
+    try {
+      var ok = await App.fetchRoadNetworkForExtent(_pendingDownloadExtent);
+      if (ok) runTravelshed();
+    } finally {
+      if (btn) btn.disabled = false;
+    }
   }
 
   // ---- Settings <-> inputs ----
@@ -694,13 +747,38 @@
       return;
     }
 
-    if (!App.roadNetworkLoaded || !App.roadNetworkLoaded()) {
-      setStatus("Load a road network first.", "error");
+    var maxBudgetMin = budgets[budgets.length - 1];
+
+    // 2. Prompt-to-download extent check. Computed against the RAW selected
+    // geometries (not resolveRoutes' band-filtered output) since it only needs
+    // shapes, not schedules.
+    var selectedFeatures = [];
+    filter.routeIndices.forEach(function (idx) { if (App.routes[idx]) selectedFeatures.push({ feature: App.routes[idx] }); });
+    filter.lineIndices.forEach(function (idx) { if (App.lines[idx]) selectedFeatures.push({ feature: App.lines[idx] }); });
+    var requiredExtent = computeRequiredExtent(_origin, selectedFeatures, maxBudgetMin, _settings.walkSpeedMph);
+    _pendingDownloadExtent = requiredExtent;
+
+    var netLoaded = App.roadNetworkLoaded && App.roadNetworkLoaded();
+    if (!netLoaded) {
+      setCoverageWarn("No street network loaded.");
+      showDownloadBtn(true);
       return;
+    }
+    var downloadedExtent = App.getRoadDownloadExtent ? App.getRoadDownloadExtent() : null;
+    if (downloadedExtent === null) {
+      // File-imported network — extent unknown. Soft warning; proceed anyway.
+      setCoverageWarn("Imported network — can't verify it covers this analysis; results near the edge may be clipped.");
+      showDownloadBtn(false);
+    } else if (requiredExtent && !turf.booleanContains(downloadedExtent, requiredExtent)) {
+      setCoverageWarn("Loaded streets don't cover this analysis area.");
+      showDownloadBtn(true);
+      return;
+    } else {
+      setCoverageWarn(null);
+      showDownloadBtn(false);
     }
 
     var walkSpeedKmh = _settings.walkSpeedMph * KM_PER_MILE;
-    var maxBudgetMin = budgets[budgets.length - 1];
     var budgetKm = walkSpeedKmh * (maxBudgetMin / 60);
 
     var analysisMin = Travelshed.parseHHMMtoMin(_settings.timeOfDay);
@@ -890,6 +968,9 @@
 
     var exportBtn = document.getElementById("tsExportBtn");
     if (exportBtn) exportBtn.addEventListener("click", exportGeoJSON);
+
+    var downloadBtn = document.getElementById("tsDownloadBtn");
+    if (downloadBtn) downloadBtn.addEventListener("click", downloadNetworkForPendingExtent);
   }
 
   function onOpen(core) {
