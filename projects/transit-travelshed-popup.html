@@ -49,6 +49,33 @@
         </p>
       </div>
 
+      <div class="rf-section-title" style="margin-top:16px;">
+        Walk limits
+        <button id="tsWalkCapsInfoBtn" class="rf-info-btn" type="button"
+          title="Transit-served shed caps how far you walk to, between, and from transit. Door-to-door lets walking use the whole time budget.">&#9432;</button>
+      </div>
+      <select id="tsShedMode" class="rf-select">
+        <option value="transit" selected>Transit-served shed (recommended)</option>
+        <option value="door">Door-to-door isochrone</option>
+      </select>
+      <div id="tsWalkCapsInfoText" class="tiny rf-info-box" style="display:none;margin-top:6px;">
+        <p>
+          <strong>Transit-served shed (recommended)</strong> — walking to, between, and from transit is capped;
+          shows the area transit meaningfully serves.
+        </p>
+        <p>
+          <strong>Door-to-door isochrone</strong> — walking may use the whole time budget; shows everywhere
+          physically reachable.
+        </p>
+      </div>
+
+      <label class="tiny" style="margin-top:10px;">Max access walk (mi)</label>
+      <input type="number" id="tsAccessWalk" class="rf-select" min="0.05" max="5" step="0.05" value="0.5">
+      <label class="tiny" style="margin-top:8px;">Max egress walk (mi)</label>
+      <input type="number" id="tsEgressWalk" class="rf-select" min="0.05" max="5" step="0.05" value="0.25">
+      <label class="tiny" style="margin-top:8px;">Max transfer walk (mi)</label>
+      <input type="number" id="tsTransferWalk" class="rf-select" min="0.05" max="5" step="0.05" value="0.25">
+
       <label class="tiny" style="margin-top:10px;">Assumed stop spacing (mi)</label>
       <input type="number" id="tsStopSpacing" class="rf-select" min="0.05" max="2" step="0.05" value="0.25">
       <p class="tiny" style="color:var(--muted);margin-top:2px;">

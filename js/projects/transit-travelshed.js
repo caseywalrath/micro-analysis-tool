@@ -25,7 +25,11 @@
     maxWaitMin: 10,
     boardPenaltyMin: 1,
     stopSpacingMi: 0.25,
-    maxEdgeKm: 0.3
+    maxEdgeKm: 0.3,
+    shedMode: "transit",      // "transit" (walk legs capped) | "door" (today's uncapped behavior)
+    maxAccessWalkMi: 0.5,
+    maxEgressWalkMi: 0.25,
+    maxTransferWalkMi: 0.25
   };
   var KM_PER_MILE = 1.609344; // engine graph weights are in km; UI/attributes are in mph
   var TRANSFER_CAP = 1;
@@ -351,12 +355,14 @@
   // (epoch, budgetKm). Yields after EVERY stop flood so the UI stays responsive
   // and the status pill can count up (transit-propensity onProgress pattern).
   //
-  // Flood budget decision: floods always run at the FULL max budget (the
-  // caller passes budgetKm sized to the user's longest band) — an upper bound
-  // on any remaining budget after a boarding, so one flood per stop serves
-  // every boarding time, every band, and every re-run with unchanged
-  // budget/speed. The pure engine thresholds a single flood into bands; we
-  // never re-flood per remaining budget.
+  // Flood budget decision: the caller sizes budgetKm — an upper bound on any
+  // remaining budget after a boarding — so one flood per stop serves every
+  // boarding time, every band, and every re-run with unchanged budget/speed/
+  // caps. The pure engine thresholds a single flood into bands; we never
+  // re-flood per remaining budget. Pre-v2 this was always the full max-budget
+  // radius; as of the v2 walk-caps plan, "transit" mode passes the smaller
+  // (egress/transfer-capped) radius instead — see the "§2.3 flood budgets"
+  // comment in runTravelshed() — while "door" mode keeps the full radius.
   async function ensureFloods(stopsByKey, budgetKm, onProgress) {
     var epoch = (typeof App.roadNetworkEpoch === "function") ? App.roadNetworkEpoch() : 0;
     var keys = Object.keys(stopsByKey);
@@ -442,18 +448,24 @@
 
   var _pendingDownloadExtent = null; // Feature<Polygon> | null — set by the last coverage check, consumed by #tsDownloadBtn
 
-  // Rectangle covering everything the analysis could touch: the origin's
-  // full-budget walk circle, unioned with a full-budget-walk buffer around
-  // each selected route/line. Egress buffer = full-budget walk distance — any
-  // egress walk is bounded by the total remaining budget at walk speed.
-  // Coarse (ignores wait/ride time already spent) but safe: it only ever asks
-  // for MORE coverage than strictly needed, never less.
-  function computeRequiredExtent(originLngLat, selectedFeatures, maxBudgetMin, walkSpeedMph) {
+  // Rectangle covering everything the analysis could touch: the origin's walk
+  // circle, unioned with a walk buffer around each selected route/line. In
+  // "door" mode both radii are the full time-budget walk distance (today's
+  // behavior — egress walk is bounded only by the total remaining budget at
+  // walk speed). In "transit" mode the origin only needs to cover the access
+  // cap, and features only need to cover the larger of the egress/transfer
+  // caps — smaller downloads, consistent with the capped floods in
+  // runTravelshed(). Coarse (ignores wait/ride time already spent) but safe:
+  // it only ever asks for MORE coverage than strictly needed, never less.
+  function computeRequiredExtent(originLngLat, selectedFeatures, maxBudgetMin, walkSpeedMph, shedMode, accessCapMi, stopCapMi) {
     var maxWalkKm = walkSpeedMph * KM_PER_MILE * (maxBudgetMin / 60);
-    var pieces = [turf.circle(originLngLat, maxWalkKm, { units: "kilometers", steps: 16 })];
+    var isTransit = shedMode !== "door";
+    var originRadiusKm = isTransit ? Math.min(maxWalkKm, accessCapMi * KM_PER_MILE) : maxWalkKm;
+    var stopRadiusKm = isTransit ? Math.min(maxWalkKm, stopCapMi * KM_PER_MILE) : maxWalkKm;
+    var pieces = [turf.circle(originLngLat, originRadiusKm, { units: "kilometers", steps: 16 })];
     selectedFeatures.forEach(function (f) {
       var b = null;
-      try { b = turf.buffer(f.feature, maxWalkKm, { units: "kilometers" }); } catch (e) { /* skip */ }
+      try { b = turf.buffer(f.feature, stopRadiusKm, { units: "kilometers" }); } catch (e) { /* skip */ }
       if (b) pieces.push(b);
     });
     var union = App.foldAnalysisUnion(pieces);
@@ -521,7 +533,31 @@
     var maxEdge = document.getElementById("tsMaxEdge");
     if (maxEdge && +maxEdge.value > 0) _settings.maxEdgeKm = +maxEdge.value;
 
+    var shedMode = document.getElementById("tsShedMode");
+    if (shedMode && (shedMode.value === "transit" || shedMode.value === "door")) _settings.shedMode = shedMode.value;
+
+    var accessWalk = document.getElementById("tsAccessWalk");
+    if (accessWalk && +accessWalk.value > 0) _settings.maxAccessWalkMi = +accessWalk.value;
+
+    var egressWalk = document.getElementById("tsEgressWalk");
+    if (egressWalk && +egressWalk.value > 0) _settings.maxEgressWalkMi = +egressWalk.value;
+
+    var transferWalk = document.getElementById("tsTransferWalk");
+    if (transferWalk && +transferWalk.value > 0) _settings.maxTransferWalkMi = +transferWalk.value;
+
+    updateWalkCapInputsEnabled();
+
     if (App.cache && App.cache.save) App.cache.save();
+  }
+
+  // The three cap inputs are only meaningful in "transit" mode — gray them
+  // out (but keep their values intact) while "door" mode is selected.
+  function updateWalkCapInputsEnabled() {
+    var enabled = _settings.shedMode !== "door";
+    ["tsAccessWalk", "tsEgressWalk", "tsTransferWalk"].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.disabled = !enabled;
+    });
   }
 
   function syncInputsFromSettings() {
@@ -553,6 +589,20 @@
 
     var maxEdge = document.getElementById("tsMaxEdge");
     if (maxEdge) maxEdge.value = _settings.maxEdgeKm;
+
+    var shedMode = document.getElementById("tsShedMode");
+    if (shedMode) shedMode.value = _settings.shedMode;
+
+    var accessWalk = document.getElementById("tsAccessWalk");
+    if (accessWalk) accessWalk.value = _settings.maxAccessWalkMi;
+
+    var egressWalk = document.getElementById("tsEgressWalk");
+    if (egressWalk) egressWalk.value = _settings.maxEgressWalkMi;
+
+    var transferWalk = document.getElementById("tsTransferWalk");
+    if (transferWalk) transferWalk.value = _settings.maxTransferWalkMi;
+
+    updateWalkCapInputsEnabled();
 
     var originLabel = document.getElementById("tsOriginLabel");
     if (originLabel) originLabel.textContent = _origin ? (_origin[1].toFixed(5) + ", " + _origin[0].toFixed(5)) : "Not set";
@@ -807,7 +857,9 @@
     var selectedFeatures = [];
     filter.routeIndices.forEach(function (idx) { if (App.routes[idx]) selectedFeatures.push({ feature: App.routes[idx] }); });
     filter.lineIndices.forEach(function (idx) { if (App.lines[idx]) selectedFeatures.push({ feature: App.lines[idx] }); });
-    var requiredExtent = computeRequiredExtent(_origin, selectedFeatures, maxBudgetMin, _settings.walkSpeedMph);
+    var stopCapMi = Math.max(_settings.maxEgressWalkMi, _settings.maxTransferWalkMi);
+    var requiredExtent = computeRequiredExtent(_origin, selectedFeatures, maxBudgetMin, _settings.walkSpeedMph,
+      _settings.shedMode, _settings.maxAccessWalkMi, stopCapMi);
     _pendingDownloadExtent = requiredExtent;
 
     var netLoaded = App.roadNetworkLoaded && App.roadNetworkLoaded();
@@ -833,6 +885,21 @@
     var walkSpeedKmh = _settings.walkSpeedMph * KM_PER_MILE;
     var budgetKm = walkSpeedKmh * (maxBudgetMin / 60);
 
+    // §2.3 flood budgets: "transit" mode floods only as far as the relevant
+    // walk cap (never past the full budget either); "door" mode floods at the
+    // full max-budget radius, unchanged from v1. One stop flood must serve
+    // both egress merging and transfer walks, so it uses the LARGER of the
+    // two caps.
+    var isTransitMode = _settings.shedMode !== "door";
+    var accessCapKm = _settings.maxAccessWalkMi * KM_PER_MILE;
+    var egressCapKm = _settings.maxEgressWalkMi * KM_PER_MILE;
+    var transferCapKm = _settings.maxTransferWalkMi * KM_PER_MILE;
+    var accessCapMin = (_settings.maxAccessWalkMi / _settings.walkSpeedMph) * 60;
+    var egressCapMin = (_settings.maxEgressWalkMi / _settings.walkSpeedMph) * 60;
+    var transferCapMin = (_settings.maxTransferWalkMi / _settings.walkSpeedMph) * 60;
+    var originFloodKm = isTransitMode ? Math.min(budgetKm, accessCapKm) : budgetKm;
+    var stopFloodKm = isTransitMode ? Math.min(budgetKm, Math.max(egressCapKm, transferCapKm)) : budgetKm;
+
     var analysisMin = Travelshed.parseHHMMtoMin(_settings.timeOfDay);
     if (analysisMin == null) analysisMin = 480; // 08:00 fallback
 
@@ -854,7 +921,7 @@
 
       setStatus("Walking from origin…", "running");
       await new Promise(function (r) { setTimeout(r, 0); });
-      var originFlood = App.computeWalkCostMap ? App.computeWalkCostMap(_origin, budgetKm) : null;
+      var originFlood = App.computeWalkCostMap ? App.computeWalkCostMap(_origin, originFloodKm) : null;
       if (!originFlood) {
         setStatus("Origin is more than 0.5 km from a loaded street.", "error");
         return;
@@ -869,7 +936,7 @@
         r.stops.forEach(function (s) { if (!stopsByKey[s.stopKey]) stopsByKey[s.stopKey] = s; });
       });
 
-      var floodStats = await ensureFloods(stopsByKey, budgetKm, function (done, total) {
+      var floodStats = await ensureFloods(stopsByKey, stopFloodKm, function (done, total) {
         setStatus("Walking from stop " + done + "/" + total + "…", "running");
       });
 
@@ -879,7 +946,7 @@
       var offNetworkStopCount = 0;
       var stopCosts = {};
       Object.keys(stopsByKey).forEach(function (k) {
-        var entry = _floodCache.get(floodCacheKey(k, epoch, budgetKm));
+        var entry = _floodCache.get(floodCacheKey(k, epoch, stopFloodKm));
         if (entry) stopCosts[k] = entry.cost;
       });
 
@@ -887,7 +954,7 @@
       active.forEach(function (r) {
         var stops = [];
         r.stops.forEach(function (s) {
-          var entry = _floodCache.get(floodCacheKey(s.stopKey, epoch, budgetKm));
+          var entry = _floodCache.get(floodCacheKey(s.stopKey, epoch, stopFloodKm));
           if (!entry) { offNetworkStopCount++; return; }
           stops.push({ stopKey: s.stopKey, rideMin: s.rideMin, access: entry.access });
         });
@@ -904,23 +971,74 @@
         maxInitialWaitMin: _settings.maxWaitMin,
         boardingPenaltyMin: _settings.boardPenaltyMin,
         transferCap: TRANSFER_CAP,
+        accessMaxMin: isTransitMode ? accessCapMin : null,
+        transferMaxMin: isTransitMode ? transferCapMin : null,
+        egressMaxMin: isTransitMode ? egressCapMin : null,
         originCost: originCost,
         routes: engineRoutes,
         stopCosts: stopCosts
       });
 
+      // bandNodeSets still drives the per-band NODE COUNTS shown in the
+      // results table — it no longer drives geometry (see below).
       var bandSets = Travelshed.bandNodeSets(engineResult.nodeTimes, budgets);
 
       setStatus("Building isochrones…", "running");
       await new Promise(function (r) { setTimeout(r, 0); });
 
+      // §2.4 cluster-union polygonization: one polygon per reachable CLUSTER
+      // (the origin/access walk blob, plus one per alighting stop's egress
+      // walk), unioned per band — rather than one hull over every reachable
+      // node. A single hull across disjoint clusters shrink-wraps the gap
+      // between them (the "bridges unreachable space" bug this plan fixes);
+      // per-cluster polygons + union can't bridge anything that isn't
+      // actually reachable. Used in BOTH modes — in "door" mode the clusters
+      // are large and overlap heavily, but the union is still correct.
+      var walkMinPerKm = 60 / walkSpeedKmh;
+      var originNodeKeys = Object.keys(originCost);
       var polys = [];
-      for (var bi = 0; bi < bandSets.length; bi++) {
-        var bs = bandSets[bi];
-        var coords = bs.nodeKeys.map(function (k) { return App.nodeKeyToCoord(k); });
-        var poly = App.polygonizeNodeSet ? App.polygonizeNodeSet(coords, _settings.maxEdgeKm) : null;
-        polys.push({ budgetMin: bs.budgetMin, polygon: poly, nodeCount: bs.nodeKeys.length });
-        await new Promise(function (r) { setTimeout(r, 0); }); // yield between band polygonizations
+      var clustersSinceYield = 0;
+      for (var bi = 0; bi < budgets.length; bi++) {
+        var B = budgets[bi];
+        var clusterPolys = [];
+
+        // Origin/access cluster: capped at the access walk limit in "transit"
+        // mode (never past the band budget either).
+        var accessCap = isTransitMode ? Math.min(B, accessCapMin) : B;
+        var originCoords = originNodeKeys
+          .filter(function (k) { return originCost[k] * walkMinPerKm <= accessCap; })
+          .map(function (k) { return App.nodeKeyToCoord(k); });
+        if (originCoords.length) {
+          var originPoly = App.polygonizeNodeSet ? App.polygonizeNodeSet(originCoords, _settings.maxEdgeKm) : null;
+          if (originPoly) clusterPolys.push(originPoly);
+        }
+        clustersSinceYield++;
+        if (clustersSinceYield >= 15) { clustersSinceYield = 0; await new Promise(function (r) { setTimeout(r, 0); }); }
+
+        // One cluster per alighting stop: capped at whatever's left of the
+        // band budget after the ride (and, in "transit" mode, at the egress
+        // walk limit too).
+        for (var ei = 0; ei < engineResult.alightings.length; ei++) {
+          var al = engineResult.alightings[ei];
+          if (al.alightMin >= B) continue;
+          var stopCostObj = stopCosts[al.stopKey];
+          if (!stopCostObj) continue;
+          var egressCap = B - al.alightMin;
+          if (isTransitMode) egressCap = Math.min(egressCap, egressCapMin);
+          var stopCoords = Object.keys(stopCostObj)
+            .filter(function (k) { return stopCostObj[k] * walkMinPerKm <= egressCap; })
+            .map(function (k) { return App.nodeKeyToCoord(k); });
+          if (stopCoords.length) {
+            var stopPoly = App.polygonizeNodeSet ? App.polygonizeNodeSet(stopCoords, _settings.maxEdgeKm) : null;
+            if (stopPoly) clusterPolys.push(stopPoly);
+          }
+          clustersSinceYield++;
+          if (clustersSinceYield >= 15) { clustersSinceYield = 0; await new Promise(function (r) { setTimeout(r, 0); }); }
+        }
+
+        var bandPolygon = App.foldAnalysisUnion(clusterPolys); // null-safe union, null for an empty array
+        polys.push({ budgetMin: B, polygon: bandPolygon, nodeCount: bandSets[bi].nodeKeys.length });
+        await new Promise(function (r) { setTimeout(r, 0); }); // yield between bands
       }
 
       // Ring differencing largest-first so the innermost band stays solid; a
@@ -985,7 +1103,8 @@
     if (clearOriginBtn) clearOriginBtn.addEventListener("click", clearOrigin);
 
     ["tsBudget1", "tsBudget2", "tsBudget3", "tsWalkSpeed", "tsDayType", "tsTimeOfDay",
-     "tsMaxWait", "tsBoardPenalty", "tsStopSpacing", "tsMaxEdge"].forEach(function (id) {
+     "tsMaxWait", "tsBoardPenalty", "tsStopSpacing", "tsMaxEdge",
+     "tsShedMode", "tsAccessWalk", "tsEgressWalk", "tsTransferWalk"].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) el.addEventListener("change", function () { readSettingsFromInputs(); markStale(); });
     });
@@ -995,6 +1114,14 @@
     if (waitBtn && waitText) {
       waitBtn.addEventListener("click", function () {
         waitText.style.display = (waitText.style.display === "none") ? "" : "none";
+      });
+    }
+
+    var walkCapsBtn = document.getElementById("tsWalkCapsInfoBtn");
+    var walkCapsText = document.getElementById("tsWalkCapsInfoText");
+    if (walkCapsBtn && walkCapsText) {
+      walkCapsBtn.addEventListener("click", function () {
+        walkCapsText.style.display = (walkCapsText.style.display === "none") ? "" : "none";
       });
     }
 
