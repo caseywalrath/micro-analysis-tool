@@ -7,6 +7,56 @@
   --warnbd: #fdba74;
   --cardbg: #fff;
 
+  /* ---- Color tokens: surfaces ---- */
+  --surface:        #ffffff;   /* page + map chrome background (= --bg) */
+  --surface-alt:    #f6f8fa;   /* toolbar, panels, table headers (= --panel) */
+  --surface-raised: #ffffff;   /* popups, cards, inputs (= --cardbg) */
+  --surface-hover:  rgba(0, 0, 0, 0.05);   /* hover wash on buttons/rows */
+  --surface-active: rgba(0, 0, 0, 0.09);
+
+  /* ---- Color tokens: text ---- */
+  --text-primary:   #2d3748;   /* absorbs #333, #2d3748, #374151, #1a1a1a */
+  --text-secondary: #555;      /* = --muted */
+  --text-faint:     #888;      /* absorbs #888, #718096, #9ca3af */
+  --text-disabled:  #a0aec0;
+  --text-invert:    #ffffff;   /* text on accent-filled buttons */
+
+  /* ---- Color tokens: borders ---- */
+  /* --border stays (#e5e7eb); absorbs #ddd, #ccc, #e2e8f0-as-light-border */
+  --border-strong:  #a0aec0;   /* input borders, toolbar button outlines */
+
+  /* ---- Color tokens: accent ---- */
+  --accent:         #2b6cb0;
+  --accent-hover:   #2c5282;
+  --accent-soft:    rgba(43, 108, 176, 0.12);  /* selected-row wash, soft chips */
+  --focus-ring:     rgba(43, 108, 176, 0.35);
+
+  /* ---- Color tokens: semantic status ---- */
+  --danger:         #e53e3e;
+  --danger-hover:   #c53030;
+  --danger-soft:    rgba(229, 62, 62, 0.08);
+  --ok-bg: #ecfdf5;  --ok-bd: #a7f3d0;  --ok-text: #065f46;
+  --warn-bg: #fff7ed; --warn-bd: #fdba74; --warn-text: #92400e;  /* = --warnbg/--warnbd */
+  --err-bg: #fef2f2;  --err-bd: #fca5a5;  --err-text: #991b1b;
+  --info-bg: #eff6ff; --info-bd: #bfdbfe; --info-text: #1e40af;
+
+  /* ---- Spacing scale (use for all margins/paddings/gaps) ---- */
+  --space-1: 4px;  --space-2: 8px;  --space-3: 12px;  --space-4: 16px;
+  --space-5: 20px; --space-6: 24px; --space-8: 32px;
+
+  /* ---- Radii ---- */
+  --radius-sm: 6px;   /* inputs, small buttons */
+  --radius-md: 8px;   /* cards, dropdowns, toolbar buttons */
+  --radius-lg: 12px;  /* popups/dialogs */
+
+  /* ---- Shadows ---- */
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.10);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.12);
+  --shadow-lg: 0 12px 40px rgba(0,0,0,0.22);
+
+  /* ---- Motion ---- */
+  --ease-fast: 0.12s ease;
+
   /* ---- Typography: Font Families ---- */
   --font-sans: system-ui, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
@@ -40,6 +90,9 @@
   --tracking-sm: 0.03em;
   --tracking-md: 0.04em;
   --tracking-lg: 0.06em;
+
+  /* Modernizes every native checkbox/radio/range/progress element, both themes. */
+  accent-color: var(--accent);
 }
 
 body { margin: 0; font-family: var(--font-sans); background: var(--bg); }
@@ -4228,6 +4281,11 @@ body.view-only-mode #draw-actions button {
    DARK MODE  —  body.dark-mode overrides
    ================================================================ */
 body.dark-mode {
+  /* Legacy tokens: values intentionally UNCHANGED here — phase 1 is additive
+     only (see docs/ui-refresh/phase-1-design-tokens.md, "the only visible
+     change allowed is accent-color"). Consolidating these onto the new
+     semantic tokens below (some of which use different, refined hexes) is
+     phase 2's job, done under full screenshot review. */
   --border: #374151;
   --muted:  #9ca3af;
   --bg:     #1e1e2e;
@@ -4236,6 +4294,44 @@ body.dark-mode {
   --warnbd: #b8860b;
   --cardbg: #2a2a3d;
   color: #e2e8f0;
+
+  /* ---- Color tokens: surfaces (equal to the legacy values above) ---- */
+  --surface:        #1e1e2e;
+  --surface-alt:    #252535;
+  --surface-raised: #2a2a3d;
+  --surface-hover:  rgba(255, 255, 255, 0.07);
+  --surface-active: rgba(255, 255, 255, 0.12);
+
+  /* ---- Color tokens: text ---- */
+  --text-primary:   #e2e8f0;
+  --text-secondary: #a8b2c1;   /* refined vs. legacy --muted (#9ca3af); phase 2 migrates */
+  --text-faint:     #9ca3af;   /* = legacy --muted's current value */
+  --text-disabled:  #718096;
+  --text-invert:    #ffffff;
+
+  /* ---- Color tokens: borders ---- */
+  /* --border stays (#374151) for now; --border-strong is new/unused until phase 2. */
+  --border-strong:  #4a5568;
+
+  /* ---- Color tokens: accent ---- */
+  --accent:         #63b3ed;
+  --accent-hover:   #90cdf4;
+  --accent-soft:    rgba(99, 179, 237, 0.15);
+  --focus-ring:     rgba(99, 179, 237, 0.4);
+
+  /* ---- Color tokens: semantic status ---- */
+  --danger:         #fc8181;
+  --danger-hover:   #f56565;
+  --danger-soft:    rgba(252, 129, 129, 0.12);
+  --ok-bg: #0c2b22;  --ok-bd: #1f5c46;  --ok-text: #6ee7b7;
+  --warn-bg: #2f2413; --warn-bd: #92610f; --warn-text: #fbbf24;   /* refined vs. legacy --warnbg/--warnbd; phase 2 migrates */
+  --err-bg: #331b1b;  --err-bd: #7f2f2f; --err-text: #fca5a5;
+  --info-bg: #16243a; --info-bd: #2c4a75; --info-text: #93c5fd;
+
+  /* ---- Shadows: stronger in dark mode ---- */
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.35);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.45);
+  --shadow-lg: 0 12px 40px rgba(0,0,0,0.55);
 }
 
 /* ---- Toolbar ---- */
