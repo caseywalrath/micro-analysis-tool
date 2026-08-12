@@ -160,5 +160,166 @@ export default {
         },
       }],
     },
+
+    // --- computeArrivalTimes: v2 walk-leg caps (docs/transit-travelshed-v2-walk-caps-plan.md §2.2) ---
+    //
+    // Access cap: 2 independent routes, one boarded from a near origin node
+    // (n1, 0.6 min walk) and one from a far origin node (n2, 6 min walk).
+    // Uncapped, both board (route-near at 6.6, route-far at 12) and each
+    // propagates one stop downstream. With accessMaxMin: 3, the far route's
+    // walk (6 min) exceeds the cap so it never boards at all — route-near is
+    // unaffected (0.6 min walk stays under the cap).
+    {
+      id: "arrival-times-access-cap-uncapped",
+      call: "Travelshed.computeArrivalTimes",
+      args: [{
+        budgetMin: 30,
+        walkSpeedKmh: 5,
+        maxInitialWaitMin: 5,
+        boardingPenaltyMin: 1,
+        transferCap: 1,
+        originCost: { n1: 0.05, n2: 0.5 },
+        routes: [
+          {
+            routeId: "route-near", mode: "forward", loop: null, headwayMin: 10,
+            stops: [
+              { stopKey: "A", rideMin: 0, access: [{ nodeKey: "n1", extraKm: 0 }] },
+              { stopKey: "B", rideMin: 5, access: [{ nodeKey: "n1b", extraKm: 0 }] },
+            ],
+          },
+          {
+            routeId: "route-far", mode: "forward", loop: null, headwayMin: 10,
+            stops: [
+              { stopKey: "C", rideMin: 0, access: [{ nodeKey: "n2", extraKm: 0 }] },
+              { stopKey: "D", rideMin: 5, access: [{ nodeKey: "n2b", extraKm: 0 }] },
+            ],
+          },
+        ],
+        stopCosts: {},
+      }],
+    },
+    {
+      id: "arrival-times-access-cap-tight",
+      call: "Travelshed.computeArrivalTimes",
+      args: [{
+        budgetMin: 30,
+        walkSpeedKmh: 5,
+        maxInitialWaitMin: 5,
+        boardingPenaltyMin: 1,
+        transferCap: 1,
+        accessMaxMin: 3, // n2's 6-min walk exceeds this; n1's 0.6-min walk doesn't
+        originCost: { n1: 0.05, n2: 0.5 },
+        routes: [
+          {
+            routeId: "route-near", mode: "forward", loop: null, headwayMin: 10,
+            stops: [
+              { stopKey: "A", rideMin: 0, access: [{ nodeKey: "n1", extraKm: 0 }] },
+              { stopKey: "B", rideMin: 5, access: [{ nodeKey: "n1b", extraKm: 0 }] },
+            ],
+          },
+          {
+            routeId: "route-far", mode: "forward", loop: null, headwayMin: 10,
+            stops: [
+              { stopKey: "C", rideMin: 0, access: [{ nodeKey: "n2", extraKm: 0 }] },
+              { stopKey: "D", rideMin: 5, access: [{ nodeKey: "n2b", extraKm: 0 }] },
+            ],
+          },
+        ],
+        stopCosts: {},
+      }],
+    },
+
+    // Egress cap: 1 route, board at A (0 min walk), alight at B (arriveMin
+    // 11). B's own flood has a near node (m1, 0.12 min walk) and a far node
+    // (m2, 3.6 min walk). Uncapped, both merge into nodeTimes. With
+    // egressMaxMin: 1, only m1 merges — fewer nodes reached, same alighting.
+    {
+      id: "arrival-times-egress-cap-uncapped",
+      call: "Travelshed.computeArrivalTimes",
+      args: [{
+        budgetMin: 30,
+        walkSpeedKmh: 5,
+        maxInitialWaitMin: 5,
+        boardingPenaltyMin: 1,
+        transferCap: 1,
+        originCost: { n1: 0 },
+        routes: [{
+          routeId: "route-1", mode: "forward", loop: null, headwayMin: 10,
+          stops: [
+            { stopKey: "A", rideMin: 0, access: [{ nodeKey: "n1", extraKm: 0 }] },
+            { stopKey: "B", rideMin: 5, access: [{ nodeKey: "n2", extraKm: 0 }] },
+          ],
+        }],
+        stopCosts: { B: { m1: 0.01, m2: 0.3 } },
+      }],
+    },
+    {
+      id: "arrival-times-egress-cap-tight",
+      call: "Travelshed.computeArrivalTimes",
+      args: [{
+        budgetMin: 30,
+        walkSpeedKmh: 5,
+        maxInitialWaitMin: 5,
+        boardingPenaltyMin: 1,
+        transferCap: 1,
+        egressMaxMin: 1, // m1's 0.12-min walk survives; m2's 3.6-min walk doesn't
+        originCost: { n1: 0 },
+        routes: [{
+          routeId: "route-1", mode: "forward", loop: null, headwayMin: 10,
+          stops: [
+            { stopKey: "A", rideMin: 0, access: [{ nodeKey: "n1", extraKm: 0 }] },
+            { stopKey: "B", rideMin: 5, access: [{ nodeKey: "n2", extraKm: 0 }] },
+          ],
+        }],
+        stopCosts: { B: { m1: 0.01, m2: 0.3 } },
+      }],
+    },
+
+    // Transfer cap: same 2-crossing-route network as "arrival-times-transfer"
+    // (its uncapped twin) — route-2's transfer boarding at C requires a
+    // 1.2-min walk from route-1's B egress flood. With transferMaxMin: 1 that
+    // walk is blocked, so route-2 never boards and D (reachable only via that
+    // transfer) drops out of both nodeTimes and alightings.
+    {
+      id: "arrival-times-transfer-cap-tight",
+      call: "Travelshed.computeArrivalTimes",
+      args: [{
+        budgetMin: 40,
+        walkSpeedKmh: 5,
+        maxInitialWaitMin: 5,
+        boardingPenaltyMin: 1,
+        transferCap: 1,
+        transferMaxMin: 1, // blocks the 1.2-min B->n3 transfer walk
+        originCost: { n1: 0 },
+        routes: [
+          {
+            routeId: "route-1",
+            mode: "forward",
+            loop: null,
+            headwayMin: 10,
+            stops: [
+              { stopKey: "A", rideMin: 0, access: [{ nodeKey: "n1", extraKm: 0 }] },
+              { stopKey: "B", rideMin: 5, access: [{ nodeKey: "n2", extraKm: 0 }] },
+            ],
+          },
+          {
+            routeId: "route-2",
+            mode: "forward",
+            loop: null,
+            headwayMin: 20,
+            stops: [
+              { stopKey: "C", rideMin: 0, access: [{ nodeKey: "n3", extraKm: 0 }] },
+              { stopKey: "D", rideMin: 8, access: [{ nodeKey: "n4", extraKm: 0 }] },
+            ],
+          },
+        ],
+        stopCosts: {
+          A: { n1: 0 },
+          B: { n2: 0, n3: 0.1 },
+          C: { n3: 0 },
+          D: { n5: 0.05 },
+        },
+      }],
+    },
   ],
 };

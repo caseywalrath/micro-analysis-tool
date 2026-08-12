@@ -193,17 +193,25 @@
     var routes = input.routes || [];
     var stopCosts = input.stopCosts || {};
 
+    // Walk-leg caps (minutes). null/undefined = uncapped — backward compatible
+    // with callers/golden cases that predate v2's shedMode split.
+    var accessMax = (input.accessMaxMin != null) ? input.accessMaxMin : Infinity;
+    var transferMax = (input.transferMaxMin != null) ? input.transferMaxMin : Infinity;
+    var egressMax = (input.egressMaxMin != null) ? input.egressMaxMin : Infinity;
+
     var walkMinPerKm = 60 / walkSpeedKmh;
 
-    // 1. Seed nodeTimes from the origin flood.
+    // 1. Seed nodeTimes from the origin flood, capped at the access walk limit.
     var nodeTimes = {};
     Object.keys(originCost).forEach(function (k) {
       var t = originCost[k] * walkMinPerKm;
-      if (t <= budgetMin) nodeTimes[k] = t;
+      if (t <= budgetMin && t <= accessMax) nodeTimes[k] = t;
     });
 
     // 2. Walk-to-stop time from an arbitrary cost map via a stop's access nodes.
-    function stopArrivalFrom(costObj, stop, baseMin) {
+    // walkCapMin bounds the WALK COMPONENT only (never baseMin) — round 0 (access)
+    // passes accessMax, rounds >=1 (transfer) pass transferMax.
+    function stopArrivalFrom(costObj, stop, baseMin, walkCapMin) {
       if (!costObj) return Infinity;
       var best = Infinity;
       var access = stop.access || [];
@@ -212,19 +220,23 @@
         var d = costObj[a.nodeKey];
         if (d == null) continue;
         var cand = (d + a.extraKm) * walkMinPerKm;
+        if (cand > walkCapMin) continue;
         if (cand < best) best = cand;
       }
       return (best === Infinity) ? Infinity : baseMin + best;
     }
 
-    // 4. Egress merge: sweep an alighting stop's own flood into nodeTimes.
+    // 4. Egress merge: sweep an alighting stop's own flood into nodeTimes,
+    // capping the walk component at egressMax in addition to the total budget.
     // (The boarding stop's flood is never merged here — propagateRide already
     // excludes the boarding stop from its results.)
     function egressMerge(alightMin, stopKey) {
       var costObj = stopCosts[stopKey];
       if (!costObj) return;
       Object.keys(costObj).forEach(function (nodeKey) {
-        var cand = alightMin + costObj[nodeKey] * walkMinPerKm;
+        var walkMin = costObj[nodeKey] * walkMinPerKm;
+        if (walkMin > egressMax) return;
+        var cand = alightMin + walkMin;
         if (cand > budgetMin) return;
         if (nodeTimes[nodeKey] == null || cand < nodeTimes[nodeKey]) {
           nodeTimes[nodeKey] = cand;
@@ -241,9 +253,11 @@
     routes.forEach(function (r) { stats.stopsConsidered += (r.stops || []).length; });
 
     var priorAlightings = null; // alighting events from the previous round: [{routeId, stopKey, alightMin}]
+    var bestAlightings = {}; // stopKey -> best {stopKey, alightMin} across ALL rounds (returned as `alightings`)
 
     for (var round = 0; round <= transferCap; round++) {
       var newAlightings = {}; // stopKey -> best {routeId, stopKey, alightMin} this round
+      var walkCapMin = (round === 0) ? accessMax : transferMax;
 
       routes.forEach(function (route) {
         var stops = route.stops || [];
@@ -253,7 +267,7 @@
 
           if (round === 0) {
             // 3. Round 0 (initial boardings): arrival from the origin flood.
-            arrive = stopArrivalFrom(originCost, stop, 0);
+            arrive = stopArrivalFrom(originCost, stop, 0, walkCapMin);
           } else {
             // 5. Round r>=1 (transfers): best arrival via any alighting event
             // from a DIFFERENT route in the prior round (no same-route re-board).
@@ -261,7 +275,7 @@
             for (var ei = 0; ei < priorAlightings.length; ei++) {
               var e = priorAlightings[ei];
               if (e.routeId === route.routeId) continue;
-              var cand = stopArrivalFrom(stopCosts[e.stopKey], stop, e.alightMin);
+              var cand = stopArrivalFrom(stopCosts[e.stopKey], stop, e.alightMin, walkCapMin);
               if (cand < arrive) arrive = cand;
             }
           }
@@ -280,9 +294,9 @@
           stats.stopsBoarded++;
           if (round > 0) stats.transferBoardings++;
 
-          var alightings = propagateRide(stops, si, boardTimeMin, { mode: route.mode, loop: route.loop });
-          for (var ai = 0; ai < alightings.length; ai++) {
-            var al = alightings[ai];
+          var routeAlightings = propagateRide(stops, si, boardTimeMin, { mode: route.mode, loop: route.loop });
+          for (var ai = 0; ai < routeAlightings.length; ai++) {
+            var al = routeAlightings[ai];
             if (al.arriveMin > budgetMin) continue;
             var alightStopKey = stops[al.stopIdx].stopKey;
 
@@ -291,6 +305,11 @@
             var existing = newAlightings[alightStopKey];
             if (!existing || al.arriveMin < existing.alightMin) {
               newAlightings[alightStopKey] = { routeId: route.routeId, stopKey: alightStopKey, alightMin: al.arriveMin };
+            }
+
+            var bestExisting = bestAlightings[alightStopKey];
+            if (!bestExisting || al.arriveMin < bestExisting.alightMin) {
+              bestAlightings[alightStopKey] = { stopKey: alightStopKey, alightMin: al.arriveMin };
             }
           }
         }
@@ -306,6 +325,7 @@
     return {
       nodeTimes: nodeTimes,
       routeDiags: Object.keys(diagByRoute).map(function (k) { return diagByRoute[k]; }),
+      alightings: Object.keys(bestAlightings).map(function (k) { return bestAlightings[k]; }),
       stats: stats
     };
   }

@@ -112,6 +112,12 @@
         "usedTransfer": false
       }
     ],
+    "alightings": [
+      {
+        "stopKey": "B",
+        "alightMin": 12.8
+      }
+    ],
     "stats": {
       "stopsConsidered": 2,
       "stopsBoarded": 1,
@@ -140,11 +146,174 @@
         "usedTransfer": true
       }
     ],
+    "alightings": [
+      {
+        "stopKey": "B",
+        "alightMin": 11
+      },
+      {
+        "stopKey": "D",
+        "alightMin": 31.2
+      }
+    ],
     "stats": {
       "stopsConsidered": 4,
       "stopsBoarded": 2,
       "transferBoardings": 1,
       "nodesReached": 4
+    }
+  },
+  "arrival-times-access-cap-uncapped": {
+    "nodeTimes": {
+      "n1": 0.6000000000000001,
+      "n2": 6
+    },
+    "routeDiags": [
+      {
+        "routeId": "route-near",
+        "boardings": 1,
+        "firstBoardMin": 6.6,
+        "usedTransfer": false
+      },
+      {
+        "routeId": "route-far",
+        "boardings": 1,
+        "firstBoardMin": 12,
+        "usedTransfer": false
+      }
+    ],
+    "alightings": [
+      {
+        "stopKey": "B",
+        "alightMin": 11.6
+      },
+      {
+        "stopKey": "D",
+        "alightMin": 17
+      }
+    ],
+    "stats": {
+      "stopsConsidered": 4,
+      "stopsBoarded": 2,
+      "transferBoardings": 0,
+      "nodesReached": 2
+    }
+  },
+  "arrival-times-access-cap-tight": {
+    "nodeTimes": {
+      "n1": 0.6000000000000001
+    },
+    "routeDiags": [
+      {
+        "routeId": "route-near",
+        "boardings": 1,
+        "firstBoardMin": 6.6,
+        "usedTransfer": false
+      },
+      {
+        "routeId": "route-far",
+        "boardings": 0,
+        "firstBoardMin": null,
+        "usedTransfer": false
+      }
+    ],
+    "alightings": [
+      {
+        "stopKey": "B",
+        "alightMin": 11.6
+      }
+    ],
+    "stats": {
+      "stopsConsidered": 4,
+      "stopsBoarded": 1,
+      "transferBoardings": 0,
+      "nodesReached": 1
+    }
+  },
+  "arrival-times-egress-cap-uncapped": {
+    "nodeTimes": {
+      "n1": 0,
+      "m1": 11.12,
+      "m2": 14.6
+    },
+    "routeDiags": [
+      {
+        "routeId": "route-1",
+        "boardings": 1,
+        "firstBoardMin": 6,
+        "usedTransfer": false
+      }
+    ],
+    "alightings": [
+      {
+        "stopKey": "B",
+        "alightMin": 11
+      }
+    ],
+    "stats": {
+      "stopsConsidered": 2,
+      "stopsBoarded": 1,
+      "transferBoardings": 0,
+      "nodesReached": 3
+    }
+  },
+  "arrival-times-egress-cap-tight": {
+    "nodeTimes": {
+      "n1": 0,
+      "m1": 11.12
+    },
+    "routeDiags": [
+      {
+        "routeId": "route-1",
+        "boardings": 1,
+        "firstBoardMin": 6,
+        "usedTransfer": false
+      }
+    ],
+    "alightings": [
+      {
+        "stopKey": "B",
+        "alightMin": 11
+      }
+    ],
+    "stats": {
+      "stopsConsidered": 2,
+      "stopsBoarded": 1,
+      "transferBoardings": 0,
+      "nodesReached": 2
+    }
+  },
+  "arrival-times-transfer-cap-tight": {
+    "nodeTimes": {
+      "n1": 0,
+      "n2": 11,
+      "n3": 12.2
+    },
+    "routeDiags": [
+      {
+        "routeId": "route-1",
+        "boardings": 1,
+        "firstBoardMin": 6,
+        "usedTransfer": false
+      },
+      {
+        "routeId": "route-2",
+        "boardings": 0,
+        "firstBoardMin": null,
+        "usedTransfer": false
+      }
+    ],
+    "alightings": [
+      {
+        "stopKey": "B",
+        "alightMin": 11
+      }
+    ],
+    "stats": {
+      "stopsConsidered": 4,
+      "stopsBoarded": 1,
+      "transferBoardings": 0,
+      "nodesReached": 3
     }
   }
 }
