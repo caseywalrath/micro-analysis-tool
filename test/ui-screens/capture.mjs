@@ -1,0 +1,402 @@
+#!/usr/bin/env node
+// test/ui-screens/capture.mjs
+//
+// Screenshots the app shell and every module popup in light + dark mode, so
+// later UI-refresh phases can diff their work against a mechanical baseline.
+// No product code is touched by this script — it only drives a browser
+// against the app's real static files over a local HTTP server.
+//
+// USAGE
+//   node test/ui-screens/capture.mjs
+//
+// Requires the "playwright" npm package to be resolvable. This repo has no
+// npm install of its own (see CLAUDE.md — "No build tools"), so install it
+// once in a scratch directory OUTSIDE the repo and point NODE_PATH at it:
+//
+//   mkdir -p /tmp/pw-install && cd /tmp/pw-install && npm init -y >/dev/null
+//   PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm i playwright
+//   NODE_PATH=/tmp/pw-install/node_modules node test/ui-screens/capture.mjs
+//
+// In the Claude Code cloud environment, Chromium is preinstalled at
+// /opt/pw-browsers/chromium — no browser download needed
+// (PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 above just stops npm from trying).
+//
+// WHY REQUESTS ARE INTERCEPTED
+// The app loads MapLibre GL / Turf / pako / PapaParse / JSZip / shapefile
+// from unpkg.com via <script>/<link> tags (see index.html). Sandboxed
+// environments often cannot reach those CDN hosts at all (org egress
+// policy, not just flaky tiles), which would prevent App.map from ever
+// being created. So this script vendors pinned copies of those exact files
+// under test/ui-screens/vendor/ (fetched once via `npm pack`, see that
+// directory's note in test/ui-screens/README.md) and serves them via
+// Playwright route interception — index.html itself is never modified.
+// Every other remote host (basemap tiles, Census/TIGERweb, OSRM, Google
+// Fonts) is aborted immediately so the run stays fast and deterministic;
+// we're checking UI chrome, not live data or map imagery.
+
+import { spawn } from "node:child_process";
+import { createRequire } from "node:module";
+import { readFileSync, mkdirSync, existsSync, rmSync, readdirSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+import net from "node:net";
+import http from "node:http";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = join(HERE, "..", "..");
+const OUT_DIR = join(HERE, "out");
+const VENDOR_DIR = join(HERE, "vendor");
+const FIXTURE_PATH = join(HERE, "fixture-session.json");
+const VIEWPORT = { width: 1600, height: 950 };
+const MAP_READY_TIMEOUT_MS = 30000;
+const POPUP_SETTLE_MS = 600;
+const TAB_SETTLE_MS = 300;
+
+// ---- Playwright loader (see USAGE above for why this isn't a plain import) ----
+
+const require = createRequire(import.meta.url);
+let playwright;
+try {
+  playwright = require("playwright");
+} catch (e) {
+  console.error("Could not load the 'playwright' package (" + e.message + ").");
+  console.error("Install it once outside the repo and point NODE_PATH at it:");
+  console.error("  mkdir -p /tmp/pw-install && cd /tmp/pw-install && npm init -y >/dev/null");
+  console.error("  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm i playwright");
+  console.error("  NODE_PATH=/tmp/pw-install/node_modules node test/ui-screens/capture.mjs");
+  process.exit(1);
+}
+const { chromium } = playwright;
+
+const CHROMIUM_CANDIDATES = [
+  process.env.PLAYWRIGHT_CHROMIUM_PATH,
+  "/opt/pw-browsers/chromium"
+].filter(Boolean);
+
+function resolveExecutablePath() {
+  for (const p of CHROMIUM_CANDIDATES) {
+    if (existsSync(p)) return p;
+  }
+  return undefined; // fall back to Playwright's own managed browser
+}
+
+// ---- Vendored CDN assets (see header comment) ----
+
+const VENDOR_MAP = new Map([
+  ["https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js", { file: "maplibre-gl.js", type: "application/javascript" }],
+  ["https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css", { file: "maplibre-gl.css", type: "text/css" }],
+  ["https://unpkg.com/@turf/turf@6.5.0/turf.min.js", { file: "turf.min.js", type: "application/javascript" }],
+  ["https://unpkg.com/pako@2.1.0/dist/pako.min.js", { file: "pako.min.js", type: "application/javascript" }],
+  ["https://unpkg.com/papaparse@5.4.1/papaparse.min.js", { file: "papaparse.min.js", type: "application/javascript" }],
+  ["https://unpkg.com/jszip@3.10.1/dist/jszip.min.js", { file: "jszip.min.js", type: "application/javascript" }],
+  ["https://unpkg.com/shapefile@0.6.6/dist/shapefile.js", { file: "shapefile.js", type: "application/javascript" }]
+]);
+
+// ---- Module popups to capture (id must match App.registerModule({id: ...})) ----
+
+const MODULE_IDS = [
+  "buffer-summary",
+  "transit-propensity",
+  "fta-small-starts",
+  "ridership-forecasting",
+  "corridor-scoring",
+  "walkshed",
+  "transit-travelshed",
+  "transit-coverage",
+  "route-costing",
+  "trip-builder",
+  "title-vi",
+  "gtfs",
+  "attribute-summary",
+  "display-settings"
+];
+
+// ---- Small utilities ----
+
+function findFreePort() {
+  return new Promise((resolve, reject) => {
+    const srv = net.createServer();
+    srv.on("error", reject);
+    srv.listen(0, "127.0.0.1", () => {
+      const { port } = srv.address();
+      srv.close(() => resolve(port));
+    });
+  });
+}
+
+function waitForHttpReady(port, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  return new Promise((resolve, reject) => {
+    function attempt() {
+      const req = http.get({ host: "127.0.0.1", port, path: "/index.html", timeout: 1000 }, (res) => {
+        res.resume();
+        resolve();
+      });
+      req.on("error", () => {
+        if (Date.now() > deadline) return reject(new Error("static server never became ready on port " + port));
+        setTimeout(attempt, 100);
+      });
+      req.on("timeout", () => req.destroy());
+    }
+    attempt();
+  });
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// ---- Report ----
+// status: "ok" | "fail" | "skip" — only "fail" makes the run exit non-zero.
+// "skip" is for documented, expected-every-run gaps (see the sidebar note
+// below) so the harness stays usable as a pass/fail gate for later phases.
+
+const results = []; // { name, status, note, width, height }
+let anyFailure = false;
+
+function record(name, status, note, dims) {
+  results.push({ name, status, note: note || "", width: dims && dims.width, height: dims && dims.height });
+  if (status === "fail") anyFailure = true;
+  const label = status === "ok" ? "OK  " : status === "skip" ? "SKIP" : "FAIL";
+  const dimStr = dims ? dims.width + "x" + dims.height : "";
+  console.log("[" + label + "] " + name + (dimStr ? "  " + dimStr : "") + (note ? "  (" + note + ")" : ""));
+}
+
+async function shootLocator(page, selector, outPath, name) {
+  const loc = page.locator(selector).first();
+  await loc.waitFor({ state: "visible", timeout: 10000 });
+  const box = await loc.boundingBox();
+  await loc.screenshot({ path: outPath });
+  record(name, "ok", null, box ? { width: Math.round(box.width), height: Math.round(box.height) } : null);
+}
+
+// ---- Main capture routine for one theme ----
+
+async function captureTheme(browser, theme, port) {
+  const isDark = theme === "dark";
+  const fixture = readFileSync(FIXTURE_PATH, "utf8");
+
+  const context = await browser.newContext({ viewport: VIEWPORT });
+
+  // Seed localStorage (dark-mode flag + demo session) before any page script runs.
+  await context.addInitScript(
+    ({ isDark, fixtureJson }) => {
+      localStorage.setItem("mat-dark-mode", isDark ? "1" : "0");
+      localStorage.setItem("mat-session", fixtureJson);
+    },
+    { isDark, fixtureJson: fixture }
+  );
+
+  // Vendor CDN assets locally; abort everything else remote (tiles, Census,
+  // OSRM, Google Fonts) so the run is fast, deterministic, and offline-safe.
+  await context.route("**/*", (route) => {
+    const url = route.request().url();
+    const vendored = VENDOR_MAP.get(url);
+    if (vendored) {
+      return route.fulfill({
+        status: 200,
+        contentType: vendored.type,
+        body: readFileSync(join(VENDOR_DIR, vendored.file))
+      });
+    }
+    if (url.startsWith("http://localhost:" + port + "/") || url.startsWith("http://127.0.0.1:" + port + "/")) {
+      return route.continue();
+    }
+    return route.abort();
+  });
+
+  const page = await context.newPage();
+  page.on("pageerror", (e) => console.warn("  [page error] " + e.message));
+
+  await page.goto("http://localhost:" + port + "/index.html", { waitUntil: "load" });
+
+  try {
+    await page.waitForFunction(
+      "window.App && window.App.map && window.App.map.loaded()",
+      { timeout: MAP_READY_TIMEOUT_MS }
+    );
+  } catch (e) {
+    console.warn("  [warn] map did not report loaded() within " + MAP_READY_TIMEOUT_MS + "ms — continuing anyway (chrome is what we're checking).");
+  }
+
+  // Dark mode: index.html's "no-flash" <head> script
+  //   (document.body.classList.add("dark-mode") off a localStorage read)
+  // runs while the parser is still inside <head>, before <body> exists, so
+  // document.body is null there and it throws every time (visible as a
+  // pageerror: "Cannot read properties of null (reading 'classList')").
+  // Pre-seeding mat-dark-mode in localStorage therefore has NO visual
+  // effect on first paint — this is a pre-existing app bug, not something
+  // phase 0 introduces or is allowed to fix (see docs/ui-refresh/README.md,
+  // "Never touch calculation code" / no product changes this phase). The
+  // #darkmode-btn click handler (wired after map load) is unaffected and
+  // is the only currently-working way to enter dark mode, so that's what
+  // this harness uses to drive the dark pass — the same path a real user
+  // takes every session.
+  if (isDark) {
+    try {
+      await page.click("#darkmode-btn", { timeout: 5000 });
+      await page.waitForFunction(
+        "document.body.classList.contains('dark-mode')",
+        { timeout: 5000 }
+      );
+    } catch (e) {
+      console.warn("  [warn] could not engage dark mode via #darkmode-btn: " + e.message);
+    }
+  }
+
+  // ---- Shell (full viewport) ----
+  try {
+    await page.screenshot({ path: join(OUT_DIR, theme + "_shell.png") });
+    record(theme + "_shell", "ok", null, VIEWPORT);
+  } catch (e) {
+    record(theme + "_shell", "fail", e.message);
+  }
+
+  // ---- Sidebar ----
+  // NOTE: #sidebar-wrap ships with inline style="display:none" in index.html
+  // and nothing in the current codebase (grep confirms no App.sidebar.render()
+  // call anywhere) ever shows it — the left "Data Inputs" sidebar is dead in
+  // this build (Data Inputs / Analysis both moved elsewhere: buffer-summary
+  // popup and the toolbar Analysis dropdown, respectively). That's a
+  // pre-existing product fact, not something phase 0 changes, so this capture
+  // is expected to be skipped every run until/unless that changes.
+  try {
+    await shootLocator(page, "#sidebar-wrap", join(OUT_DIR, theme + "_sidebar.png"), theme + "_sidebar");
+  } catch (e) {
+    record(theme + "_sidebar", "skip", "#sidebar-wrap is hidden by default in the current UI (dead code, not a phase-0 regression)");
+  }
+
+  // ---- Feature panel ----
+  try {
+    await shootLocator(page, "#feature-panel", join(OUT_DIR, theme + "_feature-panel.png"), theme + "_feature-panel");
+  } catch (e) {
+    record(theme + "_feature-panel", "fail", e.message);
+  }
+
+  // ---- Per-feature attribute popup ----
+  try {
+    await page.evaluate(() => {
+      window.App.openAttrPopup("route", 0, window.App.routes[0]);
+    });
+    await shootLocator(page, "#fp-attr-popup", join(OUT_DIR, theme + "_attr-popup.png"), theme + "_attr-popup");
+    await page.evaluate(() => window.App.closeAttrPopup());
+  } catch (e) {
+    record(theme + "_attr-popup", "fail", e.message);
+  }
+
+  // ---- Module popups ----
+  for (const id of MODULE_IDS) {
+    const name = theme + "_" + id;
+    try {
+      await page.evaluate((moduleId) => window.App.openModulePopup(moduleId), id);
+      await page.locator("#module-popup").waitFor({ state: "visible", timeout: 10000 });
+      await sleep(POPUP_SETTLE_MS);
+      await shootLocator(page, ".module-popup-dialog", join(OUT_DIR, name + ".png"), name);
+
+      // Tabbed popups: capture each [data-tab] button's panel too.
+      // NOTE: every module's popup body slot stays in the DOM once loaded
+      // (popup.js only toggles display:none on inactive slots), so this
+      // selector must be scoped to :visible — otherwise it also matches
+      // stale tab buttons from a previously-opened module's hidden slot.
+      const tabButtons = page.locator(".module-popup-dialog button[data-tab]:visible");
+      const tabCount = await tabButtons.count();
+      for (let i = 0; i < tabCount; i++) {
+        const btn = tabButtons.nth(i);
+        const tabId = await btn.getAttribute("data-tab");
+        try {
+          await btn.click();
+          await sleep(TAB_SETTLE_MS);
+          await shootLocator(
+            page,
+            ".module-popup-dialog",
+            join(OUT_DIR, name + "_tab-" + tabId + ".png"),
+            name + "_tab-" + tabId
+          );
+        } catch (tabErr) {
+          record(name + "_tab-" + tabId, "fail", tabErr.message);
+        }
+      }
+
+      await page.evaluate(() => window.App.popup.close());
+      await page.locator("#module-popup").waitFor({ state: "hidden", timeout: 5000 }).catch(() => {});
+    } catch (e) {
+      record(name, "fail", e.message);
+      // Defensive: try to close whatever might be open before moving on.
+      await page.evaluate(() => {
+        try { window.App.popup.close(); } catch (_) { /* ignore */ }
+      }).catch(() => {});
+    }
+  }
+
+  await context.close();
+}
+
+// ---- Entry point ----
+
+async function main() {
+  if (!existsSync(FIXTURE_PATH)) {
+    console.error("Missing fixture: " + FIXTURE_PATH);
+    process.exit(1);
+  }
+  for (const [url, v] of VENDOR_MAP) {
+    if (!existsSync(join(VENDOR_DIR, v.file))) {
+      console.error("Missing vendored asset for " + url + " — expected " + join(VENDOR_DIR, v.file));
+      process.exit(1);
+    }
+  }
+
+  if (existsSync(OUT_DIR)) rmSync(OUT_DIR, { recursive: true, force: true });
+  mkdirSync(OUT_DIR, { recursive: true });
+
+  const port = await findFreePort();
+  console.log("Starting static server on port " + port + " (cwd=" + REPO_ROOT + ")...");
+  const server = spawn("python3", ["-m", "http.server", String(port)], {
+    cwd: REPO_ROOT,
+    stdio: ["ignore", "ignore", "ignore"]
+  });
+
+  let browser;
+  try {
+    await waitForHttpReady(port, 10000);
+
+    const executablePath = resolveExecutablePath();
+    browser = await chromium.launch({
+      executablePath,
+      headless: true,
+      args: ["--no-sandbox"]
+    });
+
+    for (const theme of ["light", "dark"]) {
+      console.log("\n=== " + theme + " ===");
+      await captureTheme(browser, theme, port);
+    }
+  } finally {
+    if (browser) await browser.close().catch(() => {});
+    server.kill();
+  }
+
+  console.log("\n=== Summary ===");
+  const nameWidth = Math.max(...results.map((r) => r.name.length), 10);
+  for (const r of results) {
+    const dims = r.width ? r.width + "x" + r.height : "-";
+    const label = r.status === "ok" ? "OK  " : r.status === "skip" ? "SKIP" : "FAIL";
+    console.log(label + "  " + r.name.padEnd(nameWidth) + "  " + dims + (r.note ? "  " + r.note : ""));
+  }
+  const okCount = results.filter((r) => r.status === "ok").length;
+  const skipCount = results.filter((r) => r.status === "skip").length;
+  console.log(
+    "\n" + okCount + "/" + results.length + " captures succeeded" +
+    (skipCount ? " (" + skipCount + " expected skip" + (skipCount === 1 ? "" : "s") + ")" : "") +
+    ". Output: " + OUT_DIR
+  );
+
+  if (anyFailure) {
+    console.error("\nOne or more captures failed — see FAIL rows above.");
+    process.exit(1);
+  }
+}
+
+main().catch((e) => {
+  console.error("Fatal error:", e);
+  process.exit(1);
+});

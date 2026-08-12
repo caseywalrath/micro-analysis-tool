@@ -1,0 +1,196 @@
+{
+  "version": 3,
+  "points": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Downtown Stop",
+        "pointIdx": 1,
+        "color": "",
+        "attributes": {
+          "group": "",
+          "serviceAreaType": "",
+          "stopId": "1001",
+          "associatedRoutes": [
+            { "type": "route", "routeIdx": 1 },
+            { "type": "route", "routeIdx": 2 }
+          ]
+        }
+      },
+      "geometry": { "type": "Point", "coordinates": [-104.8214, 38.8339] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Airport Stop",
+        "pointIdx": 2,
+        "color": "",
+        "attributes": {
+          "group": "",
+          "serviceAreaType": "",
+          "stopId": "1002",
+          "associatedRoutes": []
+        }
+      },
+      "geometry": { "type": "Point", "coordinates": [-104.7014, 38.8058] }
+    }
+  ],
+  "lines": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Line 1",
+        "lineIdx": 1,
+        "waypoints": 3,
+        "color": "",
+        "attributes": {
+          "group": "",
+          "direction": "Both",
+          "mode": "Bus",
+          "serviceId": "",
+          "avgSpeed": 14,
+          "runTime": null
+        }
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-104.83, 38.83],
+          [-104.82, 38.835],
+          [-104.81, 38.84]
+        ]
+      }
+    }
+  ],
+  "routes": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Blue Line NB",
+        "routeIdx": 1,
+        "waypoints": [
+          [-104.8214, 38.8],
+          [-104.8214, 38.82],
+          [-104.8214, 38.84],
+          [-104.8214, 38.86]
+        ],
+        "color": "",
+        "attributes": {
+          "group": "",
+          "direction": "NB",
+          "mode": "Bus",
+          "serviceId": "Blue Line",
+          "avgSpeed": 15,
+          "runTime": null,
+          "service": {
+            "weekday": [
+              { "from": "06:00", "to": "20:00", "frequency": 15 }
+            ],
+            "saturday": [
+              { "from": "08:00", "to": "18:00", "frequency": 30 }
+            ],
+            "sunday": []
+          }
+        }
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-104.8214, 38.8],
+          [-104.8214, 38.82],
+          [-104.8214, 38.84],
+          [-104.8214, 38.86]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Blue Line SB",
+        "routeIdx": 2,
+        "waypoints": [
+          [-104.819, 38.86],
+          [-104.819, 38.84],
+          [-104.819, 38.82],
+          [-104.819, 38.8]
+        ],
+        "color": "",
+        "attributes": {
+          "group": "",
+          "direction": "SB",
+          "mode": "Bus",
+          "serviceId": "Blue Line",
+          "avgSpeed": 15,
+          "runTime": null,
+          "service": {
+            "weekday": [
+              { "from": "06:00", "to": "20:00", "frequency": 15 }
+            ],
+            "saturday": [
+              { "from": "08:00", "to": "18:00", "frequency": 30 }
+            ],
+            "sunday": []
+          }
+        }
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-104.819, 38.86],
+          [-104.819, 38.84],
+          [-104.819, 38.82],
+          [-104.819, 38.8]
+        ]
+      }
+    }
+  ],
+  "polygons": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Study Area",
+        "polyIdx": 1,
+        "vertices": 4,
+        "color": "",
+        "attributes": {
+          "group": "",
+          "notes": "Fixture study area"
+        }
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [-104.83, 38.82],
+            [-104.81, 38.82],
+            [-104.81, 38.845],
+            [-104.83, 38.845],
+            [-104.83, 38.82]
+          ]
+        ]
+      }
+    }
+  ],
+  "labels": [],
+  "textBoxes": [],
+  "bufferRadius": 0.5,
+  "lineBufferRadius": 0.5,
+  "routeBufferRadius": 0.5,
+  "pointLineWidth": 1,
+  "lineLineWidth": 1,
+  "routeLineWidth": 1,
+  "polygonLineWidth": 1,
+  "bufferLineWidth": 1,
+  "pointOpacity": 100,
+  "lineOpacity": 100,
+  "routeOpacity": 100,
+  "polygonOpacity": 50,
+  "bufferOpacity": 50,
+  "offsetOverlap": false,
+  "lodesFileNames": [],
+  "projFileName": "",
+  "projYear": null,
+  "mapCenter": [-104.815, 38.83],
+  "mapZoom": 12,
+  "moduleState": {}
+}
