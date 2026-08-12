@@ -792,6 +792,12 @@
       html += "</div>";
     });
     html += "</div>";
+    html += '<p class="tiny" style="margin-top:6px;color:var(--muted);">' +
+      (_settings.shedMode === "door"
+        ? "Door-to-door — walk uncapped."
+        : "Walk caps: access " + _settings.maxAccessWalkMi + " mi &middot; egress " + _settings.maxEgressWalkMi +
+          " mi &middot; transfer " + _settings.maxTransferWalkMi + " mi") +
+      "</p>";
     el.innerHTML = html;
   }
 
@@ -823,6 +829,10 @@
         dayType: _settings.dayType,
         timeOfDay: _settings.timeOfDay,
         stopSpacingMi: _settings.stopSpacingMi,
+        shedMode: _settings.shedMode,
+        maxAccessWalkMi: _settings.maxAccessWalkMi,
+        maxEgressWalkMi: _settings.maxEgressWalkMi,
+        maxTransferWalkMi: _settings.maxTransferWalkMi,
         networkEpoch: (typeof App.roadNetworkEpoch === "function") ? App.roadNetworkEpoch() : null
       },
       features: features
@@ -1209,7 +1219,7 @@
   function collect() {
     var budgets = _settings.budgets || [];
     return {
-      v: 1,
+      v: 2,
       origin: _origin ? _origin.slice() : null,
       budgets: [budgets[0] != null ? budgets[0] : null, budgets[1] != null ? budgets[1] : null, budgets[2] != null ? budgets[2] : null],
       walkSpeedMph: _settings.walkSpeedMph,
@@ -1219,13 +1229,21 @@
       boardPenaltyMin: _settings.boardPenaltyMin,
       stopSpacingMi: _settings.stopSpacingMi,
       maxEdgeKm: _settings.maxEdgeKm,
+      shedMode: _settings.shedMode,
+      maxAccessWalkMi: _settings.maxAccessWalkMi,
+      maxEgressWalkMi: _settings.maxEgressWalkMi,
+      maxTransferWalkMi: _settings.maxTransferWalkMi,
       selectedRouteIds: collectSelectedRouteIds()
     };
   }
 
   // Restores inputs and re-places the origin marker. Results stay empty until
   // Re-run (transit-coverage precedent: geometry is not persisted, so export
-  // stays disabled until a fresh run regenerates it).
+  // stays disabled until a fresh run regenerates it). v1 payloads (pre-dating
+  // the v2 walk-caps plan) have no shedMode/cap fields — the DEFAULT_SETTINGS
+  // values already seeded in _settings cover them, no migration warning
+  // needed (geometry is never persisted either way, so a v1 session is
+  // stale-until-rerun regardless).
   function apply(data) {
     if (!data) return;
 
@@ -1246,6 +1264,10 @@
     if (+data.boardPenaltyMin >= 0) _settings.boardPenaltyMin = +data.boardPenaltyMin;
     if (+data.stopSpacingMi > 0) _settings.stopSpacingMi = +data.stopSpacingMi;
     if (+data.maxEdgeKm > 0) _settings.maxEdgeKm = +data.maxEdgeKm;
+    if (data.shedMode === "transit" || data.shedMode === "door") _settings.shedMode = data.shedMode;
+    if (+data.maxAccessWalkMi > 0) _settings.maxAccessWalkMi = +data.maxAccessWalkMi;
+    if (+data.maxEgressWalkMi > 0) _settings.maxEgressWalkMi = +data.maxEgressWalkMi;
+    if (+data.maxTransferWalkMi > 0) _settings.maxTransferWalkMi = +data.maxTransferWalkMi;
 
     _savedSelectedRouteIds = Array.isArray(data.selectedRouteIds) ? data.selectedRouteIds : null;
   }
