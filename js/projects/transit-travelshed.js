@@ -37,6 +37,7 @@
   var _stale         = false;
   var _running       = false;
   var _initialized   = false;
+  var _savedSelectedRouteIds = null; // routeIdx/lineIdx-based ids restored from session cache, applied once the checklist exists
 
   // Per-stop walk-flood cache, keyed "stopKey|epoch|budgetKm.toFixed(3)" ->
   // { cost: {nodeKey: distKm}, access: [{nodeKey, extraKm} x2] } | null (null =
@@ -140,6 +141,50 @@
       else if (type === "line")  lineIndices.push(idx);
     }
     return { routeIndices: routeIndices, lineIndices: lineIndices };
+  }
+
+  // Stable checklist id, based on the draw-time counter (routeIdx/lineIdx) that
+  // survives deletes elsewhere, NOT the array index used for live checkbox
+  // data-idx (editing.js findRouteIndexByProp is the scan precedent). Used only
+  // for session persistence — resolveRoutes()'s routeId stays array-index-based
+  // since indices don't shift mid-run.
+  function buildStableRouteId(type, feature) {
+    var idProp = (type === "route") ? "routeIdx" : "lineIdx";
+    var stableIdx = feature.properties && feature.properties[idProp];
+    return type + "-" + stableIdx;
+  }
+
+  function collectSelectedRouteIds() {
+    var el = document.getElementById("tsRouteList");
+    if (!el) return _savedSelectedRouteIds || [];
+    var ids = [];
+    var boxes = el.querySelectorAll("input[type=checkbox]");
+    for (var i = 0; i < boxes.length; i++) {
+      var cb = boxes[i];
+      if (!cb.checked) continue;
+      var type = cb.getAttribute("data-type");
+      var idx  = parseInt(cb.getAttribute("data-idx"), 10);
+      var feature = (type === "route" ? App.routes : App.lines)[idx];
+      if (feature) ids.push(buildStableRouteId(type, feature));
+    }
+    return ids;
+  }
+
+  // Re-check checklist entries by resolving each stable id against the CURRENT
+  // array index (indices shift on delete, the routeIdx/lineIdx counter doesn't).
+  function applySelections(stableIds) {
+    var el = document.getElementById("tsRouteList");
+    if (!el) return;
+    var wanted = {};
+    stableIds.forEach(function (id) { wanted[id] = true; });
+    var boxes = el.querySelectorAll("input[type=checkbox]");
+    for (var i = 0; i < boxes.length; i++) {
+      var cb = boxes[i];
+      var type = cb.getAttribute("data-type");
+      var idx  = parseInt(cb.getAttribute("data-idx"), 10);
+      var feature = (type === "route" ? App.routes : App.lines)[idx];
+      cb.checked = !!(feature && wanted[buildStableRouteId(type, feature)]);
+    }
   }
 
   // ---- Small formatting / DOM helpers ----
@@ -348,7 +393,14 @@
   }
 
   function emptyHint() {
-    return { need: "Draw a route or line with service bands.", action: "Pick an origin and click Calculate." };
+    var nFeat = (App.routes || []).length + (App.lines || []).length;
+    if (!nFeat) {
+      return { need: "Draw a route or line with service bands.", action: "Use the Route or Line tool, then set bands in its Attributes popup." };
+    }
+    if (!_origin) {
+      return { need: "Pick an origin on the map.", action: "Click “Pick origin on map”, then click a starting point." };
+    }
+    return { need: "Select routes/lines and click Calculate.", action: "A travelshed shows everywhere reachable by walk + transit within your time budgets." };
   }
 
   function showEmpty() {
@@ -976,6 +1028,7 @@
   function onOpen(core) {
     syncInputsFromSettings();
     buildRouteChecklist();
+    if (_savedSelectedRouteIds) applySelections(_savedSelectedRouteIds);
     refreshNetWarn();
     if (_lastResult) {
       renderResults(_lastResult);
@@ -990,15 +1043,26 @@
 
   function onClose(core) { /* state persists in closure */ }
 
+  // Completeness audit (Phase 8): layers before sources (clearTravelshedLayers
+  // already orders line->fill->source), the legend widget, the origin marker,
+  // disarming the picker if it was left armed, and any pending download-offer
+  // state — nothing from an in-progress or completed run should survive Clear.
   function clearAll() {
     clearTravelshedLayers();
     if (App.popup && App.popup.hideFloatingWidget) App.popup.hideFloatingWidget("ts-legend");
+    if (_originMarker) { _originMarker.remove(); _originMarker = null; }
+    _origin = null;
+    if (App.drawMode === "ts-origin") disarmOriginPicker();
+    _pendingDownloadExtent = null;
     _lastResult = null;
     _stale = false;
     if (isPopupVisible()) {
       var resultsEl = document.getElementById("tsResults");
       if (resultsEl) resultsEl.style.display = "none";
       setExportEnabled(false);
+      setCoverageWarn(null);
+      showDownloadBtn(false);
+      syncInputsFromSettings(); // refresh the origin label back to "Not set"
       showEmpty();
     }
   }
@@ -1010,6 +1074,53 @@
     buildRouteChecklist();
     refreshNetWarn();
     if (_lastResult) markStale();
+  }
+
+  // ---- 8. Session persistence (settings only — polygons recompute cheaply and ----
+  // ---- the road network isn't persisted anyway; walkshed precedent) ----
+
+  function collect() {
+    var budgets = _settings.budgets || [];
+    return {
+      v: 1,
+      origin: _origin ? _origin.slice() : null,
+      budgets: [budgets[0] != null ? budgets[0] : null, budgets[1] != null ? budgets[1] : null, budgets[2] != null ? budgets[2] : null],
+      walkSpeedMph: _settings.walkSpeedMph,
+      dayType: _settings.dayType,
+      timeOfDay: _settings.timeOfDay,
+      maxWaitMin: _settings.maxWaitMin,
+      boardPenaltyMin: _settings.boardPenaltyMin,
+      stopSpacingMi: _settings.stopSpacingMi,
+      maxEdgeKm: _settings.maxEdgeKm,
+      selectedRouteIds: collectSelectedRouteIds()
+    };
+  }
+
+  // Restores inputs and re-places the origin marker. Results stay empty until
+  // Re-run (transit-coverage precedent: geometry is not persisted, so export
+  // stays disabled until a fresh run regenerates it).
+  function apply(data) {
+    if (!data) return;
+
+    if (Array.isArray(data.origin) && data.origin.length === 2) {
+      _origin = data.origin.slice();
+      if (_originMarker) _originMarker.remove();
+      _originMarker = new maplibregl.Marker({ color: "#7c3aed" }).setLngLat(_origin).addTo(App.map);
+    }
+
+    if (Array.isArray(data.budgets)) {
+      var restored = data.budgets.filter(function (v) { return v != null && Number.isFinite(+v) && +v > 0; }).map(Number);
+      if (restored.length) _settings.budgets = restored;
+    }
+    if (+data.walkSpeedMph > 0) _settings.walkSpeedMph = +data.walkSpeedMph;
+    if (data.dayType) _settings.dayType = data.dayType;
+    if (data.timeOfDay) _settings.timeOfDay = data.timeOfDay;
+    if (+data.maxWaitMin >= 0) _settings.maxWaitMin = +data.maxWaitMin;
+    if (+data.boardPenaltyMin >= 0) _settings.boardPenaltyMin = +data.boardPenaltyMin;
+    if (+data.stopSpacingMi > 0) _settings.stopSpacingMi = +data.stopSpacingMi;
+    if (+data.maxEdgeKm > 0) _settings.maxEdgeKm = +data.maxEdgeKm;
+
+    _savedSelectedRouteIds = Array.isArray(data.selectedRouteIds) ? data.selectedRouteIds : null;
   }
 
   // ---- Register ----
@@ -1027,5 +1138,9 @@
     clear:   function ()     { clearAll(); },
     update:  async function (core) { await update(core); }
   });
+
+  if (App.cache && App.cache.registerModule) {
+    App.cache.registerModule("transit-travelshed", { collect: collect, apply: apply });
+  }
 
 })();
