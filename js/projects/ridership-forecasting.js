@@ -34,6 +34,7 @@
   var _running = false;
   var _initialized = false;
   var _apportionByArea = false;
+  var _bufferMiles = App.ANALYSIS_BUFFER_DEFAULT_MILES; // module-owned analysis distance (Calibrate tab, shared with Demand)
   var _normalizeByLength = false;
   var _baselineUncertaintyPct = 0.25; // ±25% model uncertainty around calibrated baseline
   var _spanElasticity = 0.70; // span-to-ridership elasticity (power curve); applied per-scenario in Scenarios tab
@@ -362,9 +363,23 @@
     var demandFilter = readFeatureFilter("rfDemandFeatureList");
     _demandFeatureFilter = demandFilter;
 
-    // Combine calibration and demand feature filters for the shared union polygon
+    // Buffer set for ALL drawn routes/lines (module's own analysis distance) —
+    // computePerRouteCDI needs every feature's buffer so featureFilter:null
+    // below can compute CDI for all of them, exactly as before this module
+    // carried its own buffer distance; only the geometry source changed.
+    var allBufferSet = App.buildAnalysisBufferSet(allRoutesLinesFilter(), _bufferMiles);
+
+    // Study area union is scoped to the combined calibration+demand selection —
+    // fold only that subset's polygons out of the already-built full set.
     var combinedFilter = combineFeatureFilters(_calibFeatureFilter, demandFilter);
-    var sharedUnion = combinedFilter ? RM.buildUnionFromFeatures(combinedFilter) : null;
+    var combinedPolys = [];
+    (combinedFilter.routeIndices || []).forEach(function (idx) {
+      var b = allBufferSet.get("route", idx); if (b) combinedPolys.push(b);
+    });
+    (combinedFilter.lineIndices || []).forEach(function (idx) {
+      var b = allBufferSet.get("line", idx); if (b) combinedPolys.push(b);
+    });
+    var sharedUnion = App.foldAnalysisUnion(combinedPolys);
 
     if (textEl) textEl.textContent = "Running shared pool analysis...";
     App.setStatus("Running shared pool normalization analysis...");
@@ -379,11 +394,15 @@
       growthFactors: App.projGrowthFactors(),
       unionPolygon: sharedUnion,
       featureFilter: null,
+      bufferSet: allBufferSet,
       onProgress: function (msg) {
         if (textEl) textEl.textContent = msg;
         App.setStatus(msg);
       }
     });
+
+    result.bufferMiles = _bufferMiles;
+    result.bufferSet   = allBufferSet;
 
     // Partition result.routeCDIs by filter
     _sharedCalibPerRouteCDI = filterRouteCDIs(result.routeCDIs, _calibFeatureFilter);
@@ -433,6 +452,7 @@
       var geoLevel = document.getElementById("rfGeoLevel").value;
       var year = document.getElementById("rfYearSelect").value;
       var segLen = parseFloat(document.getElementById("rfSegmentLength").value) || 0;
+      _bufferMiles = App.readAnalysisBufferMiles("rfBufferMiles", App.ANALYSIS_BUFFER_DEFAULT_MILES);
 
       // Warn if demand settings differ from calibration settings
       if (_systemResult) {
@@ -491,11 +511,12 @@
         var demandFilter = readFeatureFilter("rfDemandFeatureList");
         _demandFeatureFilter = demandFilter;
 
-        if (hasBufferIssue(demandFilter)) {
-          throw new Error("No buffers defined for selected features. Set a buffer radius in the Features panel.");
+        var demandBufferSet = App.buildAnalysisBufferSet(demandFilter, _bufferMiles);
+        if (demandBufferSet.count === 0) {
+          throw new Error("Could not build buffers for the selected demand features.");
         }
 
-        var customUnion = demandFilter ? RM.buildUnionFromFeatures(demandFilter) : null;
+        var customUnion = demandBufferSet.union;
 
         if (textEl) textEl.textContent = "Running demand system analysis...";
         App.setStatus("Analyzing demand system...");
@@ -509,11 +530,15 @@
           growthFactors: App.projGrowthFactors(),
           unionPolygon: customUnion,
           featureFilter: demandFilter,
+          bufferSet: demandBufferSet,
           onProgress: function (msg) {
             if (textEl) textEl.textContent = msg;
             App.setStatus(msg);
           }
         });
+
+        demandSystemResult.bufferMiles = _bufferMiles;
+        demandSystemResult.bufferSet   = demandBufferSet;
 
         _demandSystemResult = demandSystemResult;
         _demandPerRouteCDI = demandSystemResult.routeCDIs;
@@ -524,7 +549,10 @@
         populateCorridorDropdownFromCheckedFeatures();
 
       } else {
-        // Path C: Uncalibrated — run fresh TPI for all features (legacy behavior)
+        // Path C: Uncalibrated — run fresh TPI for all features (legacy behavior).
+        // This predates the featureFilter/calibration system and intentionally
+        // keeps using TPI's own global-buffer fallback for the study area — only
+        // its segment buffering is brought onto the module's own distance.
         result = await RM.computeCorridorDemand({
           geoLevel: geoLevel,
           year: year,
@@ -533,6 +561,7 @@
           apportionByArea: _apportionByArea,
           growthFactors: App.projGrowthFactors(),
           segmentMiles: segLen,
+          segmentBufferMiles: _bufferMiles,
           onProgress: function (msg) {
             if (textEl) textEl.textContent = msg;
             App.setStatus(msg);
@@ -562,7 +591,7 @@
         if (segLen > 0 && RM.computeSegments) {
           if (textEl) textEl.textContent = "Computing segments...";
           App.setStatus("Computing segments...");
-          segments = RM.computeSegments(tpiResult, segLen, _selectedCorridor);
+          segments = RM.computeSegments(tpiResult, segLen, _selectedCorridor, _bufferMiles);
         }
 
         result = {
@@ -571,7 +600,8 @@
           segments: segments,
           classification: RM.classifyCDI(displayCDI),
           geoLevel: geoLevel,
-          year: year
+          year: year,
+          bufferMiles: _bufferMiles
         };
       }
 
@@ -1001,45 +1031,42 @@
     }
   }
 
-  function hasBufferIssue(filter) {
-    var routes = App.routes || [];
-    var lines  = App.lines  || [];
-    var rb = App.routeBuffers || [];
-    var lb = App.lineBuffers  || [];
-    var rIdxs = filter ? filter.routeIndices : routes.map(function(_,i){ return i; });
-    var lIdxs = filter ? filter.lineIndices  : lines.map(function(_,i){ return i; });
-    return (rIdxs.length > 0 && rIdxs.some(function(i){ return !rb[i]; })) ||
-           (lIdxs.length > 0 && lIdxs.some(function(i){ return !lb[i]; }));
+  // A filter covering every drawn route and line — used by the shared-pool
+  // path, which needs a buffer set spanning ALL drawn features (matching the
+  // historical featureFilter:null "compute CDI for all routes" behavior),
+  // separately from whatever subset defines the study-area union.
+  function allRoutesLinesFilter() {
+    return {
+      routeIndices: (App.routes || []).map(function (_, i) { return i; }),
+      lineIndices:  (App.lines  || []).map(function (_, i) { return i; })
+    };
   }
 
-  // Read checkbox state from a feature checklist and return a featureFilter object.
-  // Returns null if ALL are checked (equivalent to "no filter" for backward compat).
+  // Read checkbox state from a feature checklist and return a featureFilter
+  // object. Always explicit { routeIndices, lineIndices } arrays — never null.
   function readFeatureFilter(containerId) {
     var container = document.getElementById(containerId);
-    if (!container) return null;
-    var cbs = container.querySelectorAll('input[type="checkbox"]');
-    if (cbs.length === 0) return null;
     var routeIndices = [];
     var lineIndices = [];
-    var allChecked = true;
+    if (!container) return { routeIndices: routeIndices, lineIndices: lineIndices };
+    var cbs = container.querySelectorAll('input[type="checkbox"]');
     for (var i = 0; i < cbs.length; i++) {
       var type = cbs[i].getAttribute("data-feature-type");
       var idx = parseInt(cbs[i].getAttribute("data-feature-index"), 10);
       if (cbs[i].checked) {
         if (type === "route") routeIndices.push(idx);
         else if (type === "line") lineIndices.push(idx);
-      } else {
-        allChecked = false;
       }
     }
-    if (allChecked) return null; // no filter needed
     return { routeIndices: routeIndices, lineIndices: lineIndices };
   }
 
   // Combine two feature filters by unioning their route/line index sets.
-  // Returns null (= all features) if either argument is null (either side covers all).
+  // A missing/null side is treated as contributing no indices (explicit-array
+  // convention — never reinterpreted as "all features").
   function combineFeatureFilters(a, b) {
-    if (!a || !b) return null;
+    a = a || { routeIndices: [], lineIndices: [] };
+    b = b || { routeIndices: [], lineIndices: [] };
     var routeSet = {};
     var lineSet = {};
     (a.routeIndices || []).concat(b.routeIndices || []).forEach(function (i) { routeSet[i] = true; });
@@ -1278,16 +1305,18 @@
       var apportionCb = document.getElementById("rfCalibApportionByArea");
       var apportion = apportionCb ? apportionCb.checked : false;
       _apportionByArea = apportion;
+      _bufferMiles = App.readAnalysisBufferMiles("rfBufferMiles", App.ANALYSIS_BUFFER_DEFAULT_MILES);
 
       // Read calibration feature filter from checkboxes
       var featureFilter = readFeatureFilter("rfCalibFeatureList");
       _calibFeatureFilter = featureFilter;
 
-      if (hasBufferIssue(featureFilter)) {
-        throw new Error("No buffers defined for selected features. Set a buffer radius in the Features panel.");
+      var calibBufferSet = App.buildAnalysisBufferSet(featureFilter, _bufferMiles);
+      if (calibBufferSet.count === 0) {
+        throw new Error("Could not build buffers for the selected calibration features.");
       }
 
-      var customUnion = featureFilter ? RM.buildUnionFromFeatures(featureFilter) : null;
+      var customUnion = calibBufferSet.union;
 
       var result = await RM.computeSystemDemand({
         geoLevel: geoLevel,
@@ -1298,11 +1327,14 @@
         growthFactors: App.projGrowthFactors(),
         unionPolygon: customUnion,
         featureFilter: featureFilter,
+        bufferSet: calibBufferSet,
         onProgress: function (msg) {
           if (textEl) textEl.textContent = msg;
           App.setStatus(msg);
         }
       });
+      result.bufferMiles = _bufferMiles;
+      result.bufferSet   = calibBufferSet;
 
       _systemResult = result;
       _perRouteCDI = result.routeCDIs;
@@ -2459,7 +2491,8 @@
       exportedAt: new Date().toISOString(),
       geoLevel: sysResult ? sysResult.geoLevel : null,
       acsYear: sysResult ? sysResult.year : null,
-      corridor: _getCorridorLabel()
+      corridor: _getCorridorLabel(),
+      bufferMiles: _bufferMiles
     };
     if (extra) { for (var k in extra) { if (extra.hasOwnProperty(k)) meta[k] = extra[k]; } }
     return meta;
@@ -2543,6 +2576,13 @@
     var exportRows = _collectCorridorExportRows(includeShared);
     var factors = TPI.FACTORS;
 
+    // Prefer whichever run's own buffer set (module analysis distance) has
+    // this feature; fall back to the feature's own drawn geometry (matches
+    // the pre-buffer-distance behavior when no set is available, e.g. a
+    // restored session where geometry wasn't persisted).
+    var geoBufferSet = (_demandSystemResult && _demandSystemResult.bufferSet) ||
+                       (_systemResult && _systemResult.bufferSet) || null;
+
     var features = exportRows.map(function (row) {
       var props = {
         system: row.system,
@@ -2559,18 +2599,14 @@
       }
       // Use the feature's buffer geometry for the GeoJSON feature
       var geom = null;
-      var arr, bufArr;
-      if (row.featureType === "route") {
-        arr = App.routes || [];
-        bufArr = App.routeBuffers || [];
+      var buf = geoBufferSet ? geoBufferSet.get(row.featureType, row.featureIndex) : null;
+      if (buf) {
+        geom = buf.geometry || null;
       } else {
-        arr = App.lines || [];
-        bufArr = App.lineBuffers || [];
-      }
-      if (row.featureIndex < bufArr.length && bufArr[row.featureIndex]) {
-        geom = bufArr[row.featureIndex].geometry || null;
-      } else if (row.featureIndex < arr.length && arr[row.featureIndex]) {
-        geom = arr[row.featureIndex].geometry || null;
+        var arr = row.featureType === "route" ? (App.routes || []) : (App.lines || []);
+        if (row.featureIndex < arr.length && arr[row.featureIndex]) {
+          geom = arr[row.featureIndex].geometry || null;
+        }
       }
       return { type: "Feature", properties: props, geometry: geom };
     });
@@ -2684,6 +2720,7 @@
     data.normalizationMode = _sharedPoolMode ? "shared" : "separate";
     data.baselineUncertaintyPct = _baselineUncertaintyPct;
     data.servicePremiums = Object.assign({}, _servicePremiums);
+    data.bufferMiles = _bufferMiles;
     if (_demandFeatureFilter) data.demandFeatureFilter = _demandFeatureFilter;
     if (_sharedCalibPerRouteCDI) data.sharedCalibPerRouteCDI = _sharedCalibPerRouteCDI;
     _triggerDownload(
@@ -2725,6 +2762,10 @@
         if (rawData.baselineUncertaintyPct != null && Number.isFinite(rawData.baselineUncertaintyPct)) {
           _baselineUncertaintyPct = rawData.baselineUncertaintyPct;
         }
+        // Restore buffer distance (default App.ANALYSIS_BUFFER_DEFAULT_MILES if absent)
+        if (rawData.bufferMiles != null && Number.isFinite(rawData.bufferMiles)) {
+          _bufferMiles = rawData.bufferMiles;
+        }
         // Restore service premiums if present
         if (rawData.servicePremiums && typeof rawData.servicePremiums === "object") {
           for (var spk in rawData.servicePremiums) {
@@ -2736,6 +2777,9 @@
       } catch (_) { _sharedPoolMode = false; }
 
       // Update UI
+      var bufferMilesImportEl = document.getElementById("rfBufferMiles");
+      if (bufferMilesImportEl) bufferMilesImportEl.value = String(_bufferMiles);
+      updateDemandBufferNote();
       var uncertSlider = document.getElementById("rfBaseUncertSlider");
       var uncertValue = document.getElementById("rfBaseUncertValue");
       var uncertPctInt = Math.round(_baselineUncertaintyPct * 100);
@@ -2798,6 +2842,13 @@
       var spNoteEl = document.getElementById("rfCalibSharedPoolNote");
       if (spNoteEl) spNoteEl.style.display = "none";
     }
+  }
+
+  // Refresh the Demand tab's read-only buffer-distance note to track the
+  // Calibrate tab's single #rfBufferMiles input.
+  function updateDemandBufferNote() {
+    var noteEl = document.getElementById("rfDemandBufferNote");
+    if (noteEl) noteEl.textContent = "Analysis buffer: " + _bufferMiles + " mi — set on the Calibrate tab.";
   }
 
   // ---- Module init (called once on first popup open) ----
@@ -2905,6 +2956,20 @@
         markStale();
       });
     }
+
+    // Buffer distance (mi) — module-owned analysis distance, shared by
+    // Calibrate and Demand, independent of the Feature Settings global
+    // buffer radius.
+    var bufferMilesEl = document.getElementById("rfBufferMiles");
+    if (bufferMilesEl) {
+      bufferMilesEl.value = String(_bufferMiles);
+      bufferMilesEl.addEventListener("change", function () {
+        _bufferMiles = App.readAnalysisBufferMiles("rfBufferMiles", App.ANALYSIS_BUFFER_DEFAULT_MILES);
+        updateDemandBufferNote();
+        markStale();
+      });
+    }
+    updateDemandBufferNote();
 
     // Feature selection checklists (Calibrate tab)
     populateFeatureList("rfCalibFeatureList", _calibFeatureFilter);
@@ -3226,6 +3291,11 @@
     var calibApportionCb = document.getElementById("rfCalibApportionByArea");
     if (calibApportionCb) calibApportionCb.checked = _apportionByArea;
 
+    // Sync buffer distance input + Demand tab note
+    var bufferMilesEl = document.getElementById("rfBufferMiles");
+    if (bufferMilesEl) bufferMilesEl.value = String(_bufferMiles);
+    updateDemandBufferNote();
+
     // Sync normalize-by-length checkboxes
     var normCb = document.getElementById("rfNormalizeByLength");
     if (normCb) normCb.checked = _normalizeByLength;
@@ -3388,6 +3458,7 @@
       _schemaVersion: 3,
       weights: Object.assign({}, _weights),
       apportionByArea: _apportionByArea,
+      bufferMiles: _bufferMiles,
       normalizeByLength: _normalizeByLength,
       baselineUncertaintyPct: _baselineUncertaintyPct,
       spanElasticity: _spanElasticity,
@@ -3435,6 +3506,7 @@
 
     if (data.weights) _weights = Object.assign({}, RF_DEFAULT_WEIGHTS, data.weights);
     if (data.apportionByArea != null) _apportionByArea = !!data.apportionByArea;
+    if (data.bufferMiles != null && Number.isFinite(data.bufferMiles)) _bufferMiles = data.bufferMiles;
     if (data.normalizeByLength != null) _normalizeByLength = !!data.normalizeByLength;
     _baselineUncertaintyPct = (data.baselineUncertaintyPct != null && Number.isFinite(data.baselineUncertaintyPct))
       ? data.baselineUncertaintyPct : 0.25;
