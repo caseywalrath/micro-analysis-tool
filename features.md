@@ -489,8 +489,15 @@ Update the visual design — better typography, spacing, input styling, card lay
 ### Floating vertical icon rail (toolbar redesign) — Not started
 Move draw tools out of the horizontal top bar and into a compact vertical icon strip on the left edge of the map (similar to Felt or Mapbox Studio). Frees the top bar for session-level actions: project name, share link, export, and reset. Reduces visual clutter and scales better as more draw tools are added.
 
+### Analysis dropdown navigation — Not started
+The Analysis sidebar dropdown (`buildAnalysisButtonsHTML()`, `js/app.js`) is a single flat list of buttons, one per registered module, with no grouping, search, or hierarchy — it just grows every time a module is added. It's currently 12 entries deep (Buffer-Area Summary, TPI, FTA Small Starts, Ridership Forecasting, Corridor Scoring, Walkshed, Transit Travelshed, Transit Coverage, Route Costing, Trip Builder, Title VI, GTFS Feed Viewer — Attribute Summary and Display Settings are `system: true` and already hidden from this list), and transit-specific analyses now make up most of it. Worth a design pass before it grows further, but **no direction has been chosen** — this is a placeholder to come back and evaluate options, not a spec. Candidates raised so far (not mutually exclusive):
+- **Consolidate the transit-specific modules** under a grouped section or submenu (e.g. Transit Propensity, Transit Coverage, Transit Travelshed, Corridor Scoring, Ridership Forecasting, Route Costing, Trip Builder, FTA Small Starts) separate from the more general tools (Buffer-Area Summary, GTFS Feed Viewer, Title VI).
+- **Additional menu-bar buttons** — split "Analysis" into more than one top-level toolbar entry instead of one growing dropdown.
+- **A sidebar-style switcher inside the module popup itself** — every module already opens in the same `#module-popup` shell (`js/core/popup.js`), so the popup could gain a persistent left-hand list of modules (mirroring the app's own left sidebar) letting users jump between analyses without backing out to the dropdown each time.
+- A searchable/filterable list, which converges with the Command Palette idea below, once the count gets large enough that browsing linearly stops scaling.
+
 ### Command palette (Ctrl+K) — Not started
-A keyboard-triggered search overlay that lets users reach any tool, analysis module, or action by typing. Increasingly standard in modern web tools (Figma, Linear, Notion, Arc). Especially valuable as the feature set grows. Could be implemented as a simple filtered list over a flat registry of labeled actions.
+A keyboard-triggered search overlay that lets users reach any tool, analysis module, or action by typing. Increasingly standard in modern web tools (Figma, Linear, Notion, Arc). Especially valuable as the feature set grows. Could be implemented as a simple filtered list over a flat registry of labeled actions. One possible convergent answer to the Analysis dropdown crowding above — a typed search sidesteps the grouping question entirely.
 
 ### Layer panel — Not started
 A dedicated panel listing all drawn feature groups and imported reference layers, with per-layer visibility toggles, opacity sliders, and draw-order control (drag to reorder). Becomes essential once GTFS import and CSV import are added. Modeled on Felt's layers panel.
