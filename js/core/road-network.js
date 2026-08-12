@@ -5,7 +5,8 @@
 // Exports: roadNetworkLoaded, findLocalRoute, fetchRoadNetwork,
 //          loadRoadNetworkFromFile, exportRoadNetwork, clearRoadNetwork,
 //          computeWalkshed, computeWalkCostMap, polygonizeNodeSet,
-//          nodeKeyToCoord, snapWalk, getRoadDownloadExtent
+//          nodeKeyToCoord, snapWalk, getRoadDownloadExtent,
+//          fetchRoadNetworkForExtent
 
 (function () {
   "use strict";
@@ -373,33 +374,25 @@
 
   // ---- Overpass download ----
 
-  async function fetchRoadNetwork() {
-    if (!App.map) return;
-
-    // Prevent double-clicks
-    var btn = document.getElementById("road-net-download");
-    if (btn) btn.disabled = true;
-
-    // Expand the current view by DOWNLOAD_EXPAND on each side (about the view centroid)
-    // so roads just beyond the visible edge are included (routes/walksheds near the edge
-    // otherwise hit missing streets). transformScale(1.5) grows width & height \u00d71.5.
-    var b = App.map.getBounds();
-    var viewPoly = turf.bboxPolygon([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
-    var scaled = turf.transformScale(viewPoly, DOWNLOAD_EXPAND);
-    var eb = turf.bbox(scaled); // [west, south, east, north]
-    var west = eb[0], south = clampLat(eb[1]), east = eb[2], north = clampLat(eb[3]);
-
+  // Shared streamed Overpass fetch + graph build, extracted so any caller can
+  // download roads for a caller-supplied extent (not just the current map view).
+  //   bounds        : { s, w, n, e } — Overpass query bbox (south, west, north, east)
+  //   extentPolygon : Feature<Polygon> — recorded as the downloaded extent (drives
+  //                   the dashed on-map outline and App.getRoadDownloadExtent()).
+  // This REPLACES the loaded network wholesale (same as fetchRoadNetwork today)
+  // and bumps _networkEpoch via buildGraph(), so all module caches (walkshed,
+  // travelshed) invalidate automatically. Returns Promise<boolean> (true = loaded).
+  async function fetchNetworkForBounds(bounds, extentPolygon) {
     // Guard against very large downloads. Overpass file size is unknowable up front,
-    // so gate on the expanded area (km\u00b2): warn and let the user cancel above the threshold.
-    var areaKm2 = turf.area(scaled) / 1e6;
+    // so gate on the extent area (km\u00b2): warn and let the user cancel above the threshold.
+    var areaKm2 = turf.area(extentPolygon) / 1e6;
     if (areaKm2 > MAX_AREA_WARN_KM2) {
       var proceed = window.confirm(
         "This will download roads for ~" + Math.round(areaKm2).toLocaleString() + " km\u00b2.\n\n" +
         "That may be a large, slow download and Overpass can time out on very big areas. Continue?");
       if (!proceed) {
-        if (btn) btn.disabled = false;
         App.setStatus("Road network download cancelled");
-        return;
+        return false;
       }
     }
 
@@ -412,7 +405,7 @@
       'residential|unclassified|service|motorway_link|trunk_link|' +
       'primary_link|secondary_link|tertiary_link|' +
       'living_street|pedestrian|footway|path|steps|cycleway)$"](' +
-      south + ',' + west + ',' + north + ',' + east + ');' +
+      bounds.s + ',' + bounds.w + ',' + bounds.n + ',' + bounds.e + ');' +
       ');out geom;';
 
     App.setStatus("Downloading road network\u2026");
@@ -465,12 +458,11 @@
 
       if (elements.length === 0) {
         App.setStatus("No roads found in this area");
-        return;
+        return false;
       }
 
       // Convert Overpass JSON to GeoJSON with progress updates
       var features = [];
-      var graphLastUpdate = Date.now();
       for (var i = 0; i < elements.length; i++) {
         var el = elements[i];
         if (el.type !== "way" || !el.geometry || el.geometry.length < 2) continue;
@@ -499,12 +491,35 @@
       // Build graph (synchronous — fast for regional networks)
       buildGraph(geojson);
       _roadGeoJSON = geojson;
-      _downloadedBboxPolygon = scaled; // record the fetched extent for the on-map outline
+      _downloadedBboxPolygon = extentPolygon; // record the fetched extent for the on-map outline
 
       updateUI();
       App.setStatus(_featureCount.toLocaleString() + " road segments loaded \u2014 local routing enabled");
+      return true;
     } catch (e) {
       App.setStatus("Road network download failed: " + (e.message || e));
+      return false;
+    }
+  }
+
+  async function fetchRoadNetwork() {
+    if (!App.map) return;
+
+    // Prevent double-clicks
+    var btn = document.getElementById("road-net-download");
+    if (btn) btn.disabled = true;
+
+    try {
+      // Expand the current view by DOWNLOAD_EXPAND on each side (about the view centroid)
+      // so roads just beyond the visible edge are included (routes/walksheds near the edge
+      // otherwise hit missing streets). transformScale(1.5) grows width & height \u00d71.5.
+      var b = App.map.getBounds();
+      var viewPoly = turf.bboxPolygon([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
+      var scaled = turf.transformScale(viewPoly, DOWNLOAD_EXPAND);
+      var eb = turf.bbox(scaled); // [west, south, east, north]
+      var west = eb[0], south = clampLat(eb[1]), east = eb[2], north = clampLat(eb[3]);
+
+      await fetchNetworkForBounds({ s: south, w: west, n: north, e: east }, scaled);
     } finally {
       if (btn) btn.disabled = false;
     }
@@ -825,5 +840,14 @@
   App.nodeKeyToCoord     = keyToCoord;
   App.snapWalk           = function (lngLat) { return snapToNetwork(lngLat, "walk"); };
   App.getRoadDownloadExtent = function () { return _downloadedBboxPolygon; }; // Feature<Polygon>|null
+
+  // Caller-supplied-extent download (e.g. Transit Travelshed's scoped prompt-to-
+  // download). This REPLACES the loaded network wholesale (same as
+  // fetchRoadNetwork today) and bumps _networkEpoch, so all module caches
+  // (walkshed, travelshed) invalidate automatically. Returns Promise<boolean>.
+  App.fetchRoadNetworkForExtent = async function (extentPolygon) {
+    var bb = turf.bbox(extentPolygon); // [w, s, e, n]
+    return fetchNetworkForBounds({ s: bb[1], w: bb[0], n: bb[3], e: bb[2] }, turf.bboxPolygon(bb));
+  };
 
 })();
