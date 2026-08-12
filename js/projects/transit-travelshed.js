@@ -251,6 +251,63 @@
     if (clearBtn) clearBtn.style.display = _origin ? "" : "none";
   }
 
+  // ---- Origin picker (probe pattern — a clicked map point, NOT an App.points feature) ----
+
+  // Arm the one-shot picker: close the popup so the map is clickable, set the
+  // shared App.drawMode so editing/selection handlers (which already early-
+  // return on any truthy drawMode) get out of the way, and show a crosshair.
+  function armOriginPicker() {
+    if (App.popup && App.popup.close) App.popup.close();
+    App.drawMode = "ts-origin";
+    if (App.map) App.map.getCanvas().style.cursor = "crosshair";
+    App.setStatus("Click the map to set the travelshed origin (Esc to cancel)");
+  }
+
+  function disarmOriginPicker() {
+    App.drawMode = null;
+    if (App.map) App.map.getCanvas().style.cursor = "grab";
+  }
+
+  // Drop/update the single origin marker (measure.js's createLabel/createVertexDot
+  // pattern — a plain maplibregl.Marker, .remove()'d on clear/replace).
+  function setOrigin(lng, lat) {
+    _origin = [lng, lat];
+    if (_originMarker) _originMarker.remove();
+    _originMarker = new maplibregl.Marker({ color: "#7c3aed" }).setLngLat(_origin).addTo(App.map);
+    disarmOriginPicker();
+    App.openModulePopup("transit-travelshed"); // reopen — its onOpen refreshes the origin label/clear button
+    markStale();
+    if (App.cache && App.cache.save) App.cache.save();
+  }
+
+  function clearOrigin() {
+    if (_originMarker) { _originMarker.remove(); _originMarker = null; }
+    _origin = null;
+    syncInputsFromSettings(); // refresh the "Not set" label + hide the clear button
+    markStale();
+    if (App.cache && App.cache.save) App.cache.save();
+  }
+
+  // Map click handler + Escape-while-armed, registered ONCE (first popup open).
+  // Both early-return unless this module's own drawMode value is active, so no
+  // other file needs to change (editing/selection handlers already early-return
+  // on any truthy App.drawMode — textboxes.js's _initDrawMode is the precedent).
+  function initOriginPickerHandlers() {
+    if (App.map) {
+      App.map.on("click", function (e) {
+        if (App.drawMode !== "ts-origin") return;
+        setOrigin(e.lngLat.lng, e.lngLat.lat);
+      });
+    }
+    document.addEventListener("keydown", function (e) {
+      if (e.key !== "Escape") return;
+      if (App.drawMode !== "ts-origin") return;
+      disarmOriginPicker();
+      App.setStatus("Ready");
+      App.openModulePopup("transit-travelshed");
+    });
+  }
+
   // ---- Run (stub — implemented in Phase 6: compute pipeline + rendering) ----
 
   function runTravelshed() {
@@ -264,6 +321,13 @@
     _initialized = true;
 
     syncInputsFromSettings();
+    initOriginPickerHandlers();
+
+    var pickBtn = document.getElementById("tsPickOriginBtn");
+    if (pickBtn) pickBtn.addEventListener("click", armOriginPicker);
+
+    var clearOriginBtn = document.getElementById("tsClearOriginBtn");
+    if (clearOriginBtn) clearOriginBtn.addEventListener("click", clearOrigin);
 
     ["tsBudget1", "tsBudget2", "tsBudget3", "tsWalkSpeed", "tsDayType", "tsTimeOfDay",
      "tsMaxWait", "tsBoardPenalty", "tsStopSpacing", "tsMaxEdge"].forEach(function (id) {
