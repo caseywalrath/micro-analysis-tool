@@ -4,7 +4,8 @@
 // Depends on: App.map (map.js), App.setStatus (utils.js), turf (CDN).
 // Exports: roadNetworkLoaded, findLocalRoute, fetchRoadNetwork,
 //          loadRoadNetworkFromFile, exportRoadNetwork, clearRoadNetwork,
-//          computeWalkshed
+//          computeWalkshed, computeWalkCostMap, polygonizeNodeSet,
+//          nodeKeyToCoord, snapWalk, getRoadDownloadExtent
 
 (function () {
   "use strict";
@@ -666,16 +667,19 @@
     try { return turf.convex(fc); } catch (e2) { return null; }
   }
 
-  // Compute a network walkshed (walking isochrone) from an arbitrary origin.
+  // Budget-limited flood from an arbitrary walk origin, shared by every walk-
+  // isochrone consumer (Walkshed module, Transit Travelshed engine). Injects a
+  // temp origin node, floods, and cleans up the temp node — all inside this one
+  // synchronous call (mirrors findLocalRoute's inject/cleanup pattern). Callers
+  // may await-yield BETWEEN calls, never during: the graph mutation is not
+  // async-safe.
   //   lngLat   : [lng, lat] origin
-  //   budgetKm : maximum network walking distance in km (= speedKmh * minutes/60)
-  //   options  : { maxEdge } — advanced concave-hull edge length (km)
-  // Returns null when no network is loaded or the origin is outside coverage
-  // (snap > SNAP_MAX_KM). Otherwise { polygon, reachableSegments, reachableCount,
-  // snap, computeMs }. The graph is restored (temp origin node removed) in a finally.
-  function computeWalkshed(lngLat, budgetKm, options) {
+  //   budgetKm : maximum network walking distance in km
+  // Returns null when no network is loaded or the origin is outside walkable
+  // coverage (snap > SNAP_MAX_KM). Otherwise { distMap: Map<nodeKey,distKm>,
+  // snap, computeMs }.
+  function runWalkFlood(lngLat, budgetKm) {
     if (!_graph || !(budgetKm > 0)) return null;
-    options = options || {};
 
     var t0 = (typeof performance !== "undefined" && performance.now)
       ? performance.now() : Date.now();
@@ -721,46 +725,84 @@
       }
     }
 
-    var result = null;
+    var distMap;
     try {
       injectSnapNode(snap);
-      var distMap = floodDijkstra(snap.key, budgetKm);
-
-      // Reachable node coordinates (includes the injected origin).
-      var coords = [];
-      distMap.forEach(function (d, key) { coords.push(keyToCoord(key)); });
-
-      // Reachable street segments: both endpoints settled within budget.
-      var segFeatures = [];
-      for (var si = 0; si < _segmentIndex.length; si++) {
-        var seg = _segmentIndex[si];
-        if (seg.pedBlocked) continue; // don't draw motorways/trunk as reachable walking streets
-        if (distMap.has(seg.startKey) && distMap.has(seg.endKey)) {
-          segFeatures.push(turf.lineString([seg.startCoord, seg.endCoord]));
-        }
-      }
-      // Origin connector stubs (snap point → its bracketing segment endpoints)
-      // so the reachable-segments layer visibly ties back to the origin.
-      if (distMap.has(snap.segStartKey)) segFeatures.push(turf.lineString([snap.coord, snap.segStartCoord]));
-      if (distMap.has(snap.segEndKey)) segFeatures.push(turf.lineString([snap.coord, snap.segEndCoord]));
-
-      var polygon = buildWalkshedPolygon(coords, options.maxEdge);
-
-      var t1 = (typeof performance !== "undefined" && performance.now)
-        ? performance.now() : Date.now();
-
-      result = {
-        polygon: polygon,
-        reachableSegments: turf.featureCollection(segFeatures),
-        reachableCount: distMap.size,
-        snap: snap,
-        computeMs: Math.round(t1 - t0)
-      };
+      distMap = floodDijkstra(snap.key, budgetKm);
     } finally {
       cleanupTempNodes();
     }
 
-    return result;
+    var t1 = (typeof performance !== "undefined" && performance.now)
+      ? performance.now() : Date.now();
+
+    return { distMap: distMap, snap: snap, computeMs: Math.round(t1 - t0) };
+  }
+
+  // Compute a network walkshed (walking isochrone) from an arbitrary origin.
+  //   lngLat   : [lng, lat] origin
+  //   budgetKm : maximum network walking distance in km (= speedKmh * minutes/60)
+  //   options  : { maxEdge } — advanced concave-hull edge length (km)
+  // Returns null when no network is loaded or the origin is outside coverage
+  // (snap > SNAP_MAX_KM). Otherwise { polygon, reachableSegments, reachableCount,
+  // snap, computeMs }. Built on top of runWalkFlood — the graph mutation stays
+  // atomic there; polygon/segment assembly below never touches the graph.
+  function computeWalkshed(lngLat, budgetKm, options) {
+    options = options || {};
+
+    var flood = runWalkFlood(lngLat, budgetKm);
+    if (!flood) return null;
+    var distMap = flood.distMap;
+    var snap = flood.snap;
+
+    // Reachable node coordinates (includes the injected origin).
+    var coords = [];
+    distMap.forEach(function (d, key) { coords.push(keyToCoord(key)); });
+
+    // Reachable street segments: both endpoints settled within budget.
+    var segFeatures = [];
+    for (var si = 0; si < _segmentIndex.length; si++) {
+      var seg = _segmentIndex[si];
+      if (seg.pedBlocked) continue; // don't draw motorways/trunk as reachable walking streets
+      if (distMap.has(seg.startKey) && distMap.has(seg.endKey)) {
+        segFeatures.push(turf.lineString([seg.startCoord, seg.endCoord]));
+      }
+    }
+    // Origin connector stubs (snap point → its bracketing segment endpoints)
+    // so the reachable-segments layer visibly ties back to the origin.
+    if (distMap.has(snap.segStartKey)) segFeatures.push(turf.lineString([snap.coord, snap.segStartCoord]));
+    if (distMap.has(snap.segEndKey)) segFeatures.push(turf.lineString([snap.coord, snap.segEndCoord]));
+
+    var polygon = buildWalkshedPolygon(coords, options.maxEdge);
+
+    return {
+      polygon: polygon,
+      reachableSegments: turf.featureCollection(segFeatures),
+      reachableCount: distMap.size,
+      snap: snap,
+      computeMs: flood.computeMs
+    };
+  }
+
+  // Same flood as computeWalkshed, but returns the raw per-node cost map instead
+  // of a polygon — the primitive the Transit Travelshed engine needs to compute
+  // "time to reach this stop from any other cost map" without re-flooding.
+  //   Returns null when no network / origin off-network. Otherwise
+  //   { distMap: Map<nodeKey,distKm>, snap, accessNodes: [{nodeKey, extraKm} x2],
+  //     computeMs }.
+  // accessNodes: the straight-line km from the snap coord to each bracketing
+  // segment endpoint — lets a caller compute "time to reach the snap point from
+  // any other cost map" as min(map[k1]+e1, map[k2]+e2) x walkMinPerKm, with no
+  // turf and no O(nodes) map intersection per stop pair.
+  function computeWalkCostMap(lngLat, budgetKm) {
+    var flood = runWalkFlood(lngLat, budgetKm);
+    if (!flood) return null;
+    var snap = flood.snap;
+    var accessNodes = [
+      { nodeKey: snap.segStartKey, extraKm: turf.distance(turf.point(snap.coord), turf.point(snap.segStartCoord), { units: "kilometers" }) },
+      { nodeKey: snap.segEndKey,   extraKm: turf.distance(turf.point(snap.coord), turf.point(snap.segEndCoord),   { units: "kilometers" }) }
+    ];
+    return { distMap: flood.distMap, snap: snap, accessNodes: accessNodes, computeMs: flood.computeMs };
   }
 
   // ---- Expose on App namespace ----
@@ -775,5 +817,13 @@
   App.computeWalkshed = computeWalkshed;
   // Remove only the downloaded-area outline (leaves the road graph intact) — used by the Layers panel.
   App.clearRoadDownloadArea = function () { _downloadedBboxPolygon = null; updateUI(); };
+
+  // ---- Transit Travelshed primitives (js/core/travelshed.js + transit-travelshed.js) ----
+
+  App.computeWalkCostMap = computeWalkCostMap;
+  App.polygonizeNodeSet  = function (coords, maxEdgeKm) { return buildWalkshedPolygon(coords, maxEdgeKm); };
+  App.nodeKeyToCoord     = keyToCoord;
+  App.snapWalk           = function (lngLat) { return snapToNetwork(lngLat, "walk"); };
+  App.getRoadDownloadExtent = function () { return _downloadedBboxPolygon; }; // Feature<Polygon>|null
 
 })();
