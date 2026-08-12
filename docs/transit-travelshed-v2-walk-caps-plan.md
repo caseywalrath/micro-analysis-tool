@@ -1,6 +1,15 @@
 # Transit Travelshed v2 — Walk-leg caps & cluster-union polygons
 
-**Status:** Planned, not started.
+**Status:** Implemented (2026-08-12), all 5 phases + docs. Golden tests pass
+129/129 (`node test/run-golden.mjs`), including new hand-verified cases for
+each cap and the `alightings` return field. The §8 manual browser smoke test
+could **not** be completed in the implementing session: its sandboxed network
+policy blocks Overpass/OSRM/the CDN libraries this app loads from `unpkg.com`,
+and — confirmed via a control run against unmodified `main` in the same
+sandbox — the app's post-map-load init hangs indefinitely under full network
+isolation regardless of this plan's changes. A human (or a session with
+normal network access) should still run the §8 checklist before treating this
+as fully verified end-to-end.
 **Goal:** Turn the Transit Travelshed from a *door-to-door multimodal isochrone*
 (walking and transit freely share one time budget) into a *transit-served
 travel shed* (walking legs are individually capped), while keeping the current
