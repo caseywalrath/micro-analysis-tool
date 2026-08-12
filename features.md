@@ -40,59 +40,103 @@ A further precision pass on the walkshed network, building on the class-aware tr
 
 **Files to touch:** `js/core/road-network.js` — capture `sidewalk` (and the extra `access`/`foot` values) in the Overpass→GeoJSON conversion and in `loadRoadNetworkFromFile`'s pass-through, then extend `isPedForbidden` / add a soft-weighting hook; optionally expose the opt-in toggle + footnote in `js/projects/walkshed.js` / `projects/walkshed-popup.html`.
 
-### Transit Travelshed Engine — Not started
-The strategic centerpiece. Reuses the walkshed engine's bones and unlocks
-the Cumulative-Opportunity Transit Accessibility entry above.
+### Transit Travelshed Engine — Implemented
+Computes everywhere reachable from a clicked map origin via walk → wait →
+ride drawn transit routes/lines → walk, with at most one transfer, rendered
+as 1–3 banded isochrones. Extends the walkshed engine's bones:
+`js/core/road-network.js` gained per-node cost-map primitives
+(`computeWalkCostMap`, `polygonizeNodeSet`, `snapWalk`, `nodeKeyToCoord`,
+`fetchRoadNetworkForExtent`) shared with `computeWalkshed`; a new pure
+calculation engine `js/core/travelshed.js` (`window.Travelshed`) does the
+layered-flood arrival-time math on plain JSON so it's golden-testable with
+no turf/DOM; `js/projects/transit-travelshed.js` is the module (origin
+probe pattern — a clicked map point, not an `App.points` feature — stop
+resolution, chunked-async per-stop flood caching, scoped
+prompt-to-download street acquisition, banded rendering). Full design +
+phase-by-phase build log: `docs/transit-travelshed-plan.md`.
 
-#### Architecture sketch (extends `road-network.js` + `walkshed.js` patterns)
+**Answering the DEVELOPER NOTE above about `headway/2`:** the literature
+splits by boarding type. Classic half-headway wait assumes riders arrive at
+a stop uniformly at random, which real ridership data (Ingvardson et al.
+2018 Copenhagen smart-card data; Lam & Morrall Calgary; Salek & Machemehl /
+Fan & Machemehl Austin; TfL's operational 12/15-min timetabled cutoff; Chen
+et al. 2025) shows holds only for frequent service — at longer headways
+riders increasingly time their arrival to the schedule, so observed
+*physical* wait flattens instead of growing linearly with headway. The
+model adopted: **initial (unlinked) wait = `min(headway/2, Wmax)`**, `Wmax`
+user-adjustable (default 10 min, defensible calibration range 8–12).
+**Transfer wait stays uncapped `headway/2`**: a transferring rider's
+arrival is dictated by the feeder vehicle's schedule, not something they
+can time (absent modeled timed transfers). A fixed boarding penalty
+(default 1 min) applies at every boarding, initial or transfer. Full
+empirical basis + citations: `docs/transit-travelshed-plan.md` Appendix A.
+**Disclosed limitation:** this captures *physical* reachability only — it
+does not capture the schedule-delay/flexibility cost of infrequent service
+(an hourly route forces a departure-time adjustment even when the stop
+wait itself is short). A future generalized-cost or demand use of these
+travel times should add a separate schedule-delay penalty rather than
+uncapping `headway/2`.
 
-**Inputs:** origin (clicked point or existing Point feature), total time
-budget T (e.g. 45 min), walk speed, day type + time period (to select the
-active band per route via `getEffectiveServiceBands`), boarding penalty
-(default ~1–2 min), transfer cap (v1: 1).
+**Disclosure behaviors:** the module never silently drops or approximates —
+every choice is surfaced per route in the results panel: which service
+band and headway applied at the chosen analysis day/time (or excluded as
+"no service at HH:MM" if none), the wait-model arithmetic actually used,
+whether stops were **real** (Points whose `associatedRoutes` reference the
+feature) or **sampled** (synthetic, spaced at the assumed stop-spacing
+setting, used when a feature has zero real stops), and how direction/loop
+geometry was propagated (Both = both ways; Loop/CW/CCW = one-way,
+wrapping only if the drawn geometry is actually closed — an open "loop"
+rides linear, disclosed). Off-network stops (snapped >0.5 km from the
+loaded network) are skipped and counted rather than silently ignored.
 
-**Algorithm — layered floods rather than a true multimodal graph:**
-1. **Initial walk flood** from the origin using the existing budget-limited
-   Dijkstra, but keeping per-node *arrival times* (the engine already settles
-   nodes with costs; we expose them instead of only polygonizing).
-2. **Boarding points:** Point features with `associatedRoutes` (real stops);
-   for routes with no stop points, synthesize stops by sampling the geometry
-   at the service type's `defaultStopSpacing`. Snap to network
-   (`snapToNetwork` exists, walk mode).
-3. **Ride:** for each boarding point reached at time t₀ < T: wait = headway/2
-   (from the selected period's band) + boarding penalty, then propagate along
-   the route geometry at `avgSpeed` (or proportional `runTime`) to each
-   downstream stop. **The `direction` attribute governs propagation** — "Both"
-   propagates both ways; Loop/CW/CCW propagates one way around. (Note how
-   this makes the directionality multiplier's effect *visible* rather than
-   assumed.)
-   DEVELOPER NOTE: I wonder if headway/2 is the best measure for low-frequency routes where users are more likely to time their departure around the bus schedule; are we unfairly penalizing these routes here? Need further research.
-5. **Egress walk floods:** from each alighting stop with remaining budget,
-   run another walk flood; the travelshed is the union of all reached nodes
-   across all floods. One transfer = repeat step 3 from boarding points
-   newly reached by egress floods.
-6. **Polygonize** with the existing concave-hull auto-relax loop; optionally
-   render banded isochrones (15/30/45) by thresholding node arrival times.
+**v2 (out of scope for this pass):**
+- Street-crossing / sidewalk access penalties (undirected graph stands;
+  folds into the Walkshed sidewalk & access refinement entry above).
+- Transfer cap > 1 (the engine loop already generalizes for this; only a
+  UI knob is missing).
+- Batch/cumulative-opportunity accessibility (many origins) — this
+  engine's per-stop flood-cache design is its prerequisite; the mode
+  itself is the separate Cumulative-Opportunity Transit Accessibility
+  entry.
+- Schedule-based (timetable) waits; re-selecting the active band at a
+  simulated later clock time for downstream boardings (v1 freezes the
+  analysis-time band for the whole run).
+- Riding past the drawn end of an open (non-closed) loop; Service-paired
+  pattern awareness (each feature propagates independently in v1 — no
+  Route Costing-style pattern pairing).
+- Opportunity counts inside bands (population/jobs — natural follow-on
+  via census.js/lodes.js); departure-time profiles; per-point
+  walk-speed overrides.
 
-**The key performance design decision:** per-stop walk floods must be
-computed **once at full budget, storing per-node distances**, then *thresholded*
-per query — not re-flooded per remaining-budget value. That makes a single
-travelshed cost ~(stops reached) cheap floods with heavy cache reuse, and it's
-what makes the batch accessibility mode (hundreds of origins) feasible at all.
-Cache keyed like the walkshed module: settings + network epoch + feature geometry.
+### Transit Travelshed performance & simplification brainstorm — Partially implemented
+Current implementation computes a full per-stop walk-cost flood at every stop reachable by transit, then layers transfer boarding on top, producing accurate 1–3 banded isochrones. Depending on use cases and iteration velocity, several simplifications and speedups are worth exploring:
 
-#### What we're missing / assuming
-- **Real stop locations** for drawn scenarios (mitigated by `associatedRoutes`
-  points where placed, sampled spacing otherwise — disclose which was used).
-- **Schedules**: frequency-based wait assumption, as discussed above.
-- **Dwell times, transfer reliability**: fold into the boarding penalty knob.
-- **Speed realism**: `avgSpeed` is user-asserted; `runTime` where entered is
-  better. Both already exist as attributes.
+**Outcome so far:** `docs/transit-travelshed-v2-walk-caps-plan.md` shrank the origin and per-stop flood radii to the relevant walk cap (access, or the larger of egress/transfer) whenever `"transit"` shed mode is active, cutting per-stop flood work roughly 50–90× at typical settings — and, as a side effect of the same pass, replaced the single per-band concave hull with a union of per-cluster polygons so it can no longer bridge unreachable space between disjoint stop clusters. This is a **model-correctness fix** (walking legs are meant to be capped in the "transit-served shed" model), not an approximation, but it happens to land the biggest, cheapest win from the "Computation shortcuts" and "Large-budget truncation" ideas below. The remaining brainstorm items (sampling mode, grid approximation, per-network-epoch memoization, progressive rendering, etc.) are deferred until it's measured whether the capped floods are fast enough in practice — see that plan's §8 verification checklist item comparing `computeMs` between `"transit"` and `"door"` modes, and its §9 "explicitly deferred" list.
 
-**Effort:** large — the biggest single lift on this list (new engine
-surface in `road-network.js`, a new module, careful caching) — but it's
-incremental on proven code, not greenfield, and it's the prerequisite for the
-highest-value consulting outputs (the accessibility headline stats above).
+**Computation shortcuts (approximate but fast):**
+- **Sampling mode:** Instead of flooding from every stop, sample every Nth stop along each route (e.g., every 2nd or 3rd stop). Reduces compute time linearly with sample rate; accuracy degrades gracefully for widely-spaced stops but remains reasonable for frequent stop patterns.
+- **Grid-based approximation:** Divide the study area into a regular grid (e.g., 0.1 mi × 0.1 mi cells), compute reachability only for grid cell centers rather than stop-accurate positions, and interpolate the remaining cells. Orders of magnitude faster for large networks; useful as a rough "opportunity accessibility" layer before drilling into per-stop detail.
+- **Stop-only mode:** Render the travelshed as discrete stop buffers (point radius = walk budget) rather than computing walk-to-every-node polygons — single-hop approximation, useful for quick "can I walk to transit" screening. Skips the road-network flood entirely.
+- **Large-budget truncation:** For budgets > ~60 minutes, the isochrone area grows with the square of the budget; compute at a smaller budget (e.g., 45 min) and scale the geometry rather than recomputing. Rough but fast for exploratory "does this service reach [far zone]" questions.
+
+**Caching & precomputation:**
+- **Memoize per-network-epoch:** The current cache is keyed `stopKey|networkEpoch|budgetKm`, meaning every origin re-floods every stop. Consider caching per-stop walk costs *per network* once (no origin-dependence), reusing them across all travelshed runs, clearing only on network reload. Huge if there's geographic overlap (many origins near the same stops).
+- **Pre-seed key corridors:** For common analysis geographies (a city, a region), pre-compute and embed walk floods for a grid of "representative" stops so initial runs are instant, with lazy on-demand computation for unrepresented stops. Breaks the "always fresh" assumption but acceptable if results are timestamped.
+
+**UI/UX efficiency (same accuracy, better perceived speed):**
+- **Progressive rendering:** Stream bands to the map as they complete (band 1 at 15 min while band 2 floods). User sees *something* while waiting, reducing perceived staleness.
+- **Result caching by coordinate:** If the user re-runs from the same origin (within a snap threshold), reuse the cached result rather than re-flooding.
+- **One-band quick-run mode:** Offer a "Show 15-min isochrone only" option that skips 30/45-min computation; user can opt into full 3-band later. Common for "is this stop walkable" screening.
+
+**Architectural simplifications (lower fidelity, much simpler code):**
+- **Single-mode (walk-only, no transfer):** A walk-only isochrone from the origin (already computed as the first step) without any transit boarding. Useful as a baseline or for "how far can I walk?" without committing to the full travelshed engine. Trivial to implement — just render the walk-budget polygon.
+- **Linear corridor only:** Assume all transit is a single corridor (one route/line) so transfer is not modeled. Reduces from layered-flood to a simple walk-→-buffer-route-→-walk computation. High fidelity for the single-route case; degenerate for network analysis.
+
+**Future coordination:**
+- Integration with the Cumulative-Opportunity Transit Accessibility entry above — the sampling and grid modes are perfect for many-origins batch computation.
+- Interplay with Operation Abort — a long-running travelshed can be canceled, but incremental results (completed bands, per-stop costs) could be selectively kept rather than discarded entirely.
+
+No recommendation yet — frame as a menu of tradeoffs (speed vs. accuracy, implementation complexity vs. user value) to revisit when performance bottlenecks are observed or compute budgets tighten.
 
 ### Unmerge dissolved union — Low Priority
 Currently `bufferUnionPolygon()` always dissolves overlapping buffers. Add an option to keep individual buffers separate for per-station analysis or visual comparison.
@@ -177,7 +221,7 @@ the engine's math stabilizes (pure pieces: `defaultPolicy`, `createScenario`,
 compares demographics of the *impacted area*. A stronger equity output disaggregates
 the **change in job access** (not just area demographics) for zero-vehicle,
 low-income, and minority populations under a proposed vs. existing network. That
-needs job *access* via the planned Transit Travelshed Engine (buffer overlap isn't
+needs job *access* via the Transit Travelshed Engine (buffer overlap isn't
 accessibility) and the New-vs-Old comparison via Scenario Save & Compare — the
 demographic-disaggregation half already lives here.
 
@@ -201,6 +245,15 @@ Upload a GTFS `.zip` via Add Data (+) → GTFS. Renders shapes.txt as dashed ref
 
 ### Trip Builder — Implemented
 Enabled popup module (`js/projects/trip-builder.js`, `projects/trip-builder-popup.html`) that generates a high-level trip schedule (start/end times per direction per day type) for each Service from its underlying Time Bands, frequency, and run time / avg speed. Same Service assembly as Route Costing (`attributes.serviceId` buckets). Per-trip deletion and CSV export per Service.
+
+### Trip Builder bulk trip generation — Not started
+Currently Trip Builder generates trips one Service at a time via the "Generate Trips" button (per-Service control). Enhance with:
+
+1. **"Generate for all" button:** Iterates over every drawn route/line whose service definition is complete (no blank frequency bands, no validation errors) and regenerates trips for each in sequence. Useful when building proposals with many routes that have similar service patterns and need uniform trip generation across the fleet.
+
+2. **Per-route exclusion toggle:** Checkbox or "Exclude from regeneration" flag on each Service row, so the bulk generator skips already-tuned routes. Allows selective regeneration (e.g., regenerate new routes but preserve manually edited schedules on existing routes).
+
+Particularly valuable for scenario planning where dozens of routes share the same service bands and need consistent headway logic applied at scale.
 
 ### Corridor Scoring — Implemented
 Enabled popup module (`js/projects/corridor-scoring.js`, `projects/corridor-scoring-popup.html`) that surfaces the per-route Corridor Demand Index as a ranked, objective composite score per drawn route/line. Ranked table with classification pills and expandable per-factor breakdowns, map line layer colored by composite CDI, Adjust Weights modal, CSV/GeoJSON export, and session persistence.
@@ -453,6 +506,26 @@ Pin a text annotation to a specific map location. Notes persist in the session c
 ### Stale & empty-state consistency — Not started
 Standardize two cross-cutting popup patterns so the whole suite feels coherent. (1) **Stale banner:** most analysis modules already track a `_stale` flag — surface it as a uniform banner ("Inputs changed since last run — re-run to update") with a re-run affordance, instead of each module styling its own. (2) **Friendly empty states:** when a module has nothing to act on, show a one-line prompt ("Draw a route to begin", "Load a GTFS feed to begin") rather than an empty table. **Onboarding-aware:** given the beginner audience (see `CLAUDE.md`), each module's first open should show a one-line "what this needs" hint and lightweight tooltips on key inputs. Could be a shared helper (e.g., `App.renderModuleState({ stale, empty, hint })`) reused by every popup.
 
+### Global "in progress" indicator — Not started
+No app-wide visual cue exists today for a calculation in flight. The toolbar has a single `#status` text line (`App.setStatus`, `js/core/utils.js`) used pervasively across the app — Census/LODES fetches, road-network Overpass downloads, drawing feedback, and most analysis modules — but it's plain text that auto-clears after 5 seconds (`_statusTimer`) regardless of whether the underlying operation is still running, and carries no persistent visual weight, so it's easy to miss. Separately, each analysis module's popup shows its own local "running" status pill via `App.renderModuleState({ status: { kind: "running", ... } })` (`js/app.js`) — but that's scoped to whichever popup is open; closing the popup mid-run, or an operation kicked off from the toolbar/sidebar rather than a popup (an ACS batch fetch, a LODES download, an Overpass road download), currently leaves the user with no feedback once the 5-second toolbar line clears.
+
+**What this adds:** a single, ambient "work is happening somewhere" affordance that's visible regardless of which popup (if any) is open — a persistent header/toolbar spinner, a small corner toast/notification stack, or a thin top-of-page progress bar. Driven by a shared, reference-counted `App.beginWork(label)` / `App.endWork(id)` pair so overlapping operations (e.g. a Census fetch running while a road-network download is also in flight) don't clobber each other's indicator state. This is meant to sit *alongside*, not replace, the existing per-module status pill and stale banner (`App.renderModuleState`) — those stay the detailed, in-context readout; this is the ambient cue for when nothing else is on screen. Particularly valuable for the beginner audience (see `CLAUDE.md`): a non-coder watching a blank screen during a multi-second Census/Overpass fetch has no way today to tell "still working" from "silently failed."
+
+**Files to touch:** `js/core/utils.js` (extend `setStatus`, or add the new work-tracking helpers alongside it), `js/app.js` / `index.html` (toolbar chrome for the indicator itself), and every existing `App.setStatus(...)` call site (census.js, lodes.js, road-network.js, and each analysis module) would opt into the shared helper in addition to their current local message.
+
+### Operation abort & cancellation — Not started
+Heavy calculations (TPI scoring, Corridor Scoring, Ridership Forecasting, Transit Travelshed) often run for several seconds and trigger multiple async Census/LODES fetches, Overpass network queries, or multi-origin walkshed floods. If a user realizes mid-run they've misconfigured the analysis (wrong geography level, wrong feature selection) or simply changed their mind, they're stuck waiting for completion. Currently no way to abort.
+
+**What this adds:** an Abort button (or Ctrl+Shift+Esc hotkey) that:
+1. **Cancels in-flight fetches:** AbortController is already used in routes.js (OSRM preview throttle); extend it to Census `fetchACSValues`, LODES `fetchBlocksInternalPointsInUnion`, Overpass `fetchNetworkForBounds`, so a fetch abort immediately stops the XHR/Promise chain.
+2. **Clears pending timers & chunked async:** some modules (Walkshed, Transit Travelshed) use chunked-async iteration (e.g., per-stop flood caching) that yields control back to the event loop between chunks; a cancellation token checked at each yield-point stops the loop, freeing memory.
+3. **Resets UI state:** marks the module's `_running` flag false, hides the status pill, and optionally shows a brief "aborted" message.
+4. **Appropriate cleanup:** ensures transient state (partial result objects, intermediate GeoJSON, map layers undergoing rendering) is discarded, not persisted or left dangling.
+
+**Architectural pattern:** a module-local `let _abortController` or `let _cancelled` flag (checked at chunk boundaries); a shutdown sequence that clears the abort marker, cancels known AbortControllers, and nulls out partial results. Analysis modules already guard DOM writes with `App.popup.isOpen()`, so aborting mid-render has limited impact. The real hazard is a partial `_lastResult` being persisted by accident — an abort should clear `_lastResult` unless the user explicitly saves a prior complete run.
+
+**Effort:** low-moderate per module (abort controller wiring + yield-point checks), high if harmonizing across all async Census/LODES call sites (but the payoff is broad: applies to TPI, Corridor Scoring, Ridership Forecasting, Transit Travelshed, and future analysis modules alike).
+
 ### Resizable sidebar — Low Priority
 Allow the user to drag the sidebar edge to resize it. Currently the sidebar is a fixed 310px width defined in `css/sidebar-v2.css`.
 
@@ -462,14 +535,33 @@ Allow the user to drag sidebar sections (Buffer-Area Data, project panel, LODES)
 ### Dynamic panel loading/unloading — Low Priority
 Let users show/hide individual sidebar panels (e.g., collapse LODES section if not needed, or hide the project panel). Toggle via checkboxes or a panel menu.
 
-### Modern UI refresh — Low Priority
+### Modern UI refresh — In Progress (plan approved)
 Update the visual design — better typography, spacing, input styling, card layouts, color palette. Consider a lightweight CSS framework or design tokens. Keep it dependency-free (no React/Vue).
+
+**Sequenced implementation plan lives in `docs/ui-refresh/`** (approved 2026-08-12): design tokens → color migration → Inter + type scale → control refresh → inline-style purge → de-modalized popups → shell/a11y/docs. Approved decisions: de-modalize analysis popups, 14px full-notch sizing, Inter app-wide, foundation-first, no frameworks.
 
 ### Floating vertical icon rail (toolbar redesign) — Not started
 Move draw tools out of the horizontal top bar and into a compact vertical icon strip on the left edge of the map (similar to Felt or Mapbox Studio). Frees the top bar for session-level actions: project name, share link, export, and reset. Reduces visual clutter and scales better as more draw tools are added.
 
+### Analysis dropdown navigation — Not started
+The Analysis sidebar dropdown (`buildAnalysisButtonsHTML()`, `js/app.js`) is a single flat list of buttons, one per registered module, with no grouping, search, or hierarchy — it just grows every time a module is added. It's currently 12 entries deep (Buffer-Area Summary, TPI, FTA Small Starts, Ridership Forecasting, Corridor Scoring, Walkshed, Transit Travelshed, Transit Coverage, Route Costing, Trip Builder, Title VI, GTFS Feed Viewer — Attribute Summary and Display Settings are `system: true` and already hidden from this list), and transit-specific analyses now make up most of it. Worth a design pass before it grows further, but **no direction has been chosen** — this is a placeholder to come back and evaluate options, not a spec. Candidates raised so far (not mutually exclusive):
+- **Consolidate the transit-specific modules** under a grouped section or submenu (e.g. Transit Propensity, Transit Coverage, Transit Travelshed, Corridor Scoring, Ridership Forecasting, Route Costing, Trip Builder, FTA Small Starts) separate from the more general tools (Buffer-Area Summary, GTFS Feed Viewer, Title VI).
+- **Additional menu-bar buttons** — split "Analysis" into more than one top-level toolbar entry instead of one growing dropdown.
+- **A sidebar-style switcher inside the module popup itself** — every module already opens in the same `#module-popup` shell (`js/core/popup.js`), so the popup could gain a persistent left-hand list of modules (mirroring the app's own left sidebar) letting users jump between analyses without backing out to the dropdown each time.
+- A searchable/filterable list, which converges with the Command Palette idea below, once the count gets large enough that browsing linearly stops scaling.
+
+### Top menu layout and hierarchy — Not started
+The top toolbar currently groups mode toggles (light/dark mode, presentation mode) alongside core workflow actions (save/export/upload/reset) and analysis access in an undifferentiated row. **Exploratory question:** should mode toggles (light/dark, presentation) have the same visual prominence and toolbar real-estate as session-level actions (save/upload/reset) and analysis access?
+
+Worth a design pass to evaluate whether:
+- Mode toggles warrant relocation to a collapsible settings panel or dedicated control strip
+- Presentation mode (full-screen map, Esc to exit) has sufficient discovery / affordance as a standalone toggle
+- The toolbar could be hierarchically organized (primary workflow actions vs. secondary view modes)
+
+No decision yet — frame as exploratory UX question for a future design review.
+
 ### Command palette (Ctrl+K) — Not started
-A keyboard-triggered search overlay that lets users reach any tool, analysis module, or action by typing. Increasingly standard in modern web tools (Figma, Linear, Notion, Arc). Especially valuable as the feature set grows. Could be implemented as a simple filtered list over a flat registry of labeled actions.
+A keyboard-triggered search overlay that lets users reach any tool, analysis module, or action by typing. Increasingly standard in modern web tools (Figma, Linear, Notion, Arc). Especially valuable as the feature set grows. Could be implemented as a simple filtered list over a flat registry of labeled actions. One possible convergent answer to the Analysis dropdown crowding above — a typed search sidesteps the grouping question entirely.
 
 ### Layer panel — Not started
 A dedicated panel listing all drawn feature groups and imported reference layers, with per-layer visibility toggles, opacity sliders, and draw-order control (drag to reorder). Becomes essential once GTFS import and CSV import are added. Modeled on Felt's layers panel.
