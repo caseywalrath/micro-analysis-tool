@@ -535,8 +535,10 @@ Allow the user to drag sidebar sections (Buffer-Area Data, project panel, LODES)
 ### Dynamic panel loading/unloading — Low Priority
 Let users show/hide individual sidebar panels (e.g., collapse LODES section if not needed, or hide the project panel). Toggle via checkboxes or a panel menu.
 
-### Modern UI refresh — Low Priority
+### Modern UI refresh — In Progress (plan approved)
 Update the visual design — better typography, spacing, input styling, card layouts, color palette. Consider a lightweight CSS framework or design tokens. Keep it dependency-free (no React/Vue).
+
+**Sequenced implementation plan lives in `docs/ui-refresh/`** (approved 2026-08-12): design tokens → color migration → Inter + type scale → control refresh → inline-style purge → de-modalized popups → shell/a11y/docs. Approved decisions: de-modalize analysis popups, 14px full-notch sizing, Inter app-wide, foundation-first, no frameworks.
 
 ### Floating vertical icon rail (toolbar redesign) — Not started
 Move draw tools out of the horizontal top bar and into a compact vertical icon strip on the left edge of the map (similar to Felt or Mapbox Studio). Frees the top bar for session-level actions: project name, share link, export, and reset. Reduces visual clutter and scales better as more draw tools are added.
