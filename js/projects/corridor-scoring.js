@@ -21,6 +21,7 @@
   var _running           = false;
   var _initialized       = false;
   var _apportionByArea   = false;
+  var _bufferMiles       = App.ANALYSIS_BUFFER_DEFAULT_MILES;
 
   // ---- DOM guard: only touch DOM when popup is open for this module ----
 
@@ -30,63 +31,22 @@
 
   // ---- Feature filter helpers (routes + lines only per plan) ----
 
+  // Set by buildUnionFromFilter(), consumed immediately by runScoring() —
+  // gives access to the full buffer set (and its .count) without changing
+  // buildUnionFromFilter's return type (still just the union polygon).
+  var _lastBufferSet = null;
+
   function buildUnionFromFilter(filter) {
-    // null filter means "all corridors selected" — build union from every
-    // route and line buffer.  We cannot pass null to RM.buildUnionFromFeatures
-    // because that function treats null as "no features" and returns null.
-    var polys = [];
-    var routeBuffers = App.routeBuffers || [];
-    var lineBuffers  = App.lineBuffers  || [];
-    var i, idx;
-
-    if (!filter) {
-      for (i = 0; i < routeBuffers.length; i++) {
-        if (routeBuffers[i]) polys.push(routeBuffers[i]);
-      }
-      for (i = 0; i < lineBuffers.length; i++) {
-        if (lineBuffers[i]) polys.push(lineBuffers[i]);
-      }
-    } else {
-      if (filter.routeIndices) {
-        for (i = 0; i < filter.routeIndices.length; i++) {
-          idx = filter.routeIndices[i];
-          if (routeBuffers[idx]) polys.push(routeBuffers[idx]);
-        }
-      }
-      if (filter.lineIndices) {
-        for (i = 0; i < filter.lineIndices.length; i++) {
-          idx = filter.lineIndices[i];
-          if (lineBuffers[idx]) polys.push(lineBuffers[idx]);
-        }
-      }
-    }
-
-    if (!polys.length) return null;
-    var union = polys[0];
-    for (i = 1; i < polys.length; i++) {
-      try { union = turf.union(union, polys[i]); } catch (e) { /* skip */ }
-    }
-    return union;
-  }
-
-  function hasBufferIssue(filter) {
-    var routes = App.routes || [];
-    var lines  = App.lines  || [];
-    var rb = App.routeBuffers || [];
-    var lb = App.lineBuffers  || [];
-    var rIdxs = filter ? filter.routeIndices : routes.map(function(_,i){ return i; });
-    var lIdxs = filter ? filter.lineIndices  : lines.map(function(_,i){ return i; });
-    return (rIdxs.length > 0 && rIdxs.some(function(i){ return !rb[i]; })) ||
-           (lIdxs.length > 0 && lIdxs.some(function(i){ return !lb[i]; }));
+    var set = App.buildAnalysisBufferSet(filter, _bufferMiles);
+    _lastBufferSet = set;
+    return set.union;
   }
 
   function getFeatureFilter() {
     var el = document.getElementById("csFeatureList");
-    if (!el) return null;
-    var boxes = el.querySelectorAll("input[type=checkbox]");
-    if (!boxes.length) return null;
     var routeIndices = [], lineIndices = [];
-    var allChecked = true;
+    if (!el) return { routeIndices: routeIndices, lineIndices: lineIndices };
+    var boxes = el.querySelectorAll("input[type=checkbox]");
     for (var i = 0; i < boxes.length; i++) {
       var cb = boxes[i];
       var type = cb.getAttribute("data-type");
@@ -94,11 +54,8 @@
       if (cb.checked) {
         if      (type === "route") routeIndices.push(idx);
         else if (type === "line")  lineIndices.push(idx);
-      } else {
-        allChecked = false;
       }
     }
-    if (allChecked) return null; // no filter needed (all selected)
     return { routeIndices: routeIndices, lineIndices: lineIndices };
   }
 
@@ -342,6 +299,7 @@
       geoLevel:        _lastResult ? _lastResult.geoLevel : null,
       acsYear:         _lastResult ? _lastResult.year     : null,
       apportionByArea: _lastResult ? _lastResult.apportionByArea : false,
+      bufferMiles:     _lastResult ? _lastResult.bufferMiles : App.ANALYSIS_BUFFER_DEFAULT_MILES,
       weights:         _lastResult ? _lastResult.weights  : null
     };
   }
@@ -723,15 +681,15 @@
     try {
       var geoLevel = document.getElementById("csGeoLevel").value;
       var year     = document.getElementById("csYearSelect").value;
+      _bufferMiles  = App.readAnalysisBufferMiles("csBufferMiles", App.ANALYSIS_BUFFER_DEFAULT_MILES);
 
       var featureFilter = getFeatureFilter();
 
-      if (hasBufferIssue(featureFilter)) {
-        throw new Error("No buffers defined for selected features. Set a buffer radius in the Features panel.");
-      }
-
       var unionPolygon  = buildUnionFromFilter(featureFilter);
 
+      if (!_lastBufferSet || _lastBufferSet.count === 0) {
+        throw new Error("Could not build buffers for the selected corridors.");
+      }
       if (!unionPolygon) {
         throw new Error("No corridors selected. Check at least one route or line.");
       }
@@ -744,6 +702,7 @@
         apportionByArea: _apportionByArea,
         unionPolygon:    unionPolygon,
         featureFilter:   featureFilter,
+        bufferSet:       _lastBufferSet,
         onProgress: function (msg) { setStatus(msg, "running"); }
       });
 
@@ -761,6 +720,7 @@
         geoLevel:        geoLevel,
         year:            year,
         apportionByArea: _apportionByArea,
+        bufferMiles:     _bufferMiles,
         unionPolygon:    unionPolygon,
         featureFilter:   featureFilter,
         weights:         Object.assign({}, _weights)
@@ -812,6 +772,14 @@
         _apportionByArea = apportionCb.checked;
         markStale();
       });
+    }
+
+    // Buffer distance (mi) — module-owned analysis distance, independent of
+    // the Feature Settings global buffer radius.
+    var bufferMilesEl = document.getElementById("csBufferMiles");
+    if (bufferMilesEl) {
+      bufferMilesEl.value = String(_bufferMiles);
+      bufferMilesEl.addEventListener("change", markStale);
     }
 
     // Select all / clear
@@ -890,6 +858,8 @@
     document.querySelectorAll(".cc-status").forEach(function (s) { if (s.refresh) s.refresh(); });
     var apportionCb = document.getElementById("csApportionByArea");
     if (apportionCb) apportionCb.checked = _apportionByArea;
+    var bufferMilesEl = document.getElementById("csBufferMiles");
+    if (bufferMilesEl) bufferMilesEl.value = String(_bufferMiles);
 
     buildFeatureChecklist();
     if (_featureFilter) applyFeatureFilterToCheckboxes(_featureFilter);
@@ -971,6 +941,7 @@
       version:         1,
       weights:         Object.assign({}, _weights),
       apportionByArea: _apportionByArea,
+      bufferMiles:     _bufferMiles,
       featureFilter:   currentFilter ? JSON.parse(JSON.stringify(currentFilter)) : null,
       geoLevel:        null,
       year:            null,
@@ -987,6 +958,7 @@
         geoLevel:        _lastResult.geoLevel,
         year:            _lastResult.year,
         apportionByArea: _lastResult.apportionByArea,
+        bufferMiles:     _lastResult.bufferMiles,
         weights:         Object.assign({}, _lastResult.weights || {}),
         featureFilter:   _lastResult.featureFilter || null,
         routeCDIs:       (_lastResult.routeCDIs || []).map(function (r) {
@@ -1020,12 +992,15 @@
     if (!data) return;
     if (data.weights)          _weights         = Object.assign({}, data.weights);
     if (data.apportionByArea != null) _apportionByArea = !!data.apportionByArea;
+    if (data.bufferMiles != null) _bufferMiles = data.bufferMiles;
     if (data.featureFilter !== undefined) _featureFilter = data.featureFilter;
 
     var geoLevelEl = document.getElementById("csGeoLevel");
     var yearEl     = document.getElementById("csYearSelect");
+    var bufferMilesEl = document.getElementById("csBufferMiles");
     if (geoLevelEl && data.geoLevel) geoLevelEl.value = data.geoLevel;
     if (yearEl     && data.year)     yearEl.value     = data.year;
+    if (bufferMilesEl) bufferMilesEl.value = String(_bufferMiles);
 
     if (!data.lastSummary) return;
     var s = data.lastSummary;
@@ -1046,6 +1021,7 @@
       geoLevel:        s.geoLevel,
       year:            s.year,
       apportionByArea: s.apportionByArea,
+      bufferMiles:     s.bufferMiles != null ? s.bufferMiles : App.ANALYSIS_BUFFER_DEFAULT_MILES,
       unionPolygon:    null,
       featureFilter:   s.featureFilter || null,
       weights:         Object.assign({}, s.weights || _weights)
