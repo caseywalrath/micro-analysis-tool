@@ -764,25 +764,34 @@
 
   function _buildGeoFeatureMap(geos) {
     var allFeatures = [];
-    var pts          = App.points       || [];
-    var pointBufs    = App.buffers      || [];
-    var lines        = App.lines        || [];
-    var lineBuffers  = App.lineBuffers  || [];
-    var routes       = App.routeBuffers ? App.routes || [] : [];
-    var routeBuffers = App.routeBuffers || [];
-    var polys        = App.polygons     || [];
+    var pts    = App.points   || [];
+    var lines  = App.lines    || [];
+    var routes = App.routes   || [];
+    var polys  = App.polygons || [];
+
+    // "Covered by" annotation checks every drawn feature, not just the ones
+    // selected for this run — build a private buffer set (module's own
+    // analysis distance) covering all of them rather than reading the
+    // shared Feature Settings buffers.
+    var allFilter = {
+      routeIndices:   routes.map(function (_, i) { return i; }),
+      lineIndices:    lines.map(function (_, i) { return i; }),
+      pointIndices:   pts.map(function (_, i) { return i; }),
+      polygonIndices: polys.map(function (_, i) { return i; })
+    };
+    var bufferSet = App.buildAnalysisBufferSet(allFilter, _bufferMiles);
 
     for (var si = 0; si < pts.length; si++) {
-      if (si < pointBufs.length && pointBufs[si])
-        allFeatures.push({ name: (pts[si].properties && pts[si].properties.name) || ("Point " + (si + 1)), coverage: pointBufs[si] });
+      var pb = bufferSet.get("point", si);
+      if (pb) allFeatures.push({ name: (pts[si].properties && pts[si].properties.name) || ("Point " + (si + 1)), coverage: pb });
     }
     for (var li = 0; li < lines.length; li++) {
-      if (li < lineBuffers.length && lineBuffers[li])
-        allFeatures.push({ name: (lines[li].properties && lines[li].properties.name) || ("Line " + (li + 1)), coverage: lineBuffers[li] });
+      var lb = bufferSet.get("line", li);
+      if (lb) allFeatures.push({ name: (lines[li].properties && lines[li].properties.name) || ("Line " + (li + 1)), coverage: lb });
     }
     for (var ri = 0; ri < routes.length; ri++) {
-      if (ri < routeBuffers.length && routeBuffers[ri])
-        allFeatures.push({ name: (routes[ri].properties && routes[ri].properties.name) || ("Route " + (ri + 1)), coverage: routeBuffers[ri] });
+      var rb = bufferSet.get("route", ri);
+      if (rb) allFeatures.push({ name: (routes[ri].properties && routes[ri].properties.name) || ("Route " + (ri + 1)), coverage: rb });
     }
     for (var pi = 0; pi < polys.length; pi++) {
       if (polys[pi] && polys[pi].geometry)
