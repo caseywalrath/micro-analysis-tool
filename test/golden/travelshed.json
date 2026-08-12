@@ -1,0 +1,150 @@
+{
+  "parse-hhmm-basic": 450,
+  "parse-hhmm-single-digit-hour": 425,
+  "parse-hhmm-midnight-end": 1440,
+  "parse-hhmm-garbage": null,
+  "parse-hhmm-not-a-string": null,
+  "band-midday": {
+    "fromMin": 540,
+    "toMin": 900,
+    "headwayMin": 30
+  },
+  "band-midnight-wrap": {
+    "fromMin": 1320,
+    "toMin": 1500,
+    "headwayMin": 60
+  },
+  "band-skip-no-freq": null,
+  "band-no-match": null,
+  "band-not-array": null,
+  "wait-initial-capped": 11,
+  "wait-initial-short": 7,
+  "wait-transfer-uncapped": 16,
+  "ride-runtime-priority": 10,
+  "ride-avgspeed": 8.571428571428571,
+  "ride-zero-length-fallback": 0,
+  "sample-stops": [
+    0,
+    0.25,
+    0.5,
+    0.75,
+    1,
+    1.1
+  ],
+  "sample-stops-exact-multiple": [
+    0,
+    0.25,
+    0.5,
+    0.75,
+    1
+  ],
+  "sample-stops-degenerate": [
+    0,
+    0.2
+  ],
+  "propagate-both": [
+    {
+      "stopIdx": 0,
+      "arriveMin": 15
+    },
+    {
+      "stopIdx": 2,
+      "arriveMin": 17
+    }
+  ],
+  "propagate-forward-downstream-only": [
+    {
+      "stopIdx": 1,
+      "arriveMin": 15
+    },
+    {
+      "stopIdx": 2,
+      "arriveMin": 22
+    }
+  ],
+  "propagate-loop-wrap": [
+    {
+      "stopIdx": 0,
+      "arriveMin": 20
+    },
+    {
+      "stopIdx": 2,
+      "arriveMin": 17
+    }
+  ],
+  "band-node-sets": [
+    {
+      "budgetMin": 15,
+      "nodeKeys": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "budgetMin": 30,
+      "nodeKeys": [
+        "a",
+        "b",
+        "c"
+      ]
+    },
+    {
+      "budgetMin": 45,
+      "nodeKeys": [
+        "a",
+        "b",
+        "c",
+        "d"
+      ]
+    }
+  ],
+  "arrival-times-tiny": {
+    "nodeTimes": {
+      "n1": 1.2000000000000002,
+      "n4": 13.16,
+      "n5": 17.6
+    },
+    "routeDiags": [
+      {
+        "routeId": "route-1",
+        "boardings": 1,
+        "firstBoardMin": 7.800000000000001,
+        "usedTransfer": false
+      }
+    ],
+    "stats": {
+      "stopsConsidered": 2,
+      "stopsBoarded": 1,
+      "transferBoardings": 0,
+      "nodesReached": 3
+    }
+  },
+  "arrival-times-transfer": {
+    "nodeTimes": {
+      "n1": 0,
+      "n2": 11,
+      "n3": 12.2,
+      "n5": 31.8
+    },
+    "routeDiags": [
+      {
+        "routeId": "route-1",
+        "boardings": 1,
+        "firstBoardMin": 6,
+        "usedTransfer": false
+      },
+      {
+        "routeId": "route-2",
+        "boardings": 1,
+        "firstBoardMin": 23.2,
+        "usedTransfer": true
+      }
+    ],
+    "stats": {
+      "stopsConsidered": 4,
+      "stopsBoarded": 2,
+      "transferBoardings": 1,
+      "nodesReached": 4
+    }
+  }
+}
