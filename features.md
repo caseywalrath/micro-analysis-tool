@@ -483,6 +483,19 @@ No app-wide visual cue exists today for a calculation in flight. The toolbar has
 
 **Files to touch:** `js/core/utils.js` (extend `setStatus`, or add the new work-tracking helpers alongside it), `js/app.js` / `index.html` (toolbar chrome for the indicator itself), and every existing `App.setStatus(...)` call site (census.js, lodes.js, road-network.js, and each analysis module) would opt into the shared helper in addition to their current local message.
 
+### Operation abort & cancellation — Not started
+Heavy calculations (TPI scoring, Corridor Scoring, Ridership Forecasting, Transit Travelshed) often run for several seconds and trigger multiple async Census/LODES fetches, Overpass network queries, or multi-origin walkshed floods. If a user realizes mid-run they've misconfigured the analysis (wrong geography level, wrong feature selection) or simply changed their mind, they're stuck waiting for completion. Currently no way to abort.
+
+**What this adds:** an Abort button (or Ctrl+Shift+Esc hotkey) that:
+1. **Cancels in-flight fetches:** AbortController is already used in routes.js (OSRM preview throttle); extend it to Census `fetchACSValues`, LODES `fetchBlocksInternalPointsInUnion`, Overpass `fetchNetworkForBounds`, so a fetch abort immediately stops the XHR/Promise chain.
+2. **Clears pending timers & chunked async:** some modules (Walkshed, Transit Travelshed) use chunked-async iteration (e.g., per-stop flood caching) that yields control back to the event loop between chunks; a cancellation token checked at each yield-point stops the loop, freeing memory.
+3. **Resets UI state:** marks the module's `_running` flag false, hides the status pill, and optionally shows a brief "aborted" message.
+4. **Appropriate cleanup:** ensures transient state (partial result objects, intermediate GeoJSON, map layers undergoing rendering) is discarded, not persisted or left dangling.
+
+**Architectural pattern:** a module-local `let _abortController` or `let _cancelled` flag (checked at chunk boundaries); a shutdown sequence that clears the abort marker, cancels known AbortControllers, and nulls out partial results. Analysis modules already guard DOM writes with `App.popup.isOpen()`, so aborting mid-render has limited impact. The real hazard is a partial `_lastResult` being persisted by accident — an abort should clear `_lastResult` unless the user explicitly saves a prior complete run.
+
+**Effort:** low-moderate per module (abort controller wiring + yield-point checks), high if harmonizing across all async Census/LODES call sites (but the payoff is broad: applies to TPI, Corridor Scoring, Ridership Forecasting, Transit Travelshed, and future analysis modules alike).
+
 ### Resizable sidebar — Low Priority
 Allow the user to drag the sidebar edge to resize it. Currently the sidebar is a fixed 310px width defined in `css/sidebar-v2.css`.
 
