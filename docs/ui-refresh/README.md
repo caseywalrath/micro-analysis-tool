@@ -1,7 +1,23 @@
 # Modern UI Refresh — Master Plan
 
-Status: **in progress** — phases 0-4 complete on `claude/ui-refresh-phase-4-controls-hngzdy`;
-phase 5 (inline style purge) is next. (2026-08-13)
+Status: **in progress** — phases 0–6 complete; phase 7 (shell, accessibility,
+documentation, and refreshed baselines) is next. Phase 8 was added after the Phase 6
+checkpoint as a post-refresh feature expansion. (2026-08-13)
+
+**2026-08-13 session checkpoint.** Phase 5 removed static inline styles from the 14
+active popup fragments in four commits on
+`codex/ui-refresh-phase-5-inline-style-purge`. Phase 6 was then completed in commit
+`579b2c3` on `codex/ui-refresh-phase-6-demodalize`: analysis panels are non-modal,
+dock right over a live map, collapse to their title bar, and Transit Travelshed can pick
+an origin without closing its panel. Golden tests passed 129/129 and the visual harness
+passed 58/60 captures with the two documented hidden-sidebar skips.
+
+**Phase 8 addition.** During review of Phase 6's floating-panel behavior, the developer
+asked whether multiple analysis tools could remain open together. The use case is
+side-by-side comparison of tool inputs/results while keeping the map live. This was not
+part of the original refresh scope, so it was added after Phase 7 as
+`phase-8-multi-analysis-panels.md`; it does not delay completion of the original
+phases 0–7.
 
 **Phase 4 checkpoint outcome.** Approved, with a follow-up commit covering the
 developer's review notes. Approved as-is: control height, the Route Costing
@@ -47,19 +63,22 @@ These were decided with the developer and are settled:
 | 2 | `phase-2-color-migration.md` | Migrate ~660 hardcoded hex values onto tokens; collapse redundant dark-mode rules | Near-none (tiny consolidation shifts) | **Yes — full screenshot review** | ✅ Done, reviewed |
 | 3 | `phase-3-typography-inter.md` | Inter font, scale bump (13→14 base), fix 35 hardcoded px sizes | Everything gets slightly larger | **Yes — type approval** | ✅ Done, approved |
 | 4 | `phase-4-controls-refresh.md` | Modern form controls, buttons, checklists; widen settings columns + popups | Large — the headline change | **Yes — key checkpoint** | ✅ Done, approved with changes |
-| 5 | `phase-5-inline-style-purge.md` | Replace ~370 static inline styles in popup HTML with shared primitives | Near-none | No | Not started |
-| 6 | `phase-6-demodalize.md` | Remove backdrop, live map behind popups, collapse button on popup header | Large behavior change | **Yes — behavior test** | Not started |
-| 7 | `phase-7-shell-a11y-docs.md` | Toolbar grouping, Analysis dropdown grouping, focus/aria/target-size pass, CLAUDE.md + features.md updates | Moderate | Final review | Not started |
+| 5 | `phase-5-inline-style-purge.md` | Replace ~370 static inline styles in popup HTML with shared primitives | Near-none | No | ✅ Done |
+| 6 | `phase-6-demodalize.md` | Remove backdrop, live map behind popups, collapse button on popup header | Large behavior change | **Yes — behavior test** | ✅ Done, checkpoint delivered |
+| 7 | `phase-7-shell-a11y-docs.md` | Toolbar grouping, Analysis dropdown grouping, focus/aria/target-size pass, CLAUDE.md + features.md updates | Moderate | Original refresh final review | Not started |
+| 8 | `phase-8-multi-analysis-panels.md` | Keep one floating panel per analysis module open; independent focus, drag, collapse, and close | Large behavior/architecture change | **Yes — multi-panel behavior test** | Planned; added 2026-08-13 |
 
-Phases must run **in order** (2 depends on 1; 3–5 assume 2's tokens; 6–7 are independent
-of each other but come last so their screenshots reflect the new look).
+Phases must run **in order**. Phases 2–5 build on the token foundation; phases 6–7
+complete the original refresh. Phase 8 begins only after Phase 7 because it changes the
+popup architecture and should use the final refreshed shell, accessibility behavior,
+and screenshot baselines.
 
 ## Rules of engagement (every phase)
 
 - **Never touch calculation code.** No edits to `js/projects/*-scoring.js`, `*-engine.js`,
   `js/core/travelshed.js`, `js/core/census.js`, `js/core/lodes.js` math, or anything the
-  golden harness covers. If a phase touches ANY `.js` file (phases 4, 6, 7 do, for UI
-  config only), run `node test/run-golden.mjs` before committing and record
+  golden harness covers. If a phase touches ANY `.js` file (phases 4, 6, 7, and 8 do,
+  for UI config only), run `node test/run-golden.mjs` before committing and record
   `Verified: node test/run-golden.mjs → N/N` in the commit message. It must pass
   untouched — a failure means you changed something you shouldn't have.
 - **One phase = one commit** (phase 2 and 5 allow one commit per slice), message format:
@@ -86,7 +105,8 @@ At each checkpoint marked above, the implementing agent should:
 3. Summarize in plain language what changed and anything that surprised it.
 4. **Wait for approval before the next phase** at the phase-1, phase-3, and phase-4
    checkpoints (these set the palette, type, and control look everything else inherits).
-   The phase-2 and phase-6 checkpoints are "review and continue unless told to stop."
+   The phase-2, phase-6, and phase-8 checkpoints are "review and continue unless told
+   to stop."
 
 ## Verification protocol
 
