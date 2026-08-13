@@ -485,14 +485,31 @@ button { cursor: pointer; }
   padding: 4px 2px;
   font-style: italic;
 }
+/* Compact tier + the shared chevron: this select sits outside .module-popup-body
+   so it wasn't picked up by the phase 4 control rules, leaving it the only
+   native-arrow select left in the app chrome. */
 .lp-basemap-select {
   flex: 1;
   font-size: var(--text-sm);
-  padding: 4px 6px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--panel);
+  min-height: var(--ctl-height-sm);
+  padding: 3px 22px 3px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background-color: var(--surface-raised);
   color: var(--text-primary);
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: var(--select-chevron);
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  transition: border-color var(--ease-fast), box-shadow var(--ease-fast);
+}
+.lp-basemap-select:hover { border-color: var(--text-disabled); }
+.lp-basemap-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 .lp-grip {
   display: inline-flex;
