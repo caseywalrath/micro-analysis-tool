@@ -9,7 +9,7 @@
 <!-- ======== Tab 1: Ratings ======== -->
 <div class="fta-tab-content fta-tab-visible" data-tab="ratings">
   <div class="fta-tab-body">
-    <div class="rf-section-row" style="align-items:flex-start;min-height:380px;">
+    <div class="rf-section-row fta-rating-row">
 
       <!-- Left: settings -->
       <div class="rf-settings-col">
@@ -21,7 +21,7 @@
           <option value="bg" selected>Block Groups</option>
         </select>
 
-        <label class="tiny" style="margin-top:10px;">ACS Year</label>
+        <label class="tiny u-mt-3">ACS Year</label>
         <select id="ftaYearSelect" class="rf-select">
           <option value="2024">2024</option>
           <option value="2023">2023</option>
@@ -29,17 +29,17 @@
           <option value="2021">2021</option>
         </select>
 
-        <button id="ftaRun" type="button" class="rf-action-primary" style="margin-top:16px;">
+        <button id="ftaRun" type="button" class="rf-action-primary u-mt-4">
           Compute Ratings
         </button>
 
-        <div id="ftaDataSummary" style="margin-top:16px;">
+        <div id="ftaDataSummary" class="fta-data-summary">
           <div class="rf-section-title">Loaded Data</div>
-          <div class="tiny" style="line-height:1.6;">
-            <span id="ftaLodesIndicator" style="color:var(--muted);">LODES: not loaded</span><br>
-            <span id="ftaCreIndicator" style="color:var(--muted);">CRE: not loaded</span><br>
-            <span id="ftaEssIndicator" style="color:var(--muted);">ESS: not loaded</span><br>
-            <span id="ftaLbarIndicator" style="color:var(--muted);">LBAR: not loaded</span>
+          <div class="tiny fta-data-status">
+            <span id="ftaLodesIndicator" class="u-muted">LODES: not loaded</span><br>
+            <span id="ftaCreIndicator" class="u-muted">CRE: not loaded</span><br>
+            <span id="ftaEssIndicator" class="u-muted">ESS: not loaded</span><br>
+            <span id="ftaLbarIndicator" class="u-muted">LBAR: not loaded</span>
           </div>
         </div>
       </div>
@@ -90,7 +90,7 @@
         </div>
 
         <!-- Export -->
-        <div style="margin-top:14px;">
+        <div class="u-mt-4">
           <button id="ftaExportCSV" type="button" class="rf-btn-sm" disabled>Export Ratings CSV</button>
         </div>
 
@@ -102,47 +102,47 @@
 <!-- ======== Tab 2: Data Inputs ======== -->
 <div class="fta-tab-content" data-tab="data-inputs">
   <div class="fta-tab-body">
-    <div class="rf-section-row" style="align-items:flex-start;min-height:380px;">
+    <div class="rf-section-row fta-input-row">
 
       <!-- Left: CRE + ESS -->
-      <div class="rf-settings-col" style="width:320px;">
+      <div class="rf-settings-col fta-data-settings-col">
 
         <!-- CRE section -->
         <div class="rf-section-title">Community Risk (CRE)</div>
-        <div class="tiny" style="margin-bottom:6px;color:var(--muted);">
+        <div class="tiny u-muted fta-description">
           Upload tract-level CSV with GEOID, total population, and high-risk population columns.
         </div>
         <label class="tiny">Upload CRE CSV
-          <input id="ftaCreFile" type="file" accept=".csv" style="font-size:12px;margin-top:2px;">
+          <input id="ftaCreFile" class="fta-file-input" type="file" accept=".csv">
         </label>
-        <label class="tiny" style="margin-top:6px;">GEOID column
+        <label class="tiny u-mt-2">GEOID column
           <select id="ftaCreColGEOID" class="rf-select" disabled></select>
         </label>
-        <label class="tiny" style="margin-top:4px;">Total pop column
+        <label class="tiny u-mt-1">Total pop column
           <select id="ftaCreColTotal" class="rf-select" disabled></select>
         </label>
-        <label class="tiny" style="margin-top:4px;">High-risk pop column
+        <label class="tiny u-mt-1">High-risk pop column
           <select id="ftaCreColHigh" class="rf-select" disabled></select>
         </label>
-        <div id="ftaCreInfo" class="tiny" style="margin-top:6px;color:var(--muted);">No file loaded.</div>
+        <div id="ftaCreInfo" class="tiny u-mt-2 u-muted">No file loaded.</div>
 
-        <div style="border-top:1px solid var(--border);margin:14px 0;"></div>
+        <div class="fta-divider"></div>
 
         <!-- ESS section -->
         <div class="rf-section-title">Essential Services (ESS)</div>
-        <div class="tiny" style="margin-bottom:6px;color:var(--muted);">
+        <div class="tiny u-muted fta-description">
           Upload GeoJSON points or CSV with latitude/longitude of service locations.
         </div>
         <label class="tiny">Upload ESS file (GeoJSON or CSV)
-          <input id="ftaEssFile" type="file" accept=".json,.geojson,.csv" style="font-size:12px;margin-top:2px;">
+          <input id="ftaEssFile" class="fta-file-input" type="file" accept=".json,.geojson,.csv">
         </label>
-        <label class="tiny" style="margin-top:6px;">Latitude column (CSV)
+        <label class="tiny u-mt-2">Latitude column (CSV)
           <select id="ftaEssColLat" class="rf-select" disabled></select>
         </label>
-        <label class="tiny" style="margin-top:4px;">Longitude column (CSV)
+        <label class="tiny u-mt-1">Longitude column (CSV)
           <select id="ftaEssColLon" class="rf-select" disabled></select>
         </label>
-        <div id="ftaEssInfo" class="tiny" style="margin-top:6px;color:var(--muted);">No file loaded.</div>
+        <div id="ftaEssInfo" class="tiny u-mt-2 u-muted">No file loaded.</div>
 
       </div>
 
@@ -150,15 +150,15 @@
       <div class="rf-results-col">
 
         <div class="rf-section-title">LBAR Housing Inventory</div>
-        <div class="tiny" style="margin-bottom:6px;color:var(--muted);">
+        <div class="tiny u-muted fta-description">
           Upload GeoJSON points (properties.units, optional properties.county) or CSV with lat/lon/units and optional county FIPS.
           Enter project counties as comma-separated 5-digit FIPS.
         </div>
         <label class="tiny">Upload LBAR file (GeoJSON or CSV)
-          <input id="ftaLbarFile" type="file" accept=".json,.geojson,.csv" style="font-size:12px;margin-top:2px;">
+          <input id="ftaLbarFile" class="fta-file-input" type="file" accept=".json,.geojson,.csv">
         </label>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px;">
+        <div class="fta-lbar-grid u-mt-2">
           <label class="tiny">Latitude column
             <select id="ftaLbarColLat" class="rf-select" disabled></select>
           </label>
@@ -166,7 +166,7 @@
             <select id="ftaLbarColLon" class="rf-select" disabled></select>
           </label>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px;">
+        <div class="fta-lbar-grid fta-lbar-grid-tight">
           <label class="tiny">Units column
             <select id="ftaLbarColUnits" class="rf-select" disabled></select>
           </label>
@@ -175,17 +175,17 @@
           </label>
         </div>
 
-        <label class="tiny" style="margin-top:8px;">
+        <label class="tiny u-mt-2">
           Project counties (comma-separated 5-digit FIPS)
-          <input id="ftaLbarCounties" type="text" class="rf-select" placeholder="e.g., 06075, 06081" style="margin-top:2px;">
+          <input id="ftaLbarCounties" type="text" class="rf-select u-mt-1" placeholder="e.g., 06075, 06081">
         </label>
 
-        <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12px;cursor:pointer;">
-          <input id="ftaToggleLbarLayer" type="checkbox" style="width:auto;margin:0;">
+        <label class="fta-layer-toggle u-mt-3">
+          <input id="ftaToggleLbarLayer" type="checkbox">
           Show LBAR points on map
         </label>
 
-        <div id="ftaLbarInfo" class="tiny" style="margin-top:6px;color:var(--muted);">No file loaded.</div>
+        <div id="ftaLbarInfo" class="tiny u-mt-2 u-muted">No file loaded.</div>
 
       </div>
     </div>
