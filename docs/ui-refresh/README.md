@@ -1,6 +1,6 @@
 # Modern UI Refresh — Master Plan
 
-Status: **approved, ready to implement** (2026-08-12)
+Status: **in progress** — phases 0-3 complete and pushed to `claude/phase-0-screenshot-harness-na50o2`; phase 4 (form controls refresh) is next, approved to start in a new session. (2026-08-13)
 
 This directory is the implementation plan for the `features.md` item "Modern UI refresh."
 It is written to be executed **phase by phase, by separate agent sessions**, each working
@@ -23,16 +23,16 @@ These were decided with the developer and are settled:
 
 ## Phase sequence
 
-| Phase | File | What | Visible change? | Checkpoint after? |
-|---|---|---|---|---|
-| 0 | `phase-0-screenshot-harness.md` | Automated popup screenshot capture (light+dark) + baseline set | None | No |
-| 1 | `phase-1-design-tokens.md` | Color/spacing/radius/shadow tokens, dark-mode token block, `accent-color` | Checkboxes/radios only | **Yes — palette approval** |
-| 2 | `phase-2-color-migration.md` | Migrate ~660 hardcoded hex values onto tokens; collapse redundant dark-mode rules | Near-none (tiny consolidation shifts) | **Yes — full screenshot review** |
-| 3 | `phase-3-typography-inter.md` | Inter font, scale bump (13→14 base), fix 35 hardcoded px sizes | Everything gets slightly larger | **Yes — type approval** |
-| 4 | `phase-4-controls-refresh.md` | Modern form controls, buttons, checklists; widen settings columns + popups | Large — the headline change | **Yes — key checkpoint** |
-| 5 | `phase-5-inline-style-purge.md` | Replace ~370 static inline styles in popup HTML with shared primitives | Near-none | No |
-| 6 | `phase-6-demodalize.md` | Remove backdrop, live map behind popups, collapse button on popup header | Large behavior change | **Yes — behavior test** |
-| 7 | `phase-7-shell-a11y-docs.md` | Toolbar grouping, Analysis dropdown grouping, focus/aria/target-size pass, CLAUDE.md + features.md updates | Moderate | Final review |
+| Phase | File | What | Visible change? | Checkpoint after? | Status |
+|---|---|---|---|---|---|
+| 0 | `phase-0-screenshot-harness.md` | Automated popup screenshot capture (light+dark) + baseline set | None | No | ✅ Done |
+| 1 | `phase-1-design-tokens.md` | Color/spacing/radius/shadow tokens, dark-mode token block, `accent-color` | Checkboxes/radios only | **Yes — palette approval** | ✅ Done, approved |
+| 2 | `phase-2-color-migration.md` | Migrate ~660 hardcoded hex values onto tokens; collapse redundant dark-mode rules | Near-none (tiny consolidation shifts) | **Yes — full screenshot review** | ✅ Done, reviewed |
+| 3 | `phase-3-typography-inter.md` | Inter font, scale bump (13→14 base), fix 35 hardcoded px sizes | Everything gets slightly larger | **Yes — type approval** | ✅ Done, approved |
+| 4 | `phase-4-controls-refresh.md` | Modern form controls, buttons, checklists; widen settings columns + popups | Large — the headline change | **Yes — key checkpoint** | Not started |
+| 5 | `phase-5-inline-style-purge.md` | Replace ~370 static inline styles in popup HTML with shared primitives | Near-none | No | Not started |
+| 6 | `phase-6-demodalize.md` | Remove backdrop, live map behind popups, collapse button on popup header | Large behavior change | **Yes — behavior test** | Not started |
+| 7 | `phase-7-shell-a11y-docs.md` | Toolbar grouping, Analysis dropdown grouping, focus/aria/target-size pass, CLAUDE.md + features.md updates | Moderate | Final review | Not started |
 
 Phases must run **in order** (2 depends on 1; 3–5 assume 2's tokens; 6–7 are independent
 of each other but come last so their screenshots reflect the new look).

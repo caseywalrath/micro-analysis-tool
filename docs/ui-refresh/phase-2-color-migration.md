@@ -1,5 +1,7 @@
 # Phase 2 — Color migration onto tokens
 
+**Status: ✅ Done, reviewed** — all 7 slices landed and pushed to `claude/phase-0-screenshot-harness-na50o2`; one dark-mode specificity bug found and fixed along the way (see slice 4 commit).
+
 **Goal:** replace hardcoded chrome colors in `css/style.css` (~660 hex occurrences) and
 `css/sidebar-v2.css` with phase-1 tokens, then delete dark-mode override rules that the
 tokens make redundant. Done in slices, each verified in both themes before the next.

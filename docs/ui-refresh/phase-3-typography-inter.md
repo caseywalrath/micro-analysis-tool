@@ -1,5 +1,7 @@
 # Phase 3 — Typography: Inter + full-notch scale bump
 
+**Status: ✅ Done and approved** — landed and pushed to `claude/phase-0-screenshot-harness-na50o2`. Phase 4 is cleared to start in a new session.
+
 **Goal:** Inter app-wide, base text 13→14px, and zero hardcoded pixel font sizes.
 Approved decision: "full notch — more modern" (option b).
 
