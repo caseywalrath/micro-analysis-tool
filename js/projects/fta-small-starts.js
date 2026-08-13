@@ -592,6 +592,23 @@
     document.body.removeChild(a); URL.revokeObjectURL(url);
   }
 
+  // ---- Collapsible Ratings inputs (shared helper) ----
+
+  function inputsSummary() {
+    var geoEl = document.getElementById("ftaGeoLevel");
+    var yearEl = document.getElementById("ftaYearSelect");
+    var geoLabel = geoEl && geoEl.value === "tract" ? "Tracts" : "Block groups";
+    return geoLabel + " \u00b7 " + (yearEl ? yearEl.value : "");
+  }
+
+  function renderInputs(collapsed) {
+    App.renderModuleInputs({
+      hostEl: document.querySelector('.fta-tab-content[data-tab="ratings"] .rf-settings-col'),
+      collapsed: collapsed,
+      summary: inputsSummary()
+    });
+  }
+
   // ---- Init (called once on first popup open) ----
 
   function init(core) {
@@ -617,6 +634,10 @@
     // LBAR layer toggle
     var toggleLbar = document.getElementById("ftaToggleLbarLayer");
     if (toggleLbar) toggleLbar.addEventListener("change", refreshLbarLayerVisibility);
+
+    var ratingsSettings = document.querySelector('.fta-tab-content[data-tab="ratings"] .rf-settings-col');
+    if (ratingsSettings) ratingsSettings.addEventListener("change", function () { renderInputs(); });
+    renderInputs(false);
 
     // County FIPS (debounced)
     var _countyTimer = null;
@@ -849,6 +870,7 @@
 
   function onOpen(core) {
     switchTab(_activeTab);
+    renderInputs(false);
     updateDataIndicators();
     // Show last ratings if available
     if (_lastRatings) {

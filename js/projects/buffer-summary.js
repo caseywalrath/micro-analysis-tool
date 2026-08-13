@@ -453,6 +453,27 @@
     return codes;
   }
 
+  // ---- Collapsible inputs (shared helper) ----
+
+  function inputsSummary() {
+    var geoEl = document.getElementById("basGeoLevel");
+    var yearEl = document.getElementById("basYearSelect");
+    var apportionEl = document.getElementById("basApportionByArea");
+    var count = collectCheckedVars().length;
+    var geoLabel = geoEl && geoEl.value === "tract" ? "Tracts" : "Block groups";
+    return count + " variable" + (count === 1 ? "" : "s") + " \u00b7 " +
+      geoLabel + " \u00b7 " + (yearEl ? yearEl.value : _state.year) + " \u00b7 " +
+      (apportionEl && apportionEl.checked ? "area apportioned" : "whole geographies");
+  }
+
+  function renderInputs(collapsed) {
+    App.renderModuleInputs({
+      hostEl: document.querySelector(".bas-body .rf-settings-col"),
+      collapsed: collapsed,
+      summary: inputsSummary()
+    });
+  }
+
   // ---- Module registration ----
 
   App.registerModule({
@@ -486,12 +507,14 @@
         for (var i = 0; i < boxes.length; i++) boxes[i].checked = true;
         _state.checkedVars = collectCheckedVars();
         if (typeof App.cache !== "undefined") App.cache.save();
+        renderInputs();
       });
       document.getElementById("varClearAll").addEventListener("click", function () {
         var boxes = document.querySelectorAll('#varSelect input[type="checkbox"]');
         for (var i = 0; i < boxes.length; i++) boxes[i].checked = false;
         _state.checkedVars = [];
         if (typeof App.cache !== "undefined") App.cache.save();
+        renderInputs();
       });
 
       // Auto-save on checkbox change
@@ -499,16 +522,21 @@
         cb.addEventListener("change", function () {
           _state.checkedVars = collectCheckedVars();
           if (typeof App.cache !== "undefined") App.cache.save();
+          renderInputs();
         });
       });
 
       // Apply cached state to DOM
       applyStateToDOM();
+      renderInputs(false);
+      var settingsEl = document.querySelector(".bas-body .rf-settings-col");
+      if (settingsEl) settingsEl.addEventListener("change", function () { renderInputs(); });
     },
 
     onOpen: function (core) {
       // Re-apply state each time popup opens (in case restored from cache)
       applyStateToDOM();
+      renderInputs(false);
       // Show results table if we have results, else a friendly onboarding hint
       var tableEl = document.getElementById("basResultsTable");
       if (tableEl && _hasResults) {

@@ -111,6 +111,13 @@ const MODULE_IDS = [
   "display-settings"
 ];
 
+const COLLAPSIBLE_INPUT_MODULE_IDS = new Set([
+  "buffer-summary",
+  "transit-propensity",
+  "corridor-scoring",
+  "fta-small-starts"
+]);
+
 // ---- Small utilities ----
 
 function findFreePort() {
@@ -302,6 +309,21 @@ async function captureTheme(browser, theme, port) {
       await sleep(POPUP_SETTLE_MS);
       await shootLocator(page, ".module-popup-dialog", join(OUT_DIR, name + ".png"), name);
 
+      // Phase 7a: confirmed single-step conversions must remain readable with
+      // Inputs collapsed while Results stays visible.
+      if (COLLAPSIBLE_INPUT_MODULE_IDS.has(id)) {
+        await page.locator(".module-inputs-header:visible").click();
+        await sleep(TAB_SETTLE_MS);
+        await shootLocator(
+          page,
+          ".module-popup-dialog",
+          join(OUT_DIR, name + "_inputs-collapsed.png"),
+          name + "_inputs-collapsed"
+        );
+        await page.locator(".module-inputs-header:visible").click();
+        await sleep(TAB_SETTLE_MS);
+      }
+
       // Phase 6 behavior checkpoint: keep one representative full-page view
       // per theme so the live map, dock-right position, and collapsed title
       // bar are visible. Dialog-only captures above remain comparable to the
@@ -380,7 +402,8 @@ async function main() {
 
   const port = await findFreePort();
   console.log("Starting static server on port " + port + " (cwd=" + REPO_ROOT + ")...");
-  const server = spawn("python3", ["-m", "http.server", String(port)], {
+  const pythonExecutable = process.env.PYTHON || (process.platform === "win32" ? "python" : "python3");
+  const server = spawn(pythonExecutable, ["-m", "http.server", String(port)], {
     cwd: REPO_ROOT,
     stdio: ["ignore", "ignore", "ignore"]
   });

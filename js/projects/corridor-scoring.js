@@ -255,7 +255,29 @@
              action: "Each selected route or line gets a ranked composite demand score." };
   }
 
+  // ---- Collapsible inputs (shared helper) ----
+
+  function inputsSummary() {
+    var geoEl = document.getElementById("csGeoLevel");
+    var yearEl = document.getElementById("csYearSelect");
+    var bufferEl = document.getElementById("csBufferMiles");
+    var count = document.querySelectorAll("#csFeatureList input[type=checkbox]:checked").length;
+    var geoLabel = geoEl && geoEl.value === "tract" ? "Tracts" : "Block groups";
+    return geoLabel + " \u00b7 " + (yearEl ? yearEl.value : "") + " \u00b7 " +
+      (bufferEl ? bufferEl.value : _bufferMiles) + " mi \u00b7 " +
+      count + " corridor" + (count === 1 ? "" : "s");
+  }
+
+  function renderInputs(collapsed) {
+    App.renderModuleInputs({
+      hostEl: document.querySelector(".cs-body .rf-settings-col"),
+      collapsed: collapsed,
+      summary: inputsSummary()
+    });
+  }
+
   function markStale() {
+    renderInputs();
     _stale = true;
     setExportButtonsEnabled(false);
     if (!isPopupVisible()) return;
@@ -852,6 +874,7 @@
 
     // Populate weight sliders (in modal) with current _weights
     buildWeightSliders();
+    renderInputs(false);
   }
 
   function onOpen(core) {
@@ -863,6 +886,7 @@
 
     buildFeatureChecklist();
     if (_featureFilter) applyFeatureFilterToCheckboxes(_featureFilter);
+    renderInputs(false);
     updateLodesWarnings();
 
     if (_lastResult) {

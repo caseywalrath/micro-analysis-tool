@@ -396,7 +396,32 @@
              action: "Selected features define the normalization pool for scoring." };
   }
 
+  // ---- Collapsible inputs (shared helper) ----
+
+  function inputsSummary() {
+    var geoEl = document.getElementById("tpiGeoLevel");
+    var yearEl = document.getElementById("tpiYearSelect");
+    var bufferEl = document.getElementById("tpiBufferMiles");
+    var corridorEl = document.getElementById("tpiCorridorSelect");
+    var count = document.querySelectorAll("#tpiFeatureChecklist input[type=checkbox]:checked").length;
+    var geoLabel = geoEl && geoEl.value === "tract" ? "Tracts" : "Block groups";
+    var corridorLabel = corridorEl && corridorEl.selectedOptions.length
+      ? corridorEl.selectedOptions[0].textContent : "All features";
+    return geoLabel + " \u00b7 " + (yearEl ? yearEl.value : "") + " \u00b7 " +
+      (bufferEl ? bufferEl.value : _bufferMiles) + " mi \u00b7 " +
+      count + " feature" + (count === 1 ? "" : "s") + " \u00b7 " + corridorLabel;
+  }
+
+  function renderInputs(collapsed) {
+    App.renderModuleInputs({
+      hostEl: document.querySelector(".tpi-body .rf-settings-col"),
+      collapsed: collapsed,
+      summary: inputsSummary()
+    });
+  }
+
   function markStale() {
+    renderInputs();
     if (!_lastResult) return;
     _stale = true;
     if (!isPopupVisible()) return;
@@ -977,6 +1002,11 @@
       runBtn.parentNode.insertBefore(ccStatus, runBtn);
     }
 
+    var geoLevelEl = document.getElementById("tpiGeoLevel");
+    if (geoLevelEl) geoLevelEl.addEventListener("change", markStale);
+    var yearEl = document.getElementById("tpiYearSelect");
+    if (yearEl) yearEl.addEventListener("change", markStale);
+
     // Hide Choropleth toggle
     var hideCb = document.getElementById("tpiHideChoropleth");
     if (hideCb) {
@@ -1028,6 +1058,7 @@
     if (corridorSel) {
       corridorSel.addEventListener("change", function () {
         _selectedCorridor = corridorSel.value;
+        renderInputs();
         if (_lastResult && isPopupVisible()) {
           displayGeographyList(_lastResult, _selectedCorridor);
         }
@@ -1060,6 +1091,7 @@
 
     // Build weight sliders (in modal) with current _weights
     buildWeightSliders();
+    renderInputs(false);
   }
 
   // ---- Popup lifecycle hooks ----
@@ -1074,6 +1106,7 @@
 
     // Rebuild checklist (features may have changed since last open)
     buildFeatureChecklist();
+    renderInputs(false);
 
     // Refresh results display
     if (_lastResult && isPopupVisible()) {
