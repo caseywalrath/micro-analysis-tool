@@ -1,62 +1,70 @@
-<div class="bas-popup-layout">
+<!-- Feature Area Analysis — 2-column popup body (Settings | Results) -->
+<div class="bas-body">
+  <div class="rf-section-row" style="align-items:flex-start;min-height:400px;">
 
-  <!-- Variable selection (moved from sidebar) -->
-  <div class="bas-variables">
-    <div class="bas-var-header">
-      <span class="bas-section-label">Variables</span>
-      <span class="bas-var-actions">
+    <!-- Left: settings column -->
+    <div class="rf-settings-col">
+
+      <div class="rf-section-title">Variables</div>
+      <div class="rf-feature-select-actions" style="margin-bottom:4px;">
         <button type="button" id="varSelectAll" class="var-action-btn">Select all</button>
+        <span style="color:var(--muted);">|</span>
         <button type="button" id="varClearAll" class="var-action-btn">Clear all</button>
-      </span>
-    </div>
-    <!-- Populated at runtime by buffer-summary.js init() from VAR_META in utils.js. -->
-    <fieldset id="varSelect" class="bas-var-checklist"></fieldset>
-  </div>
+      </div>
+      <!-- Populated at runtime by buffer-summary.js init() from VAR_META in utils.js. -->
+      <fieldset id="varSelect" class="bas-var-checklist"></fieldset>
 
-  <!-- Settings -->
-  <div class="bas-settings">
-    <div class="bas-settings-row">
-      <label class="bas-label">Geography level
-        <select id="basGeoLevel">
-          <option value="tract">Census Tracts</option>
-          <option value="bg" selected>Block Groups</option>
-        </select>
+      <div class="rf-section-title" style="margin-top:16px;">Geography</div>
+
+      <label class="tiny">Level</label>
+      <select id="basGeoLevel" class="rf-select">
+        <option value="tract">Census Tracts</option>
+        <option value="bg" selected>Block Groups</option>
+      </select>
+
+      <label class="tiny" style="margin-top:10px;">ACS Year</label>
+      <select id="basYearSelect" class="rf-select">
+        <option value="2024">2024 ACS 5-year</option>
+        <option value="2023">2023 ACS 5-year</option>
+        <option value="2022">2022 ACS 5-year</option>
+        <option value="2021">2021 ACS 5-year</option>
+      </select>
+
+      <label class="tpi-toggle-row" style="margin-top:10px;">
+        <input type="checkbox" id="basApportionByArea" checked>
+        <span class="tiny">Apportion by area</span>
       </label>
 
-      <label class="bas-label">ACS Year
-        <select id="basYearSelect">
-          <option value="2024">2024 ACS 5-year</option>
-          <option value="2023">2023 ACS 5-year</option>
-          <option value="2022">2022 ACS 5-year</option>
-          <option value="2021">2021 ACS 5-year</option>
-        </select>
-      </label>
+      <button id="basRun" type="button" class="rf-action-primary" style="margin-top:12px;">
+        Calculate Summary
+      </button>
+
     </div>
 
-    <label class="bas-check">
-      <input type="checkbox" id="basApportionByArea" checked> Apportion by area
-    </label>
+    <!-- Right: results column -->
+    <div class="rf-results-col">
 
-    <button id="basRun" type="button" class="bas-run-btn">Calculate Summary</button>
+      <div id="basResultsProgress" class="results-progress"></div>
+
+      <!-- Empty / onboarding state (shown until a summary has been calculated) -->
+      <div id="basEmptyState" class="rf-info-box" style="display:none;"></div>
+
+      <table id="basResultsTable" class="results-table" style="display:none;">
+        <thead>
+          <tr>
+            <th>Census Category</th>
+            <th>Variable</th>
+            <th>Result</th>
+            <th>Percent</th>
+            <th>Aggregation Method</th>
+          </tr>
+        </thead>
+        <tbody id="basResultsTbody"></tbody>
+      </table>
+
+      <div id="basResultsNotes" class="results-notes"></div>
+
+    </div>
+
   </div>
-
-  <div id="basResultsProgress" class="results-progress"></div>
-
-  <!-- Empty / onboarding state (shown until a summary has been calculated) -->
-  <div id="basEmptyState" class="rf-info-box" style="display:none;"></div>
-
-  <table id="basResultsTable" class="results-table" style="display:none;">
-    <thead>
-      <tr>
-        <th>Census Category</th>
-        <th>Variable</th>
-        <th>Result</th>
-        <th>Percent</th>
-        <th>Aggregation Method</th>
-      </tr>
-    </thead>
-    <tbody id="basResultsTbody"></tbody>
-  </table>
-
-  <div id="basResultsNotes" class="results-notes"></div>
 </div>

@@ -1,6 +1,23 @@
 # Modern UI Refresh — Master Plan
 
-Status: **in progress** — phases 0-3 complete and pushed to `claude/phase-0-screenshot-harness-na50o2`; phase 4 (form controls refresh) is next, approved to start in a new session. (2026-08-13)
+Status: **in progress** — phases 0-4 complete on `claude/ui-refresh-phase-4-controls-hngzdy`;
+phase 5 (inline style purge) is next. (2026-08-13)
+
+**Phase 4 checkpoint outcome.** Approved, with a follow-up commit covering the
+developer's review notes. Approved as-is: control height, the Route Costing
+settings modal, the Walkshed narrow-panel pilot. Changed in the follow-up:
+collapsible module inputs (new shared `App.renderModuleInputs`, wired into
+Walkshed / Transit Coverage / Transit Travelshed), feature-panel row spacing, the
+census-cache note no longer reading as a button, dropdown-menu consistency, and
+Feature Area Analysis rebuilt on the Settings | Results schema (part of phase 5's
+remit, pulled forward). Deferred by the developer: a separate pass on option
+wording throughout.
+
+Two **non-UI fixes** rode the same branch as clearly-labelled separate commits —
+they are not part of the refresh and the phase docs claim no credit for them:
+registering five missing analysis overlays in the Layers panel, and giving
+Walkshed the prompt-to-download street-network flow Transit Travelshed already
+had.
 
 This directory is the implementation plan for the `features.md` item "Modern UI refresh."
 It is written to be executed **phase by phase, by separate agent sessions**, each working
@@ -29,7 +46,7 @@ These were decided with the developer and are settled:
 | 1 | `phase-1-design-tokens.md` | Color/spacing/radius/shadow tokens, dark-mode token block, `accent-color` | Checkboxes/radios only | **Yes — palette approval** | ✅ Done, approved |
 | 2 | `phase-2-color-migration.md` | Migrate ~660 hardcoded hex values onto tokens; collapse redundant dark-mode rules | Near-none (tiny consolidation shifts) | **Yes — full screenshot review** | ✅ Done, reviewed |
 | 3 | `phase-3-typography-inter.md` | Inter font, scale bump (13→14 base), fix 35 hardcoded px sizes | Everything gets slightly larger | **Yes — type approval** | ✅ Done, approved |
-| 4 | `phase-4-controls-refresh.md` | Modern form controls, buttons, checklists; widen settings columns + popups | Large — the headline change | **Yes — key checkpoint** | Not started |
+| 4 | `phase-4-controls-refresh.md` | Modern form controls, buttons, checklists; widen settings columns + popups | Large — the headline change | **Yes — key checkpoint** | ✅ Done, approved with changes |
 | 5 | `phase-5-inline-style-purge.md` | Replace ~370 static inline styles in popup HTML with shared primitives | Near-none | No | Not started |
 | 6 | `phase-6-demodalize.md` | Remove backdrop, live map behind popups, collapse button on popup header | Large behavior change | **Yes — behavior test** | Not started |
 | 7 | `phase-7-shell-a11y-docs.md` | Toolbar grouping, Analysis dropdown grouping, focus/aria/target-size pass, CLAUDE.md + features.md updates | Moderate | Final review | Not started |

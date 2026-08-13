@@ -2229,38 +2229,15 @@ code { font-family: var(--font-mono); }
 }
 
 /* ---- BAS popup layout ---- */
-.bas-popup-layout {
-  padding: 4px 0;
-}
+/* Feature Area Analysis. The popup moved onto the shared
+   .rf-section-row / .rf-settings-col / .rf-results-col schema, so the bespoke
+   .bas-popup-layout / .bas-variables / .bas-settings* wrappers it used to need
+   are gone; what remains is the variable checklist and this module's own
+   primary button.
 
-/* BAS variable checklist (inside popup) */
-.bas-variables {
-  margin-bottom: 12px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 8px 12px 10px;
-  background: var(--panel);
-}
-.bas-var-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 6px;
-}
-.bas-section-label {
-  font-size: var(--text-xs);
-  font-weight: var(--weight-semibold);
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-md);
-  color: var(--muted);
-}
-.bas-var-actions {
-  display: flex;
-  gap: 8px;
-}
-/* Tertiary/link actions — padded for a ≥24px hit area, matching
+   Tertiary/link actions — padded for a ≥24px hit area, matching
    .rf-feature-select-actions a. */
-.bas-var-actions .var-action-btn {
+.rf-feature-select-actions .var-action-btn {
   font-size: var(--text-sm);
   color: var(--accent);
   background: none;
@@ -2269,17 +2246,19 @@ code { font-family: var(--font-mono); }
   padding: 4px 2px;
   border-radius: var(--radius-sm);
 }
-.bas-var-actions .var-action-btn:hover {
+.rf-feature-select-actions .var-action-btn:hover {
   text-decoration: underline;
 }
-.bas-var-actions .var-action-btn:focus-visible {
+.rf-feature-select-actions .var-action-btn:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px var(--focus-ring);
 }
 .bas-var-checklist {
-  border: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
   margin: 0;
-  padding: 0;
+  padding: 6px 8px;
   max-height: 260px;
   overflow-y: auto;
 }
@@ -2297,70 +2276,24 @@ code { font-family: var(--font-mono); }
 .bas-var-checklist .var-check {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-2);
   font-size: var(--text-sm);
-  padding: 1px 0;
+  padding: 5px 6px;
+  border-radius: 4px;
   cursor: pointer;
+}
+.bas-var-checklist .var-check:hover { background: var(--surface-hover); }
+.bas-var-checklist .var-check input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  flex-shrink: 0;
 }
 .bas-var-checklist .var-warn-icon {
   font-size: var(--text-2xs);
   color: #d97706;
   cursor: help;
 }
-.bas-settings {
-  margin-bottom: 12px;
-}
-.bas-settings-row {
-  display: flex;
-  gap: 16px;
-  margin-bottom: 8px;
-}
-.bas-settings-row .bas-label {
-  display: flex;
-  flex-direction: column;
-  font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
-  gap: 4px;
-  flex: 1;
-}
-.bas-settings-row .bas-label select {
-  font-size: var(--text-base);
-  padding: 4px 6px;
-}
-.bas-check {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--text-base);
-  margin: 6px 0;
-  cursor: pointer;
-}
-/* This module's primary action. It predates .rf-action-primary and was still
-   rendering as a bare browser button; same look now, sized to its content
-   rather than filling a settings column. */
-.bas-run-btn {
-  margin-top: 8px;
-  min-height: 36px;
-  padding: 8px 18px;
-  font-family: inherit;
-  font-size: var(--text-base);
-  font-weight: var(--weight-semibold);
-  border: 1px solid var(--accent);
-  border-radius: var(--radius-sm);
-  background: var(--accent);
-  color: var(--text-invert);
-  cursor: pointer;
-  transition: background var(--ease-fast), box-shadow var(--ease-fast);
-}
-.bas-run-btn:hover:not(:disabled) {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
-}
-.bas-run-btn:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px var(--focus-ring);
-}
-.bas-run-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* ---- Basemap switcher ---- */
 .basemap-switcher {
