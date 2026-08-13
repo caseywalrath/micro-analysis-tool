@@ -105,48 +105,78 @@
 /* ---- Form controls (scoped — won't inherit legacy width:100%) ---- */
 #sidebar label {
   display: block;
-  margin: 8px 0;
-  font-size: var(--text-base);
-  color: var(--text-primary);
+  margin: var(--space-2) 0 var(--space-1);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
 }
 
+/* Matches the comfortable control tier in style.css ("Form controls" block).
+   Repeated rather than shared because these selectors are id-scoped, so they
+   outrank anything the shared block could say. */
 #sidebar select,
 #sidebar input[type="text"],
 #sidebar input[type="number"],
 #sidebar input[type="file"] {
   width: 100%;
-  padding: 7px 9px;
+  min-height: var(--ctl-height);
+  padding: 6px 10px;
   margin-top: 4px;
   box-sizing: border-box;
   font: inherit;
   font-size: var(--text-base);
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
   background: var(--surface-raised);
+  color: var(--text-primary);
+  transition: border-color var(--ease-fast), box-shadow var(--ease-fast);
+}
+#sidebar select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 30px;
+  background-image: var(--select-chevron);
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+}
+#sidebar select:hover,
+#sidebar input[type="text"]:hover,
+#sidebar input[type="number"]:hover {
+  border-color: var(--text-disabled);
 }
 #sidebar select:focus,
 #sidebar input[type="text"]:focus,
-#sidebar input[type="number"]:focus {
+#sidebar input[type="number"]:focus,
+#sidebar input[type="file"]:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(43, 108, 176, 0.15);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
+/* Secondary/outline tier, matching .rf-btn-sm in style.css. */
 #sidebar button {
   width: 100%;
-  padding: 8px 12px;
+  min-height: 30px;
+  padding: 6px 12px;
   margin-top: 6px;
   box-sizing: border-box;
   font: inherit;
-  font-size: var(--text-base);
+  font-size: var(--text-sm);
   cursor: pointer;
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
   background: var(--surface-raised);
-  transition: background 0.12s;
+  color: var(--text-primary);
+  transition: background var(--ease-fast), border-color var(--ease-fast), box-shadow var(--ease-fast);
 }
 #sidebar button:hover {
   background: var(--surface-hover);
+}
+#sidebar button:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 #sidebar .lodes-actions {
   display: flex;
@@ -257,18 +287,23 @@
   border-top: none;
   margin-top: 2px;
 }
+/* Matches .rf-feature-check-row in style.css: hover-washed, comfortable rows. */
 #sidebar .var-check {
   display: flex;
   align-items: flex-start;
-  gap: 6px;
-  margin: 3px 0;
+  gap: var(--space-2);
+  margin: 1px 0;
+  padding: 5px 6px;
+  border-radius: 4px;
   font-size: var(--text-sm);
   line-height: var(--leading-tight);
   cursor: pointer;
 }
+#sidebar .var-check:hover { background: var(--surface-hover); }
 #sidebar .var-check input[type="checkbox"] {
-  width: auto;
-  margin-top: 2px;
+  width: 15px;
+  height: 15px;
+  margin-top: 1px;
   flex-shrink: 0;
 }
 #sidebar .var-actions {
@@ -291,17 +326,8 @@
 /* ---- Dark mode ---- */
 body.dark-mode #sidebar-wrap.sb-collapsed #sb-collapse-btn { background: #252535; }
 body.dark-mode #sidebar .sb2-panel-header:hover { background: rgba(255,255,255,0.06); }
-body.dark-mode #sidebar select,
-body.dark-mode #sidebar input[type="text"],
-body.dark-mode #sidebar input[type="number"],
-body.dark-mode #sidebar input[type="file"] {
-  color: #e2e8f0; border-color: #4a5568;
-}
-body.dark-mode #sidebar select:focus,
-body.dark-mode #sidebar input[type="text"]:focus,
-body.dark-mode #sidebar input[type="number"]:focus {
-  box-shadow: 0 0 0 2px rgba(99,179,237,0.2);
-}
-body.dark-mode #sidebar button { color: #e2e8f0; }
+/* The dark control/button overrides that used to live here were deleted in
+   phase 4 — color/border/focus now come from tokens in the rules above, which
+   serve both themes. */
 body.dark-mode #sidebar .var-group-label { color: #9ca3af; }
 body.dark-mode #sidebar h3 { color: #e2e8f0; }

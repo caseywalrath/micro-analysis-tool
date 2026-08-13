@@ -60,6 +60,11 @@
     } else {
       dialog.style.width = "";
     }
+    // Narrow "task panel" modules trade width for height. Derived from
+    // popupWidth rather than a new registration field, so any module narrowed
+    // later picks it up for free. The 620px threshold matches the @container
+    // rule in style.css that stacks a two-column popup body.
+    dialog.classList.toggle("module-popup-narrow", !!mod.popupWidth && mod.popupWidth <= 620);
 
     // Hide all existing module slot divs (show only the active module's slot)
     var allSlots = bodyEl.querySelectorAll(".module-body-slot");

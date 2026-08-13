@@ -1193,7 +1193,7 @@
     id:         "transit-propensity",
     name:       "Transit Propensity Index",
     enabled:    true,
-    popupWidth: 960,
+    popupWidth: 1000,
     popupHTML:  "projects/transit-propensity-popup.html",
 
     floatingWidgets: [

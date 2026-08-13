@@ -1278,7 +1278,7 @@
     id:         "transit-travelshed",
     name:       "Transit Travelshed",
     enabled:    true,
-    popupWidth: 900,
+    popupWidth: 940,
     popupHTML:  "projects/transit-travelshed-popup.html",
 
     init:    function (core) { init(core); },

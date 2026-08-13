@@ -1008,7 +1008,7 @@
     id:         "trip-builder",
     name:       "Trip Builder",
     enabled:    true,
-    popupWidth: 1100,
+    popupWidth: 1140,
     popupHTML:  "projects/trip-builder-popup.html",
 
     init:    function (core) { init(core); },

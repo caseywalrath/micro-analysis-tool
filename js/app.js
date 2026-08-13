@@ -1481,6 +1481,32 @@
       }
     });
 
+    // ---- Whole-row click for feature checklists (UI only) ----
+    // Every module builds its checklist rows the same way:
+    //   div.rf-feature-check-row > input[type=checkbox] + label + span.badge
+    // The checkbox and the label already handle their own clicks, but the row's
+    // padding and the type badge did not, so a click just beside the name did
+    // nothing. Rather than edit ten near-identical addRow() builders, one
+    // delegated listener covers every module — current and future. It toggles
+    // the row's checkbox and dispatches a real "change" event, so each module's
+    // existing handler (markStale, etc.) runs exactly as if the box was clicked.
+    document.addEventListener("click", function (e) {
+      var row = e.target.closest && e.target.closest(".rf-feature-check-row");
+      if (!row) return;
+      if (e.target.tagName === "INPUT") return;          // the box itself
+      var cb = row.querySelector('input[type="checkbox"]');
+      if (!cb || cb.disabled) return;
+      var lbl = e.target.closest("label");
+      if (lbl) {
+        // Skip labels that already toggle on their own: most modules attach a
+        // handler that calls preventDefault() (which has run by the time this
+        // bubbles to document), and a for=/wrapping label toggles natively.
+        if (e.defaultPrevented || lbl.htmlFor || lbl.contains(cb)) return;
+      }
+      cb.checked = !cb.checked;
+      cb.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
     // Checkbox change listeners — now wired in buffer-summary.js init()
 
     // Wrap render/rebuild functions to re-apply opacity + line width after layers are recreated

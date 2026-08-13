@@ -57,6 +57,20 @@
   /* ---- Motion ---- */
   --ease-fast: 0.12s ease;
 
+  /* ---- Form control sizing (phase 4) ----
+     Two tiers. The comfortable tier is the default for popup/sidebar controls;
+     the compact tier is for dense, many-rows-at-once surfaces (the floating
+     attribute popup, the Attribute Summary grid, inline value boxes) where the
+     comfortable height would balloon the panel. Both tiers share the same
+     border/radius/focus treatment — only height and text size differ. */
+  --ctl-height:    34px;
+  --ctl-height-sm: 28px;
+
+  /* Chevron for appearance:none selects. A CSS url() cannot resolve
+     currentColor, so the glyph color is baked in and the token is re-valued in
+     the dark-mode block below. */
+  --select-chevron: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' fill='none' stroke='%234a5568' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+
   /* ---- Typography: Font Families ---- */
   --font-sans: "Inter", system-ui, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
@@ -693,7 +707,9 @@ body.dark-mode .map-textbox-resize {
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
   line-height: var(--leading-snug);
-  color: var(--text-invert);
+  /* Not --text-invert: this sits on a fixed purple that does not theme, so it
+     needs white in BOTH modes (--text-invert goes near-black in dark). */
+  color: #fff;
   background: #6b46c1;
   padding: 2px 6px;
   border-radius: 4px;
@@ -1591,28 +1607,32 @@ body.dark-mode #osm-poi-popup { border-color: #444; }
   flex: 1;
   min-width: 0;
 }
+.fp-attr-confirm-yes,
+.fp-attr-confirm-no {
+  min-height: 24px;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 3px 10px;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  font-family: inherit;
+}
 .fp-attr-confirm-yes {
   background: var(--danger);
   color: var(--text-invert);
-  border: none;
-  border-radius: 3px;
-  padding: 2px 8px;
-  font-size: var(--text-sm);
-  cursor: pointer;
-  font-family: inherit;
 }
 .fp-attr-confirm-yes:hover { background: var(--danger-hover); }
 .fp-attr-confirm-no {
-  background: #e2e8f0;
+  background: var(--surface-alt);
   color: var(--text-primary);
-  border: none;
-  border-radius: 3px;
-  padding: 2px 8px;
-  font-size: var(--text-sm);
-  cursor: pointer;
-  font-family: inherit;
+  border: 1px solid var(--border-strong);
 }
-.fp-attr-confirm-no:hover { background: #cbd5e0; }
+.fp-attr-confirm-no:hover { background: var(--surface-hover); }
+.fp-attr-confirm-yes:focus-visible,
+.fp-attr-confirm-no:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
 .fp-attr-row {
   display: flex;
   align-items: center;
@@ -1627,20 +1647,11 @@ body.dark-mode #osm-poi-popup { border-color: #444; }
   text-align: right;
   line-height: var(--leading-snug);
 }
+/* Look/size come from the compact control tier (see "Form controls" block);
+   only the layout role lives here. */
 .fp-attr-input {
-  font-size: var(--text-sm);
-  font-family: inherit;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  padding: 2px 6px;
-  background: var(--surface-raised);
   flex: 1;
   min-width: 0;
-  box-sizing: border-box;
-}
-.fp-attr-input:focus {
-  border-color: var(--accent);
-  outline: none;
 }
 input.fp-attr-input[type="number"] {
   width: 64px;
@@ -2222,16 +2233,23 @@ code { font-family: var(--font-mono); }
   display: flex;
   gap: 8px;
 }
+/* Tertiary/link actions — padded for a ≥24px hit area, matching
+   .rf-feature-select-actions a. */
 .bas-var-actions .var-action-btn {
-  font-size: var(--text-2xs);
+  font-size: var(--text-sm);
   color: var(--accent);
   background: none;
   border: none;
   cursor: pointer;
-  padding: 0;
+  padding: 4px 2px;
+  border-radius: var(--radius-sm);
 }
 .bas-var-actions .var-action-btn:hover {
   text-decoration: underline;
+}
+.bas-var-actions .var-action-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 .bas-var-checklist {
   border: none;
@@ -2292,12 +2310,32 @@ code { font-family: var(--font-mono); }
   margin: 6px 0;
   cursor: pointer;
 }
+/* This module's primary action. It predates .rf-action-primary and was still
+   rendering as a bare browser button; same look now, sized to its content
+   rather than filling a settings column. */
 .bas-run-btn {
   margin-top: 8px;
-  padding: 6px 16px;
+  min-height: 36px;
+  padding: 8px 18px;
+  font-family: inherit;
   font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--text-invert);
   cursor: pointer;
+  transition: background var(--ease-fast), box-shadow var(--ease-fast);
 }
+.bas-run-btn:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+.bas-run-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+.bas-run-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* ---- Basemap switcher ---- */
 .basemap-switcher {
@@ -2408,15 +2446,26 @@ code { font-family: var(--font-mono); }
 .module-popup-dialog {
   position: relative;
   background: var(--surface);
-  border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
   width: 720px;
   max-width: 90vw;
   max-height: 80vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /* Makes the dialog a query container so its CONTENTS can respond to the
+     panel's own width rather than the viewport's — see the @container rule
+     below. Safe here: the only position:fixed elements that appear over a
+     popup (#fp-color-picker, #fp-mini-popup, #fp-slider-popover,
+     #fp-context-menu) all append to document.body, so containment cannot
+     reparent them; the in-popup modal overlays are position:absolute. */
+  container-type: inline-size;
 }
+
+/* A narrow panel is tall by nature — let it use the height it saves in width.
+   The class is set in popup.js from the module's own popupWidth. */
+.module-popup-dialog.module-popup-narrow { max-height: 88vh; }
 .module-popup-header {
   display: flex;
   align-items: center;
@@ -2441,18 +2490,30 @@ code { font-family: var(--font-mono); }
   font-weight: var(--weight-semibold);
 }
 .module-popup-close {
-  width: auto;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
   margin: 0;
-  padding: 4px 10px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: var(--text-2xl);
   background: transparent;
   border: none;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   color: var(--muted);
   line-height: var(--leading-none);
+  transition: background var(--ease-fast), color var(--ease-fast);
 }
 .module-popup-close:hover {
+  background: var(--surface-hover);
   color: var(--danger);
+}
+.module-popup-close:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 .module-popup-body {
   padding: 14px 18px 18px;
@@ -2466,19 +2527,30 @@ code { font-family: var(--font-mono); }
   flex-direction: column;
   gap: 6px;
 }
+/* Menu rows, so they keep --text-base rather than the secondary-button
+   --text-sm — these are module names, not compact actions. */
 .analysis-module-btn {
   width: 100%;
+  min-height: 34px;
   padding: 8px 12px;
+  font-family: inherit;
   font-size: var(--text-base);
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
   background: var(--surface-raised);
+  color: var(--text-primary);
   text-align: left;
   cursor: pointer;
+  transition: background var(--ease-fast), border-color var(--ease-fast), box-shadow var(--ease-fast);
 }
 .analysis-module-btn:hover:not(:disabled) {
   background: var(--surface-hover);
   border-color: var(--accent);
+}
+.analysis-module-btn:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 .analysis-module-btn:disabled {
   opacity: 0.5;
@@ -2710,28 +2782,13 @@ body.dark-mode .ws-table .ws-warn { color: #fbbf24; }
   flex-direction: column;
   gap: 8px;
 }
-.tpi-popup-actions button {
-  width: 100%;
-  padding: 8px 0;
-  font-size: var(--text-base);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: #fff;
-}
-.tpi-popup-actions button:hover:not(:disabled) {
-  background: #eef1f5;
-}
+/* Sizing/look come from the shared button rules further down (phase 4); only
+   the column-fill width lives here. The raw hexes this block used to carry
+   (#fff / #eef1f5 / #2b6cb0 / #2c5282) are now tokens. */
+.tpi-popup-actions button { width: 100%; }
 .tpi-popup-actions button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-.tpi-popup-actions .tpi-action-primary {
-  background: #2b6cb0;
-  color: #fff;
-  border-color: #2b6cb0;
-}
-.tpi-popup-actions .tpi-action-primary:hover:not(:disabled) {
-  background: #2c5282;
 }
 .tpi-popup-section-title {
   font-size: var(--text-sm);
@@ -3021,8 +3078,11 @@ body.dark-mode .ws-table .ws-warn { color: #fbbf24; }
   display: flex;
   gap: 20px;
 }
+/* 280, not 240: phase 4's 34px controls and their labels need the extra room.
+   Each module's popupWidth grew by the same 40px so the results column keeps
+   the width it had. */
 .rf-settings-col {
-  width: 240px;
+  width: 280px;
   flex-shrink: 0;
   border-right: 1px solid var(--border);
   padding-right: 16px;
@@ -3040,42 +3100,202 @@ body.dark-mode .ws-table .ws-warn { color: #fbbf24; }
   color: var(--muted);
   margin-bottom: 8px;
 }
-.rf-select {
-  width: 100%;
+/* ---- Field labels & rhythm (phase 4) ----
+   .tiny is used two ways in the popup HTML: as a field label above a control,
+   and as generic small print (<p class="tiny">, legend rows). Only the label
+   form is restyled, and only when it isn't wrapping its own input — a label
+   that CONTAINS a checkbox/radio is an option label, not a field label. */
+label.tiny:not(:has(input)) {
+  display: block;
   font-size: var(--text-sm);
-  padding: 4px 6px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+  margin-bottom: var(--space-1);
 }
-.rf-number-input {
-  width: 100%;
+
+/* Layout primitive for a label + control pair. Defined here so phase 4 and
+   phase 5 share one spec; phase 5 is what rolls the popup HTML onto it
+   (replacing the per-element inline margin-top:10px scattered through
+   projects/*.html). Nothing uses it yet. */
+.form-field { margin-top: var(--space-3); }
+.form-field:first-child { margin-top: 0; }
+.form-field > label {
+  display: block;
   font-size: var(--text-sm);
-  padding: 4px 6px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+  margin-bottom: var(--space-1);
+}
+
+/* ---- Form controls (phase 4) ------------------------------------------
+   ONE spec for every text/number/select control in every analysis popup,
+   applied by selector list so all 15 modules inherit at once. Everything is
+   tokenized, so this block covers BOTH themes — there is deliberately no
+   matching body.dark-mode block (the old broad one was deleted).
+
+   Two tiers:
+     comfortable (--ctl-height, 34px)   — the default, used here
+     compact     (--ctl-height-sm, 28px) — dense many-row surfaces, below
+   Both share border/radius/hover/focus; only height and text size differ.  */
+.rf-select,
+.rf-number-input,
+.rf-text-input,
+.module-popup-body select,
+.module-popup-body input[type="text"],
+.module-popup-body input[type="number"],
+.module-popup-body input[type="date"],
+.module-popup-body input[type="time"],
+.module-popup-body input[type="file"],
+.module-popup-body textarea {
+  font-family: inherit;
+  font-size: var(--text-base);
+  min-height: var(--ctl-height);
+  padding: 6px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  color: var(--text-primary);
   box-sizing: border-box;
+  transition: border-color var(--ease-fast), box-shadow var(--ease-fast);
+}
+.rf-select,
+.rf-number-input,
+.rf-text-input { width: 100%; }
+
+.rf-select:hover:not(:disabled),
+.rf-number-input:hover:not(:disabled),
+.rf-text-input:hover:not(:disabled),
+.module-popup-body select:hover:not(:disabled),
+.module-popup-body input[type="text"]:hover:not(:disabled),
+.module-popup-body input[type="number"]:hover:not(:disabled),
+.module-popup-body input[type="date"]:hover:not(:disabled),
+.module-popup-body input[type="time"]:hover:not(:disabled),
+.module-popup-body textarea:hover:not(:disabled) {
+  border-color: var(--text-disabled);
+}
+
+.rf-select:focus,
+.rf-number-input:focus,
+.rf-text-input:focus,
+.module-popup-body select:focus,
+.module-popup-body input[type="text"]:focus,
+.module-popup-body input[type="number"]:focus,
+.module-popup-body input[type="date"]:focus,
+.module-popup-body input[type="time"]:focus,
+.module-popup-body input[type="file"]:focus,
+.module-popup-body textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.rf-select:disabled,
+.rf-number-input:disabled,
+.rf-text-input:disabled,
+.module-popup-body select:disabled,
+.module-popup-body input[type="text"]:disabled,
+.module-popup-body input[type="number"]:disabled,
+.module-popup-body input[type="date"]:disabled,
+.module-popup-body input[type="time"]:disabled,
+.module-popup-body textarea:disabled {
+  opacity: 0.5;
+  background: var(--surface-alt);
+  cursor: not-allowed;
+}
+
+/* Custom chevron. --select-chevron bakes in its own stroke color (a CSS url()
+   can't resolve currentColor) and is re-valued in the dark-mode token block. */
+.rf-select,
+.module-popup-body select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 30px;
+  background-image: var(--select-chevron);
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+}
+.module-popup-body select[multiple],
+.module-popup-body select[size]:not([size="1"]) {
+  background-image: none;
+  padding-right: 10px;
+}
+
+/* ---- Form controls: compact tier ----
+   Dense surfaces where 34px rows would balloon the panel: the 320px floating
+   attribute popup, the Attribute Summary grid, inline value boxes next to
+   sliders, the feature-panel buffer inputs. Selectors are specificity-matched
+   to the comfortable block above (which uses .module-popup-body <el>) so they
+   win where the two overlap. */
+.rf-number-input-sm,
+.module-popup-body .rf-number-input-sm,
+.fp-attr-input,
+#fp-attr-popup .fp-attr-input,
+.as-input,
+.module-popup-body .as-input,
+.fp-buffer-row input[type="number"],
+.fp-buffer-row input[type="text"],
+#fp-mini-popup input[type="text"],
+#fp-mini-popup input[type="number"],
+#fp-mini-popup select {
+  font-family: inherit;
+  font-size: var(--text-sm);
+  min-height: var(--ctl-height-sm);
+  padding: 3px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  box-sizing: border-box;
+  transition: border-color var(--ease-fast), box-shadow var(--ease-fast);
+}
+.rf-number-input-sm:hover:not(:disabled),
+.fp-attr-input:hover:not(:disabled),
+.as-input:hover:not(:disabled),
+.fp-buffer-row input[type="number"]:hover:not(:disabled) {
+  border-color: var(--text-disabled);
+}
+.rf-number-input-sm:focus,
+.module-popup-body .rf-number-input-sm:focus,
+.fp-attr-input:focus,
+#fp-attr-popup .fp-attr-input:focus,
+.as-input:focus,
+.module-popup-body .as-input:focus,
+.fp-buffer-row input[type="number"]:focus,
+.fp-buffer-row input[type="text"]:focus,
+#fp-mini-popup input:focus,
+#fp-mini-popup select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 .rf-number-input-sm {
   width: 52px;
   text-align: center;
-  font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  padding: 2px 4px;
+  padding: 3px 4px;
   flex-shrink: 0;
 }
 .rf-number-input-sm::-webkit-inner-spin-button,
 .rf-number-input-sm::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .rf-number-input-sm[type=number] { -moz-appearance: textfield; }
-.rf-text-input {
-  width: 100%;
-  font-size: var(--text-sm);
-  padding: 4px 6px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  box-sizing: border-box;
+
+/* Compact selects get the same chevron, tucked in tighter. Needed explicitly:
+   the compact tier's padding shorthand overrides the comfortable chevron
+   rule's padding-right, which would otherwise let text run under the glyph. */
+select.fp-attr-input,
+#fp-attr-popup select.fp-attr-input,
+.module-popup-body .as-input.as-select,
+#fp-mini-popup select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 22px;
+  background-image: var(--select-chevron);
+  background-repeat: no-repeat;
+  background-position: right 6px center;
 }
+
 .rf-input-row {
   display: flex;
   align-items: center;
@@ -3092,20 +3312,33 @@ body.dark-mode .ws-table .ws-warn { color: #fbbf24; }
 
 /* Feature selection checklist */
 .rf-feature-checklist {
-  max-height: 140px;
+  max-height: 180px;
   overflow-y: auto;
-  border: 1px solid var(--border, #ddd);
-  border-radius: 4px;
-  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px;
+  background: var(--surface-raised);
 }
+/* Rows are hover-washed and fully clickable — the whole-row click is wired
+   once by a delegated listener in js/app.js rather than in each module's own
+   row builder. */
 .rf-feature-check-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 0;
+  gap: var(--space-2);
+  padding: 5px 6px;
+  border-radius: 4px;
   font-size: var(--text-sm);
+  cursor: pointer;
 }
-.rf-feature-check-row input[type="checkbox"] { margin: 0; cursor: pointer; }
+.rf-feature-check-row:hover { background: var(--surface-hover); }
+.rf-feature-check-row input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
 .rf-feature-check-row label { cursor: pointer; }
 .rf-feature-type-badge {
   color: var(--muted, #888);
@@ -3114,40 +3347,81 @@ body.dark-mode .ws-table .ws-warn { color: #fbbf24; }
   min-width: 14px;
   font-weight: var(--weight-semibold);
 }
+/* Tertiary/link actions. Padding is not decoration — it buys the ≥24px hit
+   area these one-word links otherwise fall well short of. */
 .rf-feature-select-actions {
   margin-top: 3px;
   margin-bottom: 2px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
 }
 .rf-feature-select-actions a {
-  color: #4a90d9;
+  color: var(--accent);
   text-decoration: none;
   cursor: pointer;
+  font-size: var(--text-sm);
+  padding: 4px 2px;
+  border-radius: var(--radius-sm);
 }
 .rf-feature-select-actions a:hover { text-decoration: underline; }
+.rf-feature-select-actions a:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
 
-/* Buttons */
-.rf-action-primary {
+/* Buttons ---------------------------------------------------------------
+   Primary = filled accent, one per settings column ("Analyze", "Score…").
+   Secondary = outline, everything else (exports, modal openers, tab actions). */
+.rf-action-primary,
+.tpi-popup-actions .tpi-action-primary {
   width: 100%;
-  padding: 8px 0;
+  min-height: 36px;
+  padding: 8px 12px;
+  font-family: inherit;
   font-size: var(--text-base);
   font-weight: var(--weight-semibold);
   border: 1px solid var(--accent);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--accent);
   color: var(--text-invert);
   cursor: pointer;
+  transition: background var(--ease-fast), box-shadow var(--ease-fast);
 }
-.rf-action-primary:hover:not(:disabled) { background: var(--accent-hover); }
-.rf-action-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-.rf-btn-sm {
-  padding: 5px 10px;
+.rf-action-primary:hover:not(:disabled),
+.tpi-popup-actions .tpi-action-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+.rf-action-primary:focus-visible,
+.tpi-popup-actions .tpi-action-primary:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+.rf-action-primary:disabled,
+.tpi-popup-actions .tpi-action-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.rf-btn-sm,
+.tpi-popup-actions button {
+  min-height: 30px;
+  padding: 5px 12px;
+  font-family: inherit;
   font-size: var(--text-sm);
-  border: 1px solid var(--border);
-  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
   background: var(--surface-raised);
+  color: var(--text-primary);
   cursor: pointer;
+  transition: background var(--ease-fast), border-color var(--ease-fast), box-shadow var(--ease-fast);
 }
-.rf-btn-sm:hover:not(:disabled) { background: var(--surface-hover); }
+.rf-btn-sm:hover:not(:disabled),
+.tpi-popup-actions button:hover:not(:disabled) { background: var(--surface-hover); }
+.rf-btn-sm:focus-visible,
+.tpi-popup-actions button:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
 .rf-btn-sm:disabled { opacity: 0.4; cursor: not-allowed; }
 .rf-export-row {
   display: flex;
@@ -3657,6 +3931,30 @@ body.dark-mode .ws-table .ws-warn { color: #fbbf24; }
 @media (max-width: 680px) {
   .rf-section-row { flex-direction: column; }
   .rf-settings-col { width: 100%; border: none; padding: 0; }
+}
+
+/* Panel-width responsiveness (phase 4). Same stacking as the viewport rule
+   above, but keyed to the POPUP's own width via the container context on
+   .module-popup-dialog — so a module becomes a tall task panel (phase 6's
+   dock-right floating panels) by changing only its popupWidth, with no HTML
+   restructuring. Walkshed is the pilot at 460px.
+
+   Placement matters: @container adds no specificity, so this has to come
+   after .rf-settings-col / .rf-feature-checklist are defined above. */
+@container (max-width: 620px) {
+  .rf-section-row {
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+  .rf-settings-col {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding-right: 0;
+    padding-bottom: var(--space-3);
+  }
+  .rf-feature-checklist { max-height: 220px; }
+  .rf-export-row { flex-wrap: wrap; }
 }
 
 /* ---- Title VI popup styles (.tvi- prefix) ---- */
@@ -4296,7 +4594,12 @@ body.dark-mode {
   --text-secondary: #a8b2c1;   /* refined vs. legacy --muted (#9ca3af); phase 2 migrates */
   --text-faint:     #9ca3af;   /* = legacy --muted's current value */
   --text-disabled:  #718096;
-  --text-invert:    #ffffff;
+  /* Text ON a filled --accent / --danger button. Dark mode's accent (#63b3ed)
+     and danger (#fc8181) are light hues, so white text on them lands around
+     2:1 contrast — a WCAG AA failure on every filled button in the app. Near
+     black restores ~8:1. (The one place --text-invert sat on a color that
+     does NOT theme — .msr-label's fixed purple — is hardcoded to #fff.) */
+  --text-invert:    #1a202c;
 
   /* ---- Color tokens: borders ---- */
   /* --border stays (#374151) for now; --border-strong is new/unused until phase 2. */
@@ -4321,6 +4624,9 @@ body.dark-mode {
   --shadow-sm: 0 1px 3px rgba(0,0,0,0.35);
   --shadow-md: 0 4px 12px rgba(0,0,0,0.45);
   --shadow-lg: 0 12px 40px rgba(0,0,0,0.55);
+
+  /* ---- Form controls: lighter chevron so it reads on dark surfaces ---- */
+  --select-chevron: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' fill='none' stroke='%23a0aec0' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 
 /* ---- Toolbar ---- */
@@ -4389,11 +4695,10 @@ body.dark-mode .fp-group-name-edit {
 }
 
 /* ---- Attribute popup ---- */
-body.dark-mode .fp-attr-input {
-  color: #e2e8f0; border-color: #4a5568;
-}
-body.dark-mode .fp-attr-confirm-no { background: #374151; }
-body.dark-mode .fp-attr-confirm-no:hover { background: #4a5568; }
+/* body.dark-mode .fp-attr-input deleted in phase 4 — its color/border are now
+   token-driven by the compact control tier, which covers both themes. */
+/* body.dark-mode .fp-attr-confirm-no rules deleted in phase 4 — the base rule
+   is token-driven (--surface-alt / --surface-hover) and covers both themes. */
 body.dark-mode .fp-attr-confirm > span { color: #fca5a5; }
 body.dark-mode .fp-svc-section-title { color: #a0aec0; }
 body.dark-mode .fp-svc-header { color: #718096; border-bottom-color: #4a5568; }
@@ -4429,23 +4734,13 @@ body.dark-mode .module-popup-dialog { background: #1e1e2e; }
 body.dark-mode .floating-widget { background: rgba(30,30,46,0.95); }
 
 /* ---- Analysis module buttons ---- */
-body.dark-mode .analysis-module-btn { color: #e2e8f0; }
+/* body.dark-mode .analysis-module-btn deleted in phase 4 — color is now
+   var(--text-primary) in the base rule, which covers both themes. */
 
-/* ---- Generic inputs / selects inside popups ---- */
-body.dark-mode .module-popup-body select,
-body.dark-mode .module-popup-body input[type="text"],
-body.dark-mode .module-popup-body input[type="number"],
-body.dark-mode .module-popup-body input[type="file"],
-body.dark-mode .module-popup-body textarea {
-  background: #2a2a3d; color: #e2e8f0; border-color: #4a5568;
-}
-body.dark-mode .module-popup-body select:focus,
-body.dark-mode .module-popup-body input[type="text"]:focus,
-body.dark-mode .module-popup-body input[type="number"]:focus {
-  border-color: #63b3ed;
-  box-shadow: 0 0 0 2px rgba(99,179,237,0.2);
-  outline: none;
-}
+/* Generic inputs / selects inside popups: the old dark block here was deleted
+   in phase 4. Every declaration it carried (bg #2a2a3d, color #e2e8f0, border
+   #4a5568, focus #63b3ed + ring) is now produced by the tokenized "Form
+   controls" block, which serves both themes from one place. */
 
 /* ---- Pills and breakpoint items ---- */
 body.dark-mode .bpItem { background: #2a2a3d; }
@@ -4463,8 +4758,8 @@ body.dark-mode .pill.low  { background: #3a1a1a; border-color: #7f1d1d; color: #
    5 and 6. */
 
 /* ---- TPI ---- */
-body.dark-mode .tpi-popup-actions button { background: #2a2a3d; }
-body.dark-mode .tpi-popup-actions button:hover:not(:disabled) { background: rgba(255,255,255,0.07); }
+/* body.dark-mode .tpi-popup-actions button rules deleted in phase 4 — the
+   shared secondary-button rule is token-driven and covers both themes. */
 body.dark-mode .tpi-status-done { background: #1a3a2a; border-color: #2d6a4f; }
 body.dark-mode .tpi-status-error { background: #3a1a1a; border-color: #7f1d1d; }
 body.dark-mode .tpi-composite-value { color: #f1f5f9; }
@@ -4514,7 +4809,8 @@ body.dark-mode .rf-proj-cdi-row td { background: rgba(99,179,237,0.10); }
 body.dark-mode .rf-route-score-row:hover { background: rgba(255,255,255,0.07); }
 body.dark-mode .rf-route-factor-bar-wrap { background: #374151; }
 body.dark-mode .rf-weights-modal-title { color: #f1f5f9; }
-body.dark-mode .rf-btn-sm { color: #e2e8f0; }
+/* body.dark-mode .rf-btn-sm deleted in phase 4 — color is now
+   var(--text-primary) in the base rule, which covers both themes. */
 
 /* ---- Title VI ---- */
 body.dark-mode .tvi-baseline-box { background: #1e3a5f; border-color: #2b6cb0; }
@@ -5377,21 +5673,9 @@ body.dark-mode .as-row:not(.as-row-header):hover { background: #22222f; }
   display: flex;
   gap: 2px;
 }
-.as-input {
-  width: 100%;
-  font-size: var(--text-sm);
-  padding: 3px 6px;
-  border: 1px solid var(--border, #d6dae0);
-  border-radius: 3px;
-  background: var(--surface);
-  color: var(--text-primary);
-}
-.as-input:focus { outline: 1px solid #4299e1; border-color: #4299e1; }
+/* Look/size come from the compact control tier (see "Form controls" block). */
+.as-input { width: 100%; }
 .as-input-num { text-align: right; }
-.as-select { padding: 2px 4px; }
-body.dark-mode .as-input {
-  background: #1f1f2e; border-color: #2d2d3d;
-}
 body.dark-mode .as-section-header,
 body.dark-mode .as-cell-header { color: #a0aec0; }
 body.dark-mode .as-row-header { border-color: #2d2d3d; }

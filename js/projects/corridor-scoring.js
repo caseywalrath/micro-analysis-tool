@@ -1047,7 +1047,7 @@
     id:         "corridor-scoring",
     name:       "Corridor Scoring",
     enabled:    true,
-    popupWidth: 960,
+    popupWidth: 1000,
     popupHTML:  "projects/corridor-scoring-popup.html",
 
     init:    function (core) { init(core); },

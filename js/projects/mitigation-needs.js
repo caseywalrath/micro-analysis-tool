@@ -705,7 +705,7 @@
     id:         "mitigation-needs",
     name:       "Wetland & Channel Mitigation Needs",
     enabled:    true,
-    popupWidth: 980,
+    popupWidth: 1020,
     popupHTML:  "projects/mitigation-needs-popup.html",
 
     init:    function (core) { init(core); },

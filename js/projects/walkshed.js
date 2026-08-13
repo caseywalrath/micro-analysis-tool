@@ -589,7 +589,7 @@
     id:         "walkshed",
     name:       "Walkshed Analysis",
     enabled:    true,
-    popupWidth: 720,
+    popupWidth: 460,
     popupHTML:  "projects/walkshed-popup.html",
 
     init:    function (core) { init(core); },

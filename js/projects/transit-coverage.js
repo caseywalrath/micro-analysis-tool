@@ -1041,7 +1041,7 @@
     id:         "transit-coverage",
     name:       "Transit Coverage",
     enabled:    true,
-    popupWidth: 960,
+    popupWidth: 1000,
     popupHTML:  "projects/transit-coverage-popup.html",
 
     init:    function (core) { init(core); },

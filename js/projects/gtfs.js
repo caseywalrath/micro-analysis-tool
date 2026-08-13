@@ -931,7 +931,7 @@
     id:         "gtfs",
     name:       "GTFS Feed Attributes",
     enabled:    true,
-    popupWidth: 960,
+    popupWidth: 1000,
     popupHTML:  "projects/gtfs-popup.html",
 
     init:    function (core) { init(core); },
