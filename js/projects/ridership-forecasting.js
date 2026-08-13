@@ -362,15 +362,11 @@
   function syncBufferControl() {
     var input = document.getElementById("rfBufferMiles");
     var toggle = document.getElementById("rfUseDisplayBuffers");
-    var help = document.getElementById("rfBufferHelp");
     if (input) {
       input.value = String(_bufferMiles);
       input.disabled = _useDisplayBuffers;
     }
     if (toggle) toggle.checked = _useDisplayBuffers;
-    if (help) help.textContent = _useDisplayBuffers
-      ? "Uses the currently displayed Feature Settings buffers for calibration and demand."
-      : "Analysis distance only. Display buffers follow Feature Settings. Used for both calibration and demand.";
   }
 
   // ---- Layer 1: Demand ----

@@ -35,7 +35,7 @@
       </div>
 
       <details class="u-mt-3 data-input-group" data-input-group="advanced">
-        <summary class="tiny u-muted ws-advanced-summary">Additional settings</summary>
+        <summary class="tiny u-muted ws-advanced-summary">Advanced Settings</summary>
         <div class="form-field u-mt-2">
           <label class="tiny">Hull detail — max edge (km)</label>
           <input type="number" id="wsMaxEdge" class="rf-number-input" min="0.02" max="2" step="0.01" value="0.3">
@@ -45,10 +45,6 @@
         </p>
       </details>
 
-      <p id="wsNetWarn" class="tiny" style="display:none;color:#b45309;margin-top:12px;">
-        No street network loaded — Calculate will offer a scoped download. Or load one via Add&nbsp;Data.
-      </p>
-      <p id="wsCoverageWarn" class="tiny" style="display:none;color:#b45309;margin-top:8px;"></p>
       <div class="module-input-actions">
         <button id="wsDownloadBtn" type="button" class="rf-btn-sm" style="display:none;">
           Download streets for this area
@@ -81,10 +77,6 @@
           more irregular than a circular buffer. Click <strong>Use as study areas</strong> to run Buffer-Area
           Summary, TPI, etc. against the walkshed instead of the circle.
         </p>
-      </div>
-
-      <div id="wsEmptyState" class="rf-info-box">
-        <p>Load a road network, place points, and click <strong>Calculate</strong> to build walking isochrones.</p>
       </div>
 
     </div>

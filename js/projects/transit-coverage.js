@@ -265,12 +265,8 @@
   function syncBufferControl() {
     var input = document.getElementById("tcBufferMiles");
     var toggle = document.getElementById("tcUseDisplayBuffers");
-    var help = document.getElementById("tcBufferHelp");
     if (input) input.disabled = _useDisplayBuffers;
     if (toggle) toggle.checked = _useDisplayBuffers;
-    if (help) help.textContent = _useDisplayBuffers
-      ? "Uses the currently displayed Feature Settings buffers."
-      : "Analysis distance only. Display buffers follow Feature Settings.";
   }
 
   function renderInputs(collapsed) {

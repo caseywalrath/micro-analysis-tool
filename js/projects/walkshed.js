@@ -643,13 +643,11 @@
   function onClose(core) { /* state persists in closure */ }
 
   // Calculate stays enabled with no network loaded — pressing it is how the user
-  // gets offered the scoped download. Only the advisory note is toggled.
+  // gets offered the scoped download.
   function updateComputeAvailability() {
     var btn = document.getElementById("wsComputeBtn");
     if (btn) btn.disabled = false;
     var loaded = App.roadNetworkLoaded && App.roadNetworkLoaded();
-    var warn = document.getElementById("wsNetWarn");
-    if (warn) warn.style.display = loaded ? "none" : "";
     if (loaded) { setCoverageWarn(null); showDownloadBtn(false); }
   }
 

@@ -218,15 +218,11 @@
   function syncBufferControl() {
     var input = document.getElementById("basBufferMiles");
     var toggle = document.getElementById("basUseDisplayBuffers");
-    var help = document.getElementById("basBufferHelp");
     if (input) {
       input.value = String(_state.bufferMiles);
       input.disabled = _state.useDisplayBuffers;
     }
     if (toggle) toggle.checked = _state.useDisplayBuffers;
-    if (help) help.textContent = _state.useDisplayBuffers
-      ? "Uses the currently displayed Feature Settings buffers. Polygons are included without a buffer."
-      : "Analysis distance only. Polygons are included without a buffer.";
   }
 
   // ---- Summary runner ----

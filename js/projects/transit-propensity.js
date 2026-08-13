@@ -402,15 +402,11 @@
   function syncBufferControl() {
     var input = document.getElementById("tpiBufferMiles");
     var toggle = document.getElementById("tpiUseDisplayBuffers");
-    var help = document.getElementById("tpiBufferHelp");
     if (input) {
       input.value = String(_bufferMiles);
       input.disabled = _useDisplayBuffers;
     }
     if (toggle) toggle.checked = _useDisplayBuffers;
-    if (help) help.textContent = _useDisplayBuffers
-      ? "Uses the currently displayed Feature Settings buffers. Polygons are included without a buffer."
-      : "Analysis distance only. Polygons are included without a buffer.";
   }
 
   // ---- Collapsible inputs (shared helper) ----
