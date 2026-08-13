@@ -236,6 +236,19 @@ async function assertAdaptivePanelLayout(page, theme, id) {
       await assertState("ratings", widths.setup);
     }
 
+    // A user who reopens Inputs after viewing results must return to the
+    // narrow vertical form. Otherwise a wide result panel regresses to the
+    // former Settings | Results split while editing inputs.
+    const inputsHeader = page.locator(".module-inputs-header:visible");
+    await page.evaluate(() => window.App.popup.setLayoutMode("results"));
+    await inputsHeader.click();
+    await page.evaluate(() => window.App.popup.setLayoutMode("results"));
+    await inputsHeader.click();
+    const reopened = await assertState("reopened inputs", widths.setup);
+    if (reopened.inputsExpanded !== "true") {
+      throw new Error("reopened Inputs should be expanded; aria-expanded=" + reopened.inputsExpanded);
+    }
+
     await page.evaluate(() => window.App.popup.setLayoutMode("setup"));
     await assertState("restored setup", widths.setup);
     record(name, "ok");

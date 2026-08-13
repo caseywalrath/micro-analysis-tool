@@ -312,7 +312,11 @@
     App.renderModuleInputs({
       hostEl: document.querySelector(".ws-body .rf-settings-col"),
       collapsed: collapsed,
-      summary: _lastEntries.length ? inputsSummary() : ""
+      summary: _lastEntries.length ? inputsSummary() : "",
+      onToggle: function (isCollapsed) {
+        if (!App.popup || !App.popup.setLayoutMode) return;
+        App.popup.setLayoutMode(isCollapsed && _lastEntries.length ? "results" : "setup");
+      }
     });
   }
 

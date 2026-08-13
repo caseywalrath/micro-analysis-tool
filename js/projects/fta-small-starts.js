@@ -610,7 +610,11 @@
     App.renderModuleInputs({
       hostEl: document.querySelector('.fta-tab-content[data-tab="ratings"] .rf-settings-col'),
       collapsed: collapsed,
-      summary: inputsSummary()
+      summary: inputsSummary(),
+      onToggle: function (isCollapsed) {
+        if (!App.popup || !App.popup.setLayoutMode) return;
+        App.popup.setLayoutMode(isCollapsed && _lastRatings ? "results" : "setup");
+      }
     });
   }
 

@@ -272,7 +272,11 @@
     App.renderModuleInputs({
       hostEl: document.querySelector(".cs-body .rf-settings-col"),
       collapsed: collapsed,
-      summary: inputsSummary()
+      summary: inputsSummary(),
+      onToggle: function (isCollapsed) {
+        if (!App.popup || !App.popup.setLayoutMode) return;
+        App.popup.setLayoutMode(isCollapsed && _lastResult ? "results" : "setup");
+      }
     });
   }
 
