@@ -285,14 +285,12 @@
   }
 
   function emptyHint() {
-    if (!App.roadNetworkLoaded || !App.roadNetworkLoaded()) {
-      return {
-        need: "Load a road network first.",
-        action: "Add Data → Area Roads for Street Routing, or import a saved road-network GeoJSON."
-      };
-    }
     if (!(App.points || []).length) {
       return { need: "Place a point to calculate a walkshed.", action: "Use the Point tool, then click Calculate." };
+    }
+    if (!App.roadNetworkLoaded || !App.roadNetworkLoaded()) {
+      return { need: "Choose points and click Calculate.",
+               action: "No street network is loaded yet — Calculate will offer to download one for just the area these points need." };
     }
     return { need: "Choose points and click Calculate.", action: "A walkshed is the true street-network area reachable on foot within your time budget." };
   }
@@ -360,15 +358,103 @@
     });
   }
 
+  // ---- Prompt-to-download street network ----
+  // Ported from the Transit Travelshed module (js/projects/transit-travelshed.js),
+  // which already does this: rather than refusing to run when the loaded network
+  // doesn't reach, offer a download scoped to exactly the area this analysis
+  // needs. Walkshed's version is simpler — no routes, no shed mode, just a walk
+  // circle per selected point.
+
+  var _pendingDownloadExtent = null; // Feature<Polygon> | null, consumed by #wsDownloadBtn
+
+  // Rectangle covering everything the flood could touch: a circle of the full
+  // walk budget around each selected point. Coarse but safe — it only ever asks
+  // for MORE coverage than strictly needed, never less.
+  function computeRequiredExtent(targets) {
+    if (!targets.length) return null;
+    var budgetKm = _settings.walkSpeedMph * KM_PER_MILE * (_settings.minutes / 60);
+    var pieces = [];
+    targets.forEach(function (pf) {
+      var c = pf.geometry && pf.geometry.coordinates;
+      if (!c) return;
+      pieces.push(turf.circle(c, budgetKm, { units: "kilometers", steps: 16 }));
+    });
+    if (!pieces.length) return null;
+    var union = App.foldAnalysisUnion ? App.foldAnalysisUnion(pieces) : pieces[0];
+    return union ? turf.bboxPolygon(turf.bbox(union)) : null;
+  }
+
+  function setCoverageWarn(msg) {
+    var el = document.getElementById("wsCoverageWarn");
+    if (!el) return;
+    if (msg) { el.textContent = msg; el.style.display = ""; }
+    else { el.style.display = "none"; }
+  }
+
+  function showDownloadBtn(show) {
+    var btn = document.getElementById("wsDownloadBtn");
+    if (btn) btn.style.display = show ? "" : "none";
+  }
+
+  // Returns true when the analysis may proceed. Otherwise it has already put the
+  // reason on screen and (where a download would help) armed the download button.
+  function checkNetworkCoverage(targets) {
+    _pendingDownloadExtent = computeRequiredExtent(targets);
+
+    if (!App.roadNetworkLoaded || !App.roadNetworkLoaded()) {
+      setCoverageWarn("No street network loaded.");
+      showDownloadBtn(!!_pendingDownloadExtent);
+      return false;
+    }
+    var downloaded = App.getRoadDownloadExtent ? App.getRoadDownloadExtent() : null;
+    if (downloaded === null) {
+      // File-imported network — extent unknown. Soft warning; proceed anyway.
+      setCoverageWarn("Imported network — can't verify it covers these points; walksheds near the edge may be clipped.");
+      showDownloadBtn(false);
+      return true;
+    }
+    if (_pendingDownloadExtent && !turf.booleanContains(downloaded, _pendingDownloadExtent)) {
+      setCoverageWarn("Loaded streets don't cover this walk budget.");
+      showDownloadBtn(true);
+      return false;
+    }
+    setCoverageWarn(null);
+    showDownloadBtn(false);
+    return true;
+  }
+
+  // Downloads roads for the last computed required extent, then re-runs on
+  // success. The walkshed cache keys include the network epoch, which
+  // fetchRoadNetworkForExtent bumps, so cached polygons invalidate themselves.
+  async function downloadNetworkForPendingExtent() {
+    if (!_pendingDownloadExtent || !App.fetchRoadNetworkForExtent) return;
+    var btn = document.getElementById("wsDownloadBtn");
+    if (btn) btn.disabled = true;
+    setStatus("Downloading streets\u2026", "running");
+    try {
+      var ok = await App.fetchRoadNetworkForExtent(_pendingDownloadExtent);
+      if (ok) { updateComputeAvailability(); runWalkshed(); }
+      else setStatus("Street download failed or was cancelled.", "error");
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
   // ---- Run (compute for target set) ----
 
   function runWalkshed() {
     if (_running) return;
-    if (!App.roadNetworkLoaded || !App.roadNetworkLoaded()) { showEmpty(); return; }
 
     readSettingsFromInputs();
     var targets = getTargetPoints();
     if (!targets.length) { setStatus("Select at least one point.", "error"); return; }
+
+    // Missing or insufficient street coverage is an offer to download, not a
+    // dead end — checkNetworkCoverage has already explained and armed the button.
+    if (!checkNetworkCoverage(targets)) {
+      setStatus("Street network doesn't cover these points — download to continue.", "error");
+      return;
+    }
 
     _running = true;
     setStatus("Calculating walksheds…", "running");
@@ -503,6 +589,9 @@
     var computeBtn = document.getElementById("wsComputeBtn");
     if (computeBtn) computeBtn.addEventListener("click", runWalkshed);
 
+    var dlBtn = document.getElementById("wsDownloadBtn");
+    if (dlBtn) dlBtn.addEventListener("click", downloadNetworkForPendingExtent);
+
     var gj = document.getElementById("wsExportGeoJSON");
     if (gj) gj.addEventListener("click", exportGeoJSON);
 
@@ -544,12 +633,15 @@
 
   function onClose(core) { /* state persists in closure */ }
 
+  // Calculate stays enabled with no network loaded — pressing it is how the user
+  // gets offered the scoped download. Only the advisory note is toggled.
   function updateComputeAvailability() {
     var btn = document.getElementById("wsComputeBtn");
+    if (btn) btn.disabled = false;
     var loaded = App.roadNetworkLoaded && App.roadNetworkLoaded();
-    if (btn) btn.disabled = !loaded;
     var warn = document.getElementById("wsNetWarn");
     if (warn) warn.style.display = loaded ? "none" : "";
+    if (loaded) { setCoverageWarn(null); showDownloadBtn(false); }
   }
 
   function clearAll() {
