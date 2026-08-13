@@ -2017,7 +2017,7 @@ code { font-family: var(--font-mono); }
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 10px;
-  background: #fafafa;
+  background: var(--surface-raised);
 }
 .pill {
   display:inline-block;
@@ -2025,7 +2025,7 @@ code { font-family: var(--font-mono); }
   border-radius: 999px;
   border: 1px solid var(--border);
   font-size: var(--text-sm);
-  background: #fff;
+  background: var(--surface-raised);
 }
 .pill.na   { color: var(--muted); }
 .pill.high { font-weight: var(--weight-bold); background: #c6f6d5; border-color: #68d391; color: #22543d; }
@@ -2061,7 +2061,7 @@ code { font-family: var(--font-mono); }
 }
 .results-modal-dialog {
   position: relative;
-  background: #fff;
+  background: var(--surface);
   border-radius: 12px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.2);
   width: 640px;
@@ -2096,7 +2096,7 @@ code { font-family: var(--font-mono); }
   line-height: var(--leading-none);
 }
 .results-modal-close:hover {
-  color: #e53e3e;
+  color: var(--danger);
 }
 .results-modal-body {
   padding: 14px 18px 18px;
@@ -2140,7 +2140,7 @@ code { font-family: var(--font-mono); }
   font-style: italic;
 }
 .results-table tr.result-error td {
-  color: #e53e3e;
+  color: var(--danger);
 }
 
 /* Notes at bottom of modal */
@@ -2224,7 +2224,7 @@ code { font-family: var(--font-mono); }
 }
 .bas-var-actions .var-action-btn {
   font-size: var(--text-2xs);
-  color: #2b6cb0;
+  color: var(--accent);
   background: none;
   border: none;
   cursor: pointer;
@@ -2407,7 +2407,7 @@ code { font-family: var(--font-mono); }
 }
 .module-popup-dialog {
   position: relative;
-  background: #fff;
+  background: var(--surface);
   border-radius: 12px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.2);
   width: 720px;
@@ -2452,7 +2452,7 @@ code { font-family: var(--font-mono); }
   line-height: var(--leading-none);
 }
 .module-popup-close:hover {
-  color: #e53e3e;
+  color: var(--danger);
 }
 .module-popup-body {
   padding: 14px 18px 18px;
@@ -2472,13 +2472,13 @@ code { font-family: var(--font-mono); }
   font-size: var(--text-base);
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: #fff;
+  background: var(--surface-raised);
   text-align: left;
   cursor: pointer;
 }
 .analysis-module-btn:hover:not(:disabled) {
-  background: #eef1f5;
-  border-color: #2b6cb0;
+  background: var(--surface-hover);
+  border-color: var(--accent);
 }
 .analysis-module-btn:disabled {
   opacity: 0.5;
@@ -2770,22 +2770,22 @@ body.dark-mode .ws-table .ws-warn { color: #fbbf24; }
   margin-top: 8px;
   font-size: var(--text-sm);
   color: var(--muted);
-  background: #f9f9f9;
+  background: var(--surface-raised);
 }
 .tpi-status-stale {
   border-color: var(--warnbd);
   background: var(--warnbg);
-  color: #92400e;
+  color: var(--warn-text);
 }
 .tpi-status-done {
-  border-color: #a7f3d0;
-  background: #ecfdf5;
-  color: #065f46;
+  border-color: var(--ok-bd);
+  background: var(--ok-bg);
+  color: var(--ok-text);
 }
 .tpi-status-error {
-  border-color: #fca5a5;
-  background: #fef2f2;
-  color: #991b1b;
+  border-color: var(--err-bd);
+  background: var(--err-bg);
+  color: var(--err-text);
 }
 
 /* Results card */
@@ -2818,7 +2818,7 @@ body.dark-mode .ws-table .ws-warn { color: #fbbf24; }
 }
 .tpi-factor-name {
   flex: 1;
-  color: #333;
+  color: var(--text-primary);
 }
 .tpi-factor-weight {
   width: 36px;
@@ -2831,10 +2831,10 @@ body.dark-mode .ws-table .ws-warn { color: #fbbf24; }
   text-align: right;
   font-weight: var(--weight-semibold);
 }
-.tpi-factor-ok { color: #065f46; }
+.tpi-factor-ok { color: var(--ok-text); }
 .tpi-factor-na { color: var(--muted); font-style: italic; font-weight: var(--weight-normal); }
-.tpi-tract-marker { color: #888; font-size: var(--text-2xs); cursor: help; }
-.tpi-footnote { font-size: var(--text-xs); color: #888; margin-top: 6px; font-style: italic; line-height: var(--leading-normal); }
+.tpi-tract-marker { color: var(--text-faint); font-size: var(--text-2xs); cursor: help; }
+.tpi-footnote { font-size: var(--text-xs); color: var(--text-faint); margin-top: 6px; font-style: italic; line-height: var(--leading-normal); }
 
 /* Composite row */
 .tpi-composite-summary {
@@ -2849,8 +2849,8 @@ body.dark-mode .ws-table .ws-warn { color: #fbbf24; }
   padding: 2px 0;
   font-size: var(--text-base);
 }
-.tpi-composite-label { color: #333; }
-.tpi-composite-value { font-weight: var(--weight-semibold); color: #1a1a1a; }
+.tpi-composite-label { color: var(--text-primary); }
+.tpi-composite-value { font-weight: var(--weight-semibold); color: var(--text-primary); }
 
 /* Weight sliders */
 .tpi-slider-row {
@@ -2862,7 +2862,7 @@ body.dark-mode .ws-table .ws-warn { color: #fbbf24; }
 .tpi-slider-label {
   width: 90px;
   font-size: var(--text-sm);
-  color: #333;
+  color: var(--text-primary);
   flex-shrink: 0;
   cursor: help;
   white-space: nowrap;
@@ -2874,21 +2874,21 @@ body.dark-mode .ws-table .ws-warn { color: #fbbf24; }
   min-width: 0;
   height: 4px;
   cursor: pointer;
-  accent-color: #2b6cb0;
+  accent-color: var(--accent);
 }
 .tpi-slider-value {
   width: 44px;
   text-align: center;
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
-  color: #1a1a1a;
+  color: var(--text-primary);
   border: 1px solid var(--border);
   border-radius: 3px;
   padding: 1px 2px;
   flex-shrink: 0;
 }
 .tpi-slider-value:focus {
-  outline: 2px solid #2b6cb0;
+  outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
 /* Hide browser spin arrows to keep layout compact */
@@ -2908,7 +2908,7 @@ body.dark-mode .ws-table .ws-warn { color: #fbbf24; }
 }
 .tpi-weight-warn {
   font-size: var(--text-sm);
-  color: #e53e3e;
+  color: var(--danger);
   margin-top: 4px;
 }
 .tpi-weight-actions { margin-top: 6px; }
@@ -2932,14 +2932,14 @@ body.dark-mode .ws-table .ws-warn { color: #fbbf24; }
   text-transform: uppercase;
   letter-spacing: var(--tracking-sm);
   margin-bottom: 4px;
-  color: #333;
+  color: var(--text-primary);
 }
 .tpi-legend-row {
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 1px 0;
-  color: #333;
+  color: var(--text-primary);
 }
 .tpi-legend-swatch {
   display: inline-block;
@@ -4412,20 +4412,24 @@ body.dark-mode .fp-svc-every-ro {
 body.dark-mode .fp-svc-mirror-empty { color: #718096; }
 
 /* ---- Basemap switcher ---- */
+/* Needed despite matching the base rule's var(--surface-raised): .basemap-btn
+   is a <button> inside MapLibre's own .maplibregl-ctrl-group, whose vendor
+   CSS forces background-color:transparent with higher specificity
+   (.maplibregl-ctrl-group button) than a plain .basemap-btn class selector
+   can beat. Only a compound selector like this one has enough specificity
+   to win, in either theme - see the phase-2 slice 4 commit for how this
+   was found (a regression caught in dark_shell's diff). */
+body.dark-mode .basemap-btn { background: var(--surface-raised); }
 body.dark-mode .basemap-btn:hover { background: #374151; }
 
 /* ---- Module popup dialogs ---- */
 body.dark-mode .module-popup-dialog { background: #1e1e2e; }
-body.dark-mode .module-popup-close:hover { color: #fc8181; }
 
 /* ---- Floating map widgets (TPI/RF legends) ---- */
 body.dark-mode .floating-widget { background: rgba(30,30,46,0.95); }
 
 /* ---- Analysis module buttons ---- */
-body.dark-mode .analysis-module-btn { background: #2a2a3d; color: #e2e8f0; }
-body.dark-mode .analysis-module-btn:hover:not(:disabled) {
-  background: rgba(255,255,255,0.07); border-color: #63b3ed;
-}
+body.dark-mode .analysis-module-btn { color: #e2e8f0; }
 
 /* ---- Generic inputs / selects inside popups ---- */
 body.dark-mode .module-popup-body select,
@@ -4463,12 +4467,8 @@ body.dark-mode .tvi-tab-active { color: #63b3ed; border-bottom-color: #63b3ed; }
 /* ---- TPI ---- */
 body.dark-mode .tpi-popup-actions button { background: #2a2a3d; }
 body.dark-mode .tpi-popup-actions button:hover:not(:disabled) { background: rgba(255,255,255,0.07); }
-body.dark-mode .tpi-status { background: #2a2a3d; }
-body.dark-mode .tpi-status-done { background: #1a3a2a; color: #6ee7b7; border-color: #2d6a4f; }
-body.dark-mode .tpi-status-error { background: #3a1a1a; color: #fca5a5; border-color: #7f1d1d; }
-body.dark-mode .tpi-factor-name,
-body.dark-mode .tpi-composite-label,
-body.dark-mode .tpi-slider-label { color: #e2e8f0; }
+body.dark-mode .tpi-status-done { background: #1a3a2a; border-color: #2d6a4f; }
+body.dark-mode .tpi-status-error { background: #3a1a1a; border-color: #7f1d1d; }
 body.dark-mode .tpi-composite-value { color: #f1f5f9; }
 body.dark-mode .tpi-slider-value {
   color: #f1f5f9; background: #2a2a3d; border-color: #4a5568;
@@ -4476,8 +4476,6 @@ body.dark-mode .tpi-slider-value {
 body.dark-mode .tpi-tract-marker,
 body.dark-mode .tpi-footnote { color: #6b7280; }
 body.dark-mode .tpi-legend { background: rgba(30,30,46,0.95); }
-body.dark-mode .tpi-legend-title,
-body.dark-mode .tpi-legend-row { color: #e2e8f0; }
 
 /* ---- Ridership Forecasting ---- */
 body.dark-mode .rf-status { background: #2a2a3d; }
