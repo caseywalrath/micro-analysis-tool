@@ -2253,6 +2253,10 @@ code { font-family: var(--font-mono); }
   outline: none;
   box-shadow: 0 0 0 3px var(--focus-ring);
 }
+.bas-body .bas-section-row {
+  align-items: flex-start;
+  min-height: 400px;
+}
 .bas-var-checklist {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -2631,7 +2635,7 @@ body.dark-mode .cs-feature-badge { background: #2d3748; color: #cbd5e0; }
   align-items: flex-start;
   min-height: 400px;
 }
-.tc-empty-note {
+.rf-empty-note {
   padding: 6px;
   color: var(--muted);
   font-size: var(--text-sm);
@@ -2644,6 +2648,13 @@ body.dark-mode .cs-feature-badge { background: #2d3748; color: #cbd5e0; }
   overflow-y: auto;
   max-height: 62vh;
 }
+.ws-body .ws-section-row {
+  align-items: flex-start;
+  min-height: 380px;
+}
+.ws-body .rf-settings-col > .rf-section-title + .form-field { margin-top: 0; }
+.ws-advanced-summary { cursor: pointer; }
+.ws-export-row { flex-wrap: wrap; }
 .ws-table {
   width: 100%;
   border-collapse: collapse;
@@ -4880,6 +4891,8 @@ body.dark-mode .result-error td { color: #fc8181; }
   flex-direction: column;
   min-height: 380px;
 }
+.gtfs-popup-layout .rf-section-row { align-items: flex-start; }
+.gtfs-clear-btn { margin-top: var(--space-3); width: 100%; }
 
 /* ---- Left column: file directory ---- */
 
@@ -5539,6 +5552,7 @@ body.dark-mode .tb-edit-pattern-hdr { color: #edf2f7; }
   align-items: stretch;
   min-height: 0;
 }
+.tb-body .tb-section-row { min-height: 400px; }
 .tb-body .rf-settings-col {
   display: flex;
   flex-direction: column;
@@ -5548,6 +5562,9 @@ body.dark-mode .tb-edit-pattern-hdr { color: #edf2f7; }
   min-height: 0;
   max-height: none;
 }
+.tb-service-note { margin-bottom: var(--space-2); }
+.tb-generate-btn { width: auto; padding: 6px 16px; }
+.tb-export-note { margin-left: var(--space-2); }
 
 /* ===========================================================
    Feature Settings — Attribute Summary entry button
@@ -5660,6 +5677,8 @@ body.dark-mode .fp-bands-badge:hover { background: #2c5282; }
   font-size: var(--text-sm);
   color: var(--text-primary);
 }
+.as-action-spacer { flex: 1; }
+.as-copy-apply { width: auto; padding: 5px 16px; }
 .as-intro {
   color: var(--muted);
   font-size: var(--text-xs, 11px);

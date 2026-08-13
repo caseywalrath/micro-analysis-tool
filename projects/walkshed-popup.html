@@ -1,33 +1,39 @@
 <!-- Walkshed — 2-column popup body (Settings | Results) -->
 <div class="ws-body">
-  <div class="rf-section-row" style="align-items:flex-start;min-height:380px;">
+  <div class="rf-section-row ws-section-row">
 
     <!-- Left: settings column -->
     <div class="rf-settings-col">
 
       <div class="rf-section-title">Walk budget</div>
 
-      <label class="tiny">Minutes</label>
-      <input type="number" id="wsMinutes" class="rf-number-input" min="1" max="60" step="1" value="15">
+      <div class="form-field">
+        <label class="tiny">Minutes</label>
+        <input type="number" id="wsMinutes" class="rf-number-input" min="1" max="60" step="1" value="15">
+      </div>
 
-      <label class="tiny" style="margin-top:8px;">Walk speed (mph)</label>
-      <input type="number" id="wsSpeed" class="rf-number-input" min="0.5" max="7.5" step="0.1" value="3.1">
+      <div class="form-field">
+        <label class="tiny">Walk speed (mph)</label>
+        <input type="number" id="wsSpeed" class="rf-number-input" min="0.5" max="7.5" step="0.1" value="3.1">
+      </div>
 
-      <details style="margin-top:10px;">
-        <summary class="tiny" style="cursor:pointer;color:var(--muted);">Advanced</summary>
-        <label class="tiny" style="margin-top:6px;">Hull detail — max edge (km)</label>
-        <input type="number" id="wsMaxEdge" class="rf-number-input" min="0.02" max="2" step="0.01" value="0.3">
-        <p class="tiny" style="color:var(--muted);margin-top:4px;">
+      <details class="u-mt-3">
+        <summary class="tiny u-muted ws-advanced-summary">Advanced</summary>
+        <div class="form-field u-mt-2">
+          <label class="tiny">Hull detail — max edge (km)</label>
+          <input type="number" id="wsMaxEdge" class="rf-number-input" min="0.02" max="2" step="0.01" value="0.3">
+        </div>
+        <p class="tiny u-mt-1 u-muted">
           Smaller hugs the streets more tightly; the tool auto-relaxes if the hull comes back empty.
         </p>
       </details>
 
-      <div class="rf-section-title" style="margin-top:16px;">Points</div>
+      <div class="rf-section-title form-section">Points</div>
       <div id="wsPointList" class="rf-feature-checklist">
-        <div style="padding:6px;color:var(--muted);font-size:12px;">No points placed.</div>
+        <div class="rf-empty-note">No points placed.</div>
       </div>
 
-      <label class="tpi-toggle-row" style="margin-top:10px;">
+      <label class="tpi-toggle-row u-mt-3">
         <input type="checkbox" id="wsShowSegments" checked>
         <span class="tiny">Show reachable streets</span>
       </label>
@@ -40,7 +46,7 @@
         Download streets for this area
       </button>
 
-      <button id="wsComputeBtn" type="button" class="rf-action-primary" style="margin-top:12px;">
+      <button id="wsComputeBtn" type="button" class="rf-action-primary u-mt-3">
         Calculate
       </button>
 
@@ -56,12 +62,12 @@
       <div id="wsResults" style="display:none;">
         <div id="wsResultsTable"></div>
 
-        <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">
+        <div class="btn-row ws-export-row">
           <button id="wsUseStudyArea" type="button" class="rf-btn-sm" disabled title="Set these points' Service Area to Walkshed so demographic modules use the walkshed instead of a circle.">Use as study areas</button>
           <button id="wsExportGeoJSON" type="button" class="rf-btn-sm" disabled>Export GeoJSON</button>
         </div>
 
-        <p class="tiny" style="margin-top:8px;color:var(--muted);">
+        <p class="tiny u-mt-2 u-muted">
           A walkshed is the true street-network area reachable on foot within the time budget — smaller and
           more irregular than a circular buffer. Click <strong>Use as study areas</strong> to run Buffer-Area
           Summary, TPI, etc. against the walkshed instead of the circle.

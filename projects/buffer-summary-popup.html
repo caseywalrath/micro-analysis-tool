@@ -1,41 +1,45 @@
 <!-- Feature Area Analysis — 2-column popup body (Settings | Results) -->
 <div class="bas-body">
-  <div class="rf-section-row" style="align-items:flex-start;min-height:400px;">
+  <div class="rf-section-row bas-section-row">
 
     <!-- Left: settings column -->
     <div class="rf-settings-col">
 
       <div class="rf-section-title">Variables</div>
-      <div class="rf-feature-select-actions" style="margin-bottom:4px;">
+      <div class="rf-feature-select-actions">
         <button type="button" id="varSelectAll" class="var-action-btn">Select all</button>
-        <span style="color:var(--muted);">|</span>
+        <span class="u-muted">|</span>
         <button type="button" id="varClearAll" class="var-action-btn">Clear all</button>
       </div>
       <!-- Populated at runtime by buffer-summary.js init() from VAR_META in utils.js. -->
       <fieldset id="varSelect" class="bas-var-checklist"></fieldset>
 
-      <div class="rf-section-title" style="margin-top:16px;">Geography</div>
+      <div class="rf-section-title form-section">Geography</div>
 
-      <label class="tiny">Level</label>
-      <select id="basGeoLevel" class="rf-select">
-        <option value="tract">Census Tracts</option>
-        <option value="bg" selected>Block Groups</option>
-      </select>
+      <div class="form-field">
+        <label class="tiny">Level</label>
+        <select id="basGeoLevel" class="rf-select">
+          <option value="tract">Census Tracts</option>
+          <option value="bg" selected>Block Groups</option>
+        </select>
+      </div>
 
-      <label class="tiny" style="margin-top:10px;">ACS Year</label>
-      <select id="basYearSelect" class="rf-select">
-        <option value="2024">2024 ACS 5-year</option>
-        <option value="2023">2023 ACS 5-year</option>
-        <option value="2022">2022 ACS 5-year</option>
-        <option value="2021">2021 ACS 5-year</option>
-      </select>
+      <div class="form-field">
+        <label class="tiny">ACS Year</label>
+        <select id="basYearSelect" class="rf-select">
+          <option value="2024">2024 ACS 5-year</option>
+          <option value="2023">2023 ACS 5-year</option>
+          <option value="2022">2022 ACS 5-year</option>
+          <option value="2021">2021 ACS 5-year</option>
+        </select>
+      </div>
 
-      <label class="tpi-toggle-row" style="margin-top:10px;">
+      <label class="tpi-toggle-row u-mt-3">
         <input type="checkbox" id="basApportionByArea" checked>
         <span class="tiny">Apportion by area</span>
       </label>
 
-      <button id="basRun" type="button" class="rf-action-primary" style="margin-top:12px;">
+      <button id="basRun" type="button" class="rf-action-primary u-mt-3">
         Calculate Summary
       </button>
 
