@@ -57,6 +57,9 @@
         panes[j].classList.remove("fta-tab-visible");
       }
     }
+    if (isPopupVisible() && App.popup && App.popup.setLayoutMode) {
+      App.popup.setLayoutMode(id === "data-inputs" ? "workspace" : (_lastRatings ? "results" : "setup"));
+    }
   }
 
   // ---- LBAR map layer ----
@@ -519,6 +522,8 @@
         status: { kind: "done", message: "Ratings computed successfully." }
       });
       App.setStatus("FTA ratings computed");
+      renderInputs(true);
+      if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("results");
 
       // Enable export
       var exportBtn = document.getElementById("ftaExportCSV");
@@ -870,7 +875,7 @@
 
   function onOpen(core) {
     switchTab(_activeTab);
-    renderInputs(false);
+    renderInputs(_lastRatings ? undefined : false);
     updateDataIndicators();
     // Show last ratings if available
     if (_lastRatings) {
@@ -953,6 +958,7 @@
     name:       "FTA Small Starts (Land Use)",
     enabled:    true,
     popupWidth: 1000,
+    panelWidths: { setup: 520, results: 520, workspace: 1000 },
     popupHTML:  "projects/fta-small-starts-popup.html",
 
     init:    function (core) { init(core); },

@@ -1150,6 +1150,7 @@
       // Collapse only on success — a run that bailed out (no origin, no
       // coverage, no active band) leaves the inputs open where they're needed.
       renderInputs(true);
+      if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("results");
     } finally {
       _running = false;
       if (runBtn) runBtn.disabled = false;
@@ -1228,11 +1229,13 @@
     refreshNetWarn();
     renderInputs(_lastResult ? undefined : false);
     if (_lastResult) {
+      if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("results");
       renderResults(_lastResult);
       renderRouteDetail(_lastResult.resolved);
       setExportEnabled(!_stale);
       if (_stale) showStale(); else setStatus("", "");
     } else {
+      if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("setup");
       setExportEnabled(false);
       showEmpty();
     }
@@ -1254,6 +1257,8 @@
     _lastResult = null;
     _stale = false;
     if (isPopupVisible()) {
+      if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("setup");
+      renderInputs(false);
       var resultsEl = document.getElementById("tsResults");
       if (resultsEl) resultsEl.style.display = "none";
       setExportEnabled(false);
@@ -1339,6 +1344,7 @@
     name:       "Transit Travelshed",
     enabled:    true,
     popupWidth: 940,
+    panelWidths: { setup: 540, results: 640 },
     popupHTML:  "projects/transit-travelshed-popup.html",
 
     init:    function (core) { init(core); },

@@ -754,6 +754,8 @@
                 " — " + geoCount + " geographies.", "done");
 
       renderResultsTable(_lastResult);
+      renderInputs(true);
+      if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("results");
       renderMapChoropleth(_lastResult);
       if (App.popup && App.popup.showFloatingWidget) {
         App.popup.showFloatingWidget("cs-legend", "projects/corridor-scoring-legend.html", {
@@ -874,7 +876,7 @@
 
     // Populate weight sliders (in modal) with current _weights
     buildWeightSliders();
-    renderInputs(false);
+    renderInputs(_lastResult ? undefined : false);
   }
 
   function onOpen(core) {
@@ -890,6 +892,7 @@
     updateLodesWarnings();
 
     if (_lastResult) {
+      if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("results");
       renderResultsTable(_lastResult);
       setExportButtonsEnabled(!_stale);
       var hideCb = document.getElementById("csHideRouteColoring");
@@ -898,6 +901,7 @@
         hideCb.checked = (vis === "none");
       }
     } else {
+      if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("setup");
       setExportButtonsEnabled(false);
       App.renderModuleState({
         statusEl: "csStatus", emptyEl: "csEmptyState", empty: true, hint: emptyHint()
@@ -916,6 +920,8 @@
     _lastResult = null;
     _stale = false;
     if (isPopupVisible()) {
+      if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("setup");
+      renderInputs(false);
       var resultsEl = document.getElementById("csResults");
       if (resultsEl) resultsEl.style.display = "none";
       App.renderModuleState({
@@ -1072,6 +1078,7 @@
     name:       "Corridor Scoring",
     enabled:    true,
     popupWidth: 1000,
+    panelWidths: { setup: 520, results: 620 },
     popupHTML:  "projects/corridor-scoring-popup.html",
 
     init:    function (core) { init(core); },

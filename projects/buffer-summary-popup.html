@@ -5,16 +5,19 @@
     <!-- Left: settings column -->
     <div class="rf-settings-col">
 
-      <div class="rf-section-title">Variables</div>
-      <div class="rf-feature-select-actions">
-        <button type="button" id="varSelectAll" class="var-action-btn">Select all</button>
-        <span class="u-muted">|</span>
-        <button type="button" id="varClearAll" class="var-action-btn">Clear all</button>
+      <div class="data-input-group" data-input-group="variables">
+        <div class="rf-section-title">Variables</div>
+        <div class="rf-feature-select-actions">
+          <button type="button" id="varSelectAll" class="var-action-btn">Select all</button>
+          <span class="u-muted">|</span>
+          <button type="button" id="varClearAll" class="var-action-btn">Clear all</button>
+        </div>
+        <!-- Populated at runtime by buffer-summary.js init() from VAR_META in utils.js. -->
+        <fieldset id="varSelect" class="bas-var-checklist"></fieldset>
       </div>
-      <!-- Populated at runtime by buffer-summary.js init() from VAR_META in utils.js. -->
-      <fieldset id="varSelect" class="bas-var-checklist"></fieldset>
 
-      <div class="rf-section-title form-section">Geography</div>
+      <div class="data-input-group" data-input-group="geography">
+        <div class="rf-section-title form-section">Geography</div>
 
       <div class="form-field">
         <label class="tiny">Level</label>
@@ -34,14 +37,17 @@
         </select>
       </div>
 
-      <label class="tpi-toggle-row u-mt-3">
-        <input type="checkbox" id="basApportionByArea" checked>
-        <span class="tiny">Apportion by area</span>
-      </label>
+        <label class="tpi-toggle-row u-mt-3">
+          <input type="checkbox" id="basApportionByArea" checked>
+          <span class="tiny">Apportion by area</span>
+        </label>
+      </div>
 
-      <button id="basRun" type="button" class="rf-action-primary u-mt-3">
-        Calculate Summary
-      </button>
+      <div class="module-input-actions">
+        <button id="basRun" type="button" class="rf-action-primary">
+          Calculate Summary
+        </button>
+      </div>
 
     </div>
 

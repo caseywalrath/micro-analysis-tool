@@ -21,10 +21,30 @@
   var _dragStartY = 0;
   var _offsetX = 0;
   var _offsetY = 0;
+  var _layoutMode = null;
 
   function getContainer() {
     if (!_container) _container = document.getElementById("module-popup");
     return _container;
+  }
+
+  function applyPanelWidth(mod, mode) {
+    var el = getContainer();
+    if (!el || !mod) return;
+    var dialog = el.querySelector(".module-popup-dialog");
+    if (!dialog) return;
+
+    var widths = mod.panelWidths || {};
+    var width = widths[mode] || widths.setup || mod.popupWidth;
+    dialog.style.width = width ? width + "px" : "";
+    dialog.classList.toggle("module-popup-narrow", !!width && width <= 620);
+    _layoutMode = mode;
+
+    // A width transition must return the panel to its docked position. Otherwise
+    // a panel dragged while wide can end up partly off-screen when narrowed.
+    _offsetX = 0;
+    _offsetY = 0;
+    dialog.style.transform = "";
   }
 
   // ---- Popup lifecycle ----
@@ -56,18 +76,9 @@
       _close(modules, buildCore);
     }
 
-    // Set title and dialog width
+    // Set title and initial setup width.
     if (titleEl) titleEl.textContent = mod.name || moduleId;
-    if (mod.popupWidth) {
-      dialog.style.width = mod.popupWidth + "px";
-    } else {
-      dialog.style.width = "";
-    }
-    // Narrow "task panel" modules trade width for height. Derived from
-    // popupWidth rather than a new registration field, so any module narrowed
-    // later picks it up for free. The 620px threshold matches the @container
-    // rule in style.css that stacks a two-column popup body.
-    dialog.classList.toggle("module-popup-narrow", !!mod.popupWidth && mod.popupWidth <= 620);
+    applyPanelWidth(mod, "setup");
 
     // Hide all existing module slot divs (show only the active module's slot)
     var allSlots = bodyEl.querySelectorAll(".module-body-slot");
@@ -95,11 +106,6 @@
     // Show this module's slot
     _loadedModules[moduleId].style.display = "";
 
-    // Reset drag offset so popup re-centers
-    _offsetX = 0;
-    _offsetY = 0;
-    dialog.style.transform = "";
-
     _currentModuleId = moduleId;
     el.style.display = "flex";
 
@@ -124,6 +130,7 @@
       }
     }
     _currentModuleId = null;
+    _layoutMode = null;
   }
 
   // Public close — takes no args, uses stored references (set at wiring time)
@@ -140,6 +147,21 @@
 
   function currentModuleId() {
     return _currentModuleId;
+  }
+
+  /**
+   * Switch the active module between setup, results, and specialized workspace
+   * widths. Modules call this after a successful run or tab transition.
+   */
+  function setLayoutMode(mode) {
+    if (!_currentModuleId || !_modulesRef) return;
+    var mod = _modulesRef.get(_currentModuleId);
+    if (!mod) return;
+    applyPanelWidth(mod, mode || "setup");
+  }
+
+  function layoutMode() {
+    return _layoutMode;
   }
 
   // ---- Floating widgets ----
@@ -314,6 +336,8 @@
     close: close,
     isOpen: isOpen,
     currentModuleId: currentModuleId,
+    setLayoutMode: setLayoutMode,
+    layoutMode: layoutMode,
     showFloatingWidget: showFloatingWidget,
     hideFloatingWidget: hideFloatingWidget,
     removeFloatingWidget: removeFloatingWidget,

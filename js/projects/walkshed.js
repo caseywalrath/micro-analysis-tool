@@ -494,7 +494,10 @@
 
         // Collapse the inputs only on a run that produced something — a failed
         // run should leave them open, where the user needs them.
-        if (isPopupVisible()) renderInputs(ok > 0);
+        if (isPopupVisible()) {
+          renderInputs(ok > 0);
+          if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode(ok > 0 ? "results" : "setup");
+        }
       } finally {
         _running = false;
       }
@@ -620,12 +623,14 @@
     // has never run shows the header expanded.
     renderInputs(_lastEntries.length ? undefined : false);
     if (_lastEntries.length) {
+      if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("results");
       var resultsEl = document.getElementById("wsResults");
       if (resultsEl) resultsEl.style.display = "";
       renderResults();
       setExportEnabled(_lastEntries.some(function (e) { return !e.failed; }) && !_stale);
       if (_stale) showStale(); else setStatus("", "");
     } else {
+      if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("setup");
       setExportEnabled(false);
       showEmpty();
     }
@@ -651,6 +656,8 @@
     _lastEntries = [];
     _stale = false;
     if (isPopupVisible()) {
+      if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("setup");
+      renderInputs(false);
       var resultsEl = document.getElementById("wsResults");
       if (resultsEl) resultsEl.style.display = "none";
       setExportEnabled(false);
@@ -706,6 +713,7 @@
     name:       "Walkshed Analysis",
     enabled:    true,
     popupWidth: 460,
+    panelWidths: { setup: 460, results: 460 },
     popupHTML:  "projects/walkshed-popup.html",
 
     init:    function (core) { init(core); },

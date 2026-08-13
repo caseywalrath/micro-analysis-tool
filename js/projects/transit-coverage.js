@@ -594,6 +594,7 @@
       setStatus("Analyzed coverage — " + geos.length + " geographies.", "done");
       // Collapse only on success — an error leaves the inputs open.
       renderInputs(true);
+      if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("results");
     } catch (err) {
       console.error("Transit Coverage error:", err);
       setStatus("Error: " + (err.message || err), "error");
@@ -894,9 +895,11 @@
     renderInputs(_lastResult ? undefined : false);
 
     if (_lastResult) {
+      if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("results");
       renderResults(_lastResult);
       setExportButtonsEnabled(!_stale);
     } else {
+      if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("setup");
       setExportButtonsEnabled(false);
       App.renderModuleState({
         statusEl: "tcStatus", emptyEl: "tcEmptyState", empty: true, hint: emptyHint()
@@ -915,6 +918,8 @@
     _lastResult = null;
     _stale = false;
     if (isPopupVisible()) {
+      if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("setup");
+      renderInputs(false);
       var resultsEl = document.getElementById("tcResults");
       if (resultsEl) resultsEl.style.display = "none";
       App.renderModuleState({
@@ -1069,6 +1074,7 @@
     name:       "Transit Coverage",
     enabled:    true,
     popupWidth: 1000,
+    panelWidths: { setup: 540, results: 760 },
     popupHTML:  "projects/transit-coverage-popup.html",
 
     init:    function (core) { init(core); },

@@ -131,6 +131,9 @@ body { margin: 0; font-family: var(--font-sans); background: var(--bg); -webkit-
   padding-right: var(--space-3);
   border-right: 1px solid var(--border);
 }
+#file-actions .export-wrapper { order: 1; }
+#file-actions .add-data-wrapper { order: 2; }
+#file-actions .analysis-wrapper { order: 3; }
 .export-wrapper {
   position: relative;
 }
@@ -3264,6 +3267,18 @@ body.dark-mode .ws-table .ws-warn { color: #fbbf24; }
 .rf-results-col {
   flex: 1;
 }
+
+/* Stable seams for later Advanced/Settings consolidation. These wrappers are
+   intentionally presentation-neutral: moving a complete group will not alter
+   element IDs, listeners, or the input-action footer. */
+.data-input-group + .data-input-group { margin-top: var(--space-4); }
+.module-input-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+.module-input-actions > button { margin-top: 0; }
 
 /* ---- Collapsible module inputs (App.renderModuleInputs) ----
    Emitted by the shared helper in app.js, not by any popup's markup. The

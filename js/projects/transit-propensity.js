@@ -603,6 +603,8 @@
 
       // Display geography list
       displayGeographyList(result, _selectedCorridor);
+      renderInputs(true);
+      if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("results");
 
       setTpiStatus("TPI computed successfully.", "done");
       App.setStatus("TPI computed");
@@ -771,6 +773,8 @@
     _stale      = false;
     App.popup.hideFloatingWidget("tpi-legend");
     if (isPopupVisible()) {
+      if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("setup");
+      renderInputs(false);
       var resultsEl = document.getElementById("tpiResults");
       if (resultsEl) resultsEl.style.display = "none";
       App.renderModuleState({
@@ -1091,7 +1095,7 @@
 
     // Build weight sliders (in modal) with current _weights
     buildWeightSliders();
-    renderInputs(false);
+    renderInputs(_lastResult ? undefined : false);
   }
 
   // ---- Popup lifecycle hooks ----
@@ -1110,8 +1114,10 @@
 
     // Refresh results display
     if (_lastResult && isPopupVisible()) {
+      if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("results");
       displayGeographyList(_lastResult, _selectedCorridor);
     } else if (isPopupVisible()) {
+      if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("setup");
       App.renderModuleState({
         statusEl: "tpiStatus", emptyEl: "tpiEmptyState", empty: true, hint: emptyHint()
       });
@@ -1227,6 +1233,7 @@
     name:       "Transit Propensity Index",
     enabled:    true,
     popupWidth: 1000,
+    panelWidths: { setup: 520, results: 520 },
     popupHTML:  "projects/transit-propensity-popup.html",
 
     floatingWidgets: [

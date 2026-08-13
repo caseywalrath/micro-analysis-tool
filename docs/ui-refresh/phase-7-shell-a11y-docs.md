@@ -190,11 +190,34 @@ today. JS UI change → run golden harness.
 
 ## Final review
 
-### Implementation outcome
+### Corrected implementation outcome
+
+The original completion note conflated the four newly collapsible panels with a
+narrow-layout conversion. That was documentation-only; those panels still opened at
+1000px. The correction introduces the shared `panelWidths` registration field and
+`App.popup.setLayoutMode("setup" | "results" | "workspace")`, with drag reset and the
+existing 90vw cap retained. Each logical input section now has a stable
+`data-input-group` wrapper and Run/Calculate buttons use `.module-input-actions`, so a
+later Settings or Advanced consolidation can move a complete group without rewiring IDs
+or listeners.
+
+| Module | Setup | Results/workspace | Decision |
+|---|---:|---:|---|
+| Walkshed | 460px | 460px | Retained vertical pilot. |
+| Feature Area Analysis | 520px | 900px | Widen only for the five-column result table. |
+| Transit Propensity Index | 520px | 520px | Geography list and summary stay vertical. |
+| Corridor Scoring | 520px | 620px | Modest result width for rankings and factors. |
+| FTA Small Starts Ratings | 520px | 520px | Ratings remain vertical. |
+| FTA Data Inputs | — | 1000px workspace | Preserves the upload workspace. |
+| Transit Coverage | 540px | 760px | Widen for population/jobs and headways. |
+| Transit Travelshed | 540px | 640px | Retains scrolling inputs and Advanced details. |
+
+Route Costing and Trip Builder remain wide by design. Ridership Forecasting, Title VI,
+GTFS, system modules, and the dormant Mitigation Needs prototype are excluded.
 
 - Feature Area Analysis, Transit Propensity Index, Corridor Scoring, and FTA Small
-  Starts Ratings now use the shared collapsible-input layout. Walkshed, Transit
-  Coverage, and Transit Travelshed passed regression checks.
+  Starts Ratings use the shared collapsible-input layout. Walkshed, Transit Coverage,
+  and Transit Travelshed retain it. All seven now also use the adaptive widths above.
 - Route Costing and Trip Builder retained their wider layouts after dense result and
   interline/schedule fit testing. Their warning states combine visible icons or labels
   with color rather than relying on color alone.
@@ -205,7 +228,7 @@ today. JS UI change → run golden harness.
   state, keyboard focus remains visible, and the audited high-frequency row controls
   meet the 24px minimum target size.
 - Dark-mode persistence is fixed by moving the no-flash script to the start of the body.
-- Verification completed with 129/129 golden tests and 76/78 visual/a11y checks; the two
+- Verification completed with 129/129 golden tests and 96/98 visual/a11y checks; the two
   skips are the intentionally dormant legacy sidebar in light and dark themes.
 - `test/ui-screens/baseline/` now contains the completed Phase 7 visual baseline set.
 

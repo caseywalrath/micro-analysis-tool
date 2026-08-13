@@ -112,12 +112,20 @@ const MODULE_IDS = [
   "display-settings"
 ];
 
-const COLLAPSIBLE_INPUT_MODULE_IDS = new Set([
-  "buffer-summary",
-  "transit-propensity",
-  "corridor-scoring",
-  "fta-small-starts"
-]);
+// Phase 7b: active single-step tools start as map-friendly vertical task
+// panels, then widen only after a completed run or when FTA opens its upload
+// workspace. Values are deliberately asserted against the actual dialog,
+// rather than inferred from registration metadata.
+const ADAPTIVE_PANEL_WIDTHS = {
+  "buffer-summary": { setup: 520, results: 900 },
+  "transit-propensity": { setup: 520, results: 520 },
+  "corridor-scoring": { setup: 520, results: 620 },
+  "fta-small-starts": { setup: 520, results: 520, workspace: 1000 },
+  "walkshed": { setup: 460, results: 460 },
+  "transit-coverage": { setup: 540, results: 760 },
+  "transit-travelshed": { setup: 540, results: 640 }
+};
+const COLLAPSIBLE_INPUT_MODULE_IDS = new Set(Object.keys(ADAPTIVE_PANEL_WIDTHS));
 
 // ---- Small utilities ----
 
@@ -181,6 +189,59 @@ async function shootLocator(page, selector, outPath, name) {
 async function shootPage(page, outPath, name) {
   await page.screenshot({ path: outPath });
   record(name, "ok", null, page.viewportSize() || VIEWPORT);
+}
+
+async function assertAdaptivePanelLayout(page, theme, id) {
+  const widths = ADAPTIVE_PANEL_WIDTHS[id];
+  if (!widths) return;
+
+  const name = theme + "_" + id + "_adaptive-layout";
+  try {
+    const inspect = () => page.locator(".module-popup-dialog").evaluate((el) => {
+      const rect = el.getBoundingClientRect();
+      const row = el.querySelector(".rf-section-row");
+      const inputs = el.querySelector(".module-inputs-header");
+      return {
+        width: Math.round(rect.width),
+        inViewport: rect.left >= 0 && rect.right <= window.innerWidth,
+        flow: row ? getComputedStyle(row).flexDirection : null,
+        inputsExpanded: inputs ? inputs.getAttribute("aria-expanded") : null
+      };
+    });
+    const assertState = async (mode, expectedWidth) => {
+      const state = await inspect();
+      if (state.width !== expectedWidth) {
+        throw new Error(mode + " width " + state.width + "px; expected " + expectedWidth + "px");
+      }
+      if (!state.inViewport) throw new Error(mode + " panel exceeds the viewport");
+      const expectedFlow = expectedWidth <= 620 ? "column" : "row";
+      if (state.flow !== expectedFlow) {
+        throw new Error(mode + " flow " + state.flow + "; expected " + expectedFlow);
+      }
+      return state;
+    };
+
+    const setup = await assertState("setup", widths.setup);
+    if (setup.inputsExpanded !== "true") {
+      throw new Error("setup inputs should be expanded; aria-expanded=" + setup.inputsExpanded);
+    }
+
+    await page.evaluate(() => window.App.popup.setLayoutMode("results"));
+    await assertState("results", widths.results || widths.setup);
+
+    if (id === "fta-small-starts") {
+      await page.locator('.module-popup-dialog button[data-tab="data-inputs"]:visible').click();
+      await assertState("workspace", widths.workspace);
+      await page.locator('.module-popup-dialog button[data-tab="ratings"]:visible').click();
+      await assertState("ratings", widths.setup);
+    }
+
+    await page.evaluate(() => window.App.popup.setLayoutMode("setup"));
+    await assertState("restored setup", widths.setup);
+    record(name, "ok");
+  } catch (e) {
+    record(name, "fail", e.message);
+  }
 }
 
 // ---- Main capture routine for one theme ----
@@ -343,21 +404,40 @@ async function captureTheme(browser, theme, port) {
       await page.evaluate((moduleId) => window.App.openModulePopup(moduleId), id);
       await page.locator("#module-popup").waitFor({ state: "visible", timeout: 10000 });
       await sleep(POPUP_SETTLE_MS);
+      await assertAdaptivePanelLayout(page, theme, id);
       await shootLocator(page, ".module-popup-dialog", join(OUT_DIR, name + ".png"), name);
 
-      // Phase 7a: confirmed single-step conversions must remain readable with
-      // Inputs collapsed while Results stays visible.
+      // Every adaptive single-step panel must retain a keyboard-operable
+      // Inputs section. Collapsing it cannot hide the Results column.
       if (COLLAPSIBLE_INPUT_MODULE_IDS.has(id)) {
-        await page.locator(".module-inputs-header:visible").click();
+        const inputsHeader = page.locator(".module-inputs-header:visible");
+        await inputsHeader.click();
         await sleep(TAB_SETTLE_MS);
+        const collapsedState = await page.locator(".module-popup-dialog").evaluate((el) => {
+          const header = Array.from(el.querySelectorAll(".module-inputs-header"))
+            .find((candidate) => candidate.offsetParent !== null);
+          const activeSlot = header && header.closest(".module-body-slot");
+          const body = header && header.parentElement.querySelector(":scope > .module-inputs-body");
+          const results = activeSlot && activeSlot.querySelector(".rf-results-col");
+          return {
+            expanded: header && header.getAttribute("aria-expanded"),
+            inputsHidden: body && getComputedStyle(body).display === "none",
+            resultsVisible: results && getComputedStyle(results).display !== "none"
+          };
+        });
+        if (collapsedState.expanded !== "false" || !collapsedState.inputsHidden || !collapsedState.resultsVisible) {
+          throw new Error("collapsed Inputs state is not accessible or hid Results");
+        }
         await shootLocator(
           page,
           ".module-popup-dialog",
           join(OUT_DIR, name + "_inputs-collapsed.png"),
           name + "_inputs-collapsed"
         );
-        await page.locator(".module-inputs-header:visible").click();
+        await inputsHeader.press("Enter");
         await sleep(TAB_SETTLE_MS);
+        const expandedState = await inputsHeader.getAttribute("aria-expanded");
+        if (expandedState !== "true") throw new Error("Inputs header did not expand by keyboard");
       }
 
       // Phase 6 behavior checkpoint: keep one representative full-page view

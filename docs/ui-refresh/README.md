@@ -3,13 +3,15 @@
 Status: **original refresh complete** — phases 0–7 are complete. Phase 8 is the next,
 separately scoped feature expansion. (2026-08-13)
 
-**2026-08-13 Phase 7 completion.** The final refresh phase normalized the four confirmed
-single-step analysis layouts, grouped toolbar actions and the Analysis menu, completed
-the focus/ARIA/target-size pass, fixed dark-mode persistence across reloads, updated the
-architecture and feature documentation, and replaced the pre-refresh screenshot
-baselines. Route Costing and Trip Builder retained their wider layouts after the
-dense-result fit test. Golden tests passed 129/129 and the visual harness passed 76/78
-checks with the two documented hidden-sidebar skips.
+**2026-08-13 Phase 7 correction.** The first Phase 7 completion record accurately
+described collapsible Inputs but not a narrow-layout conversion. The seven active
+single-step panels now use adaptive setup/results/workspace widths: Walkshed 460/460;
+Feature Area Analysis 520/900; Transit Propensity 520/520; Corridor Scoring 520/620;
+FTA Ratings 520 with Data Inputs at 1000; Transit Coverage 540/760; and Transit
+Travelshed 540/640. Setup panels stack vertically over the map; result widths are
+applied after a successful run. Route Costing and Trip Builder deliberately retain their
+wide layouts. The refreshed visual baselines include the Save, Export, Add Data toolbar
+order and expanded/collapsed panel states.
 
 **2026-08-13 session checkpoint.** Phase 5 removed static inline styles from the 14
 active popup fragments in four commits on
@@ -156,9 +158,11 @@ The pre-refresh set remains available through git history.
 - **Phase 6:** flows that arm a one-shot map click while the popup is open (Transit
   Travelshed "Pick origin on map") change feel when the map is live — test that flow
   end-to-end.
-- **Phase 7 — narrow-panel fit (resolved):** Feature Area Analysis, TPI, Corridor
-  Scoring, and FTA Ratings use collapsible Inputs. Route Costing and Trip Builder retain
-  their wider layouts because their dense result states benefit from the additional
+- **Phase 7 — adaptive single-step panels (resolved):** collapsible Inputs and narrow
+  layout are separate concerns. Walkshed, Feature Area Analysis, TPI, Corridor Scoring,
+  FTA Ratings, Transit Coverage, and Transit Travelshed open vertically and use their
+  documented result/workspace widths only when needed. Route Costing and Trip Builder
+  retain their wider layouts because their dense result states benefit from the additional
   width. Ridership Forecasting, Title VI, and GTFS remain specialized layouts by design.
 - **Phase 4 — dead sidebar:** phase 0 confirmed `#sidebar-wrap` ships
   `display:none` in `index.html` and nothing in the codebase ever calls

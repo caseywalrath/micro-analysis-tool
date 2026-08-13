@@ -422,6 +422,8 @@
     notesEl.innerHTML = (notesParts.length ? notesParts.join(" ") + "<br>" : "") + methodNote;
 
     _hasResults = true;
+    renderInputs(true);
+    if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("results");
 
     App.setStatus("Done");
     if (typeof App.notifyProject === "function") await App.notifyProject();
@@ -481,6 +483,7 @@
     name: "Feature Area Analysis",
     enabled: true,
     popupWidth: 1000,
+    panelWidths: { setup: 520, results: 900 },
     popupHTML: "projects/buffer-summary-popup.html",
 
     init: function (core) {
@@ -528,7 +531,7 @@
 
       // Apply cached state to DOM
       applyStateToDOM();
-      renderInputs(false);
+      renderInputs(_hasResults ? undefined : false);
       var settingsEl = document.querySelector(".bas-body .rf-settings-col");
       if (settingsEl) settingsEl.addEventListener("change", function () { renderInputs(); });
     },
@@ -540,9 +543,11 @@
       // Show results table if we have results, else a friendly onboarding hint
       var tableEl = document.getElementById("basResultsTable");
       if (tableEl && _hasResults) {
+        if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("results");
         tableEl.style.display = "";
         App.renderModuleState({ emptyEl: "basEmptyState" });   // hide hint
       } else {
+        if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("setup");
         App.renderModuleState({ emptyEl: "basEmptyState", empty: true, hint: emptyHint() });
       }
     },

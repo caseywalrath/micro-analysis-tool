@@ -5,6 +5,8 @@
     <!-- Left: settings column (240px) -->
     <div class="rf-settings-col">
 
+      <div class="data-input-group" data-input-group="geography">
+
       <div class="rf-section-title">Geography</div>
 
       <div class="form-field">
@@ -30,6 +32,10 @@
       </select>
       </div>
 
+      </div>
+
+      <div class="data-input-group" data-input-group="analysis">
+
       <div class="rf-section-title form-section">Coverage settings</div>
 
       <div class="form-field">
@@ -51,6 +57,10 @@
         <input type="number" id="tcHeadwayThreshold" class="rf-number-input" min="1" step="1" placeholder="none">
       </div>
 
+      </div>
+
+      <div class="data-input-group" data-input-group="transit-selection">
+
       <div class="rf-section-title form-section">Transit routes/lines</div>
       <div class="rf-feature-select-actions">
         <a href="#" id="tcFeatSelectAll">Select all</a>&nbsp;<span class="u-muted">|</span>&nbsp;<a href="#" id="tcFeatSelectNone">Clear</a>
@@ -58,6 +68,10 @@
       <div id="tcFeatureList" class="rf-feature-checklist">
         <div class="rf-empty-note">No routes or lines drawn.</div>
       </div>
+
+      </div>
+
+      <div class="data-input-group" data-input-group="area-selection">
 
       <div class="rf-section-title form-section">Service area (drawn polygons)</div>
       <div class="rf-feature-select-actions">
@@ -67,9 +81,13 @@
         <div class="rf-empty-note">No polygons drawn.</div>
       </div>
 
-      <button id="tcRunBtn" type="button" class="rf-action-primary u-mt-3">
-        Analyze Coverage
-      </button>
+      </div>
+
+      <div class="module-input-actions">
+        <button id="tcRunBtn" type="button" class="rf-action-primary">
+          Analyze Coverage
+        </button>
+      </div>
 
     </div>
 

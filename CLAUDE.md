@@ -141,7 +141,7 @@ Ridership_Forecast_Readme.md    User-facing documentation for the Ridership Fore
 - **Global namespace.** All shared state and functions live on `window.App`. Each module IIFE reads `var App = window.App` and assigns its exports (e.g., `App.fetchTigerwebGeos = fetchTigerwebGeos`).
 - **Module-local state stays private.** Variables like `CRE_MAP`, `ESS_POINTS`, `LBAR_SITES` (FTA) and `_lastResult`, `_stale`, `_running` (TPI, RF) are declared inside the module IIFE closure, not on `App`. Scoring engines use separate window namespaces: `window.TPI` (TPI scoring), `window.RidershipModel` (ridership scoring).
 - **Dormant sidebar.** `#sidebar-wrap`, `sidebar-v2.css`, and `js/core/sidebar.js` remain for compatibility, but the wrapper ships hidden and `App.sidebar.render()` is not called. Current Data access is the toolbar Add Data menu; analyses are opened from the grouped toolbar Analysis menu. Do not describe the legacy sidebar as a live surface unless it is explicitly revived.
-- **Analysis panels.** Analysis modules open as non-modal floating panels over a live, interactive map. `App.popup` loads the HTML, manages init/open/close lifecycle and Escape, docks a fresh panel to the right, and collapses the whole panel to its title bar. `App.renderModuleInputs()` provides a separate, keyboard-accessible collapsible Inputs section for compatible single-step modules. Floating widgets such as legends persist independently.
+- **Analysis panels.** Analysis modules open as non-modal floating panels over a live, interactive map. `App.popup` loads the HTML, manages init/open/close lifecycle and Escape, docks a fresh panel to the right, and collapses the whole panel to its title bar. Compatible single-step modules declare `panelWidths` and call `App.popup.setLayoutMode("setup" | "results" | "workspace")`: setup opens narrow with Inputs expanded; a successful run uses the result width and collapses Inputs; clearing returns to setup. `App.renderModuleInputs()` provides that separate, keyboard-accessible Inputs section. Use stable `data-input-group` wrappers for movable input sections and keep Run/Calculate controls in `.module-input-actions`. Floating widgets such as legends persist independently.
 - **Tabbed popup layout.** Multi-step analysis modules (e.g., Ridership Forecasting, FTA Small Starts, Title VI) use a tab bar (`<div class="rf-tabs">` / `<div class="fta-tabs">` / `<div class="tvi-tabs">` with `[data-tab]` buttons) and tab content panels toggled via a `switchTab(id)` function in the module JS. State is saved to closure variables on tab switch; the form is not reset.
 - **Inline info buttons.** Contextual help uses a small `<button class="rf-info-btn">ⓘ</button>` element adjacent to the label, wired in `init()` to toggle a sibling explanation `<div>` via `style.display`. No tooltip libraries needed.
 - **CSS namespacing.** TPI styles use `.tpi-` prefix. Ridership Forecasting styles use `.rf-` prefix. FTA Small Starts styles use `.fta-` prefix. Title VI styles use `.tvi-` prefix. Rating pill colors use `.pill.high` through `.pill.low`. All live in `css/style.css`. **Exception — `.rf-status` / `.rf-status-stale|-done|-error|-running` / `.rf-status-rerun` / `.rf-status-text` and `.rf-info-box` are intentionally SHARED cross-module classes** (despite the `rf-` prefix): every analysis popup's stale/empty UI is emitted by `App.renderModuleState()`. Do not "fix" the prefix or fork per-module copies.
@@ -605,6 +605,7 @@ App.registerModule({
   name: "Human-readable Name",
   enabled: true,                                  // false = button shown grayed out
   popupWidth: 720,                                // dialog width in px
+  panelWidths: { setup: 520, results: 760 },      // optional adaptive widths; popupWidth is fallback
   popupHTML: "projects/my-analysis-popup.html",   // popup body HTML fragment path
 
   init: function (core) {
@@ -629,6 +630,18 @@ App.registerModule({
 ```
 
 `App.registerProject` is a backward-compat alias for `App.registerModule`.
+
+### Adaptive single-step panel widths
+
+`App.popup.setLayoutMode("setup" | "results" | "workspace")` resolves the active
+module's `panelWidths`, resets any drag offset, preserves the 90vw maximum, and marks
+panels at 620px or less as narrow so `.rf-section-row` stacks vertically. Use it only
+for active single-step tools. Current choices are: Walkshed 460/460; Feature Area
+Analysis 520/900; Transit Propensity 520/520; Corridor Scoring 520/620; FTA Ratings
+520 with its Data Inputs workspace at 1000; Transit Coverage 540/760; and Transit
+Travelshed 540/640. Route Costing and Trip Builder intentionally retain their existing
+wide layouts; Ridership Forecasting, Title VI, GTFS, system modules, and the dormant
+Mitigation Needs prototype are not part of this pattern.
 
 ### The `core` object
 

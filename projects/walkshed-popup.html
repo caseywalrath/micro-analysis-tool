@@ -5,6 +5,7 @@
     <!-- Left: settings column -->
     <div class="rf-settings-col">
 
+      <div class="data-input-group" data-input-group="analysis">
       <div class="rf-section-title">Walk budget</div>
 
       <div class="form-field">
@@ -27,28 +28,35 @@
           Smaller hugs the streets more tightly; the tool auto-relaxes if the hull comes back empty.
         </p>
       </details>
+      </div>
 
+      <div class="data-input-group" data-input-group="point-selection">
       <div class="rf-section-title form-section">Points</div>
       <div id="wsPointList" class="rf-feature-checklist">
         <div class="rf-empty-note">No points placed.</div>
       </div>
+      </div>
 
+      <div class="data-input-group" data-input-group="display">
       <label class="tpi-toggle-row u-mt-3">
         <input type="checkbox" id="wsShowSegments" checked>
         <span class="tiny">Show reachable streets</span>
       </label>
+      </div>
 
       <p id="wsNetWarn" class="tiny" style="display:none;color:#b45309;margin-top:12px;">
         No street network loaded — Calculate will offer a scoped download. Or load one via Add&nbsp;Data.
       </p>
       <p id="wsCoverageWarn" class="tiny" style="display:none;color:#b45309;margin-top:8px;"></p>
-      <button id="wsDownloadBtn" type="button" class="rf-btn-sm" style="display:none;margin-top:6px;">
-        Download streets for this area
-      </button>
+      <div class="module-input-actions">
+        <button id="wsDownloadBtn" type="button" class="rf-btn-sm" style="display:none;">
+          Download streets for this area
+        </button>
 
-      <button id="wsComputeBtn" type="button" class="rf-action-primary u-mt-3">
-        Calculate
-      </button>
+        <button id="wsComputeBtn" type="button" class="rf-action-primary">
+          Calculate
+        </button>
+      </div>
 
     </div>
 
