@@ -23,10 +23,8 @@
 
   var _roadGeoJSON = null;  // raw GeoJSON FeatureCollection (for export)
   var _graph = null;        // Map<nodeKey, [{node, weight, coords}]>
-  var _allLines = null;     // turf FeatureCollection of LineStrings (for nearestPointOnLine)
-  var _walkLines = null;    // subset a pedestrian may snap to (motorway/trunk excluded)
-  var _carLines = null;     // subset a car may snap to (footway/steps/etc excluded)
-  var _segmentIndex = null; // Array of {feature, startKey, endKey, startCoord, endCoord, pedBlocked, carBlocked} per segment
+  var _segmentIndex = null; // Array of {startKey, endKey, startCoord, endCoord, pedBlocked, carBlocked} per segment
+  var _segGrid = null;      // Map<"gx,gy", int[]> of _segmentIndex indices — snap acceleration, see buildSegGrid()
   var _featureCount = 0;
   var _networkEpoch = 0;    // bumped on every (re)build/clear — lets caches (e.g. walkshed) invalidate
   var _downloadedBboxPolygon = null; // turf Polygon of the last Overpass download extent (for the on-map outline)
@@ -81,11 +79,10 @@
 
   function buildGraph(geojson) {
     var graph = new Map();
-    var lines = [];      // every line (mode-agnostic snap fallback)
-    var walkLines = [];  // lines a pedestrian may use
-    var carLines = [];   // lines a car may use
     var segments = [];
     var features = geojson.features || [];
+
+    var minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
 
     function addEdge(fromKey, toKey, weight, coordPair, pedBlocked, carBlocked) {
       if (!graph.has(fromKey)) graph.set(fromKey, []);
@@ -118,11 +115,6 @@
 
       for (var a = 0; a < coordArrays.length; a++) {
         var coords = coordArrays[a];
-        var lineFeature = turf.lineString(coords, { highway: hwy, pedBlocked: pedBlocked, carBlocked: carBlocked });
-        lines.push(lineFeature);
-        if (!pedBlocked) walkLines.push(lineFeature);
-        if (!carBlocked) carLines.push(lineFeature);
-
         for (var j = 0; j < coords.length - 1; j++) {
           var c1 = coords[j];
           var c2 = coords[j + 1];
@@ -131,7 +123,6 @@
           var dist = turf.distance(turf.point(c1), turf.point(c2), { units: "kilometers" });
           addEdge(k1, k2, dist, [c1, c2], pedBlocked, carBlocked);
           segments.push({
-            feature: lineFeature,
             startKey: k1,
             endKey: k2,
             startCoord: c1,
@@ -139,66 +130,170 @@
             pedBlocked: pedBlocked,
             carBlocked: carBlocked
           });
+
+          if (c1[0] < minLng) minLng = c1[0]; if (c1[0] > maxLng) maxLng = c1[0];
+          if (c1[1] < minLat) minLat = c1[1]; if (c1[1] > maxLat) maxLat = c1[1];
+          if (c2[0] < minLng) minLng = c2[0]; if (c2[0] > maxLng) maxLng = c2[0];
+          if (c2[1] < minLat) minLat = c2[1]; if (c2[1] > maxLat) maxLat = c2[1];
         }
       }
     }
 
     _graph = graph;
-    _allLines = turf.featureCollection(lines);
-    _walkLines = turf.featureCollection(walkLines);
-    _carLines = turf.featureCollection(carLines);
     _segmentIndex = segments;
+    _segGrid = buildSegGrid(segments, minLat, maxLat, minLng, maxLng);
     _featureCount = features.length;
     _networkEpoch++;
   }
 
+  // ---- Spatial grid over segments (snap acceleration) ----
+  //
+  // snapToNetwork() is called once per stop/origin and previously scanned
+  // EVERY segment in the network (turf.lineString + turf.nearestPointOnLine
+  // per segment) to find the nearest one. On a city-scale Overpass download
+  // (tens of thousands of segments once footways/paths are included) that is
+  // 1-3 seconds PER CALL — the actual bottleneck behind "Walking from stop
+  // x/y" crawling, not the flood itself (which capped-radius floods already
+  // shrank). A uniform grid keyed by ~0.5 km cells (matching SNAP_MAX_KM, the
+  // hard rejection radius) lets snapToNetwork query only the segments near
+  // the point instead of all of them. (_segGrid itself is declared in the
+  // Private state block above.)
+
+  // Cell size in degrees, derived from the network's own bbox mid-latitude so
+  // a cell is close to a real 0.5 km square regardless of where the network
+  // is (longitude degrees shrink toward the poles; latitude degrees don't).
+  var _gridLatDeg = 0.5 / 110.574;
+  var _gridLngDeg = 0.5 / 111.32; // recomputed per network from mid-latitude below
+
+  function gridCellOf(lng, lat) {
+    return [Math.floor(lng / _gridLngDeg), Math.floor(lat / _gridLatDeg)];
+  }
+
+  function gridKey(gx, gy) { return gx + "," + gy; }
+
+  function buildSegGrid(segments, minLat, maxLat, minLng, maxLng) {
+    var grid = new Map();
+    if (!segments.length) return grid;
+
+    var midLat = (minLat + maxLat) / 2;
+    _gridLatDeg = 0.5 / 110.574;
+    _gridLngDeg = 0.5 / (111.32 * Math.cos(midLat * Math.PI / 180));
+
+    for (var i = 0; i < segments.length; i++) {
+      var seg = segments[i];
+      var lngA = seg.startCoord[0], latA = seg.startCoord[1];
+      var lngB = seg.endCoord[0], latB = seg.endCoord[1];
+      var cellA = gridCellOf(lngA, latA);
+      var cellB = gridCellOf(lngB, latB);
+      var gxMin = Math.min(cellA[0], cellB[0]), gxMax = Math.max(cellA[0], cellB[0]);
+      var gyMin = Math.min(cellA[1], cellB[1]), gyMax = Math.max(cellA[1], cellB[1]);
+
+      for (var gx = gxMin; gx <= gxMax; gx++) {
+        for (var gy = gyMin; gy <= gyMax; gy++) {
+          var key = gridKey(gx, gy);
+          var bucket = grid.get(key);
+          if (!bucket) { bucket = []; grid.set(key, bucket); }
+          bucket.push(i);
+        }
+      }
+    }
+    return grid;
+  }
+
   // ---- Snap to network ----
 
-  //   mode: "walk" | "drive" | undefined. Restricts the snap to lines the mode
-  //   can actually traverse (walk excludes motorways; drive excludes footways).
-  //   Undefined falls back to all lines (legacy / mode-agnostic callers).
+  // Nearest point on segment A-B to the query point, all in local km space
+  // (equirectangular projection around the query point — accurate at the
+  // sub-km scale SNAP_MAX_KM operates at, with no turf feature allocation).
+  // The query point is the local origin (0,0), so the standard point-segment
+  // projection formula collapses to just A/B/t. Returns { distKm, lng, lat }.
+  function nearestOnSegmentKm(queryLng, queryLat, kmPerDegLng, kmPerDegLat, aLng, aLat, bLng, bLat) {
+    var ax = (aLng - queryLng) * kmPerDegLng, ay = (aLat - queryLat) * kmPerDegLat;
+    var bx = (bLng - queryLng) * kmPerDegLng, by = (bLat - queryLat) * kmPerDegLat;
+    var dx = bx - ax, dy = by - ay;
+    var t;
+    if (dx === 0 && dy === 0) {
+      t = 0;
+    } else {
+      t = -(ax * dx + ay * dy) / (dx * dx + dy * dy);
+      if (t < 0) t = 0; else if (t > 1) t = 1;
+    }
+    var nx = ax + t * dx, ny = ay + t * dy;
+    return {
+      distKm: Math.sqrt(nx * nx + ny * ny),
+      lng: queryLng + nx / kmPerDegLng,
+      lat: queryLat + ny / kmPerDegLat
+    };
+  }
+
+  //   mode: "walk" | "drive" | undefined. Restricts the snap to segments the
+  //   mode can actually traverse (walk excludes motorways; drive excludes
+  //   footways). Undefined falls back to all segments (legacy / mode-agnostic
+  //   callers).
+  //
+  // Queries only the 3x3 grid-cell neighborhood around the point (~1.5 km sq,
+  // cells sized to SNAP_MAX_KM — see the "Spatial grid over segments" comment
+  // above buildSegGrid()) instead of scanning every segment in the network.
+  // That neighborhood always covers the full SNAP_MAX_KM rejection radius
+  // (a segment further than one cell outside the query's own cell is always
+  // >= SNAP_MAX_KM away), so results match a full scan; an empty neighborhood
+  // means nothing is within range, same as today's null return.
   function snapToNetwork(lngLat, mode) {
-    if (!_segmentIndex || _segmentIndex.length === 0) return null;
+    if (!_segmentIndex || _segmentIndex.length === 0 || !_segGrid) return null;
 
-    var linesFC = _allLines;
     var blockedField = null;
-    if (mode === "walk") { linesFC = _walkLines; blockedField = "pedBlocked"; }
-    else if (mode === "drive") { linesFC = _carLines; blockedField = "carBlocked"; }
-    if (!linesFC || linesFC.features.length === 0) return null;
+    if (mode === "walk") blockedField = "pedBlocked";
+    else if (mode === "drive") blockedField = "carBlocked";
 
-    var pt = turf.point([lngLat[0], lngLat[1]]);
-    var nearest = turf.nearestPointOnLine(linesFC, pt, { units: "kilometers" });
+    var queryLng = lngLat[0], queryLat = lngLat[1];
+    var kmPerDegLat = 110.574;
+    var kmPerDegLng = 111.32 * Math.cos(queryLat * Math.PI / 180);
 
-    if (!nearest || nearest.properties.dist > SNAP_MAX_KM) return null;
+    var cell = gridCellOf(queryLng, queryLat);
+    var gx0 = cell[0], gy0 = cell[1];
 
-    // The nearest point sits on a specific segment; find the closest one this
-    // mode can use so the snapped coord and its bracketing nodes stay consistent.
-    var snappedCoord = nearest.geometry.coordinates;
-    var snappedKey = nodeKey(snappedCoord);
-
+    var seen = new Set(); // a segment can span multiple cells; dedupe
     var bestDist = Infinity;
     var bestSeg = null;
-    for (var i = 0; i < _segmentIndex.length; i++) {
-      var seg = _segmentIndex[i];
-      if (blockedField && seg[blockedField]) continue; // skip segments this mode can't use
-      var segLine = turf.lineString([seg.startCoord, seg.endCoord]);
-      var np = turf.nearestPointOnLine(segLine, pt, { units: "kilometers" });
-      if (np.properties.dist < bestDist) {
-        bestDist = np.properties.dist;
-        bestSeg = seg;
+    var bestLng = null, bestLat = null;
+
+    for (var gx = gx0 - 1; gx <= gx0 + 1; gx++) {
+      for (var gy = gy0 - 1; gy <= gy0 + 1; gy++) {
+        var bucket = _segGrid.get(gridKey(gx, gy));
+        if (!bucket) continue;
+        for (var bi = 0; bi < bucket.length; bi++) {
+          var idx = bucket[bi];
+          if (seen.has(idx)) continue;
+          seen.add(idx);
+
+          var seg = _segmentIndex[idx];
+          if (blockedField && seg[blockedField]) continue; // skip segments this mode can't use
+
+          var np = nearestOnSegmentKm(queryLng, queryLat, kmPerDegLng, kmPerDegLat,
+            seg.startCoord[0], seg.startCoord[1], seg.endCoord[0], seg.endCoord[1]);
+          if (np.distKm < bestDist) {
+            bestDist = np.distKm;
+            bestSeg = seg;
+            bestLng = np.lng;
+            bestLat = np.lat;
+          }
+        }
       }
     }
 
     if (!bestSeg || bestDist > SNAP_MAX_KM) return null;
 
+    var snappedCoord = [bestLng, bestLat];
+
     // Insert the snapped point into the graph temporarily by connecting it to both segment endpoints
     return {
       coord: snappedCoord,
-      key: snappedKey,
+      key: nodeKey(snappedCoord),
       segStartKey: bestSeg.startKey,
       segEndKey: bestSeg.endKey,
       segStartCoord: bestSeg.startCoord,
-      segEndCoord: bestSeg.endCoord
+      segEndCoord: bestSeg.endCoord,
+      dist: bestDist
     };
   }
 
@@ -568,10 +663,8 @@
   function clearRoadNetwork() {
     _roadGeoJSON = null;
     _graph = null;
-    _allLines = null;
-    _walkLines = null;
-    _carLines = null;
     _segmentIndex = null;
+    _segGrid = null;
     _featureCount = 0;
     _networkEpoch++;
     _downloadedBboxPolygon = null;
@@ -692,7 +785,10 @@
   //   budgetKm : maximum network walking distance in km
   // Returns null when no network is loaded or the origin is outside walkable
   // coverage (snap > SNAP_MAX_KM). Otherwise { distMap: Map<nodeKey,distKm>,
-  // snap, computeMs }.
+  // snap, computeMs, snapMs, floodMs }. snapMs/floodMs split the total so
+  // callers doing many of these (e.g. Transit Travelshed's per-stop floods)
+  // can diagnose whether time is going to snapping or to the Dijkstra flood
+  // itself — see the "Spatial grid over segments" comment above buildSegGrid().
   function runWalkFlood(lngLat, budgetKm) {
     if (!_graph || !(budgetKm > 0)) return null;
 
@@ -700,6 +796,10 @@
       ? performance.now() : Date.now();
 
     var snap = snapToNetwork(lngLat, "walk");
+
+    var tSnap = (typeof performance !== "undefined" && performance.now)
+      ? performance.now() : Date.now();
+
     if (!snap) return null; // origin outside walkable network coverage
 
     // Temp origin-node injection (mirrors findLocalRoute's pattern).
@@ -751,7 +851,13 @@
     var t1 = (typeof performance !== "undefined" && performance.now)
       ? performance.now() : Date.now();
 
-    return { distMap: distMap, snap: snap, computeMs: Math.round(t1 - t0) };
+    return {
+      distMap: distMap,
+      snap: snap,
+      computeMs: Math.round(t1 - t0),
+      snapMs: Math.round(tSnap - t0),
+      floodMs: Math.round(t1 - tSnap)
+    };
   }
 
   // Compute a network walkshed (walking isochrone) from an arbitrary origin.
@@ -795,7 +901,9 @@
       reachableSegments: turf.featureCollection(segFeatures),
       reachableCount: distMap.size,
       snap: snap,
-      computeMs: flood.computeMs
+      computeMs: flood.computeMs,
+      snapMs: flood.snapMs,
+      floodMs: flood.floodMs
     };
   }
 
@@ -817,7 +925,14 @@
       { nodeKey: snap.segStartKey, extraKm: turf.distance(turf.point(snap.coord), turf.point(snap.segStartCoord), { units: "kilometers" }) },
       { nodeKey: snap.segEndKey,   extraKm: turf.distance(turf.point(snap.coord), turf.point(snap.segEndCoord),   { units: "kilometers" }) }
     ];
-    return { distMap: flood.distMap, snap: snap, accessNodes: accessNodes, computeMs: flood.computeMs };
+    return {
+      distMap: flood.distMap,
+      snap: snap,
+      accessNodes: accessNodes,
+      computeMs: flood.computeMs,
+      snapMs: flood.snapMs,
+      floodMs: flood.floodMs
+    };
   }
 
   // ---- Expose on App namespace ----

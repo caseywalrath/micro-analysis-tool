@@ -352,8 +352,14 @@
   }
 
   // Fills _floodCache for every stop in stopsByKey not already cached at this
-  // (epoch, budgetKm). Yields after EVERY stop flood so the UI stays responsive
-  // and the status pill can count up (transit-propensity onProgress pattern).
+  // (epoch, budgetKm). Yields every 5 stops or every >=50ms of work (whichever
+  // comes first) rather than after EVERY stop flood — a bare setTimeout(0)
+  // costs only microseconds, but nested inside an async/await chain across
+  // hundreds of stops it costs roughly 4ms each (browsers clamp nested-timer
+  // resolution), which adds up to real time on a big system. The status pill
+  // still updates every stop (onProgress is cheap; only the paint-yielding
+  // setTimeout is throttled), so the visible counter stays accurate the next
+  // time the UI actually gets to repaint.
   //
   // Flood budget decision: the caller sizes budgetKm — an upper bound on any
   // remaining budget after a boarding — so one flood per stop serves every
@@ -367,6 +373,9 @@
     var epoch = (typeof App.roadNetworkEpoch === "function") ? App.roadNetworkEpoch() : 0;
     var keys = Object.keys(stopsByKey);
     var cached = 0, fresh = 0;
+    var snapMs = 0, floodMs = 0; // summed over FRESH computations only — cache hits do no work
+    var sinceYield = 0;
+    var workStart = Date.now();
     for (var i = 0; i < keys.length; i++) {
       var stopKey = keys[i];
       var cacheKey = floodCacheKey(stopKey, epoch, budgetKm);
@@ -380,12 +389,19 @@
         var costObj = {};
         res.distMap.forEach(function (d, k) { costObj[k] = d; });
         _floodCache.set(cacheKey, { cost: costObj, access: res.accessNodes });
+        snapMs += res.snapMs || 0;
+        floodMs += res.floodMs || 0;
       }
       fresh++;
+      sinceYield++;
       if (onProgress) onProgress(i + 1, keys.length);
-      await new Promise(function (r) { setTimeout(r, 0); }); // yield after EVERY stop flood
+      if (sinceYield >= 5 || (Date.now() - workStart) >= 50) {
+        sinceYield = 0;
+        await new Promise(function (r) { setTimeout(r, 0); });
+        workStart = Date.now();
+      }
     }
-    return { cached: cached, fresh: fresh };
+    return { cached: cached, fresh: fresh, snapMs: snapMs, floodMs: floodMs };
   }
 
   // ---- Status / stale / empty (standardized helper) ----
@@ -761,6 +777,9 @@
         result.computeMs + " ms &middot; " + result.floodStats.fresh + " flood(s) computed, " +
         result.floodStats.cached + " reused" +
         (result.offNetworkStopCount ? " &middot; " + result.offNetworkStopCount + " stop(s) off-network (skipped)" : "") +
+      "</p>" +
+      '<p class="tiny" style="margin-top:2px;color:var(--muted);">' +
+        "snap " + result.floodStats.snapMs + " ms &middot; flood " + result.floodStats.floodMs + " ms" +
       "</p>";
   }
 
@@ -949,6 +968,20 @@
       var floodStats = await ensureFloods(stopsByKey, stopFloodKm, function (done, total) {
         setStatus("Walking from stop " + done + "/" + total + "…", "running");
       });
+      // Roll the origin flood's own snap/flood split into the totals so the
+      // diagnostic below covers every network query this run made, not just
+      // the per-stop ones.
+      floodStats.snapMs += originFlood.snapMs || 0;
+      floodStats.floodMs += originFlood.floodMs || 0;
+      // Snap vs. flood diagnostic (docs/transit-travelshed-v2-walk-caps-plan.md
+      // follow-up): snapping used to scan every segment in the network per
+      // call (turf allocations + turf.nearestPointOnLine per segment) and
+      // dominated "Walking from stop x/y" on city-scale downloads; the fix is
+      // the grid-accelerated snapToNetwork() in road-network.js. Logged (not
+      // just shown in the results footer) so it's easy to compare before/after
+      // on a real network without re-running with dev tools already open.
+      console.log("[transit-travelshed] snap " + floodStats.snapMs + " ms, flood " + floodStats.floodMs +
+        " ms, across " + floodStats.fresh + " fresh + " + floodStats.cached + " cached flood(s)");
 
       // Assemble the pure-engine input from cached floods; stops that snapped
       // off-network (cached as null) are skipped and counted.
