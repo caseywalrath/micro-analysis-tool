@@ -653,11 +653,10 @@
 
   // ---- Origin picker (probe pattern — a clicked map point, NOT an App.points feature) ----
 
-  // Arm the one-shot picker: close the popup so the map is clickable, set the
-  // shared App.drawMode so editing/selection handlers (which already early-
-  // return on any truthy drawMode) get out of the way, and show a crosshair.
+  // Arm the one-shot picker while leaving the click-through popup open. The
+  // shared App.drawMode makes editing/selection handlers (which already early-
+  // return on any truthy drawMode) get out of the way, and shows a crosshair.
   function armOriginPicker() {
-    if (App.popup && App.popup.close) App.popup.close();
     App.drawMode = "ts-origin";
     if (App.map) App.map.getCanvas().style.cursor = "crosshair";
     App.setStatus("Click the map to set the travelshed origin (Esc to cancel)");
@@ -675,7 +674,7 @@
     if (_originMarker) _originMarker.remove();
     _originMarker = new maplibregl.Marker({ color: "#7c3aed" }).setLngLat(_origin).addTo(App.map);
     disarmOriginPicker();
-    App.openModulePopup("transit-travelshed"); // reopen — its onOpen refreshes the origin label/clear button
+    syncInputsFromSettings();
     markStale();
     if (App.cache && App.cache.save) App.cache.save();
   }
@@ -704,7 +703,6 @@
       if (App.drawMode !== "ts-origin") return;
       disarmOriginPicker();
       App.setStatus("Ready");
-      App.openModulePopup("transit-travelshed");
     });
   }
 

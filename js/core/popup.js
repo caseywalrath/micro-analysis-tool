@@ -48,6 +48,9 @@
     var bodyEl = el.querySelector(".module-popup-body");
     if (!dialog || !bodyEl) return;
 
+    // A freshly opened panel always starts expanded.
+    setCollapsed(false);
+
     // If a different module was open, close it first
     if (_currentModuleId && _currentModuleId !== moduleId) {
       _close(modules, buildCore);
@@ -229,6 +232,17 @@
 
   // ---- Popup drag support ----
 
+  function setCollapsed(collapsed) {
+    var el = getContainer();
+    if (!el) return;
+    el.classList.toggle("module-popup-collapsed", collapsed);
+    var btn = el.querySelector(".module-popup-collapse");
+    if (!btn) return;
+    btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    btn.setAttribute("aria-label", collapsed ? "Expand panel" : "Collapse panel");
+    btn.title = collapsed ? "Expand" : "Collapse";
+  }
+
   function initDrag() {
     var el = getContainer();
     if (!el) return;
@@ -238,7 +252,7 @@
     if (!header || !dialog) return;
 
     header.addEventListener("mousedown", function (e) {
-      if (e.target.closest(".module-popup-close")) return;
+      if (e.target.closest(".module-popup-close, .module-popup-collapse")) return;
 
       e.preventDefault();
       _dragging = true;
@@ -282,8 +296,12 @@
       closeBtn.addEventListener("click", close);
     }
 
-    // Backdrop does NOT close (prevent accidental dismissal)
-    // — intentional design decision per plan
+    var collapseBtn = el.querySelector(".module-popup-collapse");
+    if (collapseBtn) {
+      collapseBtn.addEventListener("click", function () {
+        setCollapsed(!el.classList.contains("module-popup-collapsed"));
+      });
+    }
 
     // Initialize popup dragging
     initDrag();
