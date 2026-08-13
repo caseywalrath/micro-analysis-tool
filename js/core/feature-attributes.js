@@ -837,26 +837,55 @@
     var el = document.createElement("div");
     el.id = "fp-attr-popup";
     el.style.display = "none";
-    el.style.left = "258px";
+    el.style.left = "24px";
     el.style.top  = "60px";
 
     // Header
     var header = document.createElement("div");
     header.className = "fp-attr-popup-header";
 
+    var titleRow = document.createElement("div");
+    titleRow.className = "fp-attr-popup-title-row";
+
     var titleEl = document.createElement("span");
     titleEl.className = "fp-attr-popup-title";
-    header.appendChild(titleEl);
+    titleRow.appendChild(titleEl);
+
+    var headerActions = document.createElement("div");
+    headerActions.className = "fp-attr-popup-actions";
+
+    var collapseBtn = document.createElement("button");
+    collapseBtn.type = "button";
+    collapseBtn.className = "fp-attr-popup-collapse";
+    collapseBtn.setAttribute("aria-label", "Collapse attributes");
+    collapseBtn.setAttribute("aria-expanded", "true");
+    collapseBtn.title = "Collapse";
+    collapseBtn.innerHTML = '<svg viewBox="0 0 20 20" aria-hidden="true"><polyline points="5,12 10,7 15,12"></polyline></svg>';
+    collapseBtn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      setAttrPopupCollapsed(!_popupEl.classList.contains("fp-attr-popup-collapsed"));
+    });
+    headerActions.appendChild(collapseBtn);
 
     var closeBtn = document.createElement("button");
+    closeBtn.type = "button";
     closeBtn.className = "fp-attr-popup-close";
     closeBtn.innerHTML = "&times;";
+    closeBtn.setAttribute("aria-label", "Close attributes");
     closeBtn.title = "Close";
     closeBtn.addEventListener("click", function (e) {
       e.stopPropagation();
       closeAttrPopup();
     });
-    header.appendChild(closeBtn);
+    headerActions.appendChild(closeBtn);
+    titleRow.appendChild(headerActions);
+    header.appendChild(titleRow);
+
+    // Feature appearance controls are kept on their own left-aligned row so
+    // the title and window controls stay easy to scan.
+    var controls = document.createElement("div");
+    controls.className = "fp-attr-popup-controls";
+    header.appendChild(controls);
     el.appendChild(header);
 
     // Body
@@ -870,7 +899,7 @@
     // ---- Drag support ----
     header.addEventListener("mousedown", function (e) {
       if (e.button !== 0) return;
-      if (e.target === closeBtn || closeBtn.contains(e.target)) return;
+      if (e.target.closest(".fp-attr-popup-actions, .fp-attr-popup-controls")) return;
       e.preventDefault();
       var rect = el.getBoundingClientRect();
       _dragState = {
@@ -922,6 +951,16 @@
     top  = Math.max(0,                  Math.min(top,  window.innerHeight - minVisible));
     _popupEl.style.left = left + "px";
     _popupEl.style.top  = top  + "px";
+  }
+
+  function setAttrPopupCollapsed(collapsed) {
+    if (!_popupEl) return;
+    _popupEl.classList.toggle("fp-attr-popup-collapsed", collapsed);
+    var btn = _popupEl.querySelector(".fp-attr-popup-collapse");
+    if (!btn) return;
+    btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    btn.setAttribute("aria-label", collapsed ? "Expand attributes" : "Collapse attributes");
+    btn.title = collapsed ? "Expand" : "Collapse";
   }
 
   // SVG icons for per-feature override buttons
@@ -1153,15 +1192,17 @@
     _popupEl.querySelector(".fp-attr-popup-title").textContent =
       (TYPE_LABELS[featureType] || featureType) + " Attributes";
 
-    // Update or create color swatch in header
+    // Update or create color swatch in the left-aligned appearance-controls row.
     var headerEl = _popupEl.querySelector(".fp-attr-popup-header");
-    var existingSwatch = headerEl.querySelector(".fp-attr-popup-swatch");
+    var controlsEl = headerEl.querySelector(".fp-attr-popup-controls");
+    var existingSwatch = controlsEl.querySelector(".fp-attr-popup-swatch");
     if (existingSwatch) existingSwatch.remove();
     var featureColor = feature.properties.color ||
       (typeof App.getTypeDefaultColor === "function" ? App.getTypeDefaultColor(featureType) : "#999");
     var hdrSwatch = document.createElement("button");
     hdrSwatch.className = "fp-attr-popup-swatch";
     hdrSwatch.style.background = featureColor;
+    hdrSwatch.setAttribute("aria-label", "Change color");
     hdrSwatch.title = "Change color";
     (function (sw, ft, fi, feat) {
       sw.addEventListener("click", function (e) {
@@ -1175,21 +1216,18 @@
         }
       });
     })(hdrSwatch, featureType, featureIndex, feature);
-    // Insert swatch before title
-    var titleEl = headerEl.querySelector(".fp-attr-popup-title");
-    headerEl.insertBefore(hdrSwatch, titleEl);
+    controlsEl.appendChild(hdrSwatch);
 
     // Remove existing overrides container, then rebuild it
-    var existingOverrides = headerEl.querySelector(".fp-attr-overrides");
+    var existingOverrides = controlsEl.querySelector(".fp-attr-overrides");
     if (existingOverrides) existingOverrides.remove();
 
-    var closeBtn = headerEl.querySelector(".fp-attr-popup-close");
     var overrides = buildOverridesContainer(featureType, feature) || (function () {
       var d = document.createElement("div");
       d.className = "fp-attr-overrides";
       return d;
     })();
-    headerEl.insertBefore(overrides, closeBtn);
+    controlsEl.appendChild(overrides);
 
     // Clear and rebuild body
     var body = _popupEl.querySelector(".fp-attr-popup-body");
@@ -1334,7 +1372,8 @@
 
     // Only reset position when opening fresh (preserve dragged position when switching features)
     if (!wasOpen) {
-      _popupEl.style.left = "320px";
+      setAttrPopupCollapsed(false);
+      _popupEl.style.left = "24px";
       _popupEl.style.top  = "60px";
     }
     _popupEl.style.display = "";

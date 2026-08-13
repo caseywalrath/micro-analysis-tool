@@ -12,6 +12,12 @@ dock right over a live map, collapse to their title bar, and Transit Travelshed 
 an origin without closing its panel. Golden tests passed 129/129 and the visual harness
 passed 58/60 captures with the two documented hidden-sidebar skips.
 
+**Feature Attributes follow-up.** In the same Phase 6 working session, the singleton
+Feature Attributes popup was aligned with the floating-panel pattern: it docks left on a
+fresh open, collapses to its title bar, and places the color and per-feature appearance
+controls in a separate left-aligned row below the feature title. This keeps its close and
+collapse controls uncluttered while preserving drag behavior.
+
 **Phase 8 addition.** During review of Phase 6's floating-panel behavior, the developer
 asked whether multiple analysis tools could remain open together. The use case is
 side-by-side comparison of tool inputs/results while keeping the map live. This was not

@@ -284,6 +284,10 @@ async function captureTheme(browser, theme, port) {
       window.App.openAttrPopup("route", 0, window.App.routes[0]);
     });
     await shootLocator(page, "#fp-attr-popup", join(OUT_DIR, theme + "_attr-popup.png"), theme + "_attr-popup");
+    await page.locator(".fp-attr-popup-collapse").click();
+    await sleep(TAB_SETTLE_MS);
+    await shootLocator(page, "#fp-attr-popup", join(OUT_DIR, theme + "_attr-popup-collapsed.png"), theme + "_attr-popup-collapsed");
+    await page.locator(".fp-attr-popup-collapse").click();
     await page.evaluate(() => window.App.closeAttrPopup());
   } catch (e) {
     record(theme + "_attr-popup", "fail", e.message);
