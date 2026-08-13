@@ -48,15 +48,11 @@
   function syncBufferControl() {
     var input = document.getElementById("csBufferMiles");
     var toggle = document.getElementById("csUseDisplayBuffers");
-    var help = document.getElementById("csBufferHelp");
     if (input) {
       input.value = String(_bufferMiles);
       input.disabled = _useDisplayBuffers;
     }
     if (toggle) toggle.checked = _useDisplayBuffers;
-    if (help) help.textContent = _useDisplayBuffers
-      ? "Uses the currently displayed Feature Settings buffers."
-      : "Analysis distance only. Display buffers follow Feature Settings.";
   }
 
   function getFeatureFilter() {
