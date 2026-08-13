@@ -10,15 +10,15 @@
 <!-- ======== Tab 1: Major Service Changes ======== -->
 <div class="tvi-tab-content tvi-tab-visible" data-tab="policies">
   <div class="tvi-tab-body">
-    <div class="rf-section-row" style="align-items:flex-start;min-height:380px;">
+    <div class="rf-section-row tvi-policy-row">
 
       <!-- Left: Agency Policies -->
-      <div class="rf-settings-col" style="width:300px;">
+      <div class="rf-settings-col tvi-policy-settings">
 
         <div class="rf-section-title">Agency Policies</div>
 
-        <div class="rf-section-title" style="margin-top:8px;">Major Service Change Rules</div>
-        <div class="tiny" style="color:var(--muted);margin-bottom:8px;">Check rules to enable. A change triggering any enabled rule is flagged as a Major Service Change.</div>
+        <div class="rf-section-title u-mt-2">Major Service Change Rules</div>
+        <div class="tiny tvi-description u-muted">Check rules to enable. A change triggering any enabled rule is flagged as a Major Service Change.</div>
 
         <div class="tvi-rule-row">
           <input type="checkbox" id="tviRuleRouteMiles" checked>
@@ -55,7 +55,7 @@
           <span class="tiny">%</span>
         </div>
 
-        <div style="margin-top:auto;padding-top:16px;">
+        <div class="tvi-policy-fill">
           <button id="tviExportMSCBtn" type="button" class="rf-btn-sm">Export MSC Results CSV</button>
         </div>
 
@@ -65,18 +65,18 @@
       <div class="rf-results-col">
 
         <div class="rf-section-title">Service Adjustments</div>
-        <div class="tiny" style="color:var(--muted);margin-bottom:8px;">
+        <div class="tiny tvi-description u-muted">
           Draw the existing and proposed route alignments on the map, then pair them here. The module auto-computes route miles, % altered, and service coverage changes.
         </div>
 
         <!-- Alteration cards container -->
         <div id="tviAlterationsContainer"></div>
 
-        <div id="tviAlterationsEmpty" class="tiny" style="color:var(--muted);padding:10px 0;">
+        <div id="tviAlterationsEmpty" class="tiny tvi-empty-adjustments u-muted">
           No adjustments defined. Click "+ Service Adjustment" to add one.
         </div>
 
-        <button id="tviAddAlteration" type="button" class="rf-btn-sm" style="margin-top:8px;">+ Service Adjustment</button>
+        <button id="tviAddAlteration" type="button" class="rf-btn-sm u-mt-2">+ Service Adjustment</button>
 
       </div>
     </div>
@@ -86,10 +86,10 @@
 <!-- ======== Tab 2: Equity Analysis ======== -->
 <div class="tvi-tab-content" data-tab="analysis">
   <div class="tvi-tab-body">
-    <div class="rf-section-row" style="align-items:flex-start;min-height:380px;">
+    <div class="rf-section-row tvi-analysis-row">
 
       <!-- Left: Controls -->
-      <div class="rf-settings-col" style="width:260px;">
+      <div class="rf-settings-col tvi-analysis-settings">
 
         <div class="rf-section-title">Equity Thresholds</div>
         <div class="tvi-rule-row">
@@ -103,7 +103,7 @@
           <span class="tiny">ppt</span>
         </div>
 
-        <div style="border-top:1px solid var(--border);margin:14px 0;"></div>
+        <div class="tvi-divider"></div>
 
         <div class="rf-section-title">Geography</div>
         <label class="tiny">Level</label>
@@ -112,7 +112,7 @@
           <option value="bg" selected>Block Groups</option>
         </select>
 
-        <label class="tiny" style="margin-top:10px;">ACS Year</label>
+        <label class="tiny u-mt-3">ACS Year</label>
         <select id="tviYearSelect" class="rf-select">
           <option value="2024">2024</option>
           <option value="2023">2023</option>
@@ -120,7 +120,7 @@
           <option value="2021">2021</option>
         </select>
 
-        <div style="border-top:1px solid var(--border);margin:14px 0;"></div>
+        <div class="tvi-divider"></div>
 
         <div class="rf-section-title">Impacted Area Method</div>
         <div class="tvi-radio-group">
@@ -130,50 +130,50 @@
           <label><input type="radio" name="tviImpactMethod" value="user_polygon"> Drawn polygon(s)</label>
         </div>
 
-        <div style="border-top:1px solid var(--border);margin:14px 0;"></div>
+        <div class="tvi-divider"></div>
 
         <div class="rf-section-title">System Baseline</div>
-        <div class="tiny" style="color:var(--muted);margin-bottom:8px;">
+        <div class="tiny tvi-description u-muted">
           Calculate minority and low-income shares across the entire system (all drawn features' buffer union) as the comparison benchmark.
         </div>
 
-        <div class="tiny" style="margin-bottom:4px;">
+        <div class="tiny u-mt-1">
           <a href="#" id="tviBaselineSelectAll">Select all</a> &middot;
           <a href="#" id="tviBaselineSelectNone">Clear</a>
         </div>
         <div id="tviBaselineFeatureList" class="tvi-feature-list"></div>
 
-        <button id="tviComputeBaseline" type="button" class="rf-action-primary" style="margin-top:12px;">
+        <button id="tviComputeBaseline" type="button" class="rf-action-primary u-mt-3">
           Calculate Baseline
         </button>
 
         <div id="tviBaselineBox" class="tvi-baseline-box" style="display:none;margin-top:12px;">
           <div class="tiny"><strong>Minority share:</strong> <span id="tviBaselineMinority">&mdash;</span></div>
           <div class="tiny"><strong>Low-income share:</strong> <span id="tviBaselineLowIncome">&mdash;</span></div>
-          <div class="tiny" style="color:var(--muted);margin-top:4px;"><span id="tviBaselineGeos">&mdash;</span> geographies &middot; Pop: <span id="tviBaselinePop">&mdash;</span></div>
+          <div class="tiny u-mt-1 u-muted"><span id="tviBaselineGeos">&mdash;</span> geographies &middot; Pop: <span id="tviBaselinePop">&mdash;</span></div>
         </div>
 
-        <div style="border-top:1px solid var(--border);margin:14px 0;"></div>
+        <div class="tvi-divider"></div>
 
         <div class="rf-section-title">Equity Analysis</div>
-        <div class="tiny" style="color:var(--muted);margin-bottom:8px;">
+        <div class="tiny tvi-description u-muted">
           Evaluate Major Service Change rules and calculate demographic impacts for the active scenario's impacted area.
         </div>
 
-        <button id="tviRunAnalysis" type="button" class="rf-action-primary" style="margin-top:8px;">
+        <button id="tviRunAnalysis" type="button" class="rf-action-primary u-mt-2">
           Run Equity Analysis
         </button>
 
         <div id="tviStaleWarning" class="rf-status" style="display:none;"></div>
 
-        <div id="tviAnalysisStatus" class="tiny" style="margin-top:8px;color:var(--muted);"></div>
+        <div id="tviAnalysisStatus" class="tiny u-mt-2 u-muted"></div>
 
       </div>
 
       <!-- Right: Results -->
       <div class="rf-results-col">
 
-        <div id="tviResultsEmpty" class="tiny" style="color:var(--muted);padding:20px 0;">
+        <div id="tviResultsEmpty" class="tiny tvi-comp-empty u-muted">
           Run an equity analysis to see results here.
         </div>
 
@@ -182,7 +182,7 @@
           <!-- Major Service Change card -->
           <div class="tvi-finding-card">
             <div class="rf-section-title">Major Service Change</div>
-            <div style="margin-bottom:8px;">
+            <div class="tvi-verdict-row">
               <span id="tviMcVerdict" class="pill na">N/A</span>
             </div>
             <div id="tviMcRules"></div>
@@ -191,39 +191,39 @@
           <!-- Minority / Disparate Impact card -->
           <div class="tvi-finding-card">
             <div class="rf-section-title">Minority — Disparate Impact</div>
-            <div style="margin-bottom:8px;">
+            <div class="tvi-verdict-row">
               <span id="tviDiVerdict" class="pill na">N/A</span>
             </div>
             <table class="tvi-finding-table">
-              <tr><td class="tiny">Impacted area minority share</td><td id="tviDiImpacted" class="tiny" style="text-align:right;">&mdash;</td></tr>
-              <tr><td class="tiny">System baseline minority share</td><td id="tviDiBaseline" class="tiny" style="text-align:right;">&mdash;</td></tr>
-              <tr><td class="tiny">Difference</td><td id="tviDiDiff" class="tiny" style="text-align:right;">&mdash;</td></tr>
-              <tr><td class="tiny">Threshold</td><td id="tviDiThresh" class="tiny" style="text-align:right;">&mdash;</td></tr>
+              <tr><td class="tiny">Impacted area minority share</td><td id="tviDiImpacted" class="tiny tvi-value-right">&mdash;</td></tr>
+              <tr><td class="tiny">System baseline minority share</td><td id="tviDiBaseline" class="tiny tvi-value-right">&mdash;</td></tr>
+              <tr><td class="tiny">Difference</td><td id="tviDiDiff" class="tiny tvi-value-right">&mdash;</td></tr>
+              <tr><td class="tiny">Threshold</td><td id="tviDiThresh" class="tiny tvi-value-right">&mdash;</td></tr>
             </table>
           </div>
 
           <!-- Low-Income / Disproportionate Burden card -->
           <div class="tvi-finding-card">
             <div class="rf-section-title">Low-Income — Disproportionate Burden</div>
-            <div style="margin-bottom:8px;">
+            <div class="tvi-verdict-row">
               <span id="tviDbVerdict" class="pill na">N/A</span>
             </div>
             <table class="tvi-finding-table">
-              <tr><td class="tiny">Impacted area low-income share</td><td id="tviDbImpacted" class="tiny" style="text-align:right;">&mdash;</td></tr>
-              <tr><td class="tiny">System baseline low-income share</td><td id="tviDbBaseline" class="tiny" style="text-align:right;">&mdash;</td></tr>
-              <tr><td class="tiny">Difference</td><td id="tviDbDiff" class="tiny" style="text-align:right;">&mdash;</td></tr>
-              <tr><td class="tiny">Threshold</td><td id="tviDbThresh" class="tiny" style="text-align:right;">&mdash;</td></tr>
+              <tr><td class="tiny">Impacted area low-income share</td><td id="tviDbImpacted" class="tiny tvi-value-right">&mdash;</td></tr>
+              <tr><td class="tiny">System baseline low-income share</td><td id="tviDbBaseline" class="tiny tvi-value-right">&mdash;</td></tr>
+              <tr><td class="tiny">Difference</td><td id="tviDbDiff" class="tiny tvi-value-right">&mdash;</td></tr>
+              <tr><td class="tiny">Threshold</td><td id="tviDbThresh" class="tiny tvi-value-right">&mdash;</td></tr>
             </table>
           </div>
 
           <!-- Summary stats -->
-          <div class="tiny" style="color:var(--muted);margin-top:12px;">
+          <div class="tiny tvi-summary u-muted">
             <span id="tviSummaryGeos">&mdash;</span> geographies scored &middot;
             Impacted pop: <span id="tviSummaryPop">&mdash;</span>
           </div>
 
           <!-- Export buttons -->
-          <div style="margin-top:14px;display:flex;gap:8px;">
+          <div class="btn-row tvi-export-row">
             <button id="tviExportCSV" type="button" class="rf-btn-sm" disabled>Export Findings CSV</button>
             <button id="tviExportGeoJSON" type="button" class="rf-btn-sm" disabled>Export Impacted Area GeoJSON</button>
           </div>
@@ -239,38 +239,38 @@
   <div class="tvi-tab-body">
 
     <div class="rf-section-title">Scenario Manager</div>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
-      <select id="tviScenarioSelect" class="rf-select" style="width:200px;"></select>
+    <div class="tvi-scenario-controls">
+      <select id="tviScenarioSelect" class="rf-select tvi-scenario-select"></select>
       <button id="tviDuplicateScenario" type="button" class="rf-btn-sm">Duplicate</button>
       <button id="tviRenameScenario" type="button" class="rf-btn-sm">Rename</button>
       <button id="tviDeleteScenario" type="button" class="rf-btn-sm">Delete</button>
     </div>
 
-    <div class="rf-section-title" style="margin-top:16px;">Scenario Comparison</div>
-    <div class="tiny" style="color:var(--muted);margin-bottom:10px;">
+    <div class="rf-section-title tvi-comparison-title">Scenario Comparison</div>
+    <div class="tiny tvi-description u-muted">
       Run equity analysis on each scenario (from the Equity Analysis tab) to populate the comparison table.
     </div>
 
-    <div id="tviComparisonWrap" style="overflow-x:auto;">
+    <div id="tviComparisonWrap" class="tvi-comparison-wrap">
       <table class="tvi-comparison-table" id="tviComparisonTable">
         <thead id="tviCompThead"></thead>
         <tbody id="tviCompTbody"></tbody>
       </table>
     </div>
 
-    <div id="tviCompEmpty" class="tiny" style="color:var(--muted);padding:20px 0;">
+    <div id="tviCompEmpty" class="tiny tvi-comp-empty u-muted">
       No scenarios analyzed yet. Run analysis for at least one scenario to see comparisons.
     </div>
 
-    <div style="margin-top:14px;display:flex;gap:8px;">
+    <div class="btn-row tvi-session-export">
       <button id="tviExportCompCSV" type="button" class="rf-btn-sm" disabled>Export Comparison CSV</button>
       <button id="tviExportSessionJSON" type="button" class="rf-btn-sm" disabled>Export Session JSON</button>
     </div>
 
     <!-- Session import -->
-    <div style="margin-top:12px;">
+    <div class="tvi-session-import">
       <label class="tiny">Import Session JSON
-        <input id="tviImportSessionFile" type="file" accept=".json" style="font-size:12px;margin-top:2px;">
+        <input id="tviImportSessionFile" class="tvi-session-file" type="file" accept=".json">
       </label>
     </div>
 
