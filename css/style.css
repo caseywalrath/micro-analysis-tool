@@ -2627,6 +2627,15 @@ body.dark-mode .cs-row-details td { background: #1a2233; }
 body.dark-mode .cs-feature-badge { background: #2d3748; color: #cbd5e0; }
 
 /* ---- Transit Coverage popup body (reuses .cs-results-table) ---- */
+.tc-body .tc-section-row {
+  align-items: flex-start;
+  min-height: 400px;
+}
+.tc-empty-note {
+  padding: 6px;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
 .tc-results-table td:nth-child(n+2) { text-align: right; }
 
 /* ---- Walkshed popup ---- */
@@ -3149,6 +3158,22 @@ label.tiny:not(:has(input)) {
   font-weight: var(--weight-medium);
   color: var(--text-secondary);
   margin-bottom: var(--space-1);
+}
+.form-section { margin-top: var(--space-4); }
+.btn-row {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+.u-mt-1 { margin-top: var(--space-1); }
+.u-mt-2 { margin-top: var(--space-2); }
+.u-mt-3 { margin-top: var(--space-3); }
+.u-mt-4 { margin-top: var(--space-4); }
+.u-muted { color: var(--text-secondary); }
+.u-flex-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 /* ---- Form controls (phase 4) ------------------------------------------
