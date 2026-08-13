@@ -1,6 +1,23 @@
 # Modern UI Refresh — Master Plan
 
-Status: **approved, ready to implement** (2026-08-12)
+Status: **in progress** — phases 0-4 complete on `claude/ui-refresh-phase-4-controls-hngzdy`;
+phase 5 (inline style purge) is next. (2026-08-13)
+
+**Phase 4 checkpoint outcome.** Approved, with a follow-up commit covering the
+developer's review notes. Approved as-is: control height, the Route Costing
+settings modal, the Walkshed narrow-panel pilot. Changed in the follow-up:
+collapsible module inputs (new shared `App.renderModuleInputs`, wired into
+Walkshed / Transit Coverage / Transit Travelshed), feature-panel row spacing, the
+census-cache note no longer reading as a button, dropdown-menu consistency, and
+Feature Area Analysis rebuilt on the Settings | Results schema (part of phase 5's
+remit, pulled forward). Deferred by the developer: a separate pass on option
+wording throughout.
+
+Two **non-UI fixes** rode the same branch as clearly-labelled separate commits —
+they are not part of the refresh and the phase docs claim no credit for them:
+registering five missing analysis overlays in the Layers panel, and giving
+Walkshed the prompt-to-download street-network flow Transit Travelshed already
+had.
 
 This directory is the implementation plan for the `features.md` item "Modern UI refresh."
 It is written to be executed **phase by phase, by separate agent sessions**, each working
@@ -23,16 +40,16 @@ These were decided with the developer and are settled:
 
 ## Phase sequence
 
-| Phase | File | What | Visible change? | Checkpoint after? |
-|---|---|---|---|---|
-| 0 | `phase-0-screenshot-harness.md` | Automated popup screenshot capture (light+dark) + baseline set | None | No |
-| 1 | `phase-1-design-tokens.md` | Color/spacing/radius/shadow tokens, dark-mode token block, `accent-color` | Checkboxes/radios only | **Yes — palette approval** |
-| 2 | `phase-2-color-migration.md` | Migrate ~660 hardcoded hex values onto tokens; collapse redundant dark-mode rules | Near-none (tiny consolidation shifts) | **Yes — full screenshot review** |
-| 3 | `phase-3-typography-inter.md` | Inter font, scale bump (13→14 base), fix 35 hardcoded px sizes | Everything gets slightly larger | **Yes — type approval** |
-| 4 | `phase-4-controls-refresh.md` | Modern form controls, buttons, checklists; widen settings columns + popups | Large — the headline change | **Yes — key checkpoint** |
-| 5 | `phase-5-inline-style-purge.md` | Replace ~370 static inline styles in popup HTML with shared primitives | Near-none | No |
-| 6 | `phase-6-demodalize.md` | Remove backdrop, live map behind popups, collapse button on popup header | Large behavior change | **Yes — behavior test** |
-| 7 | `phase-7-shell-a11y-docs.md` | Toolbar grouping, Analysis dropdown grouping, focus/aria/target-size pass, CLAUDE.md + features.md updates | Moderate | Final review |
+| Phase | File | What | Visible change? | Checkpoint after? | Status |
+|---|---|---|---|---|---|
+| 0 | `phase-0-screenshot-harness.md` | Automated popup screenshot capture (light+dark) + baseline set | None | No | ✅ Done |
+| 1 | `phase-1-design-tokens.md` | Color/spacing/radius/shadow tokens, dark-mode token block, `accent-color` | Checkboxes/radios only | **Yes — palette approval** | ✅ Done, approved |
+| 2 | `phase-2-color-migration.md` | Migrate ~660 hardcoded hex values onto tokens; collapse redundant dark-mode rules | Near-none (tiny consolidation shifts) | **Yes — full screenshot review** | ✅ Done, reviewed |
+| 3 | `phase-3-typography-inter.md` | Inter font, scale bump (13→14 base), fix 35 hardcoded px sizes | Everything gets slightly larger | **Yes — type approval** | ✅ Done, approved |
+| 4 | `phase-4-controls-refresh.md` | Modern form controls, buttons, checklists; widen settings columns + popups | Large — the headline change | **Yes — key checkpoint** | ✅ Done, approved with changes |
+| 5 | `phase-5-inline-style-purge.md` | Replace ~370 static inline styles in popup HTML with shared primitives | Near-none | No | Not started |
+| 6 | `phase-6-demodalize.md` | Remove backdrop, live map behind popups, collapse button on popup header | Large behavior change | **Yes — behavior test** | Not started |
+| 7 | `phase-7-shell-a11y-docs.md` | Toolbar grouping, Analysis dropdown grouping, focus/aria/target-size pass, CLAUDE.md + features.md updates | Moderate | Final review | Not started |
 
 Phases must run **in order** (2 depends on 1; 3–5 assume 2's tokens; 6–7 are independent
 of each other but come last so their screenshots reflect the new look).
@@ -97,3 +114,32 @@ refresh ships, the baseline set is refreshed to the new look and the old set del
 - **Phase 6:** flows that arm a one-shot map click while the popup is open (Transit
   Travelshed "Pick origin on map") change feel when the map is live — test that flow
   end-to-end.
+- **Phase 4 — dead sidebar:** phase 0 confirmed `#sidebar-wrap` ships
+  `display:none` in `index.html` and nothing in the codebase ever calls
+  `App.sidebar.render()` to reveal it — the left "Data Inputs" sidebar is
+  unreachable dead code (superseded by the buffer-summary popup and the toolbar
+  Analysis dropdown). Phase 4 §1 and §4 plan to restyle `sidebar-v2.css`
+  controls/checklists anyway; that's not wrong (tokens should cover it either
+  way if it's ever revived) but don't burn checkpoint time screenshotting
+  something no user can see, and flag to the developer whether to leave it
+  dead, style it on spec, or use phase 7's toolbar pass to revive it.
+- **Phase 7 — dark mode doesn't persist across reload:** phase 0 found that
+  `index.html`'s "no-flash" `<head>` script
+  (`if (localStorage.getItem("mat-dark-mode")==="1") document.body.classList.add(...)`)
+  runs while the parser is still inside `<head>`, so `document.body` is `null`
+  and it throws every time (confirmed via a real `pageerror` during phase 0's
+  dark captures). Pre-seeded `localStorage` therefore never applies on first
+  paint — a real, pre-existing bug, not something this refresh introduces.
+  Dark mode currently only takes effect for the rest of the current tab
+  session, via the `#darkmode-btn` click handler (`app.js`), and reverts to
+  light on every reload. The screenshot harness already works around this by
+  clicking the real button instead of relying on the pre-seed (see
+  `test/ui-screens/capture.mjs`), so it doesn't block any phase's
+  verification — only real users are affected. Phase 7 already touches this
+  button's toolbar placement; consider fixing it there. Minimal fix: relocate
+  that one `<script>` line from just before `</head>` to the first line inside
+  `<body>` — same no-flash effect (still runs before any other body content
+  paints), but `document.body` exists by then. (Swapping to
+  `document.documentElement.classList` instead would NOT be a drop-in fix —
+  every dark-mode rule in `style.css` is keyed off `body.dark-mode …`, so that
+  approach would require re-keying the whole stylesheet.)

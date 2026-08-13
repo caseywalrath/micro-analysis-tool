@@ -1160,7 +1160,7 @@
     name: "Attribute Summary",
     enabled: true,
     system: true,           // skip in Analysis sidebar dropdown
-    popupWidth: 960,
+    popupWidth: 1000,
     popupHTML: "projects/attribute-summary-popup.html",
 
     init: function (/* core */) {

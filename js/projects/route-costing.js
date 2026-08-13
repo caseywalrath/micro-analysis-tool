@@ -1526,7 +1526,7 @@
     id:         "route-costing",
     name:       "Route Costing",
     enabled:    true,
-    popupWidth: 1200,
+    popupWidth: 1240,
     popupHTML:  "projects/route-costing-popup.html",
 
     init:    function (core) { init(core); },

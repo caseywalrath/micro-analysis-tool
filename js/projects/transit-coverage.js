@@ -245,6 +245,30 @@
     if (gjBtn)  gjBtn.disabled  = !enabled;
   }
 
+  // ---- Collapsible inputs (shared helper) ----
+  var DAY_LABEL = { weekday: "Weekday", saturday: "Saturday", sunday: "Sunday" };
+
+  function inputsSummary() {
+    if (!_lastResult) return "";
+    var r = _lastResult;
+    var geoLabel = r.geoLevel === "tract" ? "Tracts" : "Block groups";
+    var parts = [
+      r.bufferMiles + " mi",
+      geoLabel + " · " + r.year,
+      DAY_LABEL[r.dayType] || r.dayType
+    ];
+    if (r.thresholdMin != null) parts.push("≤ " + r.thresholdMin + " min headway");
+    return parts.join(" · ");
+  }
+
+  function renderInputs(collapsed) {
+    App.renderModuleInputs({
+      hostEl: document.querySelector(".tc-body .rf-settings-col"),
+      collapsed: collapsed,
+      summary: inputsSummary()
+    });
+  }
+
   function markStale() {
     _stale = true;
     setExportButtonsEnabled(false);
@@ -568,6 +592,8 @@
       }
       setExportButtonsEnabled(true);
       setStatus("Analyzed coverage — " + geos.length + " geographies.", "done");
+      // Collapse only on success — an error leaves the inputs open.
+      renderInputs(true);
     } catch (err) {
       console.error("Transit Coverage error:", err);
       setStatus("Error: " + (err.message || err), "error");
@@ -865,6 +891,7 @@
     buildAreaChecklist();
     if (_savedSelections) applySelections(_savedSelections);
     updateLodesWarnings();
+    renderInputs(_lastResult ? undefined : false);
 
     if (_lastResult) {
       renderResults(_lastResult);
@@ -1041,7 +1068,7 @@
     id:         "transit-coverage",
     name:       "Transit Coverage",
     enabled:    true,
-    popupWidth: 960,
+    popupWidth: 1000,
     popupHTML:  "projects/transit-coverage-popup.html",
 
     init:    function (core) { init(core); },

@@ -3598,7 +3598,7 @@
     id: "ridership-forecasting",
     name: "Ridership Forecasting",
     enabled: true,
-    popupWidth: 960,
+    popupWidth: 1000,
     popupHTML: "projects/ridership-forecasting-popup.html",
 
     floatingWidgets: [

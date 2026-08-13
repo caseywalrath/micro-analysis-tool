@@ -54,7 +54,31 @@
     { id: "rf-choropleth-fill", label: "Ridership Forecast", moduleId: "ridership-forecasting",
       layers: [{ id: "rf-choropleth-fill", op: "fill-opacity" }, { id: "rf-choropleth-line", op: "line-opacity" }, { id: "rf-corridor-cdi-layer", op: "line-opacity" }] },
     { id: "ts-travelshed-fill", label: "Transit Travelshed", moduleId: "transit-travelshed",
-      layers: [{ id: "ts-travelshed-fill", op: "fill-opacity" }, { id: "ts-travelshed-line", op: "line-opacity" }] }
+      layers: [{ id: "ts-travelshed-fill", op: "fill-opacity" }, { id: "ts-travelshed-line", op: "line-opacity" }] },
+    // Added after an audit found five map-rendering surfaces were never
+    // registered here, so their output was invisible to this panel — no
+    // show/hide, no opacity, no reorder. Entries only render when the layer is
+    // actually on the map (see entryPresent), so listing them all is safe.
+    { id: "transit-coverage-coverage-layer", label: "Transit Coverage", moduleId: "transit-coverage",
+      layers: [{ id: "transit-coverage-coverage-layer", op: "fill-opacity" },
+               { id: "transit-coverage-threshold-layer", op: "fill-opacity" },
+               { id: "transit-coverage-area-layer", op: "line-opacity" }] },
+    { id: "walkshed-fill", label: "Walkshed", moduleId: "walkshed",
+      layers: [{ id: "walkshed-fill", op: "fill-opacity" },
+               { id: "walkshed-line", op: "line-opacity" },
+               { id: "walkshed-seg", op: "line-opacity" }] },
+    { id: "tvi-impacted-fill", label: "Title VI service change", moduleId: "title-vi",
+      layers: [{ id: "tvi-impacted-fill", op: "fill-opacity" },
+               { id: "tvi-impacted-outline", op: "line-opacity" },
+               { id: "tvi-gain-fill", op: "fill-opacity" },
+               { id: "tvi-gain-outline", op: "line-opacity" }] },
+    { id: "lbar-sites-layer", label: "FTA land-use sites", moduleId: "fta-small-starts",
+      layers: [{ id: "lbar-sites-layer", op: "circle-opacity" }] },
+    // Not a module of its own — census.js renders this for whichever analysis
+    // last fetched geographies, so it gets no moduleId.
+    { id: "census-geos-fill", label: "Census geographies",
+      layers: [{ id: "census-geos-fill", op: "fill-opacity" },
+               { id: "census-geos-line", op: "line-opacity" }] }
   ];
 
   // Per-session band ordering (panel order = map order, top of list = top of map).

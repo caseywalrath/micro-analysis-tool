@@ -9,10 +9,10 @@
     <div class="rc-settings-grid">
 
       <label class="tiny">Cost per platform hour ($)</label>
-      <input type="number" id="rcCostPerHour" class="rf-select" min="0" step="1" value="150">
+      <input type="number" id="rcCostPerHour" class="rf-number-input" min="0" step="1" value="150">
 
       <label class="tiny">Deadhead %</label>
-      <input type="number" id="rcDeadheadPct" class="rf-select" min="0" max="100" step="1" value="15">
+      <input type="number" id="rcDeadheadPct" class="rf-number-input" min="0" max="100" step="1" value="15">
 
       <label class="tiny">Layover mode</label>
       <div style="display:flex;gap:12px;align-items:center;">
@@ -25,19 +25,19 @@
       </div>
 
       <label class="tiny" id="rcLayoverValueLabel">Layover (min)</label>
-      <input type="number" id="rcLayoverValue" class="rf-select" min="0" step="0.5" value="10">
+      <input type="number" id="rcLayoverValue" class="rf-number-input" min="0" step="0.5" value="10">
 
       <label class="tiny">Weekday days/year</label>
-      <input type="number" id="rcDaysWeekday" class="rf-select" min="0" max="366" step="1" value="255">
+      <input type="number" id="rcDaysWeekday" class="rf-number-input" min="0" max="366" step="1" value="255">
 
       <label class="tiny">Saturday days/year</label>
-      <input type="number" id="rcDaysSaturday" class="rf-select" min="0" max="366" step="1" value="52">
+      <input type="number" id="rcDaysSaturday" class="rf-number-input" min="0" max="366" step="1" value="52">
 
       <label class="tiny">Sunday/Holiday days/year</label>
-      <input type="number" id="rcDaysSunday" class="rf-select" min="0" max="366" step="1" value="58">
+      <input type="number" id="rcDaysSunday" class="rf-number-input" min="0" max="366" step="1" value="58">
 
       <label class="tiny">Fleet spare ratio %</label>
-      <input type="number" id="rcSpareRatio" class="rf-select" min="0" max="100" step="1" value="15">
+      <input type="number" id="rcSpareRatio" class="rf-number-input" min="0" max="100" step="1" value="15">
 
       <label class="tiny">Cost basis year (label)</label>
       <input type="text" id="rcCostBasisYear" class="rf-select" placeholder="e.g. 2024 NTD">

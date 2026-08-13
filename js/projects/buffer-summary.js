@@ -459,7 +459,7 @@
     id: "buffer-summary",
     name: "Feature Area Analysis",
     enabled: true,
-    popupWidth: 720,
+    popupWidth: 1000,
     popupHTML: "projects/buffer-summary-popup.html",
 
     init: function (core) {

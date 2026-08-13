@@ -930,7 +930,7 @@
     id:         "fta-small-starts",
     name:       "FTA Small Starts (Land Use)",
     enabled:    true,
-    popupWidth: 960,
+    popupWidth: 1000,
     popupHTML:  "projects/fta-small-starts-popup.html",
 
     init:    function (core) { init(core); },

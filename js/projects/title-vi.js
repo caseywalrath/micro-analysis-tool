@@ -1549,7 +1549,7 @@
     id: "title-vi",
     name: "Title VI Service Equity",
     enabled: true,
-    popupWidth: 960,
+    popupWidth: 1000,
     popupHTML: "projects/title-vi-popup.html",
     init: function (core) { init(core); },
     onOpen: function (core) { onOpen(core); },
