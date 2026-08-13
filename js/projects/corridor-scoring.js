@@ -1082,7 +1082,7 @@
     name:       "Corridor Scoring",
     enabled:    true,
     popupWidth: 1000,
-    panelWidths: { setup: 520, results: 620 },
+    panelWidths: { setup: 520, results: 760 },
     popupHTML:  "projects/corridor-scoring-popup.html",
 
     init:    function (core) { init(core); },

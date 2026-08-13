@@ -2716,6 +2716,7 @@ code { font-family: var(--font-mono); }
 .cs-settings-action { margin-top: var(--space-3); width: 100%; }
 .cs-results-table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: var(--text-sm);
 }
@@ -2738,6 +2739,8 @@ code { font-family: var(--font-mono); }
 .cs-results-table .cs-col-score  { width: 60px;  text-align: right; }
 .cs-results-table .cs-col-class  { width: 110px; }
 .cs-results-table .cs-col-toggle { width: 24px;  text-align: center; }
+.cs-results-table .cs-col-name   { width: auto; }
+.cs-results-table .cs-name { overflow-wrap: anywhere; }
 .cs-row { cursor: pointer; }
 .cs-row:hover { background: var(--surface-alt); }
 .cs-row .cs-rank  { color: var(--muted); font-variant-numeric: tabular-nums; }

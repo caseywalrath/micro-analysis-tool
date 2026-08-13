@@ -639,7 +639,7 @@ maximum. Input expand/collapse passes its optional preservation flag so a user's
 position is retained while the panel width changes. Panels at 620px or less are marked
 narrow so `.rf-section-row` stacks vertically. Use it only
 for active single-step tools. Current choices are: Walkshed 460/460; Feature Area
-Analysis 520/900; Transit Propensity 520/520; Corridor Scoring 520/620; FTA Ratings
+Analysis 520/900; Transit Propensity 520/520; Corridor Scoring 520/760; FTA Ratings
 520 with its Data Inputs workspace at 1000; Transit Coverage 540/760; and Transit
 Travelshed 540/640. Route Costing and Trip Builder intentionally retain their existing
 wide layouts; Ridership Forecasting, Title VI, GTFS, system modules, and the dormant
@@ -675,7 +675,7 @@ The FTA module still accesses `App.*` directly in its internal computation funct
 1. Create `js/projects/my-analysis.js` with an `App.registerModule({...})` call
 2. Create `projects/my-analysis-popup.html` with the popup body markup
 3. Add `<script src="js/projects/my-analysis.js"></script>` to `index.html` (after `app.js`)
-4. The module button automatically appears in the toolbar Analysis menu's fallback **Other** group unless its id is assigned to the General or Transit lists in `buildAnalysisButtonsHTML()`.
+4. The module button automatically appears in the toolbar Analysis menu. Feature Area Analysis and Walkshed Analysis are in **General**; every other non-system module is alphabetized in **Transit Planning** by `buildAnalysisButtonsHTML()`.
 
 Multiple modules can be active simultaneously. No core code needs to change.
 
@@ -697,7 +697,7 @@ Remove all module `<script>` tags from `index.html`. The toolbar Analysis menu w
 
 ### Dormant legacy sidebar
 
-`#sidebar-wrap` ships with `display:none`, and no live code calls `App.sidebar.render()`. The structure below is retained legacy code, not current navigation. Current data actions are in the toolbar Add Data menu; the toolbar Analysis menu is grouped into General and Transit sections.
+`#sidebar-wrap` ships with `display:none`, and no live code calls `App.sidebar.render()`. The structure below is retained legacy code, not current navigation. Current data actions are in the toolbar Add Data menu; the toolbar Analysis menu is grouped into General and Transit Planning sections.
 
 Historical dormant structure:
 

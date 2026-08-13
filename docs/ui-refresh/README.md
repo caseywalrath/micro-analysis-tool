@@ -6,7 +6,7 @@ separately scoped feature expansion. (2026-08-13)
 **2026-08-13 Phase 7 correction.** The first Phase 7 completion record accurately
 described collapsible Inputs but not a narrow-layout conversion. The seven active
 single-step panels now use adaptive setup/results/workspace widths: Walkshed 460/460;
-Feature Area Analysis 520/900; Transit Propensity 520/520; Corridor Scoring 520/620;
+Feature Area Analysis 520/900; Transit Propensity 520/520; Corridor Scoring 520/760;
 FTA Ratings 520 with Data Inputs at 1000; Transit Coverage 540/760; and Transit
 Travelshed 540/640. Setup panels stack vertically over the map; result widths are
 applied after a successful run. Route Costing and Trip Builder deliberately retain their

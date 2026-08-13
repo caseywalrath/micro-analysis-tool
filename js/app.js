@@ -305,14 +305,7 @@
 
   function buildAnalysisButtonsHTML() {
     var html = '<div class="analysis-module-list">';
-    var groups = [
-      { label: "General", ids: ["buffer-summary", "gtfs", "title-vi"] },
-      { label: "Transit", ids: [
-        "transit-propensity", "transit-coverage", "transit-travelshed",
-        "walkshed", "corridor-scoring", "ridership-forecasting",
-        "route-costing", "trip-builder", "fta-small-starts"
-      ] }
-    ];
+    var generalIds = ["buffer-summary", "walkshed"];
     var rendered = {};
 
     function renderEntry(entry) {
@@ -325,28 +318,31 @@
               '</button>';
     }
 
-    groups.forEach(function (group) {
-      var groupHtml = "";
-      group.ids.forEach(function (id) {
-        var entry = _modules.get(id);
-        if (!entry || entry.system === true) return;
-        rendered[id] = true;
-        groupHtml += renderEntry(entry);
-      });
-      if (groupHtml) {
-        html += '<div class="add-data-heading">' + group.label + '</div>' + groupHtml;
-      }
+    var generalHtml = "";
+    generalIds.forEach(function (id) {
+      var entry = _modules.get(id);
+      if (!entry || entry.system === true) return;
+      rendered[id] = true;
+      generalHtml += renderEntry(entry);
     });
-
-    var otherHtml = "";
-    for (var entry of _modules.values()) {
-      // System modules (e.g. Attribute Summary, opened from Feature Settings)
-      // are not surfaced in the Analysis toolbar menu.
-      if (entry.system === true || rendered[entry.id]) continue;
-      otherHtml += renderEntry(entry);
+    if (generalHtml) {
+      html += '<div class="add-data-heading">General</div>' + generalHtml;
     }
-    if (otherHtml) {
-      html += '<div class="add-data-heading">Other</div>' + otherHtml;
+
+    // All other non-system analyses belong to Transit Planning. Sorting by the
+    // visible module name keeps the menu stable as modules are registered in
+    // script-load order and automatically includes future modules.
+    var transitEntries = [];
+    for (var entry of _modules.values()) {
+      if (entry.system === true || rendered[entry.id]) continue;
+      transitEntries.push(entry);
+    }
+    transitEntries.sort(function (a, b) {
+      return String(a.name || a.id).localeCompare(String(b.name || b.id));
+    });
+    if (transitEntries.length) {
+      html += '<div class="add-data-heading">Transit Planning</div>';
+      transitEntries.forEach(function (entry) { html += renderEntry(entry); });
     }
     html += '</div>';
     return html;

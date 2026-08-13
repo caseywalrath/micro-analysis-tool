@@ -119,7 +119,7 @@ const MODULE_IDS = [
 const ADAPTIVE_PANEL_WIDTHS = {
   "buffer-summary": { setup: 520, results: 900 },
   "transit-propensity": { setup: 520, results: 520 },
-  "corridor-scoring": { setup: 520, results: 620 },
+  "corridor-scoring": { setup: 520, results: 760 },
   "fta-small-starts": { setup: 520, results: 520, workspace: 1000 },
   "walkshed": { setup: 460, results: 460 },
   "transit-coverage": { setup: 540, results: 760 },
@@ -344,6 +344,30 @@ async function captureTheme(browser, theme, port) {
   // ---- Phase 7 grouped Analysis menu ----
   try {
     await page.locator("#analysis-btn").click();
+    const analysisMenuCheck = await page.locator("#analysis-dropdown").evaluate((dropdown) => {
+      const headings = Array.from(dropdown.querySelectorAll(":scope > .analysis-module-list > .add-data-heading"));
+      const groups = headings.map((heading) => {
+        const buttons = [];
+        let node = heading.nextElementSibling;
+        while (node && !node.classList.contains("add-data-heading")) {
+          if (node.matches(".analysis-module-btn")) buttons.push(node.textContent.replace(/\s*\(coming soon\)/, "").trim());
+          node = node.nextElementSibling;
+        }
+        return { label: heading.textContent.trim(), buttons };
+      });
+      return groups;
+    });
+    if (analysisMenuCheck.length !== 2 || analysisMenuCheck[0].label !== "General" ||
+        analysisMenuCheck[1].label !== "Transit Planning") {
+      throw new Error("Analysis menu groups are not General and Transit Planning");
+    }
+    if (analysisMenuCheck[0].buttons.join("|") !== "Feature Area Analysis|Walkshed Analysis") {
+      throw new Error("General Analysis menu order is incorrect");
+    }
+    const transitSorted = analysisMenuCheck[1].buttons.slice().sort((a, b) => a.localeCompare(b));
+    if (transitSorted.join("|") !== analysisMenuCheck[1].buttons.join("|")) {
+      throw new Error("Transit Planning menu is not alphabetized");
+    }
     await shootLocator(
       page,
       "#analysis-dropdown",
