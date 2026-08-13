@@ -28,7 +28,7 @@
     return _container;
   }
 
-  function applyPanelWidth(mod, mode) {
+  function applyPanelWidth(mod, mode, preservePosition) {
     var el = getContainer();
     if (!el || !mod) return;
     var dialog = el.querySelector(".module-popup-dialog");
@@ -40,11 +40,14 @@
     dialog.classList.toggle("module-popup-narrow", !!width && width <= 620);
     _layoutMode = mode;
 
-    // A width transition must return the panel to its docked position. Otherwise
-    // a panel dragged while wide can end up partly off-screen when narrowed.
-    _offsetX = 0;
-    _offsetY = 0;
-    dialog.style.transform = "";
+    // Normal opens and explicit layout changes re-dock the panel. Input
+    // expand/collapse passes preservePosition so editing does not interrupt a
+    // user's chosen floating location, even when the width changes.
+    if (!preservePosition) {
+      _offsetX = 0;
+      _offsetY = 0;
+      dialog.style.transform = "";
+    }
   }
 
   // ---- Popup lifecycle ----
@@ -153,11 +156,11 @@
    * Switch the active module between setup, results, and specialized workspace
    * widths. Modules call this after a successful run or tab transition.
    */
-  function setLayoutMode(mode) {
+  function setLayoutMode(mode, preservePosition) {
     if (!_currentModuleId || !_modulesRef) return;
     var mod = _modulesRef.get(_currentModuleId);
     if (!mod) return;
-    applyPanelWidth(mod, mode || "setup");
+    applyPanelWidth(mod, mode || "setup", preservePosition === true);
   }
 
   function layoutMode() {

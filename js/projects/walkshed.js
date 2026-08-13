@@ -315,7 +315,7 @@
       summary: _lastEntries.length ? inputsSummary() : "",
       onToggle: function (isCollapsed) {
         if (!App.popup || !App.popup.setLayoutMode) return;
-        App.popup.setLayoutMode(isCollapsed && _lastEntries.length ? "results" : "setup");
+        App.popup.setLayoutMode(isCollapsed && _lastEntries.length ? "results" : "setup", true);
       }
     });
   }

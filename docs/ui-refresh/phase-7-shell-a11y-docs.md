@@ -195,8 +195,9 @@ today. JS UI change → run golden harness.
 The original completion note conflated the four newly collapsible panels with a
 narrow-layout conversion. That was documentation-only; those panels still opened at
 1000px. The correction introduces the shared `panelWidths` registration field and
-`App.popup.setLayoutMode("setup" | "results" | "workspace")`, with drag reset and the
-existing 90vw cap retained. Each logical input section now has a stable
+`App.popup.setLayoutMode("setup" | "results" | "workspace")`, with drag reset for
+normal opens and explicit transitions, while Inputs expand/collapse preserves the
+user's current drag position. The existing 90vw cap is retained. Each logical input section now has a stable
 `data-input-group` wrapper and Run/Calculate buttons use `.module-input-actions`, so a
 later Settings or Advanced consolidation can move a complete group without rewiring IDs
 or listeners.

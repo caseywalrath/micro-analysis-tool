@@ -634,8 +634,10 @@ App.registerModule({
 ### Adaptive single-step panel widths
 
 `App.popup.setLayoutMode("setup" | "results" | "workspace")` resolves the active
-module's `panelWidths`, resets any drag offset, preserves the 90vw maximum, and marks
-panels at 620px or less as narrow so `.rf-section-row` stacks vertically. Use it only
+module's `panelWidths`, resets any drag offset by default, and preserves the 90vw
+maximum. Input expand/collapse passes its optional preservation flag so a user's drag
+position is retained while the panel width changes. Panels at 620px or less are marked
+narrow so `.rf-section-row` stacks vertically. Use it only
 for active single-step tools. Current choices are: Walkshed 460/460; Feature Area
 Analysis 520/900; Transit Propensity 520/520; Corridor Scoring 520/620; FTA Ratings
 520 with its Data Inputs workspace at 1000; Transit Coverage 540/760; and Transit

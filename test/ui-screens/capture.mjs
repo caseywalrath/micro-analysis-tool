@@ -241,9 +241,20 @@ async function assertAdaptivePanelLayout(page, theme, id) {
     // former Settings | Results split while editing inputs.
     const inputsHeader = page.locator(".module-inputs-header:visible");
     await page.evaluate(() => window.App.popup.setLayoutMode("results"));
+    await page.evaluate(() => {
+      const dialog = document.querySelector(".module-popup-dialog");
+      dialog.style.transform = "translate(-96px, 24px)";
+    });
     await inputsHeader.click();
-    await page.evaluate(() => window.App.popup.setLayoutMode("results"));
+    const transformAfterCollapse = await page.locator(".module-popup-dialog").evaluate((el) => el.style.transform);
+    if (transformAfterCollapse !== "translate(-96px, 24px)") {
+      throw new Error("collapsing Inputs changed the panel docking transform");
+    }
     await inputsHeader.click();
+    const transformAfterExpand = await page.locator(".module-popup-dialog").evaluate((el) => el.style.transform);
+    if (transformAfterExpand !== "translate(-96px, 24px)") {
+      throw new Error("opening Inputs changed the panel docking transform");
+    }
     const reopened = await assertState("reopened inputs", widths.setup);
     if (reopened.inputsExpanded !== "true") {
       throw new Error("reopened Inputs should be expanded; aria-expanded=" + reopened.inputsExpanded);

@@ -613,7 +613,7 @@
       summary: inputsSummary(),
       onToggle: function (isCollapsed) {
         if (!App.popup || !App.popup.setLayoutMode) return;
-        App.popup.setLayoutMode(isCollapsed && _lastRatings ? "results" : "setup");
+        App.popup.setLayoutMode(isCollapsed && _lastRatings ? "results" : "setup", true);
       }
     });
   }
