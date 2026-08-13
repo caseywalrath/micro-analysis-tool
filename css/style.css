@@ -143,7 +143,7 @@ body { margin: 0; font-family: var(--font-sans); background: var(--bg); -webkit-
   border-radius: 6px;
   box-shadow: var(--shadow-md);
   z-index: 1000;
-  min-width: 180px;
+  min-width: 220px;
   padding: 4px 0;
 }
 #toolbar .export-dropdown button {
@@ -509,16 +509,22 @@ button { cursor: pointer; }
 }
 .lp-row-menu { margin-left: 2px; }
 /* --- Shared census-cache status line (analysis modules) --- */
+/* A status NOTE, not a control. It previously carried a filled background, a
+   full border and a radius, which — sitting directly under Corridor Scoring's
+   "Adjust Weights" outline button at the same width — read as a second button.
+   A left accent rule on a transparent ground says "information" instead. The
+   .cc-refetch-btn inside it stays a button; that one really is clickable. */
 .cc-status {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   margin: 6px 0;
-  padding: 5px 8px;
-  background: var(--accent-soft);
-  border: 1px solid #d6e4ff;
-  border-radius: 4px;
+  padding: 4px 0 4px 10px;
+  background: none;
+  border: none;
+  border-left: 3px solid var(--accent);
+  border-radius: 0;
   font-size: var(--text-xs);
   color: var(--text-secondary);
 }
@@ -1096,7 +1102,7 @@ body.dark-mode .pm-title-text { color: #f7fafc; }
   border-radius: 6px;
   box-shadow: var(--shadow-md);
   z-index: 1000;
-  min-width: 200px;
+  min-width: 220px;
   padding: 4px 0;
 }
 .add-data-heading {
@@ -1476,7 +1482,9 @@ body.dark-mode #osm-poi-popup { border-color: #444; }
 .fp-item {
   display: flex;
   align-items: center;
-  padding: 1px 0;
+  /* 3px, not 1px: phase 3 raised the row text to 14px and the old spacing left
+     the names visually crowded. */
+  padding: 3px 0;
   border-radius: 4px;
   transition: background 0.1s;
 }
@@ -2522,10 +2530,12 @@ code { font-family: var(--font-mono); }
 }
 
 /* ---- Analysis sidebar panel buttons ---- */
+/* No gap: inside the toolbar dropdown these are menu rows and must sit flush,
+   the way the Add Data and Export menus do. (The outline styling below only
+   ever shows in the sidebar — #toolbar .analysis-dropdown button outranks it.) */
 .analysis-module-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
 }
 /* Menu rows, so they keep --text-base rather than the secondary-button
    --text-sm — these are module names, not compact actions. */
@@ -3090,6 +3100,70 @@ body.dark-mode .ws-table .ws-warn { color: #fbbf24; }
 .rf-results-col {
   flex: 1;
 }
+
+/* ---- Collapsible module inputs (App.renderModuleInputs) ----
+   Emitted by the shared helper in app.js, not by any popup's markup. The
+   header is a real <button> so it is keyboard-reachable and announces its
+   expanded state; the caret reuses .lp-caret from the Layers panel. */
+.module-inputs-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  margin-bottom: var(--space-2);
+  padding: 4px 2px;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+}
+.module-inputs-header:hover { background: var(--surface-hover); }
+.module-inputs-header:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+.module-inputs-label {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-md);
+  color: var(--muted);
+  flex-shrink: 0;
+}
+/* The "what was actually run" line. Truncates rather than wrapping — the
+   header must stay one row tall so the collapsed panel is genuinely compact. */
+.module-inputs-summary {
+  font-size: var(--text-sm);
+  color: var(--text-faint);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Caret: down (the .lp-caret glyph as-authored) = expanded, right = collapsed. */
+.module-inputs-collapsed > .module-inputs-header .module-inputs-caret {
+  transform: rotate(-90deg);
+}
+.module-inputs-collapsed > .module-inputs-body { display: none; }
+/* Collapsed, the settings column becomes a one-line bar ABOVE the results
+   rather than a 280px stub beside them — otherwise a wide popup would keep
+   reserving a column's worth of blank space for a single header row. In a
+   narrow/stacked panel the @container rule already does this; the duplication
+   is harmless and keeps the two modes visually identical. */
+.rf-section-row:has(> .module-inputs-collapsed) {
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.module-inputs-collapsed.rf-settings-col {
+  width: 100%;
+  border-right: none;
+  border-bottom: 1px solid var(--border);
+  padding-right: 0;
+  padding-bottom: var(--space-2);
+}
+.module-inputs-collapsed > .module-inputs-header { margin-bottom: 0; }
 
 /* Shared styles */
 .rf-section-title {

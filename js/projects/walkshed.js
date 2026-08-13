@@ -301,6 +301,23 @@
     App.renderModuleState({ statusEl: "wsStatus", emptyEl: "wsEmptyState", empty: true, hint: emptyHint() });
   }
 
+  // ---- Collapsible inputs (shared helper) ----
+  // One line describing what the last run actually used, so the collapsed
+  // header still answers "what am I looking at".
+  function inputsSummary() {
+    var n = _lastEntries.length;
+    return _settings.minutes + " min · " + _settings.walkSpeedMph + " mph · " +
+           n + " point" + (n === 1 ? "" : "s");
+  }
+
+  function renderInputs(collapsed) {
+    App.renderModuleInputs({
+      hostEl: document.querySelector(".ws-body .rf-settings-col"),
+      collapsed: collapsed,
+      summary: _lastEntries.length ? inputsSummary() : ""
+    });
+  }
+
   function showStale() {
     _stale = true;
     App.renderModuleState({ statusEl: "wsStatus", emptyEl: "wsEmptyState", stale: true, onRerun: runWalkshed });
@@ -388,6 +405,10 @@
         } else {
           setStatus("Calculated " + ok + " walkshed(s).", "done");
         }
+
+        // Collapse the inputs only on a run that produced something — a failed
+        // run should leave them open, where the user needs them.
+        if (isPopupVisible()) renderInputs(ok > 0);
       } finally {
         _running = false;
       }
@@ -506,6 +527,9 @@
     syncInputsFromSettings();
     buildPointChecklist();
     updateComputeAvailability();
+    // Reopening keeps whatever collapse state the last run left; a module that
+    // has never run shows the header expanded.
+    renderInputs(_lastEntries.length ? undefined : false);
     if (_lastEntries.length) {
       var resultsEl = document.getElementById("wsResults");
       if (resultsEl) resultsEl.style.display = "";

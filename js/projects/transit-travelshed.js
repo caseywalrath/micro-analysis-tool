@@ -390,6 +390,31 @@
 
   // ---- Status / stale / empty (standardized helper) ----
 
+  // ---- Collapsible inputs (shared helper) ----
+  var DAY_LABEL_TS = { weekday: "Weekday", saturday: "Saturday", sunday: "Sunday" };
+
+  function inputsSummary() {
+    if (!_lastResult) return "";
+    var budgets = (_lastResult.budgets || []).filter(function (b) { return b != null; });
+    var parts = [
+      budgets.join("/") + " min",
+      (DAY_LABEL_TS[_settings.dayType] || _settings.dayType) + " " + _settings.timeOfDay,
+      _settings.walkSpeedMph + " mph"
+    ];
+    parts.push(_settings.shedMode === "door"
+      ? "walk uncapped"
+      : "walk " + _settings.maxAccessWalkMi + "/" + _settings.maxEgressWalkMi + "/" + _settings.maxTransferWalkMi + " mi");
+    return parts.join(" \u00b7 ");
+  }
+
+  function renderInputs(collapsed) {
+    App.renderModuleInputs({
+      hostEl: document.querySelector(".ts-body .rf-settings-col"),
+      collapsed: collapsed,
+      summary: inputsSummary()
+    });
+  }
+
   function setStatus(msg, kind) {
     App.renderModuleState({
       statusEl: "tsStatus",
@@ -1091,6 +1116,9 @@
       var renderedBands = rings.filter(function (r) { return r.ring; }).length;
       setStatus("Calculated travelshed — " + renderedBands + " band(s), " +
         engineResult.stats.nodesReached + " nodes reached.", "done");
+      // Collapse only on success — a run that bailed out (no origin, no
+      // coverage, no active band) leaves the inputs open where they're needed.
+      renderInputs(true);
     } finally {
       _running = false;
       if (runBtn) runBtn.disabled = false;
@@ -1167,6 +1195,7 @@
     buildRouteChecklist();
     if (_savedSelectedRouteIds) applySelections(_savedSelectedRouteIds);
     refreshNetWarn();
+    renderInputs(_lastResult ? undefined : false);
     if (_lastResult) {
       renderResults(_lastResult);
       renderRouteDetail(_lastResult.resolved);

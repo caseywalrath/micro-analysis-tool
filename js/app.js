@@ -134,6 +134,95 @@
       .replace(/"/g, "&quot;");
   }
 
+  // ---- Shared collapsible module inputs ----
+  // Sibling of renderModuleState: the other cross-cutting popup pattern.
+  //
+  // WHY: a module's settings column is only interesting until you run it. In a
+  // narrow/stacked panel (see the @container rule in style.css) the settings sit
+  // ABOVE the results, so leaving them expanded pushes the answer below the fold.
+  // Collapsing them on a successful run hands the panel back to the results.
+  //
+  // The collapsed header still carries a one-line summary of what was actually
+  // run, so a collapsed panel can always answer "what am I looking at" without
+  // being reopened.
+  //
+  // TERMINOLOGY (a convention, not enforced by this code — see CLAUDE.md):
+  //   Inputs   — required selections; live in the settings column; collapse here.
+  //   Settings — optional/expert tuning; live behind a button, modal or <details>.
+  //
+  // opts = {
+  //   hostEl,     // the module's .rf-settings-col element OR its id string
+  //   collapsed,  // bool — desired state; omit to leave the current state alone
+  //   summary,    // string shown in the header when collapsed
+  //   label,      // header label, default "Inputs"
+  //   onToggle    // optional callback(collapsedBool) when the user clicks
+  // }
+  // On first call the host's existing children are moved into a body wrapper and
+  // a clickable header is prepended. Moving nodes preserves event listeners and
+  // element ids, so modules need no markup changes. Later calls only update the
+  // summary/state. No-ops on a missing host, so it is safe to call while the
+  // popup is closed.
+  App.renderModuleInputs = function (opts) {
+    opts = opts || {};
+    var host = typeof opts.hostEl === "string"
+      ? document.getElementById(opts.hostEl) : opts.hostEl;
+    if (!host) return null;
+
+    var body = host.querySelector(":scope > .module-inputs-body");
+
+    // First call: build the header and move the existing content into a body.
+    if (!body) {
+      host.classList.add("module-inputs");
+
+      body = document.createElement("div");
+      body.className = "module-inputs-body";
+      while (host.firstChild) body.appendChild(host.firstChild);
+
+      var header = document.createElement("button");
+      header.type = "button";
+      header.className = "module-inputs-header";
+
+      var caret = document.createElement("span");
+      caret.className = "lp-caret module-inputs-caret";
+      caret.innerHTML = "&#9662;";
+
+      var label = document.createElement("span");
+      label.className = "module-inputs-label";
+
+      var summary = document.createElement("span");
+      summary.className = "module-inputs-summary";
+
+      header.appendChild(caret);
+      header.appendChild(label);
+      header.appendChild(summary);
+
+      header.addEventListener("click", function () {
+        var nowCollapsed = !host.classList.contains("module-inputs-collapsed");
+        _setInputsCollapsed(host, nowCollapsed);
+        if (typeof opts.onToggle === "function") opts.onToggle(nowCollapsed);
+      });
+
+      host.appendChild(header);
+      host.appendChild(body);
+    }
+
+    var labelEl = host.querySelector(":scope > .module-inputs-header .module-inputs-label");
+    var sumEl = host.querySelector(":scope > .module-inputs-header .module-inputs-summary");
+    if (labelEl) labelEl.textContent = opts.label || "Inputs";
+    if (sumEl) sumEl.textContent = opts.summary || "";
+
+    if (typeof opts.collapsed === "boolean") _setInputsCollapsed(host, opts.collapsed);
+    return host;
+  };
+
+  function _setInputsCollapsed(host, collapsed) {
+    // The caret rotation is driven purely by this class in CSS (down = expanded,
+    // right = collapsed), so there is no second piece of state to keep in sync.
+    host.classList.toggle("module-inputs-collapsed", collapsed);
+    var header = host.querySelector(":scope > .module-inputs-header");
+    if (header) header.setAttribute("aria-expanded", collapsed ? "false" : "true");
+  }
+
   // Override bufferUnionPolygon to include line and route buffers alongside point buffers.
   // Must happen before any user interaction; census.js and lodes.js call this at runtime.
   var _pointUnion = App.bufferUnionPolygon;
