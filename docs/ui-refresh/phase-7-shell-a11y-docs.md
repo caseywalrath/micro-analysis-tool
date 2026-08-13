@@ -1,5 +1,7 @@
 # Phase 7 — Shell hierarchy, accessibility, documentation
 
+Status: **complete** (2026-08-13)
+
 **Goal:** finish the original refresh with consistent narrow layouts for single-step
 analysis panels, toolbar and Analysis-menu grouping, and an accessibility pass — then
 update the project docs and refresh the screenshot baselines to the new look.
@@ -187,6 +189,25 @@ today. JS UI change → run golden harness.
   visible; Escape closes popup.
 
 ## Final review
+
+### Implementation outcome
+
+- Feature Area Analysis, Transit Propensity Index, Corridor Scoring, and FTA Small
+  Starts Ratings now use the shared collapsible-input layout. Walkshed, Transit
+  Coverage, and Transit Travelshed passed regression checks.
+- Route Costing and Trip Builder retained their wider layouts after dense result and
+  interline/schedule fit testing. Their warning states combine visible icons or labels
+  with color rather than relying on color alone.
+- Toolbar controls are grouped by workflow, drawing, and view function. The Analysis
+  menu is grouped into General and Transit sections with an Other fallback for future
+  registered modules.
+- Visible icon-only controls have accessible names, collapsible/tab state exposes ARIA
+  state, keyboard focus remains visible, and the audited high-frequency row controls
+  meet the 24px minimum target size.
+- Dark-mode persistence is fixed by moving the no-flash script to the start of the body.
+- Verification completed with 129/129 golden tests and 76/78 visual/a11y checks; the two
+  skips are the intentionally dormant legacy sidebar in light and dark themes.
+- `test/ui-screens/baseline/` now contains the completed Phase 7 visual baseline set.
 
 Send the developer the final light+dark shell and representative expanded/collapsed
 single-step panel screenshots plus a summary

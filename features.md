@@ -535,30 +535,20 @@ Allow the user to drag sidebar sections (Buffer-Area Data, project panel, LODES)
 ### Dynamic panel loading/unloading — Low Priority
 Let users show/hide individual sidebar panels (e.g., collapse LODES section if not needed, or hide the project panel). Toggle via checkboxes or a panel menu.
 
-### Modern UI refresh — In Progress (plan approved)
-Update the visual design — better typography, spacing, input styling, card layouts, color palette. Consider a lightweight CSS framework or design tokens. Keep it dependency-free (no React/Vue).
-
-**Sequenced implementation plan lives in `docs/ui-refresh/`** (approved 2026-08-12): design tokens → color migration → Inter + type scale → control refresh → inline-style purge → de-modalized popups → shell/a11y/docs. Approved decisions: de-modalize analysis popups, 14px full-notch sizing, Inter app-wide, foundation-first, no frameworks.
+### Modern UI refresh — Implemented
+Completed phases 0–7 of the dependency-free refresh: design tokens, semantic light/dark colors, Inter and the type scale, shared controls/layout primitives, static inline-style cleanup, non-modal floating analysis panels, collapsible single-step Inputs, toolbar/menu hierarchy, accessibility, documentation, and refreshed visual baselines. Implementation plan and phase records: [`docs/ui-refresh/`](docs/ui-refresh/).
 
 ### Floating vertical icon rail (toolbar redesign) — Not started
 Move draw tools out of the horizontal top bar and into a compact vertical icon strip on the left edge of the map (similar to Felt or Mapbox Studio). Frees the top bar for session-level actions: project name, share link, export, and reset. Reduces visual clutter and scales better as more draw tools are added.
 
-### Analysis dropdown navigation — Not started
-The Analysis sidebar dropdown (`buildAnalysisButtonsHTML()`, `js/app.js`) is a single flat list of buttons, one per registered module, with no grouping, search, or hierarchy — it just grows every time a module is added. It's currently 12 entries deep (Buffer-Area Summary, TPI, FTA Small Starts, Ridership Forecasting, Corridor Scoring, Walkshed, Transit Travelshed, Transit Coverage, Route Costing, Trip Builder, Title VI, GTFS Feed Viewer — Attribute Summary and Display Settings are `system: true` and already hidden from this list), and transit-specific analyses now make up most of it. Worth a design pass before it grows further, but **no direction has been chosen** — this is a placeholder to come back and evaluate options, not a spec. Candidates raised so far (not mutually exclusive):
-- **Consolidate the transit-specific modules** under a grouped section or submenu (e.g. Transit Propensity, Transit Coverage, Transit Travelshed, Corridor Scoring, Ridership Forecasting, Route Costing, Trip Builder, FTA Small Starts) separate from the more general tools (Buffer-Area Summary, GTFS Feed Viewer, Title VI).
+### Analysis dropdown navigation — Partially implemented
+Phase 7 grouped `buildAnalysisButtonsHTML()` into **General** (Feature Area Analysis, GTFS, Title VI) and **Transit** sections, with an automatic **Other** fallback so future registered modules never disappear. Remaining optional directions:
 - **Additional menu-bar buttons** — split "Analysis" into more than one top-level toolbar entry instead of one growing dropdown.
 - **A sidebar-style switcher inside the module popup itself** — every module already opens in the same `#module-popup` shell (`js/core/popup.js`), so the popup could gain a persistent left-hand list of modules (mirroring the app's own left sidebar) letting users jump between analyses without backing out to the dropdown each time.
 - A searchable/filterable list, which converges with the Command Palette idea below, once the count gets large enough that browsing linearly stops scaling.
 
-### Top menu layout and hierarchy — Not started
-The top toolbar currently groups mode toggles (light/dark mode, presentation mode) alongside core workflow actions (save/export/upload/reset) and analysis access in an undifferentiated row. **Exploratory question:** should mode toggles (light/dark, presentation) have the same visual prominence and toolbar real-estate as session-level actions (save/upload/reset) and analysis access?
-
-Worth a design pass to evaluate whether:
-- Mode toggles warrant relocation to a collapsible settings panel or dedicated control strip
-- Presentation mode (full-screen map, Esc to exit) has sufficient discovery / affordance as a standalone toggle
-- The toolbar could be hierarchically organized (primary workflow actions vs. secondary view modes)
-
-No decision yet — frame as exploratory UX question for a future design review.
+### Top menu layout and hierarchy — Partially implemented
+Phase 7 separated session/workflow actions on the left, drawing tools/actions in the center, and dark-mode/presentation view controls immediately beside location search on the right. Subtle separators now show the three functional groups. The vertical icon rail remains the open structural redesign item above.
 
 ### Command palette (Ctrl+K) — Not started
 A keyboard-triggered search overlay that lets users reach any tool, analysis module, or action by typing. Increasingly standard in modern web tools (Figma, Linear, Notion, Arc). Especially valuable as the feature set grows. Could be implemented as a simple filtered list over a flat registry of labeled actions. One possible convergent answer to the Analysis dropdown crowding above — a typed search sidesteps the grouping question entirely.

@@ -48,6 +48,7 @@ const OUT_DIR = join(HERE, "out");
 const VENDOR_DIR = join(HERE, "vendor");
 const FIXTURE_PATH = join(HERE, "fixture-session.json");
 const VIEWPORT = { width: 1600, height: 950 };
+const NARROW_VIEWPORT = { width: 1280, height: 800 };
 const MAP_READY_TIMEOUT_MS = 30000;
 const POPUP_SETTLE_MS = 600;
 const TAB_SETTLE_MS = 300;
@@ -179,7 +180,7 @@ async function shootLocator(page, selector, outPath, name) {
 
 async function shootPage(page, outPath, name) {
   await page.screenshot({ path: outPath });
-  record(name, "ok", null, VIEWPORT);
+  record(name, "ok", null, page.viewportSize() || VIEWPORT);
 }
 
 // ---- Main capture routine for one theme ----
@@ -231,22 +232,13 @@ async function captureTheme(browser, theme, port) {
     console.warn("  [warn] map did not report loaded() within " + MAP_READY_TIMEOUT_MS + "ms — continuing anyway (chrome is what we're checking).");
   }
 
-  // Dark mode: index.html's "no-flash" <head> script
-  //   (document.body.classList.add("dark-mode") off a localStorage read)
-  // runs while the parser is still inside <head>, before <body> exists, so
-  // document.body is null there and it throws every time (visible as a
-  // pageerror: "Cannot read properties of null (reading 'classList')").
-  // Pre-seeding mat-dark-mode in localStorage therefore has NO visual
-  // effect on first paint — this is a pre-existing app bug, not something
-  // phase 0 introduces or is allowed to fix (see docs/ui-refresh/README.md,
-  // "Never touch calculation code" / no product changes this phase). The
-  // #darkmode-btn click handler (wired after map load) is unaffected and
-  // is the only currently-working way to enter dark mode, so that's what
-  // this harness uses to drive the dark pass — the same path a real user
-  // takes every session.
+  // Phase 7 fixed the no-flash script so pre-seeded dark mode applies before
+  // first paint. Keep the real-button fallback for older snapshots or any
+  // future page variant that does not pre-apply the class.
   if (isDark) {
     try {
-      await page.click("#darkmode-btn", { timeout: 5000 });
+      const alreadyDark = await page.locator("body").evaluate((el) => el.classList.contains("dark-mode"));
+      if (!alreadyDark) await page.click("#darkmode-btn", { timeout: 5000 });
       await page.waitForFunction(
         "document.body.classList.contains('dark-mode')",
         { timeout: 5000 }
@@ -262,6 +254,20 @@ async function captureTheme(browser, theme, port) {
     record(theme + "_shell", "ok", null, VIEWPORT);
   } catch (e) {
     record(theme + "_shell", "fail", e.message);
+  }
+
+  // ---- Phase 7 grouped Analysis menu ----
+  try {
+    await page.locator("#analysis-btn").click();
+    await shootLocator(
+      page,
+      "#analysis-dropdown",
+      join(OUT_DIR, theme + "_phase7-analysis-menu.png"),
+      theme + "_phase7-analysis-menu"
+    );
+    await page.locator("#analysis-btn").click();
+  } catch (e) {
+    record(theme + "_phase7-analysis-menu", "fail", e.message);
   }
 
   // ---- Sidebar ----
@@ -283,6 +289,36 @@ async function captureTheme(browser, theme, port) {
     await shootLocator(page, "#feature-panel", join(OUT_DIR, theme + "_feature-panel.png"), theme + "_feature-panel");
   } catch (e) {
     record(theme + "_feature-panel", "fail", e.message);
+  }
+
+  // ---- Phase 7 accessibility smoke checks ----
+  try {
+    const missingIconLabels = await page.evaluate(() => Array.from(document.querySelectorAll("button"))
+      .filter((b) => b.offsetParent !== null && b.querySelector("svg") && !b.textContent.trim() && !b.getAttribute("aria-label"))
+      .map((b) => b.id || b.className || "unnamed button"));
+    if (missingIconLabels.length) throw new Error("icon buttons missing aria-label: " + missingIconLabels.join(", "));
+
+    await page.locator('.fp-tab-btn[data-fptab="layers"]').click();
+    await sleep(TAB_SETTLE_MS);
+    const rowTargetIssues = await page.evaluate(() => Array.from(document.querySelectorAll(
+      ".fp-gear-btn,.fp-del-btn,.fp-visibility-btn,.fp-dup-btn,.fp-type-icon,.fp-section-toggle,.fp-group-toggle,.lp-row-btn,.lp-swatch,.lp-caret"
+    )).filter((el) => el.offsetParent !== null).flatMap((el) => {
+      const r = el.getBoundingClientRect();
+      const issues = [];
+      if (r.width < 24 || r.height < 24) issues.push((el.className || el.id) + "=" + Math.round(r.width) + "x" + Math.round(r.height));
+      if (!el.getAttribute("aria-label")) issues.push((el.className || el.id) + " missing aria-label");
+      return issues;
+    }));
+    if (rowTargetIssues.length) throw new Error(rowTargetIssues.join(", "));
+    await page.locator('.fp-tab-btn[data-fptab="features"]').click();
+
+    await page.locator("#save-state-btn").focus();
+    await page.keyboard.press("Tab");
+    const focusVisible = await page.evaluate(() => document.activeElement && document.activeElement.matches(":focus-visible"));
+    if (!focusVisible) throw new Error("toolbar keyboard focus is not visibly styled");
+    record(theme + "_phase7-a11y-smoke", "ok");
+  } catch (e) {
+    record(theme + "_phase7-a11y-smoke", "fail", e.message);
   }
 
   // ---- Per-feature attribute popup ----
@@ -378,6 +414,25 @@ async function captureTheme(browser, theme, port) {
         try { window.App.popup.close(); } catch (_) { /* ignore */ }
       }).catch(() => {});
     }
+  }
+
+  // ---- Phase 7 responsive shell + representative collapsed Inputs ----
+  try {
+    await page.setViewportSize(NARROW_VIEWPORT);
+    await sleep(TAB_SETTLE_MS);
+    await shootPage(page, join(OUT_DIR, theme + "_phase7-narrow-shell.png"), theme + "_phase7-narrow-shell");
+    await page.evaluate(() => window.App.openModulePopup("buffer-summary"));
+    await page.locator("#module-popup").waitFor({ state: "visible", timeout: 10000 });
+    await page.locator(".module-inputs-header:visible").click();
+    await sleep(TAB_SETTLE_MS);
+    await shootPage(
+      page,
+      join(OUT_DIR, theme + "_phase7-narrow-inputs-collapsed.png"),
+      theme + "_phase7-narrow-inputs-collapsed"
+    );
+    await page.evaluate(() => window.App.popup.close());
+  } catch (e) {
+    record(theme + "_phase7-narrow", "fail", e.message, NARROW_VIEWPORT);
   }
 
   await context.close();

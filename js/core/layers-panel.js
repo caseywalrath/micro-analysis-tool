@@ -251,6 +251,7 @@
     eye.className = "lp-row-btn" + (vis ? "" : " lp-eye-off");
     eye.innerHTML = vis ? EYE_SVG : EYE_OFF_SVG;
     eye.title = vis ? "Hide layer" : "Show layer";
+    eye.setAttribute("aria-label", (vis ? "Hide " : "Show ") + entry.label);
     eye.addEventListener("click", function (e) {
       e.stopPropagation();
       setEntryVisible(entry, !entryVisible(entry));
@@ -271,6 +272,7 @@
     op.className = "lp-row-btn lp-row-op";
     op.innerHTML = OPACITY_SVG;
     op.title = "Opacity";
+    op.setAttribute("aria-label", "Change opacity for " + entry.label);
     op.addEventListener("click", function (e) {
       e.stopPropagation();
       if (typeof App._openFpSlider !== "function") return;
@@ -287,6 +289,7 @@
     menu.className = "lp-row-btn lp-row-menu";
     menu.innerHTML = MENU_SVG;
     menu.title = "More";
+    menu.setAttribute("aria-label", "More actions for " + entry.label);
     menu.addEventListener("click", function (e) {
       e.stopPropagation();
       var opts = [{ label: "Zoom to layer", action: function () { zoomToEntry(entry); } }];
@@ -382,6 +385,8 @@
     eye.className = "lp-row-btn" + (hidden ? " lp-eye-off" : "");
     eye.innerHTML = hidden ? EYE_OFF_SVG : EYE_SVG;
     eye.title = hidden ? "Show" : "Hide";
+    eye.setAttribute("aria-label", (hidden ? "Show " : "Hide ") +
+      (it.feature.properties.name || (it.type + " " + (it.index + 1))));
     eye.addEventListener("click", function (e) {
       e.stopPropagation();
       setItemsHidden([it], !it.feature.properties.hidden);
@@ -395,6 +400,8 @@
     sw.className = "lp-swatch";
     sw.style.background = color;
     sw.title = "Change color";
+    sw.setAttribute("aria-label", "Change color for " +
+      (it.feature.properties.name || (it.type + " " + (it.index + 1))));
     sw.addEventListener("click", function (e) {
       e.stopPropagation();
       App.openColorPicker(sw, it.feature.properties.color || color, function (nc) {
@@ -430,6 +437,8 @@
     var open = !!_expandedGroups[groupName];
     toggle.innerHTML = "&#9662;";
     toggle.classList.toggle("open", open);
+    toggle.setAttribute("aria-label", "Toggle group " + groupName);
+    toggle.setAttribute("aria-expanded", open ? "true" : "false");
     header.appendChild(toggle);
 
     var allHidden = items.every(function (it) { return !!it.feature.properties.hidden; });
@@ -438,6 +447,7 @@
     eye.className = "lp-row-btn" + (allHidden ? " lp-eye-off" : "");
     eye.innerHTML = allHidden ? EYE_OFF_SVG : EYE_SVG;
     eye.title = allHidden ? "Show all" : "Hide all";
+    eye.setAttribute("aria-label", (allHidden ? "Show" : "Hide") + " group " + groupName);
     eye.addEventListener("click", function (e) {
       e.stopPropagation();
       setItemsHidden(items, !allHidden);
@@ -451,6 +461,7 @@
     sw.className = "lp-swatch";
     sw.style.background = firstColor;
     sw.title = "Change color for all in group";
+    sw.setAttribute("aria-label", "Change color for group " + groupName);
     sw.addEventListener("click", function (e) {
       e.stopPropagation();
       App.openColorPicker(sw, firstColor, function (nc) {
@@ -476,6 +487,7 @@
     menu.className = "lp-row-btn lp-row-menu";
     menu.innerHTML = MENU_SVG;
     menu.title = "More";
+    menu.setAttribute("aria-label", "More actions for group " + groupName);
     menu.addEventListener("click", function (e) {
       e.stopPropagation();
       var opts = [
@@ -504,6 +516,7 @@
       var isOpen = body.style.display !== "none";
       body.style.display = isOpen ? "none" : "";
       toggle.classList.toggle("open", !isOpen);
+      toggle.setAttribute("aria-expanded", isOpen ? "false" : "true");
       if (isOpen) delete _expandedGroups[groupName];
       else _expandedGroups[groupName] = true;
     }
@@ -553,6 +566,7 @@
     op.className = "lp-row-btn lp-row-op";
     op.innerHTML = OPACITY_SVG;
     op.title = t.label + " opacity";
+    op.setAttribute("aria-label", "Change " + t.label + " opacity");
     op.addEventListener("click", function (e) {
       e.stopPropagation();
       if (typeof App._openFpSlider !== "function") return;

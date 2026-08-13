@@ -181,6 +181,7 @@
       var header = document.createElement("button");
       header.type = "button";
       header.className = "module-inputs-header";
+      header.setAttribute("aria-label", "Toggle analysis inputs");
 
       var caret = document.createElement("span");
       caret.className = "lp-caret module-inputs-caret";
@@ -304,17 +305,48 @@
 
   function buildAnalysisButtonsHTML() {
     var html = '<div class="analysis-module-list">';
-    for (var entry of _modules.values()) {
-      // System modules (e.g. Attribute Summary, opened from Feature Settings)
-      // are not surfaced in the Analysis sidebar panel.
-      if (entry.system === true) continue;
+    var groups = [
+      { label: "General", ids: ["buffer-summary", "gtfs", "title-vi"] },
+      { label: "Transit", ids: [
+        "transit-propensity", "transit-coverage", "transit-travelshed",
+        "walkshed", "corridor-scoring", "ridership-forecasting",
+        "route-costing", "trip-builder", "fta-small-starts"
+      ] }
+    ];
+    var rendered = {};
+
+    function renderEntry(entry) {
       var isEnabled = entry.enabled !== false;
       var disabledAttr = isEnabled ? '' : ' disabled';
-      html += '<button class="analysis-module-btn"' +
+      return '<button class="analysis-module-btn"' +
               ' data-module-id="' + entry.id + '"' + disabledAttr + '>' +
               (entry.name || entry.id) +
               (isEnabled ? '' : ' <span class="coming-soon">(coming soon)</span>') +
               '</button>';
+    }
+
+    groups.forEach(function (group) {
+      var groupHtml = "";
+      group.ids.forEach(function (id) {
+        var entry = _modules.get(id);
+        if (!entry || entry.system === true) return;
+        rendered[id] = true;
+        groupHtml += renderEntry(entry);
+      });
+      if (groupHtml) {
+        html += '<div class="add-data-heading">' + group.label + '</div>' + groupHtml;
+      }
+    });
+
+    var otherHtml = "";
+    for (var entry of _modules.values()) {
+      // System modules (e.g. Attribute Summary, opened from Feature Settings)
+      // are not surfaced in the Analysis toolbar menu.
+      if (entry.system === true || rendered[entry.id]) continue;
+      otherHtml += renderEntry(entry);
+    }
+    if (otherHtml) {
+      html += '<div class="add-data-heading">Other</div>' + otherHtml;
     }
     html += '</div>';
     return html;
@@ -704,15 +736,17 @@
     var _darkBtn = document.getElementById("darkmode-btn");
     var _DARK_KEY = "mat-dark-mode";
     if (_darkBtn) {
+      _darkBtn.setAttribute("aria-pressed", document.body.classList.contains("dark-mode") ? "true" : "false");
       _darkBtn.addEventListener("click", function () {
         var isDark = document.body.classList.toggle("dark-mode");
+        _darkBtn.setAttribute("aria-pressed", isDark ? "true" : "false");
         localStorage.setItem(_DARK_KEY, isDark ? "1" : "0");
         if (typeof App.switchBasemap === "function") {
           App.switchBasemap(isDark ? "carto-dark" : "carto-light");
         }
       });
     }
-    // Restore basemap to match dark mode preference (class already set by no-flash script in <head>)
+    // Restore basemap to match dark mode preference (class set by the first script in <body>).
     if (document.body.classList.contains("dark-mode") && typeof App.switchBasemap === "function") {
       App.switchBasemap("carto-dark");
     }
@@ -721,6 +755,8 @@
     App.setPresentMode = function (enabled) {
       var isEnabled = !!enabled;
       document.body.classList.toggle("present-mode", isEnabled);
+      var presentBtn = document.getElementById("present-btn");
+      if (presentBtn) presentBtn.setAttribute("aria-pressed", isEnabled ? "true" : "false");
       App.map.resize();
       document.dispatchEvent(new CustomEvent("mat:present-mode-change", {
         detail: { enabled: isEnabled }
