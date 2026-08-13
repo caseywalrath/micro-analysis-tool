@@ -6,12 +6,22 @@
     <div class="rf-settings-col">
 
       <div class="data-input-group" data-input-group="origin">
-      <div class="rf-section-title">Origin</div>
+      <div class="rf-section-title">Select origin</div>
       <div class="ts-origin-actions">
-        <button id="tsPickOriginBtn" type="button" class="rf-btn-sm">Pick origin on map</button>
+        <button id="tsPickOriginBtn" type="button" class="rf-btn-sm">Select Origin</button>
         <button id="tsClearOriginBtn" type="button" class="rf-btn-sm" style="display:none;" title="Clear origin">&times;</button>
       </div>
       <p id="tsOriginLabel" class="tiny u-mt-1 u-muted">Not set</p>
+      </div>
+
+      <div class="data-input-group" data-input-group="route-selection">
+      <div class="rf-section-title form-section">Routes/Lines</div>
+      <div class="rf-feature-select-actions">
+        <a href="#" id="tsRouteSelectAll">Select all</a>&nbsp;<span class="u-muted">|</span>&nbsp;<a href="#" id="tsRouteSelectNone">Clear</a>
+      </div>
+      <div id="tsRouteList" class="rf-feature-checklist">
+        <div class="rf-empty-note">No routes or lines drawn.</div>
+      </div>
       </div>
 
       <div class="data-input-group" data-input-group="analysis">
@@ -92,18 +102,8 @@
       </p>
       </div>
 
-      <div class="data-input-group" data-input-group="route-selection">
-      <div class="rf-section-title form-section">Routes/Lines</div>
-      <div class="rf-feature-select-actions">
-        <a href="#" id="tsRouteSelectAll">Select all</a>&nbsp;<span class="u-muted">|</span>&nbsp;<a href="#" id="tsRouteSelectNone">Clear</a>
-      </div>
-      <div id="tsRouteList" class="rf-feature-checklist">
-        <div class="rf-empty-note">No routes or lines drawn.</div>
-      </div>
-      </div>
-
       <details class="u-mt-3 data-input-group" data-input-group="advanced">
-        <summary class="tiny u-muted ts-advanced-summary">Advanced</summary>
+        <summary class="tiny u-muted ts-advanced-summary">Additional settings</summary>
         <label class="tiny u-mt-2">Hull detail — max edge (km)</label>
         <input type="number" id="tsMaxEdge" class="rf-number-input" min="0.02" max="2" step="0.01" value="0.3">
         <p class="tiny u-mt-1 u-muted">

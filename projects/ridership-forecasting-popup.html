@@ -25,6 +25,24 @@
 
       <div class="rf-section-row">
         <div class="rf-settings-col">
+          <div class="data-input-group" data-input-group="selection">
+            <div class="rf-section-title">Calibration features</div>
+            <div class="tiny rf-feature-description u-muted">
+              Select which routes/lines to include. Only selected features contribute
+              to quintile normalization and CDI scoring.
+            </div>
+            <div id="rfCalibFeatureList" class="rf-feature-checklist">
+              <div class="tiny u-muted">Draw routes/lines on the map first.</div>
+            </div>
+            <div class="rf-feature-select-actions">
+              <a href="#" id="rfCalibSelectAll" class="tiny">Select all</a>
+              <span class="tiny u-muted"> | </span>
+              <a href="#" id="rfCalibSelectNone" class="tiny">Clear</a>
+            </div>
+          </div>
+
+          <div class="data-input-group" data-input-group="geography">
+          <div class="rf-section-title form-section">Geography</div>
           <label class="tiny">Geography level</label>
           <select id="rfCalibGeoLevel" class="rf-select">
             <option value="tract">Tracts (faster)</option>
@@ -38,39 +56,29 @@
             <option value="2022">2022</option>
             <option value="2021">2021</option>
           </select>
+          </div>
 
-          <label class="rf-toggle-row u-mt-2">
-            <input type="checkbox" id="rfCalibApportionByArea">
-            <span>Apportion by Area</span>
-          </label>
-
-          <label class="rf-toggle-row u-mt-1">
-            <input type="checkbox" id="rfCalibNormalizeByLength">
-            <span>Normalize by Length</span>
-          </label>
-
-          <label class="tiny u-mt-2">Buffer distance (mi)</label>
+          <div class="data-input-group" data-input-group="analysis">
+          <div class="rf-section-title form-section">Analysis parameters</div>
+          <label class="tiny">Buffer distance (mi)</label>
           <input type="number" id="rfBufferMiles" class="rf-number-input" value="0.5" min="0.05" max="5" step="0.05">
           <label class="rf-toggle-row u-mt-1">
             <input type="checkbox" id="rfUseDisplayBuffers">
             <span>Use Display Buffers</span>
           </label>
           <p id="rfBufferHelp" class="tiny u-mt-1 u-muted">When enabled, uses the currently displayed Feature Settings buffers.</p>
+          <label class="rf-toggle-row u-mt-2">
+            <input type="checkbox" id="rfCalibApportionByArea">
+            <span>Apportion by Area</span>
+          </label>
+          </div>
 
-          <div class="rf-feature-section">
-            <label class="tiny">Calibration features</label>
-            <div class="tiny rf-feature-description u-muted">
-              Select which routes/lines to include. Only selected features contribute
-              to quintile normalization and CDI scoring.
-            </div>
-            <div id="rfCalibFeatureList" class="rf-feature-checklist">
-              <div class="tiny u-muted">Draw routes/lines on the map first.</div>
-            </div>
-            <div class="rf-feature-select-actions">
-              <a href="#" id="rfCalibSelectAll" class="tiny">Select all</a>
-              <span class="tiny u-muted"> | </span>
-              <a href="#" id="rfCalibSelectNone" class="tiny">Clear</a>
-            </div>
+          <div class="data-input-group" data-input-group="settings">
+            <div class="rf-section-title form-section">Demand settings</div>
+            <label class="rf-toggle-row">
+              <input type="checkbox" id="rfCalibNormalizeByLength">
+              <span>Normalize by Length</span>
+            </label>
           </div>
 
           <button id="rfAdjustWeights" type="button" class="rf-btn-sm tpi-settings-action">
@@ -288,16 +296,16 @@
             <option value="2021">2021</option>
           </select>
 
+          <label class="rf-toggle-row u-mt-2">
+            <input type="checkbox" id="rfApportionByArea">
+            <span>Apportion by Area</span>
+          </label>
+
           <label class="tiny u-mt-2">Segment length (mi)</label>
           <div class="rf-input-row">
             <input id="rfSegmentLength" type="number" min="0" max="10" step="0.25" value="0.5" class="rf-number-input" />
             <span class="tiny u-muted">0 = no segments</span>
           </div>
-
-          <label class="rf-toggle-row u-mt-2">
-            <input type="checkbox" id="rfApportionByArea">
-            <span>Apportion by Area</span>
-          </label>
 
           <button id="rfRunDemand" type="button" class="rf-action-primary u-mt-3">
             Analyze Demand

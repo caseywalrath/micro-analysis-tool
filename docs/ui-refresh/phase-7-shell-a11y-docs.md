@@ -201,6 +201,22 @@ user's current drag position. The existing 90vw cap is retained. Each logical in
 later Settings or Advanced consolidation can move a complete group without rewiring IDs
 or listeners.
 
+### Input hierarchy follow-up
+
+Analysis panels now use this visible input order wherever the relevant controls exist:
+
+1. Feature, route, corridor, or service-area selection.
+2. Census geography and ACS-year selection.
+3. Buffer and other study-area parameters, including apportionment.
+4. Module-specific settings.
+5. Additional settings behind an existing modal button or native details control.
+
+Transit Travelshed is the deliberate exception: **Select origin** is its first control,
+followed by route/line selection and then its transit-specific parameters. The
+Walkshed and Transit Travelshed details controls are labeled **Additional settings**.
+The ordering is presentation-only; all existing control IDs and listeners remain
+unchanged.
+
 | Module | Setup | Results/workspace | Decision |
 |---|---:|---:|---|
 | Walkshed | 460px | 460px | Retained vertical pilot. |

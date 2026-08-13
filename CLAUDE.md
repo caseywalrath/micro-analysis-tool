@@ -647,6 +647,13 @@ Travelshed 540/640. Route Costing and Trip Builder intentionally retain their ex
 wide layouts; Ridership Forecasting, Title VI, GTFS, system modules, and the dormant
 Mitigation Needs prototype are not part of this pattern.
 
+**Analysis input order:** Where controls exist, analysis popup inputs are ordered as
+selection, Census geography, buffer/study-area parameters (including apportionment),
+module-specific settings, then additional settings in an existing modal or native
+details control. Transit Travelshed deliberately starts with **Select Origin**, followed
+by its route/line selection. This is presentation-only: preserve the existing IDs and
+listeners when reorganizing these groups.
+
 ### The `core` object
 
 Passed to `init()`, `onOpen()`, `onClose()`, and `update()`. Provides the module with access to shared state and functions without reaching into `App` directly:

@@ -33,8 +33,19 @@
     <!-- Left: settings column (240px) -->
     <div class="rf-settings-col">
 
+      <div class="data-input-group" data-input-group="selection">
+      <div class="rf-section-title">Corridors to score</div>
+
+      <div class="rf-feature-select-actions">
+        <a href="#" id="csSelectAll">Select all</a>&nbsp;<span class="u-muted">|</span>&nbsp;<a href="#" id="csSelectNone">Clear</a>
+      </div>
+      <div id="csFeatureList" class="rf-feature-checklist">
+        <div class="rf-empty-note">No features drawn.</div>
+      </div>
+      </div>
+
       <div class="data-input-group" data-input-group="geography">
-      <div class="rf-section-title">Geography</div>
+      <div class="rf-section-title form-section">Geography</div>
 
       <label class="tiny">Level</label>
       <select id="csGeoLevel" class="rf-select">
@@ -55,27 +66,20 @@
         <option value="2021">2021</option>
       </select>
 
-      <div class="tpi-toggle-row u-mt-3">
-        <input type="checkbox" id="csApportionByArea">
-        <label for="csApportionByArea" class="tiny">Apportion by area</label>
       </div>
 
-      <label class="tiny u-mt-3">Buffer distance (mi)</label>
+      <div class="data-input-group" data-input-group="analysis">
+      <div class="rf-section-title form-section">Analysis parameters</div>
+      <label class="tiny">Buffer distance (mi)</label>
       <input type="number" id="csBufferMiles" class="rf-number-input" value="0.5" min="0.05" max="5" step="0.05">
       <label class="tpi-toggle-row u-mt-2">
         <input type="checkbox" id="csUseDisplayBuffers">
         <span class="tiny">Use Display Buffers</span>
       </label>
       <p id="csBufferHelp" class="tiny u-mt-1 u-muted">When enabled, uses the currently displayed Feature Settings buffers.</p>
-      </div>
-
-      <div class="data-input-group" data-input-group="selection">
-      <div class="rf-section-title form-section">Corridors to score</div>
-      <div class="rf-feature-select-actions">
-        <a href="#" id="csSelectAll">Select all</a>&nbsp;<span class="u-muted">|</span>&nbsp;<a href="#" id="csSelectNone">Clear</a>
-      </div>
-      <div id="csFeatureList" class="rf-feature-checklist">
-        <div class="rf-empty-note">No features drawn.</div>
+      <div class="tpi-toggle-row u-mt-3">
+        <input type="checkbox" id="csApportionByArea">
+        <label for="csApportionByArea" class="tiny">Apportion by area</label>
       </div>
       </div>
 

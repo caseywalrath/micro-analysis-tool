@@ -449,7 +449,7 @@
       return { need: "Draw a route or line with service bands.", action: "Use the Route or Line tool, then set bands in its Attributes popup." };
     }
     if (!_origin) {
-      return { need: "Pick an origin on the map.", action: "Click “Pick origin on map”, then click a starting point." };
+      return { need: "Select an origin on the map.", action: "Click “Select Origin”, then click a starting point." };
     }
     return { need: "Select routes/lines and click Calculate.", action: "A travelshed shows everywhere reachable by walk + transit within your time budgets." };
   }
