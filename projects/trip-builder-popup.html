@@ -1,16 +1,16 @@
 <!-- Trip Builder — 2-column popup body (Services | Trips) -->
 <div class="tb-body">
-  <div class="rf-section-row" style="min-height:400px;">
+  <div class="rf-section-row tb-section-row">
 
     <!-- Left: services column -->
     <div class="rf-settings-col">
 
       <div class="rf-section-title">Services</div>
-      <div class="tiny" style="color:var(--muted);margin-bottom:6px;">
+      <div class="tiny tb-service-note">
         Click a Service to view its generated trip schedule. Routes/Lines that share a <b>Service</b> attribute appear as one paired Service.
       </div>
       <div id="tbServiceList" class="rf-feature-checklist">
-        <div style="padding:6px;color:var(--muted);font-size:12px;">No routes or lines drawn.</div>
+        <div class="rf-empty-note">No routes or lines drawn.</div>
       </div>
 
     </div>
@@ -27,7 +27,7 @@
 
       <!-- Generate button (always visible when a service is selected) -->
       <div id="tbActions" style="display:none;margin-top:8px;">
-        <button id="tbGenerateBtn" type="button" class="rf-action-primary" style="width:auto;padding:6px 16px;">
+        <button id="tbGenerateBtn" type="button" class="rf-action-primary tb-generate-btn">
           Generate Trips
         </button>
       </div>
@@ -38,7 +38,7 @@
       <!-- Export -->
       <div id="tbExportRow" style="display:none;margin-top:14px;">
         <button id="tbExportCSV" type="button" class="rf-btn-sm" disabled>Export CSV</button>
-        <span class="tiny" style="margin-left:10px;color:var(--muted);">
+        <span class="tiny tb-export-note">
           Asterisks (*) mark directions derived from a "Both" attribute.
         </span>
       </div>
@@ -46,7 +46,7 @@
       <!-- Empty state when no service is selected -->
       <div id="tbEmptyState" class="rf-info-box">
         <p>Select a Service from the left to view its trip schedule.</p>
-        <p class="tiny" style="color:var(--muted);">
+        <p class="tiny u-muted">
           Trips are generated from each Route/Line's <b>Direction</b>, <b>Time Bands</b>, <b>Frequency</b>, and <b>Run time</b> (or <b>Avg speed</b>) attributes.
           Edit those in the per-feature Attributes popup. Bands with blank or zero Frequency mean &ldquo;no service in this band&rdquo;.
         </p>

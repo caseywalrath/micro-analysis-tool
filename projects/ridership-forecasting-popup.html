@@ -18,7 +18,7 @@
 
       <!-- Step 1: System Analysis -->
       <div class="rf-section-title">Step 1: Analyze System Demand</div>
-      <div class="tiny" style="margin-bottom:8px;">
+      <div class="tiny rf-description">
         Draw routes/lines on the map and name them to match your observed ridership data.
         This step computes a Corridor Demand Index (CDI) for each route, normalized across the entire system.
       </div>
@@ -31,7 +31,7 @@
             <option value="bg" selected>Block Groups</option>
           </select>
 
-          <label class="tiny" style="margin-top:6px;">ACS Year <button id="rfCalibLodesWarnBtn" class="rf-info-btn" type="button" title="LODES data not loaded. The Employment Density factor will be excluded and its weight redistributed to other factors automatically. Upload a LODES file via the sidebar to include employment in the analysis." style="display:none;color:#b45309;">&#9888;</button></label>
+          <label class="tiny u-mt-2">ACS Year <button id="rfCalibLodesWarnBtn" class="rf-info-btn" type="button" title="LODES data not loaded. The Employment Density factor will be excluded and its weight redistributed to other factors automatically. Upload a LODES file via the sidebar to include employment in the analysis." style="display:none;color:#b45309;">&#9888;</button></label>
           <select id="rfCalibYearSelect" class="rf-select">
             <option value="2024">2024</option>
             <option value="2023">2023</option>
@@ -39,41 +39,41 @@
             <option value="2021">2021</option>
           </select>
 
-          <label class="rf-toggle-row" style="margin-top:8px;">
+          <label class="rf-toggle-row u-mt-2">
             <input type="checkbox" id="rfCalibApportionByArea">
             <span>Apportion by Area</span>
           </label>
 
-          <label class="rf-toggle-row" style="margin-top:4px;">
+          <label class="rf-toggle-row u-mt-1">
             <input type="checkbox" id="rfCalibNormalizeByLength">
             <span>Normalize by Length</span>
           </label>
 
-          <label class="tiny" style="margin-top:8px;">Buffer distance (mi)</label>
+          <label class="tiny u-mt-2">Buffer distance (mi)</label>
           <input type="number" id="rfBufferMiles" class="rf-number-input" value="0.5" min="0.05" max="5" step="0.05">
-          <p class="tiny" style="color:var(--muted);margin-top:2px;">Analysis distance only — map buffers still follow Feature Settings. Used for both calibration and demand.</p>
+          <p class="tiny u-mt-1 u-muted">Analysis distance only — map buffers still follow Feature Settings. Used for both calibration and demand.</p>
 
-          <div style="margin-top:10px;">
+          <div class="rf-feature-section">
             <label class="tiny">Calibration features</label>
-            <div class="tiny" style="color:var(--muted); margin-bottom:4px;">
+            <div class="tiny rf-feature-description u-muted">
               Select which routes/lines to include. Only selected features contribute
               to quintile normalization and CDI scoring.
             </div>
             <div id="rfCalibFeatureList" class="rf-feature-checklist">
-              <div class="tiny" style="color:var(--muted);">Draw routes/lines on the map first.</div>
+              <div class="tiny u-muted">Draw routes/lines on the map first.</div>
             </div>
             <div class="rf-feature-select-actions">
               <a href="#" id="rfCalibSelectAll" class="tiny">Select all</a>
-              <span class="tiny" style="color:var(--muted);"> | </span>
+              <span class="tiny u-muted"> | </span>
               <a href="#" id="rfCalibSelectNone" class="tiny">Clear</a>
             </div>
           </div>
 
-          <button id="rfAdjustWeights" type="button" class="rf-btn-sm" style="margin-top:12px; width:100%;">
+          <button id="rfAdjustWeights" type="button" class="rf-btn-sm tpi-settings-action">
             Adjust Weights
           </button>
 
-          <button id="rfRunSystemAnalysis" type="button" class="rf-action-primary" style="margin-top:6px;">
+          <button id="rfRunSystemAnalysis" type="button" class="rf-action-primary u-mt-2">
             Analyze System
           </button>
         </div>
@@ -85,13 +85,13 @@
 
           <div id="rfSystemResults" style="display:none;">
             <div class="rf-section-title">Per-Route CDI Scores</div>
-            <div class="tiny" style="margin-bottom:4px;">
+            <div class="tiny rf-description-tight">
               CDI scores are relative to this system&rsquo;s corridors, not national benchmarks. Averaging bounded quintile
               scores (1&ndash;5) naturally compresses the range &mdash; most routes cluster in the 2.5&ndash;4.0 band.
               Click any route below to see which factors drive its score.
             </div>
             <div id="rfRouteScoreList" class="rf-route-score-list"></div>
-            <div class="rf-stats-grid" style="margin-top:8px;">
+            <div class="rf-stats-grid u-mt-2">
               <div class="rf-stat">
                 <span class="rf-stat-label">Routes / Lines</span>
                 <span id="rfSystemFeatureCount" class="rf-stat-value">&mdash;</span>
@@ -106,7 +106,7 @@
       <!-- Step 2: Upload Observed Data -->
       <div id="rfCalibStep2" style="opacity:0.5; pointer-events:none;">
         <div class="rf-section-title">Step 2: Upload Observed Ridership</div>
-        <div class="tiny" style="margin-bottom:8px;">
+        <div class="tiny rf-description">
           Upload a CSV with route names and observed daily ridership. Route names must match
           the names assigned to your drawn features (case-insensitive).
         </div>
@@ -114,7 +114,7 @@
         <div class="rf-upload-row">
           <button id="rfUploadCalibCSV" type="button" class="rf-btn-sm">Upload CSV</button>
           <input type="file" id="rfCalibFile" accept=".csv,.txt" style="display:none" />
-          <span id="rfCalibFileName" class="tiny" style="color:var(--muted);">No file loaded</span>
+          <span id="rfCalibFileName" class="tiny u-muted">No file loaded</span>
         </div>
 
         <div id="rfCalibMapping" style="display:none; margin-top:12px;">
@@ -133,7 +133,7 @@
             <select id="rfCalibColServiceType" class="rf-select"></select>
           </div>
 
-          <button id="rfMatchRoutes" type="button" class="rf-btn-sm" style="margin-top:10px;">
+          <button id="rfMatchRoutes" type="button" class="rf-btn-sm u-mt-3">
             Match Routes
           </button>
         </div>
@@ -160,7 +160,7 @@
             </label>
           </div>
 
-          <button id="rfRunCalibration" type="button" class="rf-action-primary" style="margin-top:8px;">
+          <button id="rfRunCalibration" type="button" class="rf-action-primary u-mt-2">
             Run Calibration
           </button>
 
@@ -182,8 +182,8 @@
             </div>
 
             <div id="rfCalibChartWrap" style="display:none; margin-top:14px; position:relative;">
-              <div class="rf-section-title" style="margin-bottom:6px;">Fit Visualization</div>
-              <canvas id="rfCalibChart" style="width:100%; height:260px; display:block;"></canvas>
+              <div class="rf-section-title rf-chart-title">Fit Visualization</div>
+              <canvas id="rfCalibChart" class="rf-chart-canvas"></canvas>
               <div id="rfCalibChartTooltip" style="
                 display:none; position:absolute; pointer-events:none;
                 background:rgba(0,0,0,0.75); color:#fff; font-size:11px;
@@ -197,7 +197,7 @@
             <div id="rfCalibWarning" class="rf-warning" style="display:none;"></div>
           </div>
 
-          <div class="rf-export-row" style="margin-top:12px;">
+          <div class="rf-export-row u-mt-3">
             <button id="rfExportCalibJSON" type="button" class="rf-btn-sm" disabled>Export Coefficients</button>
             <button id="rfImportCalibJSON" type="button" class="rf-btn-sm">Import Coefficients</button>
             <input type="file" id="rfCalibImportFile" accept=".json" style="display:none" />
@@ -231,26 +231,26 @@
             <span>Same system as calibration</span>
           </label>
 
-          <p id="rfDemandBufferNote" class="tiny" style="color:var(--muted);margin-top:4px;">
+          <p id="rfDemandBufferNote" class="tiny u-mt-1 u-muted">
             Analysis buffer: 0.5 mi — set on the Calibrate tab.
           </p>
 
-          <div id="rfDemandFeatureSection" style="margin-top:6px;">
+          <div id="rfDemandFeatureSection" class="u-mt-2">
             <label class="tiny">Demand system features</label>
-            <div class="tiny" style="color:var(--muted); margin-bottom:4px;">
+            <div class="tiny rf-feature-description u-muted">
               Select routes/lines for the target system. These get their own
               quintile normalization, independent of the calibration system.
             </div>
             <div id="rfDemandFeatureList" class="rf-feature-checklist">
-              <div class="tiny" style="color:var(--muted);">Draw routes/lines on the map first.</div>
+              <div class="tiny u-muted">Draw routes/lines on the map first.</div>
             </div>
             <div class="rf-feature-select-actions">
               <a href="#" id="rfDemandSelectAll" class="tiny">Select all</a>
-              <span class="tiny" style="color:var(--muted);"> | </span>
+              <span class="tiny u-muted"> | </span>
               <a href="#" id="rfDemandSelectNone" class="tiny">Clear</a>
             </div>
 
-            <label class="rf-toggle-row" style="margin-top:8px;">
+            <label class="rf-toggle-row u-mt-2">
               <input type="checkbox" id="rfSharedPoolMode">
               <span>Shared pool normalization (calibration + demand)
                 <button id="rfSharedPoolInfoBtn" class="rf-info-btn" type="button" aria-label="What is shared pool normalization?">&#9432;</button>
@@ -258,25 +258,25 @@
             </label>
             <div id="rfSharedPoolTooltip" class="rf-cdi-tooltip" style="display:none; margin-top:4px;">
               <strong>Shared Pool Normalization</strong>
-              <p style="margin:4px 0 0;">By default, CDI for each system is computed within its own normalization pool. A &#8220;High CDI&#8221; in the target system is relative to that system only, which may not correspond to the same absolute conditions as in the calibration system.</p>
-              <p style="margin:4px 0 0;">When checked, a single TPI analysis covers both calibration and demand systems together. All routes are scored relative to the same pool of geographies, making CDI directly comparable across systems. The calibration is automatically refitted using the new shared-pool CDI values for calibration routes.</p>
-              <p style="margin:4px 0 0;"><strong>Use when:</strong> calibrating against one peer system and applying to a target with substantially different absolute density levels.</p>
-              <p style="margin:4px 0 0;"><strong>Warning:</strong> Changing feature selections changes the normalization pool and may shift all CDI values. Re-run after any changes.</p>
+              <p class="rf-tooltip-paragraph">By default, CDI for each system is computed within its own normalization pool. A &#8220;High CDI&#8221; in the target system is relative to that system only, which may not correspond to the same absolute conditions as in the calibration system.</p>
+              <p class="rf-tooltip-paragraph">When checked, a single TPI analysis covers both calibration and demand systems together. All routes are scored relative to the same pool of geographies, making CDI directly comparable across systems. The calibration is automatically refitted using the new shared-pool CDI values for calibration routes.</p>
+              <p class="rf-tooltip-paragraph"><strong>Use when:</strong> calibrating against one peer system and applying to a target with substantially different absolute density levels.</p>
+              <p class="rf-tooltip-paragraph"><strong>Warning:</strong> Changing feature selections changes the normalization pool and may shift all CDI values. Re-run after any changes.</p>
             </div>
           </div>
 
-          <label class="tiny" style="margin-top:8px;">Analysis corridor</label>
+          <label class="tiny u-mt-2">Analysis corridor</label>
           <select id="rfCorridorSelect" class="rf-select">
             <option value="all">All corridors (system-wide)</option>
           </select>
 
-          <label class="tiny" style="margin-top:6px;">Geography level</label>
+          <label class="tiny u-mt-2">Geography level</label>
           <select id="rfGeoLevel" class="rf-select">
             <option value="tract">Tracts (faster)</option>
             <option value="bg" selected>Block Groups</option>
           </select>
 
-          <label class="tiny" style="margin-top:6px;">ACS Year <button id="rfDemandLodesWarnBtn" class="rf-info-btn" type="button" title="LODES data not loaded. The Employment Density factor will be excluded and its weight redistributed to other factors automatically. Upload a LODES file via the sidebar to include employment in the analysis." style="display:none;color:#b45309;">&#9888;</button></label>
+          <label class="tiny u-mt-2">ACS Year <button id="rfDemandLodesWarnBtn" class="rf-info-btn" type="button" title="LODES data not loaded. The Employment Density factor will be excluded and its weight redistributed to other factors automatically. Upload a LODES file via the sidebar to include employment in the analysis." style="display:none;color:#b45309;">&#9888;</button></label>
           <select id="rfYearSelect" class="rf-select">
             <option value="2024">2024</option>
             <option value="2023">2023</option>
@@ -284,18 +284,18 @@
             <option value="2021">2021</option>
           </select>
 
-          <label class="tiny" style="margin-top:6px;">Segment length (mi)</label>
+          <label class="tiny u-mt-2">Segment length (mi)</label>
           <div class="rf-input-row">
             <input id="rfSegmentLength" type="number" min="0" max="10" step="0.25" value="0.5" class="rf-number-input" />
-            <span class="tiny" style="color:var(--muted);">0 = no segments</span>
+            <span class="tiny u-muted">0 = no segments</span>
           </div>
 
-          <label class="rf-toggle-row" style="margin-top:8px;">
+          <label class="rf-toggle-row u-mt-2">
             <input type="checkbox" id="rfApportionByArea">
             <span>Apportion by Area</span>
           </label>
 
-          <button id="rfRunDemand" type="button" class="rf-action-primary" style="margin-top:12px;">
+          <button id="rfRunDemand" type="button" class="rf-action-primary u-mt-3">
             Analyze Demand
           </button>
         </div>
@@ -355,15 +355,15 @@
 
             <!-- Corridor comparison -->
             <div id="rfCorridorComparison" style="display:none;">
-              <div class="rf-section-title" style="margin-top:12px;">Corridor Comparison</div>
+              <div class="rf-section-title u-mt-3">Corridor Comparison</div>
               <div id="rfCorridorComparisonList" class="rf-segment-list"></div>
             </div>
           </div>
 
-          <div class="rf-export-row" style="margin-top:12px;">
+          <div class="rf-export-row u-mt-3">
             <button id="rfExportDemandGeoJSON" type="button" class="rf-btn-sm" disabled>GeoJSON</button>
             <button id="rfExportDemandCSV" type="button" class="rf-btn-sm" disabled>CSV</button>
-            <label class="rf-toggle-row" style="margin-left:8px; font-size:11px;">
+            <label class="rf-toggle-row rf-export-label">
               <input type="checkbox" id="rfExportIncludeSharedPool" disabled>
               <span>Include Shared Pool data</span>
             </label>
@@ -396,42 +396,42 @@
             <option value="brt">BRT-Style</option>
           </select>
 
-          <label class="tiny" style="margin-top:8px;">Baseline Headway (min)</label>
+          <label class="tiny u-mt-2">Baseline Headway (min)</label>
           <input id="rfBaseHeadway" type="number" min="1" max="120" value="30" class="rf-number-input" />
 
-          <label class="tiny" style="margin-top:6px;">Proposed Headway (min)</label>
+          <label class="tiny u-mt-2">Proposed Headway (min)</label>
           <input id="rfNewHeadway" type="number" min="1" max="120" value="15" class="rf-number-input" />
 
-          <div class="rf-section-title" style="margin-top:12px;">Elasticity</div>
+          <div class="rf-section-title u-mt-3">Elasticity</div>
 
           <label class="tiny">Frequency Elasticity</label>
           <div class="rf-slider-row">
             <input id="rfFreqElastSlider" type="range" min="0.1" max="1.0" step="0.05" value="0.60" class="rf-slider" />
             <input id="rfFreqElastValue" type="number" min="0.1" max="1.0" step="0.05" value="0.60" class="rf-number-input-sm" />
           </div>
-          <div class="tiny" style="color:var(--muted);">Typical range: 0.3-0.8</div>
+          <div class="tiny u-muted">Typical range: 0.3-0.8</div>
 
-          <label class="tiny" style="margin-top:8px;">Service Span Elasticity</label>
+          <label class="tiny u-mt-2">Service Span Elasticity</label>
           <div class="rf-slider-row">
             <input id="rfSpanElastSlider" type="range" min="0.1" max="1.0" step="0.05" value="0.70" class="rf-slider" />
             <input id="rfSpanElastValue" type="number" min="0.1" max="1.0" step="0.05" value="0.70" class="rf-number-input-sm" />
           </div>
-          <div class="tiny" style="color:var(--muted);">Typical range: 0.5-0.9</div>
+          <div class="tiny u-muted">Typical range: 0.5-0.9</div>
 
-          <div class="rf-section-title" style="margin-top:12px;">Model Uncertainty</div>
+          <div class="rf-section-title u-mt-3">Model Uncertainty</div>
 
           <label class="tiny">Baseline Uncertainty (&plusmn;%)</label>
           <div class="rf-slider-row">
             <input id="rfBaseUncertSlider" type="range" min="0" max="60" step="5" value="25" class="rf-slider" />
             <input id="rfBaseUncertValue" type="number" min="0" max="60" step="5" value="25" class="rf-number-input-sm" />
           </div>
-          <div class="tiny" style="color:var(--muted);">Confidence band around calibrated baseline (0% = no uncertainty)</div>
+          <div class="tiny u-muted">Confidence band around calibrated baseline (0% = no uncertainty)</div>
         </div>
 
         <!-- Right: Results -->
         <div class="rf-results-col">
           <div class="rf-section-title">Service Type Premium</div>
-          <div class="tiny" style="color:var(--muted); margin-bottom:6px;">Ridership uplift vs. Local Bus baseline. Moderate = average of the two. Applies to the selected service type only.</div>
+          <div class="tiny rf-feature-description u-muted">Ridership uplift vs. Local Bus baseline. Moderate = average of the two. Applies to the selected service type only.</div>
 
           <label class="tiny">Conservative (%)</label>
           <div class="rf-slider-row">
@@ -439,20 +439,20 @@
             <input id="rfServicePremLowVal" type="number" min="0" max="150" step="5" value="0" class="rf-number-input-sm" />
           </div>
 
-          <label class="tiny" style="margin-top:6px;">Optimistic (%)</label>
+          <label class="tiny u-mt-2">Optimistic (%)</label>
           <div class="rf-slider-row">
             <input id="rfServicePremHigh" type="range" min="0" max="150" step="5" value="0" class="rf-slider" />
             <input id="rfServicePremHighVal" type="number" min="0" max="150" step="5" value="0" class="rf-number-input-sm" />
           </div>
 
-          <div class="rf-section-title" style="margin-top:16px;">Ridership Multiplier</div>
+          <div class="rf-section-title form-section">Ridership Multiplier</div>
           <div id="rfElasticityNoCDI" class="rf-info-box">
             Run Demand analysis first to see ridership estimates.
           </div>
 
           <div id="rfElasticityResults" style="display:none;">
-            <div id="rfBaselineBand" class="rf-range-card" style="margin-bottom:8px;">
-              <div style="font-weight:600; font-size:11px; margin-bottom:4px; color:var(--muted);">Baseline Projection (before service effects)</div>
+            <div id="rfBaselineBand" class="rf-range-card rf-baseline-band">
+              <div class="rf-card-heading">Baseline Projection (before service effects)</div>
               <div class="rf-range-row">
                 <span class="rf-range-label">Low</span>
                 <span id="rfBaseBandLow" class="rf-range-value">&mdash;</span>
@@ -467,7 +467,7 @@
               </div>
             </div>
 
-            <div style="font-weight:600; font-size:11px; margin-bottom:4px;">Projected Ridership (with service effects)</div>
+            <div class="rf-projected-heading">Projected Ridership (with service effects)</div>
             <div class="rf-range-card">
               <div class="rf-range-row">
                 <span class="rf-range-label">Conservative</span>
@@ -483,7 +483,7 @@
               </div>
             </div>
 
-            <div class="rf-stats-grid" style="margin-top:8px;">
+            <div class="rf-stats-grid u-mt-2">
               <div class="rf-stat">
                 <span class="rf-stat-label">Frequency Effect</span>
                 <span id="rfFreqEffect" class="rf-stat-value">&mdash;</span>
@@ -506,7 +506,7 @@
     <div class="rf-tab-body">
 
       <div class="rf-section-title">Service Scenarios</div>
-      <div class="tiny" style="margin-bottom:10px;">
+      <div class="tiny rf-description">
         Define operating characteristics for each scenario to compare ridership, cost, and productivity side-by-side.
       </div>
 
@@ -632,7 +632,7 @@
       </div>
 
       <!-- Comparison table -->
-      <div class="rf-section-title" style="margin-top:16px;">Comparison</div>
+      <div class="rf-section-title form-section">Comparison</div>
 
       <div id="rfScenarioNoCDI" class="rf-info-box">
         Run Demand analysis first to generate scenario comparisons.
@@ -645,7 +645,7 @@
         </table>
       </div>
 
-      <div class="rf-export-row" style="margin-top:12px;">
+      <div class="rf-export-row u-mt-3">
         <button id="rfBuildScenarios" type="button" class="rf-action-primary">Build Scenarios</button>
         <button id="rfExportScenariosCSV" type="button" class="rf-btn-sm" disabled>Export CSV</button>
         <button id="rfExportScenariosJSON" type="button" class="rf-btn-sm" disabled>Export JSON</button>
@@ -660,7 +660,7 @@
     <div class="rf-tab-body">
 
       <div class="rf-section-title">Population Growth Projections</div>
-      <div class="tiny" style="margin-bottom:8px;">
+      <div class="tiny rf-description">
         Upload a PPACG population projection CSV to project how your scenarios perform
         under future population conditions. Projected population counts are added to Census
         ACS baseline data, re-scoring demand indices for each horizon year.
@@ -670,11 +670,11 @@
         <button id="rfProjUploadBtn" type="button" class="rf-btn-sm">Upload CSV</button>
         <button id="rfProjClear" type="button" class="rf-btn-sm" style="display:none;">Clear</button>
         <input id="rfProjFile" type="file" accept=".csv" style="display:none" />
-        <span id="rfProjFileInfo" class="tiny" style="color:var(--muted);">No projection file loaded</span>
+        <span id="rfProjFileInfo" class="tiny u-muted">No projection file loaded</span>
       </div>
 
       <div id="rfProjReady" style="display:none; margin-top:12px;">
-        <div class="tiny" style="margin-bottom:8px; color:var(--muted);">
+        <div class="tiny rf-description u-muted">
           Projected population will be added to Census ACS baselines and TPI will be re-scored
           for each horizon year (2030, 2040, 2050). Scenario parameters from the Scenarios tab
           are used. No additional Census API calls are needed.
@@ -685,7 +685,7 @@
         </button>
       </div>
 
-      <div id="rfProjPrereqs" class="rf-info-box" style="margin-top:12px;">
+      <div id="rfProjPrereqs" class="rf-info-box rf-projection-prereq">
         Complete the Calibrate and Scenarios tabs first, then upload a projection CSV to run growth projections.
       </div>
 
@@ -695,12 +695,12 @@
 
       <div id="rfProjResults" style="display:none; margin-top:16px;">
         <div class="rf-section-title">Projection Timeline</div>
-        <div class="tiny" style="margin-bottom:8px; color:var(--muted);">
+        <div class="tiny rf-description u-muted">
           Daily ridership (Moderate estimate). Low&ndash;High range shown in parentheses.
           CDI changes reflect projected population shifts across census geographies.
         </div>
 
-        <div style="overflow-x:auto;">
+        <div class="rf-projection-table-wrap">
           <table class="rf-compare-table rf-proj-table">
             <thead id="rfProjHead"></thead>
             <tbody id="rfProjBody"></tbody>
@@ -708,7 +708,7 @@
         </div>
       </div>
 
-      <div class="rf-export-row" style="margin-top:12px;">
+      <div class="rf-export-row u-mt-3">
         <button id="rfExportProjCSV" type="button" class="rf-btn-sm" disabled>Export CSV</button>
       </div>
     </div>
@@ -720,13 +720,13 @@
   <div id="rfWeightsModal" class="rf-weights-modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="rfWeightsModalTitle">
     <div class="rf-weights-modal-box">
       <div id="rfWeightsModalTitle" class="rf-weights-modal-title">Adjust Factor Weights</div>
-      <div class="tiny" style="margin-bottom:10px; color:var(--muted);">
+      <div class="tiny rf-modal-description u-muted">
         Weights must sum to 100. Set a factor to 0 to exclude it. These weights are independent from the TPI tool.
       </div>
 
       <div id="rfWeightSliders"></div>
 
-      <div class="tpi-weight-total" style="margin-top:10px;">
+      <div class="tpi-weight-total u-mt-3">
         <span>Total:</span>
         <span id="rfWeightSum">100</span><span>%</span>
       </div>
@@ -734,16 +734,16 @@
         Weights must sum to 100%.
       </div>
 
-      <div class="tiny" style="margin-top:6px; color:var(--muted);">
+      <div class="tiny u-mt-2 u-muted">
         Employment factor requires a LODES file. If absent, its weight is redistributed automatically.
       </div>
 
       <div class="rf-weights-modal-actions">
         <button id="rfCopyFromTPI" type="button" class="rf-btn-sm">Copy From TPI</button>
         <button id="rfResetWeights" type="button" class="rf-btn-sm">Reset to Defaults</button>
-        <span style="flex:1;"></span>
+        <span class="rf-modal-spacer"></span>
         <button id="rfWeightsCancel" type="button" class="rf-btn-sm">Cancel</button>
-        <button id="rfWeightsConfirm" type="button" class="rf-action-primary" style="min-width:80px;">Confirm</button>
+        <button id="rfWeightsConfirm" type="button" class="rf-action-primary rf-min-width-confirm">Confirm</button>
       </div>
     </div>
   </div>
@@ -755,14 +755,14 @@
        role="dialog" aria-modal="true">
     <div class="rf-weights-modal-box">
       <div class="rf-weights-modal-title">Confirm Analysis Settings</div>
-      <div class="tiny" style="margin-bottom:10px; color:var(--muted);">
+      <div class="tiny rf-modal-description u-muted">
         Please review your settings before running. Depending on the study area and geography
         level, this analysis may take several minutes.
       </div>
-      <div id="rfConfirmModalBody" style="margin-bottom:12px;"></div>
+      <div id="rfConfirmModalBody" class="rf-confirm-body"></div>
       <div class="rf-weights-modal-actions">
         <button id="rfConfirmModalCancel" type="button" class="rf-btn-sm">Cancel</button>
-        <span style="flex:1;"></span>
+        <span class="rf-modal-spacer"></span>
         <button id="rfConfirmModalProceed" type="button" class="rf-action-primary">Proceed</button>
       </div>
     </div>

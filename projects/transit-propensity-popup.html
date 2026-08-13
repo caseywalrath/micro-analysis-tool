@@ -2,14 +2,14 @@
 <div id="tpiWeightsModal" class="rf-weights-modal-overlay" style="display:none;" role="dialog" aria-modal="true">
   <div class="rf-weights-modal-box">
     <div class="rf-weights-modal-title">Adjust Factor Weights</div>
-    <div class="tiny" style="margin-bottom:10px;color:var(--muted);">
+    <div class="tiny rf-modal-description u-muted">
       Weights must sum to 100. Set a factor to 0 to exclude it.
       Employment requires a LODES file; its weight is redistributed automatically if absent.
     </div>
 
     <div id="tpiWeightSliders"></div>
 
-    <div class="tpi-weight-total" style="margin-top:8px;">
+    <div class="tpi-weight-total">
       <span>Total:</span>
       <span id="tpiWeightSum">100</span><span>%</span>
     </div>
@@ -19,16 +19,16 @@
 
     <div class="rf-weights-modal-actions">
       <button id="tpiResetWeights" class="rf-btn-sm" type="button">Reset to Defaults</button>
-      <span style="flex:1;"></span>
+      <span class="rf-modal-spacer"></span>
       <button id="tpiWeightsCancel" class="rf-btn-sm" type="button">Cancel</button>
-      <button id="tpiWeightsConfirm" class="rf-action-primary" type="button" style="width:auto;padding:5px 16px;">Confirm</button>
+      <button id="tpiWeightsConfirm" class="rf-action-primary rf-modal-confirm" type="button">Confirm</button>
     </div>
   </div>
 </div>
 
 <!-- Main two-column layout -->
 <div class="tpi-body">
-  <div class="rf-section-row" style="align-items:flex-start;min-height:400px;">
+  <div class="rf-section-row tpi-section-row">
 
     <!-- Left: settings column (240px) -->
     <div class="rf-settings-col">
@@ -41,7 +41,7 @@
         <option value="bg" selected>Block Groups</option>
       </select>
 
-      <label class="tiny" style="margin-top:10px;">
+      <label class="tiny u-mt-3">
         ACS Year&nbsp;<button id="tpiLodesWarnBtn" class="rf-info-btn" type="button"
           title="LODES data not loaded — Employment factor will be excluded and its weight redistributed automatically."
           style="color:#f59e0b;display:none;">&#9888;</button>
@@ -53,32 +53,32 @@
         <option value="2021">2021</option>
       </select>
 
-      <div class="tpi-toggle-row" style="margin-top:10px;">
+      <div class="tpi-toggle-row u-mt-3">
         <input type="checkbox" id="tpiApportionByArea">
         <label for="tpiApportionByArea" class="tiny">Apportion by area</label>
       </div>
 
-      <label class="tiny" style="margin-top:10px;">Buffer distance (mi)</label>
+      <label class="tiny u-mt-3">Buffer distance (mi)</label>
       <input type="number" id="tpiBufferMiles" class="rf-number-input" value="0.5" min="0.05" max="5" step="0.05">
-      <p class="tiny" style="color:var(--muted);margin-top:2px;">Analysis distance only — map buffers still follow Feature Settings.</p>
+      <p class="tiny u-mt-1 u-muted">Analysis distance only — map buffers still follow Feature Settings.</p>
 
-      <div class="rf-section-title" style="margin-top:16px;">TPI Features</div>
-      <div class="rf-feature-select-actions" style="margin-bottom:4px;">
-        <a href="#" id="tpiSelectAll">Select all</a>&nbsp;<span style="color:var(--muted);">|</span>&nbsp;<a href="#" id="tpiSelectNone">Clear</a>
+      <div class="rf-section-title form-section">TPI Features</div>
+      <div class="rf-feature-select-actions">
+        <a href="#" id="tpiSelectAll">Select all</a>&nbsp;<span class="u-muted">|</span>&nbsp;<a href="#" id="tpiSelectNone">Clear</a>
       </div>
       <div id="tpiFeatureChecklist" class="rf-feature-checklist">
-        <div style="padding:6px;color:var(--muted);font-size:12px;">No features drawn.</div>
+        <div class="rf-empty-note">No features drawn.</div>
       </div>
 
-      <label class="tiny" style="margin-top:10px;">Analysis corridor</label>
+      <label class="tiny u-mt-3">Analysis corridor</label>
       <select id="tpiCorridorSelect" class="rf-select">
         <option value="all">All features (system-wide)</option>
       </select>
 
-      <button id="tpiAdjustWeights" type="button" class="rf-btn-sm" style="margin-top:12px;width:100%;">
+      <button id="tpiAdjustWeights" type="button" class="rf-btn-sm tpi-settings-action">
         Adjust Weights
       </button>
-      <button id="tpiRun" type="button" class="rf-action-primary" style="margin-top:8px;">
+      <button id="tpiRun" type="button" class="rf-action-primary u-mt-2">
         Analyze System
       </button>
       <label id="tpiChoroplethToggleRow" class="tpi-toggle-row" style="display:none;margin-top:10px;">
@@ -100,14 +100,14 @@
 
         <div class="rf-section-title">
           Analysis Corridor
-          <span id="tpiCorridorLabel" style="font-weight:normal;text-transform:none;letter-spacing:0;font-size:12px;color:#333;"></span>
+          <span id="tpiCorridorLabel" class="tpi-corridor-label"></span>
         </div>
 
         <!-- Scrollable geography list -->
-        <div id="tpiGeoList" class="rf-route-score-list" style="max-height:300px;"></div>
+        <div id="tpiGeoList" class="rf-route-score-list tpi-results-list"></div>
 
         <!-- Summary stats -->
-        <div class="rf-section-title" style="margin-top:14px;">Summary</div>
+        <div class="rf-section-title form-section">Summary</div>
         <div class="rf-stats-grid">
           <div class="rf-stat">
             <span class="rf-stat-label">Corridor TPI Score</span>
@@ -124,12 +124,12 @@
         <p id="tpiApportionNote" class="tpi-footnote" style="display:none;"></p>
 
         <!-- Export buttons -->
-        <div style="display:flex;gap:8px;margin-top:14px;">
+        <div class="btn-row">
           <button id="tpiExportGeoJSON" type="button" class="rf-btn-sm" disabled>Export GeoJSON</button>
           <button id="tpiExportCSV" type="button" class="rf-btn-sm" disabled>Export CSV</button>
         </div>
 
-        <p class="tiny" style="margin-top:8px;color:var(--muted);">
+        <p class="tiny u-mt-2 u-muted">
           Scores are quintile-normalized within the selected TPI features pool.
           Exports include all analyzed geographies.
         </p>

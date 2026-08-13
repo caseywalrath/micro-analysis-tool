@@ -1,19 +1,22 @@
 <!-- Transit Coverage — 2-column popup body (Settings | Results) -->
 <div class="cs-body tc-body">
-  <div class="rf-section-row" style="align-items:flex-start;min-height:400px;">
+  <div class="rf-section-row tc-section-row">
 
     <!-- Left: settings column (240px) -->
     <div class="rf-settings-col">
 
       <div class="rf-section-title">Geography</div>
 
-      <label class="tiny">Level</label>
-      <select id="tcGeoLevel" class="rf-select">
-        <option value="tract">Census Tracts</option>
-        <option value="bg" selected>Block Groups</option>
-      </select>
+      <div class="form-field">
+        <label class="tiny">Level</label>
+        <select id="tcGeoLevel" class="rf-select">
+          <option value="tract">Census Tracts</option>
+          <option value="bg" selected>Block Groups</option>
+        </select>
+      </div>
 
-      <label class="tiny" style="margin-top:10px;">
+      <div class="form-field">
+      <label class="tiny">
         ACS Year&nbsp;<button id="tcLodesWarnBtn" class="rf-info-btn" type="button"
           title="LODES data not loaded — Jobs columns will show — until a LODES file is loaded via Add Data."
           style="color:#f59e0b;display:none;">&#9888;</button>
@@ -24,39 +27,46 @@
         <option value="2022">2022</option>
         <option value="2021">2021</option>
       </select>
+      </div>
 
-      <div class="rf-section-title" style="margin-top:16px;">Coverage settings</div>
+      <div class="rf-section-title form-section">Coverage settings</div>
 
-      <label class="tiny">Buffer distance (mi)</label>
-      <input type="number" id="tcBufferMiles" class="rf-number-input" value="0.5" min="0.05" max="5" step="0.05">
+      <div class="form-field">
+        <label class="tiny">Buffer distance (mi)</label>
+        <input type="number" id="tcBufferMiles" class="rf-number-input" value="0.5" min="0.05" max="5" step="0.05">
+      </div>
 
-      <label class="tiny" style="margin-top:10px;">Day type (peak headway)</label>
-      <select id="tcDayType" class="rf-select">
-        <option value="weekday" selected>Weekday</option>
-        <option value="saturday">Saturday</option>
-        <option value="sunday">Sunday</option>
-      </select>
+      <div class="form-field">
+        <label class="tiny">Day type (peak headway)</label>
+        <select id="tcDayType" class="rf-select">
+          <option value="weekday" selected>Weekday</option>
+          <option value="saturday">Saturday</option>
+          <option value="sunday">Sunday</option>
+        </select>
+      </div>
 
-      <label class="tiny" style="margin-top:10px;">Headway threshold (min)</label>
-      <input type="number" id="tcHeadwayThreshold" class="rf-number-input" min="1" step="1" placeholder="none">
+      <div class="form-field">
+        <label class="tiny">Headway threshold (min)</label>
+        <input type="number" id="tcHeadwayThreshold" class="rf-number-input" min="1" step="1" placeholder="none">
+      </div>
 
-      <div class="rf-section-title" style="margin-top:16px;">Transit routes/lines</div>
-      <div class="rf-feature-select-actions" style="margin-bottom:4px;">
-        <a href="#" id="tcFeatSelectAll">Select all</a>&nbsp;<span style="color:var(--muted);">|</span>&nbsp;<a href="#" id="tcFeatSelectNone">Clear</a>
+      <div class="rf-section-title form-section">Transit routes/lines</div>
+      <div class="rf-feature-select-actions">
+        <a href="#" id="tcFeatSelectAll">Select all</a>&nbsp;<span class="u-muted">|</span>&nbsp;<a href="#" id="tcFeatSelectNone">Clear</a>
       </div>
       <div id="tcFeatureList" class="rf-feature-checklist">
-        <div style="padding:6px;color:var(--muted);font-size:12px;">No routes or lines drawn.</div>
+        <div class="rf-empty-note">No routes or lines drawn.</div>
       </div>
 
-      <div class="rf-section-title" style="margin-top:16px;">Service area (drawn polygons)</div>
-      <div class="rf-feature-select-actions" style="margin-bottom:4px;">
-        <a href="#" id="tcAreaSelectAll">Select all</a>&nbsp;<span style="color:var(--muted);">|</span>&nbsp;<a href="#" id="tcAreaSelectNone">Clear</a>
+      <div class="rf-section-title form-section">Service area (drawn polygons)</div>
+      <div class="rf-feature-select-actions">
+        <a href="#" id="tcAreaSelectAll">Select all</a>&nbsp;<span class="u-muted">|</span>&nbsp;<a href="#" id="tcAreaSelectNone">Clear</a>
       </div>
       <div id="tcAreaList" class="rf-feature-checklist">
-        <div style="padding:6px;color:var(--muted);font-size:12px;">No polygons drawn.</div>
+        <div class="rf-empty-note">No polygons drawn.</div>
       </div>
 
-      <button id="tcRunBtn" type="button" class="rf-action-primary" style="margin-top:12px;">
+      <button id="tcRunBtn" type="button" class="rf-action-primary u-mt-3">
         Analyze Coverage
       </button>
 
@@ -73,16 +83,16 @@
       <div id="tcResults" style="display:none;">
         <div id="tcResultsTable"></div>
 
-        <p id="tcStatSentence" class="tiny" style="margin-top:8px;"></p>
-        <div id="tcHeadwayList" style="margin-top:10px;"></div>
+        <p id="tcStatSentence" class="tiny u-mt-2"></p>
+        <div id="tcHeadwayList" class="u-mt-3"></div>
 
         <!-- Export buttons -->
-        <div style="display:flex;gap:8px;margin-top:14px;">
+        <div class="btn-row">
           <button id="tcExportGeoJSON" type="button" class="rf-btn-sm" disabled>Export GeoJSON</button>
           <button id="tcExportCSV" type="button" class="rf-btn-sm" disabled>Export CSV</button>
         </div>
 
-        <p class="tiny" style="margin-top:8px;color:var(--muted);">
+        <p class="tiny u-mt-2 u-muted">
           Population is apportioned by area; jobs are counted by whole LODES block (apportionment does not apply to jobs).
         </p>
       </div>
