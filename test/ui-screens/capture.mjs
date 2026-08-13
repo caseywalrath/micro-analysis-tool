@@ -170,6 +170,11 @@ async function shootLocator(page, selector, outPath, name) {
   record(name, "ok", null, box ? { width: Math.round(box.width), height: Math.round(box.height) } : null);
 }
 
+async function shootPage(page, outPath, name) {
+  await page.screenshot({ path: outPath });
+  record(name, "ok", null, VIEWPORT);
+}
+
 // ---- Main capture routine for one theme ----
 
 async function captureTheme(browser, theme, port) {
@@ -279,6 +284,10 @@ async function captureTheme(browser, theme, port) {
       window.App.openAttrPopup("route", 0, window.App.routes[0]);
     });
     await shootLocator(page, "#fp-attr-popup", join(OUT_DIR, theme + "_attr-popup.png"), theme + "_attr-popup");
+    await page.locator(".fp-attr-popup-collapse").click();
+    await sleep(TAB_SETTLE_MS);
+    await shootLocator(page, "#fp-attr-popup", join(OUT_DIR, theme + "_attr-popup-collapsed.png"), theme + "_attr-popup-collapsed");
+    await page.locator(".fp-attr-popup-collapse").click();
     await page.evaluate(() => window.App.closeAttrPopup());
   } catch (e) {
     record(theme + "_attr-popup", "fail", e.message);
@@ -292,6 +301,27 @@ async function captureTheme(browser, theme, port) {
       await page.locator("#module-popup").waitFor({ state: "visible", timeout: 10000 });
       await sleep(POPUP_SETTLE_MS);
       await shootLocator(page, ".module-popup-dialog", join(OUT_DIR, name + ".png"), name);
+
+      // Phase 6 behavior checkpoint: keep one representative full-page view
+      // per theme so the live map, dock-right position, and collapsed title
+      // bar are visible. Dialog-only captures above remain comparable to the
+      // pre-refresh baseline set.
+      if (id === "transit-coverage") {
+        await shootPage(
+          page,
+          join(OUT_DIR, theme + "_phase6-live-map.png"),
+          theme + "_phase6-live-map"
+        );
+        await page.locator(".module-popup-collapse").click();
+        await sleep(TAB_SETTLE_MS);
+        await shootPage(
+          page,
+          join(OUT_DIR, theme + "_phase6-collapsed.png"),
+          theme + "_phase6-collapsed"
+        );
+        await page.locator(".module-popup-collapse").click();
+        await sleep(TAB_SETTLE_MS);
+      }
 
       // Tabbed popups: capture each [data-tab] button's panel too.
       // NOTE: every module's popup body slot stays in the DOM once loaded

@@ -303,10 +303,12 @@
 
       <!-- Analysis module popup (generic container, reused per-module) -->
       <div id="module-popup" class="module-popup" style="display:none;">
-        <div class="module-popup-backdrop"></div>
         <div class="module-popup-dialog">
           <div class="module-popup-header">
             <h3 class="module-popup-title"></h3>
+            <button class="module-popup-collapse" aria-label="Collapse panel" aria-expanded="true" title="Collapse">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><polyline points="5,12 10,7 15,12"></polyline></svg>
+            </button>
             <button class="module-popup-close" aria-label="Close">&times;</button>
           </div>
           <div class="module-popup-body"></div>

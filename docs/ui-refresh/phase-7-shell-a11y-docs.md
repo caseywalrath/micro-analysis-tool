@@ -1,8 +1,8 @@
 # Phase 7 — Shell hierarchy, accessibility, documentation
 
-**Goal:** the remaining moderate wins — toolbar grouping, Analysis menu grouping, an
-accessibility pass — then update the project docs and refresh the screenshot baselines
-to the new look.
+**Goal:** finish the original refresh with consistent narrow layouts for single-step
+analysis panels, toolbar and Analysis-menu grouping, and an accessibility pass — then
+update the project docs and refresh the screenshot baselines to the new look.
 
 ## 0. Consider fixing the dark-mode no-flash bug here
 
@@ -23,7 +23,82 @@ once the no-flash script correctly pre-applies the class, that same click
 would toggle dark mode back *off* instead. Guard it — only click when
 `!document.body.classList.contains("dark-mode")`.
 
-## 1. Toolbar hierarchy
+## 1. Single-step panel layout normalization
+
+Phase 4 approved Walkshed as the narrow-panel pilot and added the shared
+`App.renderModuleInputs()` collapsible-input primitive. Walkshed, Transit Coverage, and
+Transit Travelshed currently use it. Extend that pattern before refreshing the final
+baselines so more single-step tools preserve horizontal space for the live map introduced
+in Phase 6.
+
+This is a **structural-fit rule**, not a blanket rule that every module with one Run
+button must use the same markup. Apply it where inputs can collapse into a useful summary
+and the results remain readable in a narrow floating panel.
+
+### Confirmed conversions
+
+- **Feature Area Analysis:** wrap the Settings column with
+  `App.renderModuleInputs()`. Its collapsed summary should identify the selected variable
+  count, geography level, ACS year, and area-apportionment state. Keep the Results table
+  visible while inputs are collapsed.
+- **Transit Propensity Index:** make the Settings column collapsible. Summarize geography
+  level/year, analysis-buffer distance, selected-feature count, and selected corridor.
+  Preserve the Adjust Weights modal and choropleth visibility control.
+- **Corridor Scoring:** make the Settings column collapsible. Summarize geography
+  level/year, analysis-buffer distance, and selected-corridor count. Preserve the Adjust
+  Weights modal and route-coloring visibility control.
+- **FTA Small Starts:** apply the collapsible Settings pattern to the **Ratings** tab,
+  summarizing geography level and ACS year. Keep the Data Inputs tab's upload layout
+  unchanged; it is a separate workspace and does not fit the narrow input/results schema.
+
+Use each module's existing Settings and Results DOM. Do not duplicate the collapse
+component or introduce module-specific caret behavior. Each module should call
+`App.renderModuleInputs()` during its existing popup initialization and provide a summary
+callback based on current UI state. Reopening a module starts expanded, matching the
+Phase 4 pilot behavior; user collapse/expand actions must not alter analysis settings.
+
+### Existing implementations — regression check only
+
+- **Walkshed:** retain the approved narrow-panel pilot behavior.
+- **Transit Coverage:** retain its current collapsible inputs and verify its summary stays
+  current after setting changes and analysis runs.
+- **Transit Travelshed:** retain its current collapsible inputs and verify origin picking,
+  map interaction, and summary updates still work while the panel remains open.
+
+### Conditional fit test — do not force the pattern
+
+- **Route Costing:** its main view is Settings | Results, but the service checklist,
+  dense results tables, Costing Settings modal, and Interlines workflow may require its
+  current width. Prototype the narrow/collapsed state only if it can preserve readable
+  tables and modal access without horizontal clipping. Otherwise document it as deferred.
+- **Trip Builder:** its service selector is simple, but its generated schedules are among
+  the widest results in the app. Prototype only if the results remain readable at the
+  proposed narrow width. Otherwise document it as deferred.
+
+Do **not** convert Ridership Forecasting, Title VI Service Equity, or GTFS Feed Viewer in
+this phase. Their multi-step/tabbed or specialized workspaces do not fit this schema.
+
+### Layout and responsive acceptance criteria
+
+- Expanded inputs remain comfortable at the Phase 4 control sizes; collapsed inputs leave
+  a materially narrower panel over the map.
+- Results never disappear when only the input section is collapsed.
+- The input summary updates after every setting that it reports.
+- The shared input caret and the Phase 6 whole-panel caret remain visually and
+  semantically distinct. Both work by mouse and keyboard and expose accurate expanded
+  state.
+- At 1280px and the harness's narrow viewport, no panel or dense result table clips beyond
+  the viewport. Existing responsive stacking remains functional.
+- Verify both light and dark themes in expanded and collapsed states. Add focused captures
+  for the newly converted modules where the existing harness does not exercise both
+  states.
+
+This layout work may be committed separately as
+`UI refresh phase 7a: normalize single-step analysis panel layouts` before the Phase 7
+shell/accessibility commit. It remains part of Phase 7 and must be complete before the
+final baseline replacement.
+
+## 2. Toolbar hierarchy
 
 Today `#file-actions` mixes view toggles (dark mode, present) with workflow actions
 (save, add data, export, analysis). Restructure `index.html` (keep all ids; only move
@@ -44,7 +119,7 @@ elements and adjust CSS):
 Check present-mode and collapsed states still look right (present mode hides the
 toolbar entirely — unaffected, but verify).
 
-## 2. Analysis dropdown grouping
+## 3. Analysis dropdown grouping
 
 In `js/app.js` `buildAnalysisButtonsHTML()`: render two labeled groups using the same
 heading style as the Add Data dropdown (`.add-data-heading` pattern):
@@ -59,7 +134,7 @@ Implementation note: modules register in script order; hardcode the two id lists
 not in either list (so future modules never vanish). Skip `system: true` modules as
 today. JS UI change → run golden harness.
 
-## 3. Accessibility pass
+## 4. Accessibility pass
 
 - **Focus visibility:** add a global
   `:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }`
@@ -75,7 +150,7 @@ today. JS UI change → run golden harness.
   confirm; the red "blocked service" rows in Route Costing / Trip Builder already have
   ⚠ badges — confirm; fix any case found where color is the only signal.
 
-## 4. Documentation + wrap-up
+## 5. Documentation + wrap-up
 
 - **CLAUDE.md:** update the Conventions section — semantic color tokens + the dark-mode
   token block (declare "no raw hex for chrome colors; data colors exempt"), spacing
@@ -103,12 +178,18 @@ today. JS UI change → run golden harness.
 
 - Capture script both themes — final full pass.
 - `node test/run-golden.mjs` → pass.
+- Expanded/collapsed walkthrough for Feature Area Analysis, Transit Propensity Index,
+  Corridor Scoring, and FTA Small Starts Ratings; regression walkthrough for Walkshed,
+  Transit Coverage, and Transit Travelshed.
+- Record the Route Costing and Trip Builder fit-test decision. If either is converted,
+  include it in the expanded/collapsed walkthrough and verify its widest result state.
 - Keyboard-only walkthrough: Tab through toolbar → sidebar → a popup; focus always
   visible; Escape closes popup.
 
 ## Final review
 
-Send the developer the final light+dark shell and 3–4 popup screenshots plus a summary
+Send the developer the final light+dark shell and representative expanded/collapsed
+single-step panel screenshots plus a summary
 of everything shipped across phases 0–7, and the list of deliberately-deferred items
 (vertical icon rail, command palette, JS-template inline styles, docked-panel popup
 variant).
