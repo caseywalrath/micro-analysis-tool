@@ -22,6 +22,7 @@
   var _initialized = false;
   var _apportionByArea = false;
   var _bufferMiles = App.ANALYSIS_BUFFER_DEFAULT_MILES;
+  var _useDisplayBuffers = false;
 
   function getTpiClass(score) {
     if (!Number.isFinite(score)) return "N/A";
@@ -47,7 +48,9 @@
   var _lastBufferSet = null;
 
   function buildUnionFromFilter(filter) {
-    var set = App.buildAnalysisBufferSet(filter, _bufferMiles);
+    var set = _useDisplayBuffers
+      ? App.buildDisplayBufferSet(filter)
+      : App.buildAnalysisBufferSet(filter, _bufferMiles);
     _lastBufferSet = set;
     return set.union;
   }
@@ -396,6 +399,20 @@
              action: "Selected features define the normalization pool for scoring." };
   }
 
+  function syncBufferControl() {
+    var input = document.getElementById("tpiBufferMiles");
+    var toggle = document.getElementById("tpiUseDisplayBuffers");
+    var help = document.getElementById("tpiBufferHelp");
+    if (input) {
+      input.value = String(_bufferMiles);
+      input.disabled = _useDisplayBuffers;
+    }
+    if (toggle) toggle.checked = _useDisplayBuffers;
+    if (help) help.textContent = _useDisplayBuffers
+      ? "Uses the currently displayed Feature Settings buffers. Polygons are included without a buffer."
+      : "Analysis distance only. Polygons are included without a buffer.";
+  }
+
   // ---- Collapsible inputs (shared helper) ----
 
   function inputsSummary() {
@@ -557,6 +574,7 @@
       var geoLevel = document.getElementById("tpiGeoLevel").value;
       var year     = document.getElementById("tpiYearSelect").value;
       _bufferMiles  = App.readAnalysisBufferMiles("tpiBufferMiles", App.ANALYSIS_BUFFER_DEFAULT_MILES);
+      _useDisplayBuffers = !!(document.getElementById("tpiUseDisplayBuffers") || {}).checked;
 
       var featureFilter = getFeatureFilter();
       var unionPolygon  = buildUnionFromFilter(featureFilter);
@@ -812,7 +830,9 @@
       pointIndices:   pts.map(function (_, i) { return i; }),
       polygonIndices: polys.map(function (_, i) { return i; })
     };
-    var bufferSet = App.buildAnalysisBufferSet(allFilter, _bufferMiles);
+    var bufferSet = _useDisplayBuffers
+      ? App.buildDisplayBufferSet(allFilter)
+      : App.buildAnalysisBufferSet(allFilter, _bufferMiles);
 
     for (var si = 0; si < pts.length; si++) {
       var pb = bufferSet.get("point", si);
@@ -1096,6 +1116,13 @@
       bufferMilesEl.value = String(_bufferMiles);
       bufferMilesEl.addEventListener("change", markStale);
     }
+    var displayBuffersEl = document.getElementById("tpiUseDisplayBuffers");
+    if (displayBuffersEl) displayBuffersEl.addEventListener("change", function () {
+      _useDisplayBuffers = displayBuffersEl.checked;
+      syncBufferControl();
+      markStale();
+    });
+    syncBufferControl();
 
     // Build weight sliders (in modal) with current _weights
     buildWeightSliders();
@@ -1111,6 +1138,7 @@
     if (apportionCb) apportionCb.checked = _apportionByArea;
     var bufferMilesEl = document.getElementById("tpiBufferMiles");
     if (bufferMilesEl) bufferMilesEl.value = String(_bufferMiles);
+    syncBufferControl();
 
     // Rebuild checklist (features may have changed since last open)
     buildFeatureChecklist();
@@ -1165,6 +1193,7 @@
       weights:          Object.assign({}, _weights),
       apportionByArea:  _apportionByArea,
       bufferMiles:      _bufferMiles,
+      useDisplayBuffers: _useDisplayBuffers,
       selectedCorridor: _selectedCorridor,
       tpiFeatureFilter: _tpiFeatureFilter ? JSON.parse(JSON.stringify(_tpiFeatureFilter)) : null
     };
@@ -1193,11 +1222,13 @@
     if (data.weights)          _weights          = Object.assign({}, data.weights);
     if (data.apportionByArea != null) _apportionByArea = !!data.apportionByArea;
     if (data.bufferMiles != null) _bufferMiles = data.bufferMiles;
+    if (data.useDisplayBuffers != null) _useDisplayBuffers = !!data.useDisplayBuffers;
     if (data.selectedCorridor) _selectedCorridor = data.selectedCorridor;
     if (data.tpiFeatureFilter !== undefined) _tpiFeatureFilter = data.tpiFeatureFilter;
 
     var bufferMilesEl = document.getElementById("tpiBufferMiles");
     if (bufferMilesEl) bufferMilesEl.value = String(_bufferMiles);
+    syncBufferControl();
 
     if (!data.result) return;
     var r = data.result;

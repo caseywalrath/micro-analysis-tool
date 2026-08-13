@@ -126,6 +126,13 @@ const ADAPTIVE_PANEL_WIDTHS = {
   "transit-travelshed": { setup: 540, results: 640 }
 };
 const COLLAPSIBLE_INPUT_MODULE_IDS = new Set(Object.keys(ADAPTIVE_PANEL_WIDTHS));
+const DISPLAY_BUFFER_CONTROL_IDS = {
+  "buffer-summary": ["#basUseDisplayBuffers", "#basBufferMiles"],
+  "transit-propensity": ["#tpiUseDisplayBuffers", "#tpiBufferMiles"],
+  "ridership-forecasting": ["#rfUseDisplayBuffers", "#rfBufferMiles"],
+  "corridor-scoring": ["#csUseDisplayBuffers", "#csBufferMiles"],
+  "transit-coverage": ["#tcUseDisplayBuffers", "#tcBufferMiles"]
+};
 
 // ---- Small utilities ----
 
@@ -262,6 +269,32 @@ async function assertAdaptivePanelLayout(page, theme, id) {
 
     await page.evaluate(() => window.App.popup.setLayoutMode("setup"));
     await assertState("restored setup", widths.setup);
+    record(name, "ok");
+  } catch (e) {
+    record(name, "fail", e.message);
+  }
+}
+
+async function assertDisplayBufferControl(page, theme, id) {
+  const pair = DISPLAY_BUFFER_CONTROL_IDS[id];
+  if (!pair) return;
+  const [toggleSelector, inputSelector] = pair;
+  const name = theme + "_" + id + "_display-buffers";
+  try {
+    const toggle = page.locator(toggleSelector + ":visible");
+    const input = page.locator(inputSelector + ":visible");
+    const initial = await toggle.isChecked();
+    if (await input.isDisabled() !== initial) {
+      throw new Error("buffer field disabled state does not match Use Display Buffers");
+    }
+    await toggle.click();
+    if (await input.isDisabled() === initial) {
+      throw new Error("Use Display Buffers did not toggle the field disabled state");
+    }
+    await toggle.click();
+    if (await input.isDisabled() !== initial) {
+      throw new Error("Use Display Buffers did not restore the field disabled state");
+    }
     record(name, "ok");
   } catch (e) {
     record(name, "fail", e.message);
@@ -452,6 +485,7 @@ async function captureTheme(browser, theme, port) {
       await page.evaluate((moduleId) => window.App.openModulePopup(moduleId), id);
       await page.locator("#module-popup").waitFor({ state: "visible", timeout: 10000 });
       await sleep(POPUP_SETTLE_MS);
+      await assertDisplayBufferControl(page, theme, id);
       await assertAdaptivePanelLayout(page, theme, id);
       await shootLocator(page, ".module-popup-dialog", join(OUT_DIR, name + ".png"), name);
 

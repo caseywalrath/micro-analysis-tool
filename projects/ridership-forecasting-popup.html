@@ -51,7 +51,11 @@
 
           <label class="tiny u-mt-2">Buffer distance (mi)</label>
           <input type="number" id="rfBufferMiles" class="rf-number-input" value="0.5" min="0.05" max="5" step="0.05">
-          <p class="tiny u-mt-1 u-muted">Analysis distance only — map buffers still follow Feature Settings. Used for both calibration and demand.</p>
+          <label class="rf-toggle-row u-mt-1">
+            <input type="checkbox" id="rfUseDisplayBuffers">
+            <span>Use Display Buffers</span>
+          </label>
+          <p id="rfBufferHelp" class="tiny u-mt-1 u-muted">When enabled, uses the currently displayed Feature Settings buffers.</p>
 
           <div class="rf-feature-section">
             <label class="tiny">Calibration features</label>

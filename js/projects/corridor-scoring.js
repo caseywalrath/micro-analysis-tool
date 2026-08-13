@@ -22,6 +22,7 @@
   var _initialized       = false;
   var _apportionByArea   = false;
   var _bufferMiles       = App.ANALYSIS_BUFFER_DEFAULT_MILES;
+  var _useDisplayBuffers = false;
 
   // ---- DOM guard: only touch DOM when popup is open for this module ----
 
@@ -37,9 +38,25 @@
   var _lastBufferSet = null;
 
   function buildUnionFromFilter(filter) {
-    var set = App.buildAnalysisBufferSet(filter, _bufferMiles);
+    var set = _useDisplayBuffers
+      ? App.buildDisplayBufferSet(filter)
+      : App.buildAnalysisBufferSet(filter, _bufferMiles);
     _lastBufferSet = set;
     return set.union;
+  }
+
+  function syncBufferControl() {
+    var input = document.getElementById("csBufferMiles");
+    var toggle = document.getElementById("csUseDisplayBuffers");
+    var help = document.getElementById("csBufferHelp");
+    if (input) {
+      input.value = String(_bufferMiles);
+      input.disabled = _useDisplayBuffers;
+    }
+    if (toggle) toggle.checked = _useDisplayBuffers;
+    if (help) help.textContent = _useDisplayBuffers
+      ? "Uses the currently displayed Feature Settings buffers."
+      : "Analysis distance only. Display buffers follow Feature Settings.";
   }
 
   function getFeatureFilter() {
@@ -708,6 +725,7 @@
       var geoLevel = document.getElementById("csGeoLevel").value;
       var year     = document.getElementById("csYearSelect").value;
       _bufferMiles  = App.readAnalysisBufferMiles("csBufferMiles", App.ANALYSIS_BUFFER_DEFAULT_MILES);
+      _useDisplayBuffers = !!(document.getElementById("csUseDisplayBuffers") || {}).checked;
 
       var featureFilter = getFeatureFilter();
 
@@ -809,6 +827,13 @@
       bufferMilesEl.value = String(_bufferMiles);
       bufferMilesEl.addEventListener("change", markStale);
     }
+    var displayBuffersEl = document.getElementById("csUseDisplayBuffers");
+    if (displayBuffersEl) displayBuffersEl.addEventListener("change", function () {
+      _useDisplayBuffers = displayBuffersEl.checked;
+      syncBufferControl();
+      markStale();
+    });
+    syncBufferControl();
 
     // Select all / clear
     var selectAll = document.getElementById("csSelectAll");
@@ -889,6 +914,7 @@
     if (apportionCb) apportionCb.checked = _apportionByArea;
     var bufferMilesEl = document.getElementById("csBufferMiles");
     if (bufferMilesEl) bufferMilesEl.value = String(_bufferMiles);
+    syncBufferControl();
 
     buildFeatureChecklist();
     if (_featureFilter) applyFeatureFilterToCheckboxes(_featureFilter);
@@ -976,6 +1002,7 @@
       weights:         Object.assign({}, _weights),
       apportionByArea: _apportionByArea,
       bufferMiles:     _bufferMiles,
+      useDisplayBuffers: _useDisplayBuffers,
       featureFilter:   currentFilter ? JSON.parse(JSON.stringify(currentFilter)) : null,
       geoLevel:        null,
       year:            null,
@@ -1027,6 +1054,7 @@
     if (data.weights)          _weights         = Object.assign({}, data.weights);
     if (data.apportionByArea != null) _apportionByArea = !!data.apportionByArea;
     if (data.bufferMiles != null) _bufferMiles = data.bufferMiles;
+    if (data.useDisplayBuffers != null) _useDisplayBuffers = !!data.useDisplayBuffers;
     if (data.featureFilter !== undefined) _featureFilter = data.featureFilter;
 
     var geoLevelEl = document.getElementById("csGeoLevel");
@@ -1035,6 +1063,7 @@
     if (geoLevelEl && data.geoLevel) geoLevelEl.value = data.geoLevel;
     if (yearEl     && data.year)     yearEl.value     = data.year;
     if (bufferMilesEl) bufferMilesEl.value = String(_bufferMiles);
+    syncBufferControl();
 
     if (!data.lastSummary) return;
     var s = data.lastSummary;

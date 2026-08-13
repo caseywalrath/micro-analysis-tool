@@ -62,7 +62,11 @@
 
       <label class="tiny u-mt-3">Buffer distance (mi)</label>
       <input type="number" id="csBufferMiles" class="rf-number-input" value="0.5" min="0.05" max="5" step="0.05">
-      <p class="tiny u-mt-1 u-muted">Analysis distance only — map buffers still follow Feature Settings.</p>
+      <label class="tpi-toggle-row u-mt-2">
+        <input type="checkbox" id="csUseDisplayBuffers">
+        <span class="tiny">Use Display Buffers</span>
+      </label>
+      <p id="csBufferHelp" class="tiny u-mt-1 u-muted">When enabled, uses the currently displayed Feature Settings buffers.</p>
       </div>
 
       <div class="data-input-group" data-input-group="selection">
