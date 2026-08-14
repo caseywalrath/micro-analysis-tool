@@ -23,6 +23,11 @@
   var _offsetY = 0;
   var _layoutMode = null;
 
+  // Keep a usable portion of the title bar in view after a drag. The top edge
+  // is stricter: it never moves above the browser viewport.
+  var _minVisibleHeaderWidth = 120;
+  var _minVisibleHeaderHeight = 32;
+
   function getContainer() {
     if (!_container) _container = document.getElementById("module-popup");
     return _container;
@@ -48,6 +53,42 @@
       _offsetY = 0;
       dialog.style.transform = "";
     }
+  }
+
+  function applyDragOffset(dialog, nextX, nextY) {
+    if (!dialog) return;
+    var dialogRect = dialog.getBoundingClientRect();
+    if (!dialogRect.width) return;
+
+    // The rectangle reflects the *previous* offset. Remove that offset before
+    // applying the proposed new one, so fast pointer movement cannot corrupt
+    // the docked position used by the constraint.
+    var baseTop = dialogRect.top - _offsetY;
+    _offsetX = nextX;
+    _offsetY = Math.max(-baseTop, nextY);
+    dialog.style.transform = "translate(" + _offsetX + "px, " + _offsetY + "px)";
+  }
+
+  function restoreReachableHeader(dialog, header) {
+    if (!dialog || !header) return;
+    var dialogRect = dialog.getBoundingClientRect();
+    var headerRect = header.getBoundingClientRect();
+    if (!dialogRect.width || !headerRect.height) return;
+
+    var nextX = _offsetX;
+    var nextY = _offsetY;
+    var visibleWidth = Math.min(_minVisibleHeaderWidth, dialogRect.width, window.innerWidth / 2);
+    var visibleHeight = Math.min(_minVisibleHeaderHeight, headerRect.height, window.innerHeight / 2);
+
+    if (dialogRect.right < visibleWidth) nextX += visibleWidth - dialogRect.right;
+    else if (dialogRect.left > window.innerWidth - visibleWidth) nextX -= dialogRect.left - (window.innerWidth - visibleWidth);
+
+    // The title bar may not leave through the bottom edge. Its top edge is
+    // separately constrained while dragging, so no correction is needed above.
+    if (headerRect.top > window.innerHeight - visibleHeight) {
+      nextY -= headerRect.top - (window.innerHeight - visibleHeight);
+    }
+    applyDragOffset(dialog, nextX, nextY);
   }
 
   // ---- Popup lifecycle ----
@@ -260,7 +301,20 @@
   function setCollapsed(collapsed) {
     var el = getContainer();
     if (!el) return;
+    var dialog = el.querySelector(".module-popup-dialog");
+    var closeBtn = el.querySelector(".module-popup-close");
+    // The popup container vertically centers the dialog. Anchor the compact
+    // bar on the close button: collapse can shrink leftward, while the close
+    // button and adjacent caret remain exactly where they were.
+    var wasVisible = el.style.display !== "none" && dialog;
+    var previousCloseRect = wasVisible && closeBtn ? closeBtn.getBoundingClientRect() : null;
     el.classList.toggle("module-popup-collapsed", collapsed);
+    if (previousCloseRect && previousCloseRect.width) {
+      var nextCloseRect = closeBtn.getBoundingClientRect();
+      _offsetX += previousCloseRect.left - nextCloseRect.left;
+      _offsetY += previousCloseRect.top - nextCloseRect.top;
+      dialog.style.transform = "translate(" + _offsetX + "px, " + _offsetY + "px)";
+    }
     var btn = el.querySelector(".module-popup-collapse");
     if (!btn) return;
     btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
@@ -292,14 +346,14 @@
       if (!_dragging) return;
       e.preventDefault();
 
-      _offsetX = e.clientX - _dragStartX;
-      _offsetY = e.clientY - _dragStartY;
-      dialog.style.transform = "translate(" + _offsetX + "px, " + _offsetY + "px)";
+      applyDragOffset(dialog, e.clientX - _dragStartX, e.clientY - _dragStartY);
     });
 
     document.addEventListener("mouseup", function () {
       if (!_dragging) return;
       _dragging = false;
+
+      restoreReachableHeader(dialog, header);
 
       header.classList.remove("dragging");
       dialog.classList.remove("dragging");
