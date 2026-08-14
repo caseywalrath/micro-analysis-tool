@@ -1528,6 +1528,7 @@ body.dark-mode #osm-poi-popup { border-color: #444; }
 .fp-item {
   display: flex;
   align-items: center;
+  position: relative;
   /* 3px, not 1px: phase 3 raised the row text to 14px and the old spacing left
      the names visually crowded. */
   padding: 3px 0;
@@ -1574,8 +1575,13 @@ body.dark-mode #osm-poi-popup { border-color: #444; }
   flex-shrink: 0;
   opacity: 0;
   transition: opacity 0.15s, color 0.15s;
+  position: absolute;
+  right: 24px;
+  z-index: 1;
+  background: inherit;
+  pointer-events: none;
 }
-.fp-item:hover .fp-gear-btn { opacity: 0.7; }
+.fp-item:hover .fp-gear-btn { opacity: 0.7; pointer-events: auto; }
 .fp-gear-btn:hover { opacity: 1 !important; color: var(--accent); }
 
 /* Floating attributes popup */
@@ -2038,8 +2044,17 @@ input.fp-attr-input[type="number"] {
   opacity: 0;
   transition: opacity 0.15s, color 0.15s;
 }
-.fp-item:hover .fp-del-btn { opacity: 0.7; }
+.fp-item > .fp-del-btn {
+  position: absolute;
+  right: 0;
+  z-index: 1;
+  background: inherit;
+  pointer-events: none;
+}
+.fp-item:hover > .fp-del-btn { opacity: 0.7; pointer-events: auto; }
 .fp-del-btn:hover { opacity: 1 !important; color: var(--danger); }
+.fp-item:focus-within .fp-gear-btn,
+.fp-item:focus-within > .fp-del-btn { opacity: 0.7; pointer-events: auto; }
 .fp-group-header:hover .fp-del-btn { opacity: 0.7; }
 
 /* Row-level delete confirmation strip */

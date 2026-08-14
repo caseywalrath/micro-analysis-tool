@@ -86,7 +86,7 @@ js/
     census.js               TIGERweb geometry queries, ACS data fetch, area-weighted aggregation
     lodes.js                LODES .csv.gz download/upload/parse, block-level employment
     cache.js                Session cache: save/restore/reset via localStorage; JSON import/export
-    popup.js                Analysis popup manager: open/close module popups, floating map widgets (legend)
+    popup.js                Analysis popup manager: open/close module popups, adaptive panel widths, title-bar dragging locked below the browser top with release-time left/right/bottom recovery, collapse/expand anchored on the caret/close controls, and floating map widgets (legend)
     module-buffers.js       Shared analysis-buffer helper: `App.ANALYSIS_BUFFER_DEFAULT_MILES` (0.5) / `_MIN_MILES` (0.05) / `_MAX_MILES` (5), `foldAnalysisUnion`, `buildAnalysisBuffer`, `buildDisplayBufferSet`, `readAnalysisBufferMiles`, `buildAnalysisBufferSet`. Lets Feature Area Analysis, Transit Coverage, Transit Propensity, Ridership Forecasting, and Corridor Scoring choose either a module-owned analysis distance or the selected current Feature Settings buffers without changing map state — see those modules' entries below and `docs/module-buffer-distance-plan.md`.
     present-overlays.js     Presentation mode overlay manager: draggable/resizable legend, north arrow, and title. Registers `"present-overlays"` cache state and listens for `mat:present-mode-change` from `App.setPresentMode()` in `app.js`. Legend auto-sizes to row content with balanced horizontal padding until manually resized. Title auto-sizes to entered text until manually resized; manual title size persists and title text scales from box width.
   projects/
@@ -314,6 +314,8 @@ Saves session state (points, lines, routes, polygons, buffer radii, form selecti
 
 ### popup.js
 `popup.open(moduleId, modules, buildCore)`, `popup.close()`, `popup.isOpen()`, `popup.currentModuleId()`, `popup.showFloatingWidget(id, htmlFile, options)`, `popup.hideFloatingWidget(id)`, `popup.removeFloatingWidget(id)`, `popup.wire(modules, buildCore)`
+
+Module panels dock over the map but can be dragged. The panel's top edge cannot move above the browser viewport. On mouse release, left, right, or bottom overflow is corrected just enough to leave 120 px horizontally and 32 px vertically of the title bar reachable. Collapsing or expanding anchors the close button and adjacent caret at their current screen location; the compact bar shrinks or expands leftward around those controls.
 
 Floating widget options: `{ position: "bottom-left"|"bottom-right"|"top-left"|"top-right", width: px, title: string }`
 
