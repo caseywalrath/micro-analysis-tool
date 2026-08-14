@@ -1,5 +1,7 @@
 # Phase 7 — Shell hierarchy, accessibility, documentation
 
+Status: **complete** (2026-08-13)
+
 **Goal:** finish the original refresh with consistent narrow layouts for single-step
 analysis panels, toolbar and Analysis-menu grouping, and an accessibility pass — then
 update the project docs and refresh the screenshot baselines to the new look.
@@ -124,15 +126,14 @@ toolbar entirely — unaffected, but verify).
 In `js/app.js` `buildAnalysisButtonsHTML()`: render two labeled groups using the same
 heading style as the Add Data dropdown (`.add-data-heading` pattern):
 
-- **General:** Buffer-Area Summary, GTFS Feed Viewer, Title VI Service Equity.
-- **Transit:** Transit Propensity, Transit Coverage, Transit Travelshed, Walkshed,
-  Corridor Scoring, Ridership Forecasting, Route Costing, Trip Builder, FTA Small
-  Starts.
+- **General:** Feature Area Analysis and Walkshed Analysis.
+- **Transit Planning:** every other non-system analysis, arranged alphabetically by
+  visible module name.
 
-Implementation note: modules register in script order; hardcode the two id lists in
-`buildAnalysisButtonsHTML` with a fallback bucket ("Other") for any registered module
-not in either list (so future modules never vanish). Skip `system: true` modules as
-today. JS UI change → run golden harness.
+Implementation note: keep the two General ids explicit in `buildAnalysisButtonsHTML`;
+put every other registered non-system module into Transit Planning and sort that group
+by visible name so future modules never vanish. Skip `system: true` modules as today.
+JS UI change → run golden harness.
 
 ## 4. Accessibility pass
 
@@ -187,6 +188,65 @@ today. JS UI change → run golden harness.
   visible; Escape closes popup.
 
 ## Final review
+
+### Corrected implementation outcome
+
+The original completion note conflated the four newly collapsible panels with a
+narrow-layout conversion. That was documentation-only; those panels still opened at
+1000px. The correction introduces the shared `panelWidths` registration field and
+`App.popup.setLayoutMode("setup" | "results" | "workspace")`, with drag reset for
+normal opens and explicit transitions, while Inputs expand/collapse preserves the
+user's current drag position. The existing 90vw cap is retained. Each logical input section now has a stable
+`data-input-group` wrapper and Run/Calculate buttons use `.module-input-actions`, so a
+later Settings or Advanced consolidation can move a complete group without rewiring IDs
+or listeners.
+
+### Input hierarchy follow-up
+
+Analysis panels now use this visible input order wherever the relevant controls exist:
+
+1. Feature, route, corridor, or service-area selection.
+2. Census geography and ACS-year selection.
+3. Buffer and other study-area parameters, including apportionment.
+4. Module-specific settings.
+5. Additional settings behind an existing modal button or native details control.
+
+Transit Travelshed is the deliberate exception: **Select origin** is its first control,
+followed by route/line selection and then its transit-specific parameters. The
+Walkshed and Transit Travelshed details controls are labeled **Additional settings**.
+The ordering is presentation-only; all existing control IDs and listeners remain
+unchanged.
+
+| Module | Setup | Results/workspace | Decision |
+|---|---:|---:|---|
+| Walkshed | 460px | 460px | Retained vertical pilot. |
+| Feature Area Analysis | 520px | 900px | Widen only for the five-column result table. |
+| Transit Propensity Index | 520px | 520px | Geography list and summary stay vertical. |
+| Corridor Scoring | 520px | 760px | Result width uses the available space for rankings and factors. |
+| FTA Small Starts Ratings | 520px | 520px | Ratings remain vertical. |
+| FTA Data Inputs | — | 1000px workspace | Preserves the upload workspace. |
+| Transit Coverage | 540px | 760px | Widen for population/jobs and headways. |
+| Transit Travelshed | 540px | 640px | Retains scrolling inputs and Advanced details. |
+
+Route Costing and Trip Builder remain wide by design. Ridership Forecasting, Title VI,
+GTFS, system modules, and the dormant Mitigation Needs prototype are excluded.
+
+- Feature Area Analysis, Transit Propensity Index, Corridor Scoring, and FTA Small
+  Starts Ratings use the shared collapsible-input layout. Walkshed, Transit Coverage,
+  and Transit Travelshed retain it. All seven now also use the adaptive widths above.
+- Route Costing and Trip Builder retained their wider layouts after dense result and
+  interline/schedule fit testing. Their warning states combine visible icons or labels
+  with color rather than relying on color alone.
+- Toolbar controls are grouped by workflow, drawing, and view function. The Analysis
+  menu puts Feature Area Analysis and Walkshed Analysis in General, and alphabetizes
+  every other non-system module under Transit Planning.
+- Visible icon-only controls have accessible names, collapsible/tab state exposes ARIA
+  state, keyboard focus remains visible, and the audited high-frequency row controls
+  meet the 24px minimum target size.
+- Dark-mode persistence is fixed by moving the no-flash script to the start of the body.
+- Verification completed with 129/129 golden tests and 96/98 visual/a11y checks; the two
+  skips are the intentionally dormant legacy sidebar in light and dark themes.
+- `test/ui-screens/baseline/` now contains the completed Phase 7 visual baseline set.
 
 Send the developer the final light+dark shell and representative expanded/collapsed
 single-step panel screenshots plus a summary

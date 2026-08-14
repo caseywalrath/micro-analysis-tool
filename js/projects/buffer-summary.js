@@ -14,7 +14,10 @@
     geoLevel: "bg",
     year: "2024",
     apportionByArea: true,
-    checkedVars: []  // persisted checkbox values (restored before DOM exists)
+    checkedVars: [], // persisted checkbox values (restored before DOM exists)
+    featureFilter: null,
+    bufferMiles: App.ANALYSIS_BUFFER_DEFAULT_MILES,
+    useDisplayBuffers: false
   };
   var _initialized = false;
   var _hasResults = false; // true once a summary has been computed this session
@@ -114,13 +117,112 @@
   // Context-aware onboarding/empty hint shown until a summary is calculated.
   function emptyHint() {
     var hasFeatures = (App.points || []).length + (App.lines || []).length +
-                      (App.routes || []).length > 0;
+                      (App.routes || []).length + (App.polygons || []).length > 0;
     if (!hasFeatures) {
       return { need: "Draw a point, line, or route to begin.",
                action: "Buffers around your features define the area summarized." };
     }
     return { need: "Select variables and click Calculate Summary.",
              action: "Pick Census/LODES variables above to summarize within your buffers." };
+  }
+
+  // ---- Feature selection and analysis-buffer controls ----
+
+  function getFeatureFilter() {
+    var el = document.getElementById("basFeatureChecklist");
+    var routeIndices = [], lineIndices = [], pointIndices = [], polygonIndices = [];
+    if (!el) return { routeIndices: routeIndices, lineIndices: lineIndices,
+                      pointIndices: pointIndices, polygonIndices: polygonIndices };
+    var boxes = el.querySelectorAll("input[type=checkbox]");
+    for (var i = 0; i < boxes.length; i++) {
+      var cb = boxes[i];
+      if (!cb.checked) continue;
+      var type = cb.getAttribute("data-type");
+      var idx = parseInt(cb.getAttribute("data-idx"), 10);
+      if (type === "route") routeIndices.push(idx);
+      else if (type === "line") lineIndices.push(idx);
+      else if (type === "point") pointIndices.push(idx);
+      else if (type === "polygon") polygonIndices.push(idx);
+    }
+    return { routeIndices: routeIndices, lineIndices: lineIndices,
+             pointIndices: pointIndices, polygonIndices: polygonIndices };
+  }
+
+  function filterHas(filter, type, idx) {
+    if (!filter) return true;
+    var key = type + "Indices";
+    return Array.isArray(filter[key]) && filter[key].indexOf(idx) !== -1;
+  }
+
+  function applyFeatureFilterToCheckboxes(filter) {
+    var boxes = document.querySelectorAll("#basFeatureChecklist input[type=checkbox]");
+    for (var i = 0; i < boxes.length; i++) {
+      boxes[i].checked = filterHas(filter, boxes[i].getAttribute("data-type"),
+        parseInt(boxes[i].getAttribute("data-idx"), 10));
+    }
+  }
+
+  function buildFeatureChecklist() {
+    var el = document.getElementById("basFeatureChecklist");
+    if (!el) return;
+    var previous = {};
+    var existing = el.querySelectorAll("input[type=checkbox]");
+    for (var i = 0; i < existing.length; i++) {
+      previous[existing[i].getAttribute("data-type") + ":" + existing[i].getAttribute("data-idx")] = existing[i].checked;
+    }
+    el.innerHTML = "";
+    var hasFeatures = false;
+
+    function addRow(type, idx, feature, fallback, badge) {
+      hasFeatures = true;
+      var key = type + ":" + idx;
+      var row = document.createElement("div");
+      row.className = "rf-feature-check-row";
+      var cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.setAttribute("data-type", type);
+      cb.setAttribute("data-idx", String(idx));
+      cb.checked = Object.prototype.hasOwnProperty.call(previous, key)
+        ? previous[key] : filterHas(_state.featureFilter, type, idx);
+      var label = document.createElement("label");
+      label.style.cssText = "flex:1;cursor:pointer;";
+      label.textContent = (feature.properties && feature.properties.name) || fallback;
+      var badgeEl = document.createElement("span");
+      badgeEl.className = "rf-feature-type-badge";
+      badgeEl.textContent = badge;
+      label.addEventListener("click", function (event) {
+        event.preventDefault();
+        cb.checked = !cb.checked;
+        _state.featureFilter = getFeatureFilter();
+        if (App.cache) App.cache.save();
+        renderInputs();
+      });
+      cb.addEventListener("change", function () {
+        _state.featureFilter = getFeatureFilter();
+        if (App.cache) App.cache.save();
+        renderInputs();
+      });
+      row.appendChild(cb);
+      row.appendChild(label);
+      row.appendChild(badgeEl);
+      el.appendChild(row);
+    }
+
+    (App.routes || []).forEach(function (feature, idx) { addRow("route", idx, feature, "Route " + (idx + 1), "R"); });
+    (App.lines || []).forEach(function (feature, idx) { addRow("line", idx, feature, "Line " + (idx + 1), "L"); });
+    (App.points || []).forEach(function (feature, idx) { addRow("point", idx, feature, "Point " + (idx + 1), "S"); });
+    (App.polygons || []).forEach(function (feature, idx) { addRow("polygon", idx, feature, "Polygon " + (idx + 1), "P"); });
+    if (!hasFeatures) el.innerHTML = '<div class="rf-empty-note">No features drawn.</div>';
+  }
+
+  function syncBufferControl() {
+    var input = document.getElementById("basBufferMiles");
+    var toggle = document.getElementById("basUseDisplayBuffers");
+    if (input) {
+      input.value = String(_state.bufferMiles);
+      input.disabled = _state.useDisplayBuffers;
+    }
+    if (toggle) toggle.checked = _state.useDisplayBuffers;
   }
 
   // ---- Summary runner ----
@@ -149,6 +251,22 @@
     var geoLevel = document.getElementById("basGeoLevel").value;
     var apportionByAreaEl = document.getElementById("basApportionByArea");
     var apportionByArea = apportionByAreaEl ? apportionByAreaEl.checked : true;
+    var featureFilter = getFeatureFilter();
+    var selectedCount = featureFilter.routeIndices.length + featureFilter.lineIndices.length +
+      featureFilter.pointIndices.length + featureFilter.polygonIndices.length;
+    if (!selectedCount) {
+      App.setStatus("No features selected");
+      App.renderModuleState({ emptyEl: "basEmptyState", empty: true,
+        hint: { need: "Select at least one feature to analyze.", action: "Choose a point, line, route, or polygon above." } });
+      return;
+    }
+    _state.bufferMiles = App.readAnalysisBufferMiles("basBufferMiles", App.ANALYSIS_BUFFER_DEFAULT_MILES);
+    _state.useDisplayBuffers = !!(document.getElementById("basUseDisplayBuffers") || {}).checked;
+    _state.featureFilter = featureFilter;
+    var bufferSet = _state.useDisplayBuffers
+      ? App.buildDisplayBufferSet(featureFilter)
+      : App.buildAnalysisBufferSet(featureFilter, _state.bufferMiles);
+    var unionFeat = bufferSet.union;
 
     // Save state
     _state.year = year;
@@ -196,8 +314,7 @@
       codeToRows[code].push(tr);
     }
 
-    // Check for buffer union
-    var unionFeat = App.bufferUnionPolygon();
+    // Check for the selected analysis union.
     if (!unionFeat) {
       var errMsg = (App.points.length === 0 && App.lines.length === 0 &&
                     App.routes.length === 0 && App.polygons.length === 0)
@@ -418,10 +535,15 @@
     var apportionNote = apportionByArea
       ? "counts are area-apportioned (fractional overlap)"
       : "counts include all intersecting geographies in full (no area apportionment)";
-    var methodNote = 'Summaries are computed within the <b>dissolved union</b> of all buffers. Set the buffer radius in the Features panel. For ACS, ' + apportionNote + '. Medians are shown as an area-weighted average estimate.';
+    var bufferNote = _state.useDisplayBuffers
+      ? "the selected displayed buffers"
+      : "a " + _state.bufferMiles + " mi analysis buffer around the selected features";
+    var methodNote = 'Summaries are computed within the <b>dissolved union</b> of ' + bufferNote + '. Polygons are included without a buffer. For ACS, ' + apportionNote + '. Medians are shown as an area-weighted average estimate.';
     notesEl.innerHTML = (notesParts.length ? notesParts.join(" ") + "<br>" : "") + methodNote;
 
     _hasResults = true;
+    renderInputs(true);
+    if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("results");
 
     App.setStatus("Done");
     if (typeof App.notifyProject === "function") await App.notifyProject();
@@ -436,6 +558,8 @@
     if (yearEl) yearEl.value = _state.year;
     var apportionEl = document.getElementById("basApportionByArea");
     if (apportionEl) apportionEl.checked = _state.apportionByArea;
+    syncBufferControl();
+    applyFeatureFilterToCheckboxes(_state.featureFilter);
 
     // Restore checkbox selections (LODES checkbox is now inside #varSelect).
     if (_state.checkedVars && _state.checkedVars.length > 0) {
@@ -453,6 +577,33 @@
     return codes;
   }
 
+  // ---- Collapsible inputs (shared helper) ----
+
+  function inputsSummary() {
+    var geoEl = document.getElementById("basGeoLevel");
+    var yearEl = document.getElementById("basYearSelect");
+    var apportionEl = document.getElementById("basApportionByArea");
+    var count = collectCheckedVars().length;
+    var featureCount = document.querySelectorAll("#basFeatureChecklist input[type=checkbox]:checked").length;
+    var geoLabel = geoEl && geoEl.value === "tract" ? "Tracts" : "Block groups";
+    return count + " variable" + (count === 1 ? "" : "s") + " \u00b7 " +
+      geoLabel + " \u00b7 " + (yearEl ? yearEl.value : _state.year) + " \u00b7 " +
+      (apportionEl && apportionEl.checked ? "area apportioned" : "whole geographies") + " \u00b7 " +
+      featureCount + " feature" + (featureCount === 1 ? "" : "s");
+  }
+
+  function renderInputs(collapsed) {
+    App.renderModuleInputs({
+      hostEl: document.querySelector(".bas-body .rf-settings-col"),
+      collapsed: collapsed,
+      summary: inputsSummary(),
+      onToggle: function (isCollapsed) {
+        if (!App.popup || !App.popup.setLayoutMode) return;
+        App.popup.setLayoutMode(isCollapsed && _hasResults ? "results" : "setup", true);
+      }
+    });
+  }
+
   // ---- Module registration ----
 
   App.registerModule({
@@ -460,6 +611,7 @@
     name: "Feature Area Analysis",
     enabled: true,
     popupWidth: 1000,
+    panelWidths: { setup: 520, results: 900 },
     popupHTML: "projects/buffer-summary-popup.html",
 
     init: function (core) {
@@ -469,6 +621,7 @@
       // Must run before any querySelectorAll on the checkbox list below.
       var varSelectEl = document.getElementById("varSelect");
       if (varSelectEl) varSelectEl.innerHTML = buildVarChecklistHTML();
+      buildFeatureChecklist();
 
       // Wire Calculate Summary button
       document.getElementById("basRun").addEventListener("click", async function () {
@@ -486,12 +639,44 @@
         for (var i = 0; i < boxes.length; i++) boxes[i].checked = true;
         _state.checkedVars = collectCheckedVars();
         if (typeof App.cache !== "undefined") App.cache.save();
+        renderInputs();
       });
       document.getElementById("varClearAll").addEventListener("click", function () {
         var boxes = document.querySelectorAll('#varSelect input[type="checkbox"]');
         for (var i = 0; i < boxes.length; i++) boxes[i].checked = false;
         _state.checkedVars = [];
         if (typeof App.cache !== "undefined") App.cache.save();
+        renderInputs();
+      });
+
+      document.getElementById("basFeatureSelectAll").addEventListener("click", function (event) {
+        event.preventDefault();
+        document.querySelectorAll("#basFeatureChecklist input[type=checkbox]").forEach(function (cb) { cb.checked = true; });
+        _state.featureFilter = getFeatureFilter();
+        if (App.cache) App.cache.save();
+        renderInputs();
+      });
+      document.getElementById("basFeatureSelectNone").addEventListener("click", function (event) {
+        event.preventDefault();
+        document.querySelectorAll("#basFeatureChecklist input[type=checkbox]").forEach(function (cb) { cb.checked = false; });
+        _state.featureFilter = getFeatureFilter();
+        if (App.cache) App.cache.save();
+        renderInputs();
+      });
+
+      var bufferMilesEl = document.getElementById("basBufferMiles");
+      if (bufferMilesEl) bufferMilesEl.addEventListener("change", function () {
+        _state.bufferMiles = App.readAnalysisBufferMiles(bufferMilesEl, App.ANALYSIS_BUFFER_DEFAULT_MILES);
+        syncBufferControl();
+        if (App.cache) App.cache.save();
+        renderInputs();
+      });
+      var displayBuffersEl = document.getElementById("basUseDisplayBuffers");
+      if (displayBuffersEl) displayBuffersEl.addEventListener("change", function () {
+        _state.useDisplayBuffers = displayBuffersEl.checked;
+        syncBufferControl();
+        if (App.cache) App.cache.save();
+        renderInputs();
       });
 
       // Auto-save on checkbox change
@@ -499,22 +684,30 @@
         cb.addEventListener("change", function () {
           _state.checkedVars = collectCheckedVars();
           if (typeof App.cache !== "undefined") App.cache.save();
+          renderInputs();
         });
       });
 
       // Apply cached state to DOM
       applyStateToDOM();
+      renderInputs(_hasResults ? undefined : false);
+      var settingsEl = document.querySelector(".bas-body .rf-settings-col");
+      if (settingsEl) settingsEl.addEventListener("change", function () { renderInputs(); });
     },
 
     onOpen: function (core) {
       // Re-apply state each time popup opens (in case restored from cache)
+      buildFeatureChecklist();
       applyStateToDOM();
+      renderInputs(false);
       // Show results table if we have results, else a friendly onboarding hint
       var tableEl = document.getElementById("basResultsTable");
       if (tableEl && _hasResults) {
+        if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("results");
         tableEl.style.display = "";
         App.renderModuleState({ emptyEl: "basEmptyState" });   // hide hint
       } else {
+        if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("setup");
         App.renderModuleState({ emptyEl: "basEmptyState", empty: true, hint: emptyHint() });
       }
     },
@@ -524,9 +717,13 @@
       if (document.getElementById("varSelect")) {
         _state.checkedVars = collectCheckedVars();
       }
+      if (document.getElementById("basFeatureChecklist")) _state.featureFilter = getFeatureFilter();
     },
 
     update: function (core) {
+      if (App.popup && App.popup.isOpen() && App.popup.currentModuleId() === "buffer-summary") {
+        buildFeatureChecklist();
+      }
       // no-op — summary is on-demand, not auto-updating
     }
   });
@@ -542,7 +739,10 @@
           geoLevel: _state.geoLevel,
           year: _state.year,
           apportionByArea: _state.apportionByArea,
-          checkedVars: vars
+          checkedVars: vars,
+          featureFilter: document.getElementById("basFeatureChecklist") ? getFeatureFilter() : _state.featureFilter,
+          bufferMiles: _state.bufferMiles,
+          useDisplayBuffers: _state.useDisplayBuffers
         };
       },
       apply: function (data) {
@@ -550,6 +750,9 @@
         if (data.year) _state.year = data.year;
         if (typeof data.apportionByArea === "boolean") _state.apportionByArea = data.apportionByArea;
         if (Array.isArray(data.checkedVars)) _state.checkedVars = data.checkedVars;
+        if (data.featureFilter) _state.featureFilter = data.featureFilter;
+        if (Number.isFinite(data.bufferMiles)) _state.bufferMiles = data.bufferMiles;
+        if (typeof data.useDisplayBuffers === "boolean") _state.useDisplayBuffers = data.useDisplayBuffers;
         // DOM may not exist yet; applyStateToDOM() is called in onOpen()
       }
     });

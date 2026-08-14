@@ -22,6 +22,7 @@
   var _initialized       = false;
   var _apportionByArea   = false;
   var _bufferMiles       = App.ANALYSIS_BUFFER_DEFAULT_MILES;
+  var _useDisplayBuffers = false;
 
   // ---- DOM guard: only touch DOM when popup is open for this module ----
 
@@ -37,9 +38,21 @@
   var _lastBufferSet = null;
 
   function buildUnionFromFilter(filter) {
-    var set = App.buildAnalysisBufferSet(filter, _bufferMiles);
+    var set = _useDisplayBuffers
+      ? App.buildDisplayBufferSet(filter)
+      : App.buildAnalysisBufferSet(filter, _bufferMiles);
     _lastBufferSet = set;
     return set.union;
+  }
+
+  function syncBufferControl() {
+    var input = document.getElementById("csBufferMiles");
+    var toggle = document.getElementById("csUseDisplayBuffers");
+    if (input) {
+      input.value = String(_bufferMiles);
+      input.disabled = _useDisplayBuffers;
+    }
+    if (toggle) toggle.checked = _useDisplayBuffers;
   }
 
   function getFeatureFilter() {
@@ -255,7 +268,33 @@
              action: "Each selected route or line gets a ranked composite demand score." };
   }
 
+  // ---- Collapsible inputs (shared helper) ----
+
+  function inputsSummary() {
+    var geoEl = document.getElementById("csGeoLevel");
+    var yearEl = document.getElementById("csYearSelect");
+    var bufferEl = document.getElementById("csBufferMiles");
+    var count = document.querySelectorAll("#csFeatureList input[type=checkbox]:checked").length;
+    var geoLabel = geoEl && geoEl.value === "tract" ? "Tracts" : "Block groups";
+    return geoLabel + " \u00b7 " + (yearEl ? yearEl.value : "") + " \u00b7 " +
+      (bufferEl ? bufferEl.value : _bufferMiles) + " mi \u00b7 " +
+      count + " corridor" + (count === 1 ? "" : "s");
+  }
+
+  function renderInputs(collapsed) {
+    App.renderModuleInputs({
+      hostEl: document.querySelector(".cs-body .rf-settings-col"),
+      collapsed: collapsed,
+      summary: inputsSummary(),
+      onToggle: function (isCollapsed) {
+        if (!App.popup || !App.popup.setLayoutMode) return;
+        App.popup.setLayoutMode(isCollapsed && _lastResult ? "results" : "setup", true);
+      }
+    });
+  }
+
   function markStale() {
+    renderInputs();
     _stale = true;
     setExportButtonsEnabled(false);
     if (!isPopupVisible()) return;
@@ -682,6 +721,7 @@
       var geoLevel = document.getElementById("csGeoLevel").value;
       var year     = document.getElementById("csYearSelect").value;
       _bufferMiles  = App.readAnalysisBufferMiles("csBufferMiles", App.ANALYSIS_BUFFER_DEFAULT_MILES);
+      _useDisplayBuffers = !!(document.getElementById("csUseDisplayBuffers") || {}).checked;
 
       var featureFilter = getFeatureFilter();
 
@@ -732,6 +772,8 @@
                 " — " + geoCount + " geographies.", "done");
 
       renderResultsTable(_lastResult);
+      renderInputs(true);
+      if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("results");
       renderMapChoropleth(_lastResult);
       if (App.popup && App.popup.showFloatingWidget) {
         App.popup.showFloatingWidget("cs-legend", "projects/corridor-scoring-legend.html", {
@@ -781,6 +823,13 @@
       bufferMilesEl.value = String(_bufferMiles);
       bufferMilesEl.addEventListener("change", markStale);
     }
+    var displayBuffersEl = document.getElementById("csUseDisplayBuffers");
+    if (displayBuffersEl) displayBuffersEl.addEventListener("change", function () {
+      _useDisplayBuffers = displayBuffersEl.checked;
+      syncBufferControl();
+      markStale();
+    });
+    syncBufferControl();
 
     // Select all / clear
     var selectAll = document.getElementById("csSelectAll");
@@ -852,6 +901,7 @@
 
     // Populate weight sliders (in modal) with current _weights
     buildWeightSliders();
+    renderInputs(_lastResult ? undefined : false);
   }
 
   function onOpen(core) {
@@ -860,12 +910,15 @@
     if (apportionCb) apportionCb.checked = _apportionByArea;
     var bufferMilesEl = document.getElementById("csBufferMiles");
     if (bufferMilesEl) bufferMilesEl.value = String(_bufferMiles);
+    syncBufferControl();
 
     buildFeatureChecklist();
     if (_featureFilter) applyFeatureFilterToCheckboxes(_featureFilter);
+    renderInputs(false);
     updateLodesWarnings();
 
     if (_lastResult) {
+      if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("results");
       renderResultsTable(_lastResult);
       setExportButtonsEnabled(!_stale);
       var hideCb = document.getElementById("csHideRouteColoring");
@@ -874,6 +927,7 @@
         hideCb.checked = (vis === "none");
       }
     } else {
+      if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("setup");
       setExportButtonsEnabled(false);
       App.renderModuleState({
         statusEl: "csStatus", emptyEl: "csEmptyState", empty: true, hint: emptyHint()
@@ -892,6 +946,8 @@
     _lastResult = null;
     _stale = false;
     if (isPopupVisible()) {
+      if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("setup");
+      renderInputs(false);
       var resultsEl = document.getElementById("csResults");
       if (resultsEl) resultsEl.style.display = "none";
       App.renderModuleState({
@@ -942,6 +998,7 @@
       weights:         Object.assign({}, _weights),
       apportionByArea: _apportionByArea,
       bufferMiles:     _bufferMiles,
+      useDisplayBuffers: _useDisplayBuffers,
       featureFilter:   currentFilter ? JSON.parse(JSON.stringify(currentFilter)) : null,
       geoLevel:        null,
       year:            null,
@@ -993,6 +1050,7 @@
     if (data.weights)          _weights         = Object.assign({}, data.weights);
     if (data.apportionByArea != null) _apportionByArea = !!data.apportionByArea;
     if (data.bufferMiles != null) _bufferMiles = data.bufferMiles;
+    if (data.useDisplayBuffers != null) _useDisplayBuffers = !!data.useDisplayBuffers;
     if (data.featureFilter !== undefined) _featureFilter = data.featureFilter;
 
     var geoLevelEl = document.getElementById("csGeoLevel");
@@ -1001,6 +1059,7 @@
     if (geoLevelEl && data.geoLevel) geoLevelEl.value = data.geoLevel;
     if (yearEl     && data.year)     yearEl.value     = data.year;
     if (bufferMilesEl) bufferMilesEl.value = String(_bufferMiles);
+    syncBufferControl();
 
     if (!data.lastSummary) return;
     var s = data.lastSummary;
@@ -1048,6 +1107,7 @@
     name:       "Corridor Scoring",
     enabled:    true,
     popupWidth: 1000,
+    panelWidths: { setup: 520, results: 760 },
     popupHTML:  "projects/corridor-scoring-popup.html",
 
     init:    function (core) { init(core); },

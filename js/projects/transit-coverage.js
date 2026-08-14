@@ -18,6 +18,7 @@
   var _running          = false;
   var _initialized       = false;
   var _savedSelections   = null;  // { routeIndices, lineIndices, polygonIndices } restored from session cache (Step 7)
+  var _useDisplayBuffers = false;
 
   // ---- DOM guard: only touch DOM when popup is open for this module ----
 
@@ -253,7 +254,7 @@
     var r = _lastResult;
     var geoLabel = r.geoLevel === "tract" ? "Tracts" : "Block groups";
     var parts = [
-      r.bufferMiles + " mi",
+      r.useDisplayBuffers ? "display buffers" : r.bufferMiles + " mi",
       geoLabel + " · " + r.year,
       DAY_LABEL[r.dayType] || r.dayType
     ];
@@ -261,11 +262,22 @@
     return parts.join(" · ");
   }
 
+  function syncBufferControl() {
+    var input = document.getElementById("tcBufferMiles");
+    var toggle = document.getElementById("tcUseDisplayBuffers");
+    if (input) input.disabled = _useDisplayBuffers;
+    if (toggle) toggle.checked = _useDisplayBuffers;
+  }
+
   function renderInputs(collapsed) {
     App.renderModuleInputs({
       hostEl: document.querySelector(".tc-body .rf-settings-col"),
       collapsed: collapsed,
-      summary: inputsSummary()
+      summary: inputsSummary(),
+      onToggle: function (isCollapsed) {
+        if (!App.popup || !App.popup.setLayoutMode) return;
+        App.popup.setLayoutMode(isCollapsed && _lastResult ? "results" : "setup", true);
+      }
     });
   }
 
@@ -369,10 +381,13 @@
   // App.routeBuffers / App.lineBuffers (those belong to the shared
   // Feature Settings buffer radius, a different concern).
 
-  function buildCoverageUnions(sel, miles, dayType, thresholdMin) {
+  function buildCoverageUnions(sel, miles, dayType, thresholdMin, useDisplayBuffers) {
     var headwayRows = [];
     var allBuffers = [];
     var qualifyingBuffers = [];
+    var bufferSet = useDisplayBuffers
+      ? App.buildDisplayBufferSet(sel)
+      : App.buildAnalysisBufferSet(sel, miles);
 
     function processFeature(type, idx, feature) {
       if (!feature) return;
@@ -386,7 +401,7 @@
         peakHeadway: peak, qualifies: qualifies
       });
 
-      var buf = App.buildAnalysisBuffer(feature, miles);
+      var buf = bufferSet.get(type, idx);
       if (buf) {
         allBuffers.push(buf);
         if (qualifies) qualifyingBuffers.push(buf);
@@ -525,7 +540,8 @@
         throw new Error("Could not build a service area from the selected polygons.");
       }
 
-      var unions = buildCoverageUnions(featSel, bufferMiles, dayType, thresholdMin);
+      _useDisplayBuffers = !!(document.getElementById("tcUseDisplayBuffers") || {}).checked;
+      var unions = buildCoverageUnions(featSel, bufferMiles, dayType, thresholdMin, _useDisplayBuffers);
       var coverageUnion  = unions.coverageUnion;
       var thresholdUnion = unions.thresholdUnion;
       var headwayRows     = unions.headwayRows;
@@ -571,7 +587,7 @@
 
       _lastResult = {
         geoLevel: geoLevel, year: year,
-        bufferMiles: bufferMiles, dayType: dayType, thresholdMin: thresholdMin,
+        bufferMiles: bufferMiles, useDisplayBuffers: _useDisplayBuffers, dayType: dayType, thresholdMin: thresholdMin,
         popTotal: popTotal, popCovered: popCovered, popThreshold: popThreshold,
         jobsTotal: jobsTotal, jobsCovered: jobsCovered, jobsThreshold: jobsThreshold,
         headwayRows: headwayRows,
@@ -594,6 +610,7 @@
       setStatus("Analyzed coverage — " + geos.length + " geographies.", "done");
       // Collapse only on success — an error leaves the inputs open.
       renderInputs(true);
+      if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("results");
     } catch (err) {
       console.error("Transit Coverage error:", err);
       setStatus("Error: " + (err.message || err), "error");
@@ -832,6 +849,13 @@
     // Coverage settings
     var bufferInput = document.getElementById("tcBufferMiles");
     if (bufferInput) bufferInput.addEventListener("change", markStale);
+    var displayBuffersInput = document.getElementById("tcUseDisplayBuffers");
+    if (displayBuffersInput) displayBuffersInput.addEventListener("change", function () {
+      _useDisplayBuffers = displayBuffersInput.checked;
+      syncBufferControl();
+      markStale();
+    });
+    syncBufferControl();
 
     var dayTypeSel = document.getElementById("tcDayType");
     if (dayTypeSel) dayTypeSel.addEventListener("change", markStale);
@@ -889,14 +913,17 @@
   function onOpen(core) {
     buildFeatureChecklist();
     buildAreaChecklist();
+    syncBufferControl();
     if (_savedSelections) applySelections(_savedSelections);
     updateLodesWarnings();
     renderInputs(_lastResult ? undefined : false);
 
     if (_lastResult) {
+      if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("results");
       renderResults(_lastResult);
       setExportButtonsEnabled(!_stale);
     } else {
+      if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("setup");
       setExportButtonsEnabled(false);
       App.renderModuleState({
         statusEl: "tcStatus", emptyEl: "tcEmptyState", empty: true, hint: emptyHint()
@@ -915,6 +942,8 @@
     _lastResult = null;
     _stale = false;
     if (isPopupVisible()) {
+      if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("setup");
+      renderInputs(false);
       var resultsEl = document.getElementById("tcResults");
       if (resultsEl) resultsEl.style.display = "none";
       App.renderModuleState({
@@ -942,6 +971,7 @@
   function saveTcState(mode) {
     var settings = {
       bufferMiles:      null,
+      useDisplayBuffers: _useDisplayBuffers,
       dayType:          null,
       headwayThreshold: null,
       geoLevel:         null,
@@ -995,6 +1025,7 @@
         geoLevel:        _lastResult.geoLevel,
         year:            _lastResult.year,
         bufferMiles:     _lastResult.bufferMiles,
+        useDisplayBuffers: _lastResult.useDisplayBuffers,
         dayType:         _lastResult.dayType,
         thresholdMin:    _lastResult.thresholdMin,
         popTotal:        _lastResult.popTotal,
@@ -1024,6 +1055,8 @@
     var yearEl      = document.getElementById("tcYearSelect");
 
     if (bufferEl && Number.isFinite(settings.bufferMiles)) bufferEl.value = String(settings.bufferMiles);
+    if (settings.useDisplayBuffers != null) _useDisplayBuffers = !!settings.useDisplayBuffers;
+    syncBufferControl();
     if (dayTypeEl && settings.dayType)                      dayTypeEl.value = settings.dayType;
     if (thresholdEl) {
       thresholdEl.value = (settings.headwayThreshold != null) ? String(settings.headwayThreshold) : "";
@@ -1038,6 +1071,7 @@
       geoLevel:         s.geoLevel,
       year:             s.year,
       bufferMiles:      s.bufferMiles,
+      useDisplayBuffers: !!s.useDisplayBuffers,
       dayType:          s.dayType,
       thresholdMin:     s.thresholdMin,
       popTotal:         s.popTotal,
@@ -1069,6 +1103,7 @@
     name:       "Transit Coverage",
     enabled:    true,
     popupWidth: 1000,
+    panelWidths: { setup: 540, results: 760 },
     popupHTML:  "projects/transit-coverage-popup.html",
 
     init:    function (core) { init(core); },

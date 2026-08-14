@@ -312,7 +312,11 @@
     App.renderModuleInputs({
       hostEl: document.querySelector(".ws-body .rf-settings-col"),
       collapsed: collapsed,
-      summary: _lastEntries.length ? inputsSummary() : ""
+      summary: _lastEntries.length ? inputsSummary() : "",
+      onToggle: function (isCollapsed) {
+        if (!App.popup || !App.popup.setLayoutMode) return;
+        App.popup.setLayoutMode(isCollapsed && _lastEntries.length ? "results" : "setup", true);
+      }
     });
   }
 
@@ -494,7 +498,10 @@
 
         // Collapse the inputs only on a run that produced something — a failed
         // run should leave them open, where the user needs them.
-        if (isPopupVisible()) renderInputs(ok > 0);
+        if (isPopupVisible()) {
+          renderInputs(ok > 0);
+          if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode(ok > 0 ? "results" : "setup");
+        }
       } finally {
         _running = false;
       }
@@ -620,12 +627,14 @@
     // has never run shows the header expanded.
     renderInputs(_lastEntries.length ? undefined : false);
     if (_lastEntries.length) {
+      if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("results");
       var resultsEl = document.getElementById("wsResults");
       if (resultsEl) resultsEl.style.display = "";
       renderResults();
       setExportEnabled(_lastEntries.some(function (e) { return !e.failed; }) && !_stale);
       if (_stale) showStale(); else setStatus("", "");
     } else {
+      if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("setup");
       setExportEnabled(false);
       showEmpty();
     }
@@ -634,13 +643,11 @@
   function onClose(core) { /* state persists in closure */ }
 
   // Calculate stays enabled with no network loaded — pressing it is how the user
-  // gets offered the scoped download. Only the advisory note is toggled.
+  // gets offered the scoped download.
   function updateComputeAvailability() {
     var btn = document.getElementById("wsComputeBtn");
     if (btn) btn.disabled = false;
     var loaded = App.roadNetworkLoaded && App.roadNetworkLoaded();
-    var warn = document.getElementById("wsNetWarn");
-    if (warn) warn.style.display = loaded ? "none" : "";
     if (loaded) { setCoverageWarn(null); showDownloadBtn(false); }
   }
 
@@ -651,6 +658,8 @@
     _lastEntries = [];
     _stale = false;
     if (isPopupVisible()) {
+      if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("setup");
+      renderInputs(false);
       var resultsEl = document.getElementById("wsResults");
       if (resultsEl) resultsEl.style.display = "none";
       setExportEnabled(false);
@@ -706,6 +715,7 @@
     name:       "Walkshed Analysis",
     enabled:    true,
     popupWidth: 460,
+    panelWidths: { setup: 460, results: 460 },
     popupHTML:  "projects/walkshed-popup.html",
 
     init:    function (core) { init(core); },

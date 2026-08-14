@@ -35,6 +35,7 @@
   var _initialized = false;
   var _apportionByArea = false;
   var _bufferMiles = App.ANALYSIS_BUFFER_DEFAULT_MILES; // module-owned analysis distance (Calibrate tab, shared with Demand)
+  var _useDisplayBuffers = false;
   var _normalizeByLength = false;
   var _baselineUncertaintyPct = 0.25; // ±25% model uncertainty around calibrated baseline
   var _spanElasticity = 0.70; // span-to-ridership elasticity (power curve); applied per-scenario in Scenarios tab
@@ -352,6 +353,22 @@
     if (tabId === "elasticity") refreshElasticity();
   }
 
+  function buildRouteLineBufferSet(filter) {
+    return _useDisplayBuffers
+      ? App.buildDisplayBufferSet(filter)
+      : App.buildAnalysisBufferSet(filter, _bufferMiles);
+  }
+
+  function syncBufferControl() {
+    var input = document.getElementById("rfBufferMiles");
+    var toggle = document.getElementById("rfUseDisplayBuffers");
+    if (input) {
+      input.value = String(_bufferMiles);
+      input.disabled = _useDisplayBuffers;
+    }
+    if (toggle) toggle.checked = _useDisplayBuffers;
+  }
+
   // ---- Layer 1: Demand ----
 
   // Run a single combined TPI analysis for both calibration and demand feature sets.
@@ -367,7 +384,7 @@
     // computePerRouteCDI needs every feature's buffer so featureFilter:null
     // below can compute CDI for all of them, exactly as before this module
     // carried its own buffer distance; only the geometry source changed.
-    var allBufferSet = App.buildAnalysisBufferSet(allRoutesLinesFilter(), _bufferMiles);
+    var allBufferSet = buildRouteLineBufferSet(allRoutesLinesFilter());
 
     // Study area union is scoped to the combined calibration+demand selection —
     // fold only that subset's polygons out of the already-built full set.
@@ -453,6 +470,7 @@
       var year = document.getElementById("rfYearSelect").value;
       var segLen = parseFloat(document.getElementById("rfSegmentLength").value) || 0;
       _bufferMiles = App.readAnalysisBufferMiles("rfBufferMiles", App.ANALYSIS_BUFFER_DEFAULT_MILES);
+      _useDisplayBuffers = !!(document.getElementById("rfUseDisplayBuffers") || {}).checked;
 
       // Warn if demand settings differ from calibration settings
       if (_systemResult) {
@@ -511,7 +529,7 @@
         var demandFilter = readFeatureFilter("rfDemandFeatureList");
         _demandFeatureFilter = demandFilter;
 
-        var demandBufferSet = App.buildAnalysisBufferSet(demandFilter, _bufferMiles);
+        var demandBufferSet = buildRouteLineBufferSet(demandFilter);
         if (demandBufferSet.count === 0) {
           throw new Error("Could not build buffers for the selected demand features.");
         }
@@ -1306,12 +1324,13 @@
       var apportion = apportionCb ? apportionCb.checked : false;
       _apportionByArea = apportion;
       _bufferMiles = App.readAnalysisBufferMiles("rfBufferMiles", App.ANALYSIS_BUFFER_DEFAULT_MILES);
+      _useDisplayBuffers = !!(document.getElementById("rfUseDisplayBuffers") || {}).checked;
 
       // Read calibration feature filter from checkboxes
       var featureFilter = readFeatureFilter("rfCalibFeatureList");
       _calibFeatureFilter = featureFilter;
 
-      var calibBufferSet = App.buildAnalysisBufferSet(featureFilter, _bufferMiles);
+      var calibBufferSet = buildRouteLineBufferSet(featureFilter);
       if (calibBufferSet.count === 0) {
         throw new Error("Could not build buffers for the selected calibration features.");
       }
@@ -2848,7 +2867,9 @@
   // Calibrate tab's single #rfBufferMiles input.
   function updateDemandBufferNote() {
     var noteEl = document.getElementById("rfDemandBufferNote");
-    if (noteEl) noteEl.textContent = "Analysis buffer: " + _bufferMiles + " mi — set on the Calibrate tab.";
+    if (noteEl) noteEl.textContent = _useDisplayBuffers
+      ? "Analysis buffers: Display Buffers — set on the Calibrate tab."
+      : "Analysis buffer: " + _bufferMiles + " mi — set on the Calibrate tab.";
   }
 
   // ---- Module init (called once on first popup open) ----
@@ -2969,6 +2990,14 @@
         markStale();
       });
     }
+    var displayBuffersEl = document.getElementById("rfUseDisplayBuffers");
+    if (displayBuffersEl) displayBuffersEl.addEventListener("change", function () {
+      _useDisplayBuffers = displayBuffersEl.checked;
+      syncBufferControl();
+      updateDemandBufferNote();
+      markStale();
+    });
+    syncBufferControl();
     updateDemandBufferNote();
 
     // Feature selection checklists (Calibrate tab)
@@ -3294,6 +3323,7 @@
     // Sync buffer distance input + Demand tab note
     var bufferMilesEl = document.getElementById("rfBufferMiles");
     if (bufferMilesEl) bufferMilesEl.value = String(_bufferMiles);
+    syncBufferControl();
     updateDemandBufferNote();
 
     // Sync normalize-by-length checkboxes
@@ -3459,6 +3489,7 @@
       weights: Object.assign({}, _weights),
       apportionByArea: _apportionByArea,
       bufferMiles: _bufferMiles,
+      useDisplayBuffers: _useDisplayBuffers,
       normalizeByLength: _normalizeByLength,
       baselineUncertaintyPct: _baselineUncertaintyPct,
       spanElasticity: _spanElasticity,
@@ -3507,6 +3538,7 @@
     if (data.weights) _weights = Object.assign({}, RF_DEFAULT_WEIGHTS, data.weights);
     if (data.apportionByArea != null) _apportionByArea = !!data.apportionByArea;
     if (data.bufferMiles != null && Number.isFinite(data.bufferMiles)) _bufferMiles = data.bufferMiles;
+    if (data.useDisplayBuffers != null) _useDisplayBuffers = !!data.useDisplayBuffers;
     if (data.normalizeByLength != null) _normalizeByLength = !!data.normalizeByLength;
     _baselineUncertaintyPct = (data.baselineUncertaintyPct != null && Number.isFinite(data.baselineUncertaintyPct))
       ? data.baselineUncertaintyPct : 0.25;

@@ -1,11 +1,11 @@
 // js/core/module-buffers.js
-// Shared "module-owned analysis buffer" helper. Analysis modules (Transit
-// Coverage, Transit Propensity, Ridership Forecasting, Corridor Scoring) each
-// carry their own buffer distance, independent of the Feature Settings global
+// Shared analysis-buffer helper. Feature Area Analysis, Transit Coverage,
+// Transit Propensity, Ridership Forecasting, and Corridor Scoring can carry a
+// module distance, independent of the Feature Settings global
 // buffer radius (App.routeBuffers / App.lineBuffers / App.buffers, rebuilt by
-// js/core/routes.js / lines.js / points.js). This file never reads or mutates
-// those — it builds a PRIVATE buffer set from source geometry + a caller-given
-// distance, for use inside a single analysis run.
+// js/core/routes.js / lines.js / points.js). It never mutates those arrays and
+// it can build either a private distance-based set or a selected display-buffer
+// set for one analysis run.
 // Depends on: App namespace, turf (CDN), App.points/lines/routes/polygons,
 //   App.getPointWalkshed (walkshed.js, optional — guarded).
 // No DOM access.
@@ -31,6 +31,52 @@
   function buildAnalysisBuffer(feature, miles) {
     try { return turf.buffer(feature, miles, { units: "miles", steps: 64 }); }
     catch (e) { return null; }
+  }
+
+  // Return the drawn Feature Settings buffers for an explicit selection. This
+  // makes "Use Display Buffers" honor the same per-feature overrides and
+  // walkshed substitutions visible on the map. Polygons stay unbuffered.
+  function buildDisplayBufferSet(filter) {
+    var byType = { route: {}, line: {}, point: {}, polygon: {} };
+    var allPolys = [];
+    var count = 0;
+
+    function add(type, features, displayBuffers, indices) {
+      if (!indices) return;
+      for (var i = 0; i < indices.length; i++) {
+        var idx = indices[i];
+        var feature = features[idx];
+        if (!feature || (feature.properties && feature.properties.hidden)) continue;
+        var polygon = displayBuffers[idx];
+        if (!polygon) continue;
+        byType[type][idx] = polygon;
+        allPolys.push(polygon);
+        count++;
+      }
+    }
+
+    filter = filter || {};
+    add("route", App.routes || [], App.routeBuffers || [], filter.routeIndices);
+    add("line", App.lines || [], App.lineBuffers || [], filter.lineIndices);
+    add("point", App.points || [], App.buffers || [], filter.pointIndices);
+
+    var polygons = App.polygons || [];
+    var polygonIndices = filter.polygonIndices || [];
+    for (var pi = 0; pi < polygonIndices.length; pi++) {
+      var pidx = polygonIndices[pi];
+      var poly = polygons[pidx];
+      if (!poly || (poly.properties && poly.properties.hidden)) continue;
+      byType.polygon[pidx] = poly;
+      allPolys.push(poly);
+      count++;
+    }
+
+    return {
+      byType: byType,
+      union: foldAnalysisUnion(allPolys),
+      get: function (type, idx) { return (byType[type] && byType[type][idx]) || null; },
+      count: count
+    };
   }
 
   // Read + validate a buffer-distance input. Accepts an element id (string),
@@ -138,6 +184,7 @@
 
   App.foldAnalysisUnion     = foldAnalysisUnion;
   App.buildAnalysisBuffer   = buildAnalysisBuffer;
+  App.buildDisplayBufferSet = buildDisplayBufferSet;
   App.readAnalysisBufferMiles = readAnalysisBufferMiles;
   App.buildAnalysisBufferSet  = buildAnalysisBufferSet;
 })();

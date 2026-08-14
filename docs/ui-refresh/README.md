@@ -1,8 +1,17 @@
 # Modern UI Refresh — Master Plan
 
-Status: **in progress** — phases 0–6 complete; phase 7 (shell, accessibility,
-documentation, and refreshed baselines) is next. Phase 8 was added after the Phase 6
-checkpoint as a post-refresh feature expansion. (2026-08-13)
+Status: **original refresh complete** — phases 0–7 are complete. Phase 8 is the next,
+separately scoped feature expansion. (2026-08-13)
+
+**2026-08-13 Phase 7 correction.** The first Phase 7 completion record accurately
+described collapsible Inputs but not a narrow-layout conversion. The seven active
+single-step panels now use adaptive setup/results/workspace widths: Walkshed 460/460;
+Feature Area Analysis 520/900; Transit Propensity 520/520; Corridor Scoring 520/760;
+FTA Ratings 520 with Data Inputs at 1000; Transit Coverage 540/760; and Transit
+Travelshed 540/640. Setup panels stack vertically over the map; result widths are
+applied after a successful run. Route Costing and Trip Builder deliberately retain their
+wide layouts. The refreshed visual baselines include the Save, Export, Add Data toolbar
+order and expanded/collapsed panel states.
 
 **2026-08-13 session checkpoint.** Phase 5 removed static inline styles from the 14
 active popup fragments in four commits on
@@ -81,7 +90,7 @@ These were decided with the developer and are settled:
 | 4 | `phase-4-controls-refresh.md` | Modern form controls, buttons, checklists; widen settings columns + popups | Large — the headline change | **Yes — key checkpoint** | ✅ Done, approved with changes |
 | 5 | `phase-5-inline-style-purge.md` | Replace ~370 static inline styles in popup HTML with shared primitives | Near-none | No | ✅ Done |
 | 6 | `phase-6-demodalize.md` | Remove backdrop, live map behind popups, collapse button on popup header | Large behavior change | **Yes — behavior test** | ✅ Done, checkpoint delivered |
-| 7 | `phase-7-shell-a11y-docs.md` | Single-step panel normalization, toolbar/menu grouping, focus/aria/target-size pass, docs + new baselines | Moderate–large | Original refresh final review | Planned; expanded 2026-08-13 |
+| 7 | `phase-7-shell-a11y-docs.md` | Single-step panel normalization, toolbar/menu grouping, focus/aria/target-size pass, docs + new baselines | Moderate–large | Original refresh final review | ✅ Done |
 | 8 | `phase-8-multi-analysis-panels.md` | Keep one floating panel per analysis module open; independent focus, drag, collapse, and close | Large behavior/architecture change | **Yes — multi-panel behavior test** | Planned; added 2026-08-13 |
 
 Phases must run **in order**. Phases 2–5 build on the token foundation; phases 6–7
@@ -132,9 +141,8 @@ Phase 0 builds `test/ui-screens/capture.mjs`. From then on:
 node test/ui-screens/capture.mjs            # writes test/ui-screens/out/<theme>_<name>.png
 ```
 
-Baseline images from phase 0 are kept in `test/ui-screens/baseline/` (committed once,
-~30 small PNGs) so any later session can diff against the pre-refresh look. After the
-refresh ships, the baseline set is refreshed to the new look and the old set deleted.
+Baseline images in `test/ui-screens/baseline/` now represent the completed Phase 7 UI.
+The pre-refresh set remains available through git history.
 
 ## Known-risk register (watch for these)
 
@@ -150,12 +158,12 @@ refresh ships, the baseline set is refreshed to the new look and the old set del
 - **Phase 6:** flows that arm a one-shot map click while the popup is open (Transit
   Travelshed "Pick origin on map") change feel when the map is live — test that flow
   end-to-end.
-- **Phase 7 — narrow-panel fit:** collapsible inputs should expose more of the live map,
-  but narrowing dense results can make a tool worse. Feature Area Analysis, TPI,
-  Corridor Scoring, and FTA Ratings are confirmed conversions. Route Costing and Trip
-  Builder are conditional: retain their current layouts unless their widest result states
-  pass the explicit fit test in the Phase 7 plan. Do not convert Ridership Forecasting,
-  Title VI, or GTFS under this work item.
+- **Phase 7 — adaptive single-step panels (resolved):** collapsible Inputs and narrow
+  layout are separate concerns. Walkshed, Feature Area Analysis, TPI, Corridor Scoring,
+  FTA Ratings, Transit Coverage, and Transit Travelshed open vertically and use their
+  documented result/workspace widths only when needed. Route Costing and Trip Builder
+  retain their wider layouts because their dense result states benefit from the additional
+  width. Ridership Forecasting, Title VI, and GTFS remain specialized layouts by design.
 - **Phase 4 — dead sidebar:** phase 0 confirmed `#sidebar-wrap` ships
   `display:none` in `index.html` and nothing in the codebase ever calls
   `App.sidebar.render()` to reveal it — the left "Data Inputs" sidebar is
@@ -165,23 +173,6 @@ refresh ships, the baseline set is refreshed to the new look and the old set del
   way if it's ever revived) but don't burn checkpoint time screenshotting
   something no user can see, and flag to the developer whether to leave it
   dead, style it on spec, or use phase 7's toolbar pass to revive it.
-- **Phase 7 — dark mode doesn't persist across reload:** phase 0 found that
-  `index.html`'s "no-flash" `<head>` script
-  (`if (localStorage.getItem("mat-dark-mode")==="1") document.body.classList.add(...)`)
-  runs while the parser is still inside `<head>`, so `document.body` is `null`
-  and it throws every time (confirmed via a real `pageerror` during phase 0's
-  dark captures). Pre-seeded `localStorage` therefore never applies on first
-  paint — a real, pre-existing bug, not something this refresh introduces.
-  Dark mode currently only takes effect for the rest of the current tab
-  session, via the `#darkmode-btn` click handler (`app.js`), and reverts to
-  light on every reload. The screenshot harness already works around this by
-  clicking the real button instead of relying on the pre-seed (see
-  `test/ui-screens/capture.mjs`), so it doesn't block any phase's
-  verification — only real users are affected. Phase 7 already touches this
-  button's toolbar placement; consider fixing it there. Minimal fix: relocate
-  that one `<script>` line from just before `</head>` to the first line inside
-  `<body>` — same no-flash effect (still runs before any other body content
-  paints), but `document.body` exists by then. (Swapping to
-  `document.documentElement.classList` instead would NOT be a drop-in fix —
-  every dark-mode rule in `style.css` is keyed off `body.dark-mode …`, so that
-  approach would require re-keying the whole stylesheet.)
+- **Phase 7 — dark-mode persistence (resolved):** the no-flash script now runs as the
+  first body script, after `document.body` exists and before body content paints. The
+  capture harness recognizes the pre-applied theme instead of toggling it back off.

@@ -1,5 +1,11 @@
 # Module-Owned Analysis Buffer Distance — Implementation Plan
 
+> Follow-up delivered: Feature Area Analysis now uses the same selected-feature
+> buffer controls. All five scoped modules also provide a default-off **Use
+> Display Buffers** option. It disables the distance field and uses the selected
+> Feature Settings buffers; polygons remain unbuffered and cached walksheds are
+> preserved in both modes.
+
 ## Context
 
 Transit Coverage was built as the first module that owns its own analysis distance: it reads a "Buffer distance (mi)" input and builds **private** buffers with `turf.buffer(...)`, never touching the shared `App.routeBuffers` / `App.lineBuffers` that the Feature Settings panel maintains. Its plan called this "a prototype for the future per-module-buffer convention (out of scope here)."

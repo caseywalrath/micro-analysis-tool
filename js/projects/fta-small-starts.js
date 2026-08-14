@@ -57,6 +57,9 @@
         panes[j].classList.remove("fta-tab-visible");
       }
     }
+    if (isPopupVisible() && App.popup && App.popup.setLayoutMode) {
+      App.popup.setLayoutMode(id === "data-inputs" ? "workspace" : (_lastRatings ? "results" : "setup"));
+    }
   }
 
   // ---- LBAR map layer ----
@@ -519,6 +522,8 @@
         status: { kind: "done", message: "Ratings computed successfully." }
       });
       App.setStatus("FTA ratings computed");
+      renderInputs(true);
+      if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("results");
 
       // Enable export
       var exportBtn = document.getElementById("ftaExportCSV");
@@ -592,6 +597,27 @@
     document.body.removeChild(a); URL.revokeObjectURL(url);
   }
 
+  // ---- Collapsible Ratings inputs (shared helper) ----
+
+  function inputsSummary() {
+    var geoEl = document.getElementById("ftaGeoLevel");
+    var yearEl = document.getElementById("ftaYearSelect");
+    var geoLabel = geoEl && geoEl.value === "tract" ? "Tracts" : "Block groups";
+    return geoLabel + " \u00b7 " + (yearEl ? yearEl.value : "");
+  }
+
+  function renderInputs(collapsed) {
+    App.renderModuleInputs({
+      hostEl: document.querySelector('.fta-tab-content[data-tab="ratings"] .rf-settings-col'),
+      collapsed: collapsed,
+      summary: inputsSummary(),
+      onToggle: function (isCollapsed) {
+        if (!App.popup || !App.popup.setLayoutMode) return;
+        App.popup.setLayoutMode(isCollapsed && _lastRatings ? "results" : "setup", true);
+      }
+    });
+  }
+
   // ---- Init (called once on first popup open) ----
 
   function init(core) {
@@ -617,6 +643,10 @@
     // LBAR layer toggle
     var toggleLbar = document.getElementById("ftaToggleLbarLayer");
     if (toggleLbar) toggleLbar.addEventListener("change", refreshLbarLayerVisibility);
+
+    var ratingsSettings = document.querySelector('.fta-tab-content[data-tab="ratings"] .rf-settings-col');
+    if (ratingsSettings) ratingsSettings.addEventListener("change", function () { renderInputs(); });
+    renderInputs(false);
 
     // County FIPS (debounced)
     var _countyTimer = null;
@@ -849,6 +879,7 @@
 
   function onOpen(core) {
     switchTab(_activeTab);
+    renderInputs(_lastRatings ? undefined : false);
     updateDataIndicators();
     // Show last ratings if available
     if (_lastRatings) {
@@ -931,6 +962,7 @@
     name:       "FTA Small Starts (Land Use)",
     enabled:    true,
     popupWidth: 1000,
+    panelWidths: { setup: 520, results: 520, workspace: 1000 },
     popupHTML:  "projects/fta-small-starts-popup.html",
 
     init:    function (core) { init(core); },

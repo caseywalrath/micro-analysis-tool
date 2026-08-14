@@ -91,50 +91,10 @@
       <!-- Left: Controls -->
       <div class="rf-settings-col tvi-analysis-settings">
 
-        <div class="rf-section-title">Equity Thresholds</div>
-        <div class="tvi-rule-row">
-          <label>Disparate Impact</label>
-          <input id="tviDiThreshold" type="number" min="1" max="50" value="15" class="tvi-threshold-input">
-          <span class="tiny">ppt</span>
-        </div>
-        <div class="tvi-rule-row">
-          <label>Disproportionate Burden</label>
-          <input id="tviDbThreshold" type="number" min="1" max="50" value="15" class="tvi-threshold-input">
-          <span class="tiny">ppt</span>
-        </div>
-
-        <div class="tvi-divider"></div>
-
-        <div class="rf-section-title">Geography</div>
-        <label class="tiny">Level</label>
-        <select id="tviGeoLevel" class="rf-select">
-          <option value="tract">Census Tracts</option>
-          <option value="bg" selected>Block Groups</option>
-        </select>
-
-        <label class="tiny u-mt-3">ACS Year</label>
-        <select id="tviYearSelect" class="rf-select">
-          <option value="2024">2024</option>
-          <option value="2023">2023</option>
-          <option value="2022">2022</option>
-          <option value="2021">2021</option>
-        </select>
-
-        <div class="tvi-divider"></div>
-
-        <div class="rf-section-title">Impacted Area Method</div>
-        <div class="tvi-radio-group">
-          <label><input type="radio" name="tviImpactMethod" value="service_loss_area" checked> Area losing coverage (buffer difference)</label>
-          <label><input type="radio" name="tviImpactMethod" value="service_change_area"> All affected area (loss + gain)</label>
-          <label><input type="radio" name="tviImpactMethod" value="full_route_buffer"> Full existing route buffer</label>
-          <label><input type="radio" name="tviImpactMethod" value="user_polygon"> Drawn polygon(s)</label>
-        </div>
-
-        <div class="tvi-divider"></div>
-
+        <div class="data-input-group" data-input-group="selection">
         <div class="rf-section-title">System Baseline</div>
         <div class="tiny tvi-description u-muted">
-          Calculate minority and low-income shares across the entire system (all drawn features' buffer union) as the comparison benchmark.
+          Calculate minority and low-income shares across the selected system's buffer union as the comparison benchmark.
         </div>
 
         <div class="tiny u-mt-1">
@@ -151,6 +111,54 @@
           <div class="tiny"><strong>Minority share:</strong> <span id="tviBaselineMinority">&mdash;</span></div>
           <div class="tiny"><strong>Low-income share:</strong> <span id="tviBaselineLowIncome">&mdash;</span></div>
           <div class="tiny u-mt-1 u-muted"><span id="tviBaselineGeos">&mdash;</span> geographies &middot; Pop: <span id="tviBaselinePop">&mdash;</span></div>
+        </div>
+        </div>
+
+        <div class="tvi-divider"></div>
+
+        <div class="data-input-group" data-input-group="geography">
+        <div class="rf-section-title">Geography</div>
+        <label class="tiny">Level</label>
+        <select id="tviGeoLevel" class="rf-select">
+          <option value="tract">Census Tracts</option>
+          <option value="bg" selected>Block Groups</option>
+        </select>
+
+        <label class="tiny u-mt-3">ACS Year</label>
+        <select id="tviYearSelect" class="rf-select">
+          <option value="2024">2024</option>
+          <option value="2023">2023</option>
+          <option value="2022">2022</option>
+          <option value="2021">2021</option>
+        </select>
+        </div>
+
+        <div class="tvi-divider"></div>
+
+        <div class="data-input-group" data-input-group="analysis">
+        <div class="rf-section-title">Impacted Area Method</div>
+        <div class="tvi-radio-group">
+          <label><input type="radio" name="tviImpactMethod" value="service_loss_area" checked> Area losing coverage (buffer difference)</label>
+          <label><input type="radio" name="tviImpactMethod" value="service_change_area"> All affected area (loss + gain)</label>
+          <label><input type="radio" name="tviImpactMethod" value="full_route_buffer"> Full existing route buffer</label>
+          <label><input type="radio" name="tviImpactMethod" value="user_polygon"> Drawn polygon(s)</label>
+        </div>
+        </div>
+
+        <div class="tvi-divider"></div>
+
+        <div class="data-input-group" data-input-group="thresholds">
+        <div class="rf-section-title">Equity Thresholds</div>
+        <div class="tvi-rule-row">
+          <label>Disparate Impact</label>
+          <input id="tviDiThreshold" type="number" min="1" max="50" value="15" class="tvi-threshold-input">
+          <span class="tiny">ppt</span>
+        </div>
+        <div class="tvi-rule-row">
+          <label>Disproportionate Burden</label>
+          <input id="tviDbThreshold" type="number" min="1" max="50" value="15" class="tvi-threshold-input">
+          <span class="tiny">ppt</span>
+        </div>
         </div>
 
         <div class="tvi-divider"></div>

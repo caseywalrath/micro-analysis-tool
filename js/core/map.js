@@ -264,6 +264,7 @@
     this._btn.type = "button";
     this._btn.className = "north-arrow-btn";
     this._btn.title = "Reset north";
+    this._btn.setAttribute("aria-label", "Reset map orientation to north");
     this._btn.innerHTML = NORTH_ARROW_SVG;
     this._btn.addEventListener("click", function () { mapInstance.resetNorth(); });
 
@@ -304,6 +305,7 @@
     btn.type = "button";
     btn.className = "basemap-btn";
     btn.title = "Switch basemap";
+    btn.setAttribute("aria-label", "Choose basemap");
     btn.innerHTML = LAYERS_SVG;
 
     var dropdown = document.createElement("div");

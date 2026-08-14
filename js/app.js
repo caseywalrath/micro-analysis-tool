@@ -181,6 +181,7 @@
       var header = document.createElement("button");
       header.type = "button";
       header.className = "module-inputs-header";
+      header.setAttribute("aria-label", "Toggle analysis inputs");
 
       var caret = document.createElement("span");
       caret.className = "lp-caret module-inputs-caret";
@@ -304,17 +305,44 @@
 
   function buildAnalysisButtonsHTML() {
     var html = '<div class="analysis-module-list">';
-    for (var entry of _modules.values()) {
-      // System modules (e.g. Attribute Summary, opened from Feature Settings)
-      // are not surfaced in the Analysis sidebar panel.
-      if (entry.system === true) continue;
+    var generalIds = ["buffer-summary", "walkshed"];
+    var rendered = {};
+
+    function renderEntry(entry) {
       var isEnabled = entry.enabled !== false;
       var disabledAttr = isEnabled ? '' : ' disabled';
-      html += '<button class="analysis-module-btn"' +
+      return '<button class="analysis-module-btn"' +
               ' data-module-id="' + entry.id + '"' + disabledAttr + '>' +
               (entry.name || entry.id) +
               (isEnabled ? '' : ' <span class="coming-soon">(coming soon)</span>') +
               '</button>';
+    }
+
+    var generalHtml = "";
+    generalIds.forEach(function (id) {
+      var entry = _modules.get(id);
+      if (!entry || entry.system === true) return;
+      rendered[id] = true;
+      generalHtml += renderEntry(entry);
+    });
+    if (generalHtml) {
+      html += '<div class="add-data-heading">General</div>' + generalHtml;
+    }
+
+    // All other non-system analyses belong to Transit Planning. Sorting by the
+    // visible module name keeps the menu stable as modules are registered in
+    // script-load order and automatically includes future modules.
+    var transitEntries = [];
+    for (var entry of _modules.values()) {
+      if (entry.system === true || rendered[entry.id]) continue;
+      transitEntries.push(entry);
+    }
+    transitEntries.sort(function (a, b) {
+      return String(a.name || a.id).localeCompare(String(b.name || b.id));
+    });
+    if (transitEntries.length) {
+      html += '<div class="add-data-heading">Transit Planning</div>';
+      transitEntries.forEach(function (entry) { html += renderEntry(entry); });
     }
     html += '</div>';
     return html;
@@ -704,15 +732,17 @@
     var _darkBtn = document.getElementById("darkmode-btn");
     var _DARK_KEY = "mat-dark-mode";
     if (_darkBtn) {
+      _darkBtn.setAttribute("aria-pressed", document.body.classList.contains("dark-mode") ? "true" : "false");
       _darkBtn.addEventListener("click", function () {
         var isDark = document.body.classList.toggle("dark-mode");
+        _darkBtn.setAttribute("aria-pressed", isDark ? "true" : "false");
         localStorage.setItem(_DARK_KEY, isDark ? "1" : "0");
         if (typeof App.switchBasemap === "function") {
           App.switchBasemap(isDark ? "carto-dark" : "carto-light");
         }
       });
     }
-    // Restore basemap to match dark mode preference (class already set by no-flash script in <head>)
+    // Restore basemap to match dark mode preference (class set by the first script in <body>).
     if (document.body.classList.contains("dark-mode") && typeof App.switchBasemap === "function") {
       App.switchBasemap("carto-dark");
     }
@@ -721,6 +751,8 @@
     App.setPresentMode = function (enabled) {
       var isEnabled = !!enabled;
       document.body.classList.toggle("present-mode", isEnabled);
+      var presentBtn = document.getElementById("present-btn");
+      if (presentBtn) presentBtn.setAttribute("aria-pressed", isEnabled ? "true" : "false");
       App.map.resize();
       document.dispatchEvent(new CustomEvent("mat:present-mode-change", {
         detail: { enabled: isEnabled }

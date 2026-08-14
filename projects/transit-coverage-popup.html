@@ -5,7 +5,33 @@
     <!-- Left: settings column (240px) -->
     <div class="rf-settings-col">
 
-      <div class="rf-section-title">Geography</div>
+      <div class="data-input-group" data-input-group="transit-selection">
+
+      <div class="rf-section-title">Transit routes/lines</div>
+      <div class="rf-feature-select-actions">
+        <a href="#" id="tcFeatSelectAll">Select all</a>&nbsp;<span class="u-muted">|</span>&nbsp;<a href="#" id="tcFeatSelectNone">Clear</a>
+      </div>
+      <div id="tcFeatureList" class="rf-feature-checklist">
+        <div class="rf-empty-note">No routes or lines drawn.</div>
+      </div>
+
+      </div>
+
+      <div class="data-input-group" data-input-group="area-selection">
+
+      <div class="rf-section-title form-section">Service area (drawn polygons)</div>
+      <div class="rf-feature-select-actions">
+        <a href="#" id="tcAreaSelectAll">Select all</a>&nbsp;<span class="u-muted">|</span>&nbsp;<a href="#" id="tcAreaSelectNone">Clear</a>
+      </div>
+      <div id="tcAreaList" class="rf-feature-checklist">
+        <div class="rf-empty-note">No polygons drawn.</div>
+      </div>
+
+      </div>
+
+      <div class="data-input-group" data-input-group="geography">
+
+      <div class="rf-section-title form-section">Geography</div>
 
       <div class="form-field">
         <label class="tiny">Level</label>
@@ -18,6 +44,7 @@
       <div class="form-field">
       <label class="tiny">
         ACS Year&nbsp;<button id="tcLodesWarnBtn" class="rf-info-btn" type="button"
+          aria-label="LODES data warning"
           title="LODES data not loaded — Jobs columns will show — until a LODES file is loaded via Add Data."
           style="color:#f59e0b;display:none;">&#9888;</button>
       </label>
@@ -29,11 +56,19 @@
       </select>
       </div>
 
+      </div>
+
+      <div class="data-input-group" data-input-group="analysis">
+
       <div class="rf-section-title form-section">Coverage settings</div>
 
       <div class="form-field">
         <label class="tiny">Buffer distance (mi)</label>
         <input type="number" id="tcBufferMiles" class="rf-number-input" value="0.5" min="0.05" max="5" step="0.05">
+        <label class="tpi-toggle-row u-mt-2">
+          <input type="checkbox" id="tcUseDisplayBuffers">
+          <span class="tiny">Use Display Buffers</span>
+        </label>
       </div>
 
       <div class="form-field">
@@ -50,25 +85,13 @@
         <input type="number" id="tcHeadwayThreshold" class="rf-number-input" min="1" step="1" placeholder="none">
       </div>
 
-      <div class="rf-section-title form-section">Transit routes/lines</div>
-      <div class="rf-feature-select-actions">
-        <a href="#" id="tcFeatSelectAll">Select all</a>&nbsp;<span class="u-muted">|</span>&nbsp;<a href="#" id="tcFeatSelectNone">Clear</a>
-      </div>
-      <div id="tcFeatureList" class="rf-feature-checklist">
-        <div class="rf-empty-note">No routes or lines drawn.</div>
       </div>
 
-      <div class="rf-section-title form-section">Service area (drawn polygons)</div>
-      <div class="rf-feature-select-actions">
-        <a href="#" id="tcAreaSelectAll">Select all</a>&nbsp;<span class="u-muted">|</span>&nbsp;<a href="#" id="tcAreaSelectNone">Clear</a>
+      <div class="module-input-actions">
+        <button id="tcRunBtn" type="button" class="rf-action-primary">
+          Analyze Coverage
+        </button>
       </div>
-      <div id="tcAreaList" class="rf-feature-checklist">
-        <div class="rf-empty-note">No polygons drawn.</div>
-      </div>
-
-      <button id="tcRunBtn" type="button" class="rf-action-primary u-mt-3">
-        Analyze Coverage
-      </button>
 
     </div>
 
@@ -95,11 +118,6 @@
         <p class="tiny u-mt-2 u-muted">
           Population is apportioned by area; jobs are counted by whole LODES block (apportionment does not apply to jobs).
         </p>
-      </div>
-
-      <!-- Pre-run empty state -->
-      <div id="tcEmptyState" class="rf-info-box">
-        <p>Select transit features and a service area, then click <strong>Analyze Coverage</strong>.</p>
       </div>
 
     </div>

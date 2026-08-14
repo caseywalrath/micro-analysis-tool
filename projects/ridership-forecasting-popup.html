@@ -16,49 +16,11 @@
   <div class="rf-tab-content rf-tab-visible" data-tab="calibrate">
     <div class="rf-tab-body">
 
-      <!-- Step 1: System Analysis -->
-      <div class="rf-section-title">Step 1: Analyze System Demand</div>
-      <div class="tiny rf-description">
-        Draw routes/lines on the map and name them to match your observed ridership data.
-        This step computes a Corridor Demand Index (CDI) for each route, normalized across the entire system.
-      </div>
-
       <div class="rf-section-row">
         <div class="rf-settings-col">
-          <label class="tiny">Geography level</label>
-          <select id="rfCalibGeoLevel" class="rf-select">
-            <option value="tract">Tracts (faster)</option>
-            <option value="bg" selected>Block Groups</option>
-          </select>
-
-          <label class="tiny u-mt-2">ACS Year <button id="rfCalibLodesWarnBtn" class="rf-info-btn" type="button" title="LODES data not loaded. The Employment Density factor will be excluded and its weight redistributed to other factors automatically. Upload a LODES file via the sidebar to include employment in the analysis." style="display:none;color:#b45309;">&#9888;</button></label>
-          <select id="rfCalibYearSelect" class="rf-select">
-            <option value="2024">2024</option>
-            <option value="2023">2023</option>
-            <option value="2022">2022</option>
-            <option value="2021">2021</option>
-          </select>
-
-          <label class="rf-toggle-row u-mt-2">
-            <input type="checkbox" id="rfCalibApportionByArea">
-            <span>Apportion by Area</span>
-          </label>
-
-          <label class="rf-toggle-row u-mt-1">
-            <input type="checkbox" id="rfCalibNormalizeByLength">
-            <span>Normalize by Length</span>
-          </label>
-
-          <label class="tiny u-mt-2">Buffer distance (mi)</label>
-          <input type="number" id="rfBufferMiles" class="rf-number-input" value="0.5" min="0.05" max="5" step="0.05">
-          <p class="tiny u-mt-1 u-muted">Analysis distance only — map buffers still follow Feature Settings. Used for both calibration and demand.</p>
-
-          <div class="rf-feature-section">
-            <label class="tiny">Calibration features</label>
-            <div class="tiny rf-feature-description u-muted">
-              Select which routes/lines to include. Only selected features contribute
-              to quintile normalization and CDI scoring.
-            </div>
+          <div class="data-input-group" data-input-group="selection">
+            <div class="rf-section-title">Calibration features</div>
+            <div class="tiny rf-feature-description u-muted">Select calibration lines/routes.</div>
             <div id="rfCalibFeatureList" class="rf-feature-checklist">
               <div class="tiny u-muted">Draw routes/lines on the map first.</div>
             </div>
@@ -67,6 +29,44 @@
               <span class="tiny u-muted"> | </span>
               <a href="#" id="rfCalibSelectNone" class="tiny">Clear</a>
             </div>
+          </div>
+
+          <div class="data-input-group" data-input-group="geography">
+          <div class="rf-section-title form-section">Geography</div>
+          <label class="tiny">Geography level</label>
+          <select id="rfCalibGeoLevel" class="rf-select">
+            <option value="tract">Tracts (faster)</option>
+            <option value="bg" selected>Block Groups</option>
+          </select>
+
+          <label class="tiny u-mt-2">ACS Year <button id="rfCalibLodesWarnBtn" class="rf-info-btn" type="button" aria-label="LODES data warning" title="LODES data not loaded. The Employment Density factor will be excluded and its weight redistributed to other factors automatically. Upload a LODES file via Add Data to include employment in the analysis." style="display:none;color:#b45309;">&#9888;</button></label>
+          <select id="rfCalibYearSelect" class="rf-select">
+            <option value="2024">2024</option>
+            <option value="2023">2023</option>
+            <option value="2022">2022</option>
+            <option value="2021">2021</option>
+          </select>
+          </div>
+
+          <div class="data-input-group" data-input-group="analysis">
+          <div class="rf-section-title form-section">Analysis parameters</div>
+          <label class="tiny">Buffer distance (mi)</label>
+          <input type="number" id="rfBufferMiles" class="rf-number-input" value="0.5" min="0.05" max="5" step="0.05">
+          <label class="rf-toggle-row u-mt-1">
+            <input type="checkbox" id="rfUseDisplayBuffers">
+            <span>Use Display Buffers</span>
+          </label>
+          <label class="rf-toggle-row u-mt-2">
+            <input type="checkbox" id="rfCalibApportionByArea">
+            <span>Apportion by Area</span>
+          </label>
+          </div>
+
+          <div class="data-input-group" data-input-group="settings">
+            <label class="rf-toggle-row">
+              <input type="checkbox" id="rfCalibNormalizeByLength">
+              <span>Normalize by Length</span>
+            </label>
           </div>
 
           <button id="rfAdjustWeights" type="button" class="rf-btn-sm tpi-settings-action">
@@ -231,10 +231,6 @@
             <span>Same system as calibration</span>
           </label>
 
-          <p id="rfDemandBufferNote" class="tiny u-mt-1 u-muted">
-            Analysis buffer: 0.5 mi — set on the Calibrate tab.
-          </p>
-
           <div id="rfDemandFeatureSection" class="u-mt-2">
             <label class="tiny">Demand system features</label>
             <div class="tiny rf-feature-description u-muted">
@@ -276,7 +272,7 @@
             <option value="bg" selected>Block Groups</option>
           </select>
 
-          <label class="tiny u-mt-2">ACS Year <button id="rfDemandLodesWarnBtn" class="rf-info-btn" type="button" title="LODES data not loaded. The Employment Density factor will be excluded and its weight redistributed to other factors automatically. Upload a LODES file via the sidebar to include employment in the analysis." style="display:none;color:#b45309;">&#9888;</button></label>
+          <label class="tiny u-mt-2">ACS Year <button id="rfDemandLodesWarnBtn" class="rf-info-btn" type="button" aria-label="LODES data warning" title="LODES data not loaded. The Employment Density factor will be excluded and its weight redistributed to other factors automatically. Upload a LODES file via Add Data to include employment in the analysis." style="display:none;color:#b45309;">&#9888;</button></label>
           <select id="rfYearSelect" class="rf-select">
             <option value="2024">2024</option>
             <option value="2023">2023</option>
@@ -284,16 +280,16 @@
             <option value="2021">2021</option>
           </select>
 
+          <label class="rf-toggle-row u-mt-2">
+            <input type="checkbox" id="rfApportionByArea">
+            <span>Apportion by Area</span>
+          </label>
+
           <label class="tiny u-mt-2">Segment length (mi)</label>
           <div class="rf-input-row">
             <input id="rfSegmentLength" type="number" min="0" max="10" step="0.25" value="0.5" class="rf-number-input" />
             <span class="tiny u-muted">0 = no segments</span>
           </div>
-
-          <label class="rf-toggle-row u-mt-2">
-            <input type="checkbox" id="rfApportionByArea">
-            <span>Apportion by Area</span>
-          </label>
 
           <button id="rfRunDemand" type="button" class="rf-action-primary u-mt-3">
             Analyze Demand

@@ -33,36 +33,9 @@
     <!-- Left: settings column (240px) -->
     <div class="rf-settings-col">
 
-      <div class="rf-section-title">Geography</div>
+      <div class="data-input-group" data-input-group="selection">
+      <div class="rf-section-title">TPI Features</div>
 
-      <label class="tiny">Level</label>
-      <select id="tpiGeoLevel" class="rf-select">
-        <option value="tract">Census Tracts</option>
-        <option value="bg" selected>Block Groups</option>
-      </select>
-
-      <label class="tiny u-mt-3">
-        ACS Year&nbsp;<button id="tpiLodesWarnBtn" class="rf-info-btn" type="button"
-          title="LODES data not loaded — Employment factor will be excluded and its weight redistributed automatically."
-          style="color:#f59e0b;display:none;">&#9888;</button>
-      </label>
-      <select id="tpiYearSelect" class="rf-select">
-        <option value="2024">2024</option>
-        <option value="2023">2023</option>
-        <option value="2022">2022</option>
-        <option value="2021">2021</option>
-      </select>
-
-      <div class="tpi-toggle-row u-mt-3">
-        <input type="checkbox" id="tpiApportionByArea">
-        <label for="tpiApportionByArea" class="tiny">Apportion by area</label>
-      </div>
-
-      <label class="tiny u-mt-3">Buffer distance (mi)</label>
-      <input type="number" id="tpiBufferMiles" class="rf-number-input" value="0.5" min="0.05" max="5" step="0.05">
-      <p class="tiny u-mt-1 u-muted">Analysis distance only — map buffers still follow Feature Settings.</p>
-
-      <div class="rf-section-title form-section">TPI Features</div>
       <div class="rf-feature-select-actions">
         <a href="#" id="tpiSelectAll">Select all</a>&nbsp;<span class="u-muted">|</span>&nbsp;<a href="#" id="tpiSelectNone">Clear</a>
       </div>
@@ -74,13 +47,54 @@
       <select id="tpiCorridorSelect" class="rf-select">
         <option value="all">All features (system-wide)</option>
       </select>
+      </div>
 
-      <button id="tpiAdjustWeights" type="button" class="rf-btn-sm tpi-settings-action">
-        Adjust Weights
-      </button>
-      <button id="tpiRun" type="button" class="rf-action-primary u-mt-2">
-        Analyze System
-      </button>
+      <div class="data-input-group" data-input-group="geography">
+      <div class="rf-section-title form-section">Geography</div>
+
+      <label class="tiny">Level</label>
+      <select id="tpiGeoLevel" class="rf-select">
+        <option value="tract">Census Tracts</option>
+        <option value="bg" selected>Block Groups</option>
+      </select>
+
+      <label class="tiny u-mt-3">
+        ACS Year&nbsp;<button id="tpiLodesWarnBtn" class="rf-info-btn" type="button"
+          aria-label="LODES data warning"
+          title="LODES data not loaded — Employment factor will be excluded and its weight redistributed automatically."
+          style="color:#f59e0b;display:none;">&#9888;</button>
+      </label>
+      <select id="tpiYearSelect" class="rf-select">
+        <option value="2024">2024</option>
+        <option value="2023">2023</option>
+        <option value="2022">2022</option>
+        <option value="2021">2021</option>
+      </select>
+
+      </div>
+
+      <div class="data-input-group" data-input-group="analysis">
+      <div class="rf-section-title form-section">Analysis parameters</div>
+      <label class="tiny">Buffer distance (mi)</label>
+      <input type="number" id="tpiBufferMiles" class="rf-number-input" value="0.5" min="0.05" max="5" step="0.05">
+      <label class="tpi-toggle-row u-mt-2">
+        <input type="checkbox" id="tpiUseDisplayBuffers">
+        <span class="tiny">Use Display Buffers</span>
+      </label>
+      <div class="tpi-toggle-row u-mt-3">
+        <input type="checkbox" id="tpiApportionByArea">
+        <label for="tpiApportionByArea" class="tiny">Apportion by area</label>
+      </div>
+      </div>
+
+      <div class="module-input-actions">
+        <button id="tpiAdjustWeights" type="button" class="rf-btn-sm tpi-settings-action">
+          Adjust Weights
+        </button>
+        <button id="tpiRun" type="button" class="rf-action-primary u-mt-2">
+          Analyze System
+        </button>
+      </div>
       <label id="tpiChoroplethToggleRow" class="tpi-toggle-row" style="display:none;margin-top:10px;">
         <input type="checkbox" id="tpiHideChoropleth">
         <span class="tiny">Hide Choropleth</span>
@@ -134,11 +148,6 @@
           Exports include all analyzed geographies.
         </p>
 
-      </div>
-
-      <!-- Pre-run empty state -->
-      <div id="tpiEmptyState" class="rf-info-box">
-        <p>Select features and click <strong>Analyze System</strong> to compute the Transit Propensity Index.</p>
       </div>
 
     </div>

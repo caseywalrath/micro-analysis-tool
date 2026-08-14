@@ -32,11 +32,11 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <!-- No-flash dark mode: apply class before first paint -->
-    <script>if(localStorage.getItem("mat-dark-mode")==="1")document.body.classList.add("dark-mode");</script>
   </head>
 
   <body>
+    <!-- No-flash dark mode: body exists here and no visible content has painted yet. -->
+    <script>if(localStorage.getItem("mat-dark-mode")==="1")document.body.classList.add("dark-mode");</script>
     <div id="app">
       <div id="pm-controls">
         <div class="pm-elements-wrap">
@@ -55,22 +55,8 @@
       </div>
       <div id="toolbar">
         <div id="file-actions">
-          <button id="darkmode-btn" title="Toggle dark mode" aria-label="Toggle dark mode">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="12" cy="12" r="9" stroke="#2d3748"/>
-              <path d="M12 3a9 9 0 0 1 0 18z" fill="#2d3748" stroke="none"/>
-            </svg>
-          </button>
-          <button id="present-btn" title="Present (hide panels)">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2d3748" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="15,3 21,3 21,9"/>
-              <polyline points="9,21 3,21 3,15"/>
-              <polyline points="21,15 21,21 15,21"/>
-              <polyline points="3,9 3,3 9,3"/>
-            </svg>
-          </button>
           <div class="save-state-wrapper">
-            <button id="save-state-btn" title="Save / Load State">
+            <button id="save-state-btn" title="Save / Load State" aria-label="Save or load state">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2d3748" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M5 4h11l4 4v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/>
                 <polyline points="8,4 8,9 15,9 15,4"/>
@@ -85,7 +71,7 @@
           </div>
           <input id="save-state-file-input" type="file" accept=".json" style="display:none;" />
           <div class="add-data-wrapper">
-            <button id="add-data-btn" title="Add Data">
+            <button id="add-data-btn" title="Add Data" aria-label="Add data">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2d3748" stroke-width="2.5" stroke-linecap="round">
                 <line x1="12" y1="5" x2="12" y2="19"/>
                 <line x1="5" y1="12" x2="19" y2="12"/>
@@ -107,7 +93,7 @@
             <div id="osm-poi-popup" style="display:none;">
               <div class="lodes-popup-header">
                 <span>OSM Points of Interest</span>
-                <button id="osm-poi-popup-close" class="lodes-popup-x">&#10005;</button>
+                <button id="osm-poi-popup-close" class="lodes-popup-x" aria-label="Close points of interest dialog">&#10005;</button>
               </div>
               <div class="lodes-popup-body" id="osm-poi-category-list">
                 <!-- checkboxes built dynamically by osm-pois.js -->
@@ -119,7 +105,7 @@
             <div id="lodes-popup" style="display:none;">
               <div class="lodes-popup-header">
                 <span>LODES Employment Data</span>
-                <button id="lodes-popup-close" class="lodes-popup-x">&#10005;</button>
+                <button id="lodes-popup-close" class="lodes-popup-x" aria-label="Close LODES dialog">&#10005;</button>
               </div>
               <div class="lodes-popup-body">
                 <div class="lodes-popup-label">Select states to download:</div>
@@ -136,7 +122,7 @@
             <input id="gtfs-file-input" type="file" accept=".zip" style="display:none" />
           </div>
           <div class="export-wrapper">
-            <button id="export-btn" title="Export">
+            <button id="export-btn" title="Export" aria-label="Export data">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2d3748" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M12 15V3"/><polyline points="16,7 12,3 8,7"/>
                 <path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/>
@@ -158,7 +144,7 @@
             </div>
           </div>
           <div class="analysis-wrapper">
-            <button id="analysis-btn" title="Analysis">
+            <button id="analysis-btn" title="Analysis" aria-label="Open Analysis menu">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2d3748" stroke-width="2" stroke-linecap="round">
                 <rect x="4" y="14" width="4" height="6" rx="1"/>
                 <rect x="10" y="8" width="4" height="12" rx="1"/>
@@ -169,28 +155,28 @@
           </div>
         </div>
         <div id="draw-tools">
-          <button class="tool-btn" data-mode="point" title="Point (S)">
+          <button class="tool-btn" data-mode="point" title="Point (S)" aria-label="Draw point">
             <svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" fill="#3182ce"/></svg>
           </button>
-          <button class="tool-btn" data-mode="line" title="Line (L · Enter to finish)">
+          <button class="tool-btn" data-mode="line" title="Line (L · Enter to finish)" aria-label="Draw line">
             <svg width="22" height="22" viewBox="0 0 24 24"><line x1="4" y1="19" x2="20" y2="5" stroke="#eab308" stroke-width="3.5" stroke-linecap="round"/></svg>
           </button>
-          <button class="tool-btn" data-mode="route" title="Route (R · Enter to finish)">
+          <button class="tool-btn" data-mode="route" title="Route (R · Enter to finish)" aria-label="Draw route">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M6 18c0-3 2-4 5-4s5-1 5-4" stroke="#22a352" stroke-width="2.5" stroke-linecap="round"/><circle cx="6" cy="18" r="2.5" fill="#22a352"/><rect x="14" y="4" width="6" height="5" rx="1" fill="#22a352"/><circle cx="16" cy="6.5" r="1" fill="white"/><circle cx="18.5" cy="6.5" r="1" fill="white"/></svg>
           </button>
-          <button class="tool-btn" data-mode="polygon" title="Polygon (P · Enter to finish)">
+          <button class="tool-btn" data-mode="polygon" title="Polygon (P · Enter to finish)" aria-label="Draw polygon">
             <svg width="22" height="22" viewBox="0 0 24 24"><polygon points="12,4 21,10 18,20 6,20 3,10" fill="#f97316"/></svg>
           </button>
-          <button class="tool-btn" data-mode="label" title="Label (B)">
+          <button class="tool-btn" data-mode="label" title="Label (B)" aria-label="Add label">
             <svg width="22" height="22" viewBox="0 0 24 24"><path d="M4 5h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9l-4 3.5V16H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" fill="#e53e3e"/></svg>
           </button>
-          <button class="tool-btn" data-mode="textbox" title="Text Box (T)">
+          <button class="tool-btn" data-mode="textbox" title="Text Box (T)" aria-label="Add text box">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
               <rect x="3" y="3" width="18" height="18" rx="2" stroke="#888" stroke-width="1.8"/>
               <text x="12" y="17" text-anchor="middle" font-size="14" font-weight="700" fill="#888" font-family="serif">T</text>
             </svg>
           </button>
-          <button class="tool-btn" data-mode="measure" title="Measure (M)">
+          <button class="tool-btn" data-mode="measure" title="Measure (M)" aria-label="Measure distance">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
               <rect x="2" y="6" width="20" height="12" rx="2" stroke="#6b46c1" stroke-width="1.8"/>
               <line x1="6" y1="6" x2="6" y2="11" stroke="#6b46c1" stroke-width="1.5"/>
@@ -201,17 +187,33 @@
           </button>
         </div>
         <div id="draw-actions">
-          <button id="undo-btn" title="Undo (Ctrl+Z)" disabled>
+          <button id="undo-btn" title="Undo (Ctrl+Z)" aria-label="Undo" disabled>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 9h11a4 4 0 0 1 0 8H11" stroke="#2d3748" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><polyline points="7,5 4,9 7,13" stroke="#2d3748" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
-          <button id="redo-btn" title="Redo (Ctrl+Shift+Z)" disabled>
+          <button id="redo-btn" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" disabled>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M20 9H9a4 4 0 0 0 0 8h4" stroke="#2d3748" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><polyline points="17,5 20,9 17,13" stroke="#2d3748" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
-          <button id="clear" title="Clear">
+          <button id="clear" title="Clear" aria-label="Clear features">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2d3748" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>
           </button>
-          <button id="reset" class="reset-btn" title="Reset Session">
+          <button id="reset" class="reset-btn" title="Reset Session" aria-label="Reset session">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4.5 12a7.5 7.5 0 0 1 13-5.1l1.5-1.5" stroke="#e53e3e" stroke-width="2.5" stroke-linecap="round"/><path d="M19.5 12a7.5 7.5 0 0 1-13 5.1l-1.5 1.5" stroke="#e53e3e" stroke-width="2.5" stroke-linecap="round"/><polygon points="19,2 22,5.5 18,6" fill="#e53e3e"/><polygon points="5,22 2,18.5 6,18" fill="#e53e3e"/><line x1="12" y1="9" x2="12" y2="13" stroke="#e53e3e" stroke-width="2.5" stroke-linecap="round"/><circle cx="12" cy="16" r="1.3" fill="#e53e3e"/></svg>
+          </button>
+        </div>
+        <div id="view-actions">
+          <button id="darkmode-btn" title="Toggle dark mode" aria-label="Toggle dark mode">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="12" cy="12" r="9" stroke="#2d3748"/>
+              <path d="M12 3a9 9 0 0 1 0 18z" fill="#2d3748" stroke="none"/>
+            </svg>
+          </button>
+          <button id="present-btn" title="Present (hide panels)" aria-label="Enter presentation mode" aria-pressed="false">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2d3748" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="15,3 21,3 21,9"/>
+              <polyline points="9,21 3,21 3,15"/>
+              <polyline points="21,15 21,21 15,21"/>
+              <polyline points="3,9 3,3 9,3"/>
+            </svg>
           </button>
         </div>
         <div id="search-wrapper">
@@ -252,8 +254,8 @@
         </button>
         <div class="fp-header">
           <div class="fp-tabs" role="tablist">
-            <button class="fp-tab-btn active" data-fptab="features" role="tab" type="button">Features</button>
-            <button class="fp-tab-btn" data-fptab="layers" role="tab" type="button">Layers</button>
+            <button class="fp-tab-btn active" data-fptab="features" role="tab" type="button" aria-selected="true">Features</button>
+            <button class="fp-tab-btn" data-fptab="layers" role="tab" type="button" aria-selected="false">Layers</button>
           </div>
         </div>
         <div class="fp-content">
@@ -319,7 +321,7 @@
       <div id="pm-legend" class="pm-overlay" data-pm="legend" style="display:none;">
         <div class="pm-drag-handle">
           LEGEND
-          <button id="pm-legend-add-btn" class="pm-legend-add-btn" title="Add items to legend">+</button>
+          <button id="pm-legend-add-btn" class="pm-legend-add-btn" title="Add items to legend" aria-label="Add items to legend">+</button>
         </div>
         <div class="pm-legend-body"></div>
       </div>
@@ -346,7 +348,7 @@
       </div>
 
       <div id="pm-title" class="pm-overlay" data-pm="title" style="display:none;">
-        <div class="pm-title-text" contenteditable="true" spellcheck="false">Title</div>
+        <div class="pm-title-text" contenteditable="true" role="textbox" aria-label="Presentation title" spellcheck="false">Title</div>
       </div>
 
     </div>

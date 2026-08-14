@@ -22,6 +22,7 @@
   var _initialized = false;
   var _apportionByArea = false;
   var _bufferMiles = App.ANALYSIS_BUFFER_DEFAULT_MILES;
+  var _useDisplayBuffers = false;
 
   function getTpiClass(score) {
     if (!Number.isFinite(score)) return "N/A";
@@ -47,7 +48,9 @@
   var _lastBufferSet = null;
 
   function buildUnionFromFilter(filter) {
-    var set = App.buildAnalysisBufferSet(filter, _bufferMiles);
+    var set = _useDisplayBuffers
+      ? App.buildDisplayBufferSet(filter)
+      : App.buildAnalysisBufferSet(filter, _bufferMiles);
     _lastBufferSet = set;
     return set.union;
   }
@@ -396,7 +399,46 @@
              action: "Selected features define the normalization pool for scoring." };
   }
 
+  function syncBufferControl() {
+    var input = document.getElementById("tpiBufferMiles");
+    var toggle = document.getElementById("tpiUseDisplayBuffers");
+    if (input) {
+      input.value = String(_bufferMiles);
+      input.disabled = _useDisplayBuffers;
+    }
+    if (toggle) toggle.checked = _useDisplayBuffers;
+  }
+
+  // ---- Collapsible inputs (shared helper) ----
+
+  function inputsSummary() {
+    var geoEl = document.getElementById("tpiGeoLevel");
+    var yearEl = document.getElementById("tpiYearSelect");
+    var bufferEl = document.getElementById("tpiBufferMiles");
+    var corridorEl = document.getElementById("tpiCorridorSelect");
+    var count = document.querySelectorAll("#tpiFeatureChecklist input[type=checkbox]:checked").length;
+    var geoLabel = geoEl && geoEl.value === "tract" ? "Tracts" : "Block groups";
+    var corridorLabel = corridorEl && corridorEl.selectedOptions.length
+      ? corridorEl.selectedOptions[0].textContent : "All features";
+    return geoLabel + " \u00b7 " + (yearEl ? yearEl.value : "") + " \u00b7 " +
+      (bufferEl ? bufferEl.value : _bufferMiles) + " mi \u00b7 " +
+      count + " feature" + (count === 1 ? "" : "s") + " \u00b7 " + corridorLabel;
+  }
+
+  function renderInputs(collapsed) {
+    App.renderModuleInputs({
+      hostEl: document.querySelector(".tpi-body .rf-settings-col"),
+      collapsed: collapsed,
+      summary: inputsSummary(),
+      onToggle: function (isCollapsed) {
+        if (!App.popup || !App.popup.setLayoutMode) return;
+        App.popup.setLayoutMode(isCollapsed && _lastResult ? "results" : "setup", true);
+      }
+    });
+  }
+
   function markStale() {
+    renderInputs();
     if (!_lastResult) return;
     _stale = true;
     if (!isPopupVisible()) return;
@@ -528,6 +570,7 @@
       var geoLevel = document.getElementById("tpiGeoLevel").value;
       var year     = document.getElementById("tpiYearSelect").value;
       _bufferMiles  = App.readAnalysisBufferMiles("tpiBufferMiles", App.ANALYSIS_BUFFER_DEFAULT_MILES);
+      _useDisplayBuffers = !!(document.getElementById("tpiUseDisplayBuffers") || {}).checked;
 
       var featureFilter = getFeatureFilter();
       var unionPolygon  = buildUnionFromFilter(featureFilter);
@@ -578,6 +621,8 @@
 
       // Display geography list
       displayGeographyList(result, _selectedCorridor);
+      renderInputs(true);
+      if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("results");
 
       setTpiStatus("TPI computed successfully.", "done");
       App.setStatus("TPI computed");
@@ -746,6 +791,8 @@
     _stale      = false;
     App.popup.hideFloatingWidget("tpi-legend");
     if (isPopupVisible()) {
+      if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("setup");
+      renderInputs(false);
       var resultsEl = document.getElementById("tpiResults");
       if (resultsEl) resultsEl.style.display = "none";
       App.renderModuleState({
@@ -779,7 +826,9 @@
       pointIndices:   pts.map(function (_, i) { return i; }),
       polygonIndices: polys.map(function (_, i) { return i; })
     };
-    var bufferSet = App.buildAnalysisBufferSet(allFilter, _bufferMiles);
+    var bufferSet = _useDisplayBuffers
+      ? App.buildDisplayBufferSet(allFilter)
+      : App.buildAnalysisBufferSet(allFilter, _bufferMiles);
 
     for (var si = 0; si < pts.length; si++) {
       var pb = bufferSet.get("point", si);
@@ -977,6 +1026,11 @@
       runBtn.parentNode.insertBefore(ccStatus, runBtn);
     }
 
+    var geoLevelEl = document.getElementById("tpiGeoLevel");
+    if (geoLevelEl) geoLevelEl.addEventListener("change", markStale);
+    var yearEl = document.getElementById("tpiYearSelect");
+    if (yearEl) yearEl.addEventListener("change", markStale);
+
     // Hide Choropleth toggle
     var hideCb = document.getElementById("tpiHideChoropleth");
     if (hideCb) {
@@ -1028,6 +1082,7 @@
     if (corridorSel) {
       corridorSel.addEventListener("change", function () {
         _selectedCorridor = corridorSel.value;
+        renderInputs();
         if (_lastResult && isPopupVisible()) {
           displayGeographyList(_lastResult, _selectedCorridor);
         }
@@ -1057,9 +1112,17 @@
       bufferMilesEl.value = String(_bufferMiles);
       bufferMilesEl.addEventListener("change", markStale);
     }
+    var displayBuffersEl = document.getElementById("tpiUseDisplayBuffers");
+    if (displayBuffersEl) displayBuffersEl.addEventListener("change", function () {
+      _useDisplayBuffers = displayBuffersEl.checked;
+      syncBufferControl();
+      markStale();
+    });
+    syncBufferControl();
 
     // Build weight sliders (in modal) with current _weights
     buildWeightSliders();
+    renderInputs(_lastResult ? undefined : false);
   }
 
   // ---- Popup lifecycle hooks ----
@@ -1071,14 +1134,18 @@
     if (apportionCb) apportionCb.checked = _apportionByArea;
     var bufferMilesEl = document.getElementById("tpiBufferMiles");
     if (bufferMilesEl) bufferMilesEl.value = String(_bufferMiles);
+    syncBufferControl();
 
     // Rebuild checklist (features may have changed since last open)
     buildFeatureChecklist();
+    renderInputs(false);
 
     // Refresh results display
     if (_lastResult && isPopupVisible()) {
+      if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("results");
       displayGeographyList(_lastResult, _selectedCorridor);
     } else if (isPopupVisible()) {
+      if (App.popup && App.popup.setLayoutMode) App.popup.setLayoutMode("setup");
       App.renderModuleState({
         statusEl: "tpiStatus", emptyEl: "tpiEmptyState", empty: true, hint: emptyHint()
       });
@@ -1122,6 +1189,7 @@
       weights:          Object.assign({}, _weights),
       apportionByArea:  _apportionByArea,
       bufferMiles:      _bufferMiles,
+      useDisplayBuffers: _useDisplayBuffers,
       selectedCorridor: _selectedCorridor,
       tpiFeatureFilter: _tpiFeatureFilter ? JSON.parse(JSON.stringify(_tpiFeatureFilter)) : null
     };
@@ -1150,11 +1218,13 @@
     if (data.weights)          _weights          = Object.assign({}, data.weights);
     if (data.apportionByArea != null) _apportionByArea = !!data.apportionByArea;
     if (data.bufferMiles != null) _bufferMiles = data.bufferMiles;
+    if (data.useDisplayBuffers != null) _useDisplayBuffers = !!data.useDisplayBuffers;
     if (data.selectedCorridor) _selectedCorridor = data.selectedCorridor;
     if (data.tpiFeatureFilter !== undefined) _tpiFeatureFilter = data.tpiFeatureFilter;
 
     var bufferMilesEl = document.getElementById("tpiBufferMiles");
     if (bufferMilesEl) bufferMilesEl.value = String(_bufferMiles);
+    syncBufferControl();
 
     if (!data.result) return;
     var r = data.result;
@@ -1194,6 +1264,7 @@
     name:       "Transit Propensity Index",
     enabled:    true,
     popupWidth: 1000,
+    panelWidths: { setup: 520, results: 520 },
     popupHTML:  "projects/transit-propensity-popup.html",
 
     floatingWidgets: [

@@ -107,6 +107,7 @@
       cell.className = "fp-cp-cell";
       cell.style.background = c;
       cell.title = c;
+      cell.setAttribute("aria-label", "Select color " + c);
       cell.addEventListener("click", function (e) {
         e.stopPropagation();
         selectPickerColor(c);
@@ -510,6 +511,7 @@
     var eyeBtn = document.createElement("button");
     eyeBtn.className = "fp-visibility-btn" + (isHidden ? " fp-eye-off" : "");
     eyeBtn.title = isHidden ? "Show" : "Hide";
+    eyeBtn.setAttribute("aria-label", isHidden ? "Show feature" : "Hide feature");
     eyeBtn.innerHTML = isHidden ? EYE_OFF_SVG : EYE_SVG;
     (function (btn, feat, ft) {
       btn.addEventListener("click", function (e) {
@@ -526,6 +528,7 @@
     typeIcon.className = "fp-type-icon";
     typeIcon.innerHTML = TYPE_ICON_SVGS[featureType] || "";
     typeIcon.title = "Change " + (TYPE_LABELS_LOCAL[featureType] || featureType) + " color";
+    typeIcon.setAttribute("aria-label", typeIcon.title);
     var _currentColor = feature.properties.color || getTypeDefaultColor(featureType);
     typeIcon.style.color = _currentColor;
     (function (btn, ft, fi) {
@@ -553,6 +556,7 @@
       dupBtn = document.createElement("button");
       dupBtn.className = "fp-dup-btn";
       dupBtn.title = "Duplicate label";
+      dupBtn.setAttribute("aria-label", "Duplicate label");
       dupBtn.innerHTML = COPY_SVG;
       (function (fi) {
         dupBtn.addEventListener("click", function (e) {
@@ -566,6 +570,7 @@
     var gearBtn = document.createElement("button");
     gearBtn.className = "fp-gear-btn";
     gearBtn.title = "Edit attributes";
+    gearBtn.setAttribute("aria-label", "Edit feature attributes");
     gearBtn.innerHTML = GEAR_SVG;
     (function (ft, fi, feat) {
       gearBtn.addEventListener("click", function (e) {
@@ -577,6 +582,7 @@
     var trashBtn = document.createElement("button");
     trashBtn.className = "fp-del-btn";
     trashBtn.title = "Delete feature";
+    trashBtn.setAttribute("aria-label", "Delete feature");
     trashBtn.innerHTML = TRASH_SVG;
     trashBtn.addEventListener("click", function (e) {
       e.stopPropagation();
@@ -684,6 +690,7 @@
       if (initColor) { sw.style.background = initColor; }
       else { sw.classList.add("fp-swatch-neutral"); }
       sw.title = "Set color for all labels";
+      sw.setAttribute("aria-label", "Set color for all labels");
       sw.addEventListener("click", function (e) {
         e.stopPropagation();
         App.openColorPicker(sw, (App.sectionColors && App.sectionColors.label) || "", function (newColor) {
@@ -710,6 +717,8 @@
       stog.className = "fp-section-toggle open";
       stog.innerHTML = CHEVRON_SVG;
       stog.title = "Collapse Labels and Text";
+      stog.setAttribute("aria-label", "Collapse Labels and Text");
+      stog.setAttribute("aria-expanded", "true");
       header.appendChild(stog);
 
       (function (hdr, tog, swBtn) {
@@ -724,11 +733,15 @@
             if (listEl) listEl.style.display = "none";
             if (tbEl)   tbEl.style.display   = "none";
             tog.classList.remove("open");
+            tog.setAttribute("aria-expanded", "false");
+            tog.setAttribute("aria-label", "Expand Labels and Text");
           } else {
             delete _collapsedSections.label;
             if (listEl) listEl.style.display = "";
             if (tbEl)   tbEl.style.display   = "";
             tog.classList.add("open");
+            tog.setAttribute("aria-expanded", "true");
+            tog.setAttribute("aria-label", "Collapse Labels and Text");
           }
         }
         tog.addEventListener("click", toggleSection);
@@ -749,6 +762,8 @@
     var toggle = document.createElement("button");
     toggle.className = "fp-group-toggle";
     toggle.innerHTML = CHEVRON_SVG;
+    toggle.setAttribute("aria-label", "Toggle group " + groupName);
+    toggle.setAttribute("aria-expanded", "false");
     header.appendChild(toggle);
 
     // Group-level visibility eye
@@ -757,6 +772,7 @@
     groupEye.className = "fp-visibility-btn" + (allHidden ? " fp-eye-off" : "");
     groupEye.innerHTML = allHidden ? EYE_OFF_SVG : EYE_SVG;
     groupEye.title = allHidden ? "Show all" : "Hide all";
+    groupEye.setAttribute("aria-label", (allHidden ? "Show" : "Hide") + " group " + groupName);
     groupEye.addEventListener("click", function (e) {
       e.stopPropagation();
       var hideAll = !items.every(function (it) { return !!it.feature.properties.hidden; });
@@ -778,6 +794,7 @@
     sw.className = "fp-swatch fp-item-swatch";
     sw.style.background = firstColor;
     sw.title = "Change color for all in group";
+    sw.setAttribute("aria-label", "Change color for group " + groupName);
     sw.addEventListener("click", function (e) {
       e.stopPropagation();
       var curColor = items[0].feature.properties.color || getTypeDefaultColor(items[0].type);
@@ -838,6 +855,7 @@
     var groupTrashBtn = document.createElement("button");
     groupTrashBtn.className = "fp-del-btn";
     groupTrashBtn.title = "Delete all features in group";
+    groupTrashBtn.setAttribute("aria-label", "Delete group " + groupName);
     groupTrashBtn.innerHTML = TRASH_SVG;
     groupTrashBtn.addEventListener("click", function (e) {
       e.stopPropagation();
@@ -991,7 +1009,10 @@
       var gtoggle = header.querySelector(".fp-group-toggle");
       if (_expandedGroups[expandKey]) {
         body.style.display = "";
-        if (gtoggle) gtoggle.classList.add("open");
+        if (gtoggle) {
+          gtoggle.classList.add("open");
+          gtoggle.setAttribute("aria-expanded", "true");
+        }
       }
 
       var sw = header.querySelector(".fp-item-swatch");
@@ -1004,7 +1025,10 @@
         e.stopPropagation();
         var isOpen = body.style.display !== "none";
         body.style.display = isOpen ? "none" : "";
-        if (gtoggle) gtoggle.classList.toggle("open", !isOpen);
+        if (gtoggle) {
+          gtoggle.classList.toggle("open", !isOpen);
+          gtoggle.setAttribute("aria-expanded", isOpen ? "false" : "true");
+        }
         if (isOpen) { delete _expandedGroups[expandKey]; }
         else { _expandedGroups[expandKey] = true; }
       }
@@ -1073,7 +1097,10 @@
       var gtoggle = header.querySelector(".fp-group-toggle");
       if (_expandedGroups[expandKey]) {
         body.style.display = "";
-        if (gtoggle) gtoggle.classList.add("open");
+        if (gtoggle) {
+          gtoggle.classList.add("open");
+          gtoggle.setAttribute("aria-expanded", "true");
+        }
       }
 
       var sw = header.querySelector(".fp-item-swatch");
@@ -1086,7 +1113,10 @@
         e.stopPropagation();
         var isOpen = body.style.display !== "none";
         body.style.display = isOpen ? "none" : "";
-        if (gtoggle) gtoggle.classList.toggle("open", !isOpen);
+        if (gtoggle) {
+          gtoggle.classList.toggle("open", !isOpen);
+          gtoggle.setAttribute("aria-expanded", isOpen ? "false" : "true");
+        }
         if (isOpen) { delete _expandedGroups[expandKey]; }
         else { _expandedGroups[expandKey] = true; }
       }
@@ -1145,6 +1175,8 @@
     stog.className = "fp-section-toggle";
     stog.innerHTML = CHEVRON_SVG;
     stog.title = "Toggle Feature Settings";
+    stog.setAttribute("aria-label", "Collapse Feature Settings");
+    stog.setAttribute("aria-expanded", "true");
     stog.classList.add("open");
     header.appendChild(stog);
 
@@ -1155,6 +1187,8 @@
       var isOpen = body && body.style.display !== "none";
       if (body) body.style.display = isOpen ? "none" : "";
       stog.classList.toggle("open", !isOpen);
+      stog.setAttribute("aria-expanded", isOpen ? "false" : "true");
+      stog.setAttribute("aria-label", isOpen ? "Expand Feature Settings" : "Collapse Feature Settings");
     }
     stog.addEventListener("click", toggle);
     header.addEventListener("click", toggle);
@@ -1175,7 +1209,9 @@
     if (!tabBtns.length) return;
     function show(tab) {
       tabBtns.forEach(function (b) {
-        b.classList.toggle("active", b.getAttribute("data-fptab") === tab);
+        var selected = b.getAttribute("data-fptab") === tab;
+        b.classList.toggle("active", selected);
+        b.setAttribute("aria-selected", selected ? "true" : "false");
       });
       var fEl = document.getElementById("fp-tab-features");
       var lEl = document.getElementById("fp-tab-layers");

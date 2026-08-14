@@ -5,16 +5,19 @@
     <!-- Left: settings column -->
     <div class="rf-settings-col">
 
-      <div class="rf-section-title">Variables</div>
-      <div class="rf-feature-select-actions">
-        <button type="button" id="varSelectAll" class="var-action-btn">Select all</button>
-        <span class="u-muted">|</span>
-        <button type="button" id="varClearAll" class="var-action-btn">Clear all</button>
-      </div>
-      <!-- Populated at runtime by buffer-summary.js init() from VAR_META in utils.js. -->
-      <fieldset id="varSelect" class="bas-var-checklist"></fieldset>
+      <div class="data-input-group" data-input-group="selection">
+        <div class="rf-section-title">Features to analyze</div>
+        <div class="rf-feature-select-actions">
+          <a href="#" id="basFeatureSelectAll">Select all</a>&nbsp;<span class="u-muted">|</span>&nbsp;<a href="#" id="basFeatureSelectNone">Clear</a>
+        </div>
+        <div id="basFeatureChecklist" class="rf-feature-checklist">
+          <div class="rf-empty-note">No features drawn.</div>
+        </div>
 
-      <div class="rf-section-title form-section">Geography</div>
+      </div>
+
+      <div class="data-input-group" data-input-group="geography">
+        <div class="rf-section-title form-section">Geography</div>
 
       <div class="form-field">
         <label class="tiny">Level</label>
@@ -34,14 +37,38 @@
         </select>
       </div>
 
-      <label class="tpi-toggle-row u-mt-3">
-        <input type="checkbox" id="basApportionByArea" checked>
-        <span class="tiny">Apportion by area</span>
-      </label>
+      </div>
 
-      <button id="basRun" type="button" class="rf-action-primary u-mt-3">
-        Calculate Summary
-      </button>
+      <div class="data-input-group" data-input-group="analysis">
+        <div class="rf-section-title form-section">Analysis parameters</div>
+        <label class="tiny">Buffer distance (mi)</label>
+        <input type="number" id="basBufferMiles" class="rf-number-input" value="0.5" min="0.05" max="5" step="0.05">
+        <label class="tpi-toggle-row u-mt-2">
+          <input type="checkbox" id="basUseDisplayBuffers">
+          <span class="tiny">Use Display Buffers</span>
+        </label>
+        <label class="tpi-toggle-row u-mt-3">
+          <input type="checkbox" id="basApportionByArea" checked>
+          <span class="tiny">Apportion by area</span>
+        </label>
+      </div>
+
+      <div class="data-input-group" data-input-group="variables">
+        <div class="rf-section-title form-section">Variables</div>
+        <div class="rf-feature-select-actions">
+          <button type="button" id="varSelectAll" class="var-action-btn">Select all</button>
+          <span class="u-muted">|</span>
+          <button type="button" id="varClearAll" class="var-action-btn">Clear all</button>
+        </div>
+        <!-- Populated at runtime by buffer-summary.js init() from VAR_META in utils.js. -->
+        <fieldset id="varSelect" class="bas-var-checklist"></fieldset>
+      </div>
+
+      <div class="module-input-actions">
+        <button id="basRun" type="button" class="rf-action-primary">
+          Calculate Summary
+        </button>
+      </div>
 
     </div>
 
@@ -49,9 +76,6 @@
     <div class="rf-results-col">
 
       <div id="basResultsProgress" class="results-progress"></div>
-
-      <!-- Empty / onboarding state (shown until a summary has been calculated) -->
-      <div id="basEmptyState" class="rf-info-box" style="display:none;"></div>
 
       <table id="basResultsTable" class="results-table" style="display:none;">
         <thead>

@@ -48,6 +48,7 @@ const OUT_DIR = join(HERE, "out");
 const VENDOR_DIR = join(HERE, "vendor");
 const FIXTURE_PATH = join(HERE, "fixture-session.json");
 const VIEWPORT = { width: 1600, height: 950 };
+const NARROW_VIEWPORT = { width: 1280, height: 800 };
 const MAP_READY_TIMEOUT_MS = 30000;
 const POPUP_SETTLE_MS = 600;
 const TAB_SETTLE_MS = 300;
@@ -111,6 +112,28 @@ const MODULE_IDS = [
   "display-settings"
 ];
 
+// Phase 7b: active single-step tools start as map-friendly vertical task
+// panels, then widen only after a completed run or when FTA opens its upload
+// workspace. Values are deliberately asserted against the actual dialog,
+// rather than inferred from registration metadata.
+const ADAPTIVE_PANEL_WIDTHS = {
+  "buffer-summary": { setup: 520, results: 900 },
+  "transit-propensity": { setup: 520, results: 520 },
+  "corridor-scoring": { setup: 520, results: 760 },
+  "fta-small-starts": { setup: 520, results: 520, workspace: 1000 },
+  "walkshed": { setup: 460, results: 460 },
+  "transit-coverage": { setup: 540, results: 760 },
+  "transit-travelshed": { setup: 540, results: 640 }
+};
+const COLLAPSIBLE_INPUT_MODULE_IDS = new Set(Object.keys(ADAPTIVE_PANEL_WIDTHS));
+const DISPLAY_BUFFER_CONTROL_IDS = {
+  "buffer-summary": ["#basUseDisplayBuffers", "#basBufferMiles"],
+  "transit-propensity": ["#tpiUseDisplayBuffers", "#tpiBufferMiles"],
+  "ridership-forecasting": ["#rfUseDisplayBuffers", "#rfBufferMiles"],
+  "corridor-scoring": ["#csUseDisplayBuffers", "#csBufferMiles"],
+  "transit-coverage": ["#tcUseDisplayBuffers", "#tcBufferMiles"]
+};
+
 // ---- Small utilities ----
 
 function findFreePort() {
@@ -172,7 +195,110 @@ async function shootLocator(page, selector, outPath, name) {
 
 async function shootPage(page, outPath, name) {
   await page.screenshot({ path: outPath });
-  record(name, "ok", null, VIEWPORT);
+  record(name, "ok", null, page.viewportSize() || VIEWPORT);
+}
+
+async function assertAdaptivePanelLayout(page, theme, id) {
+  const widths = ADAPTIVE_PANEL_WIDTHS[id];
+  if (!widths) return;
+
+  const name = theme + "_" + id + "_adaptive-layout";
+  try {
+    const inspect = () => page.locator(".module-popup-dialog").evaluate((el) => {
+      const rect = el.getBoundingClientRect();
+      const row = el.querySelector(".rf-section-row");
+      const inputs = el.querySelector(".module-inputs-header");
+      return {
+        width: Math.round(rect.width),
+        inViewport: rect.left >= 0 && rect.right <= window.innerWidth,
+        flow: row ? getComputedStyle(row).flexDirection : null,
+        inputsExpanded: inputs ? inputs.getAttribute("aria-expanded") : null
+      };
+    });
+    const assertState = async (mode, expectedWidth) => {
+      const state = await inspect();
+      if (state.width !== expectedWidth) {
+        throw new Error(mode + " width " + state.width + "px; expected " + expectedWidth + "px");
+      }
+      if (!state.inViewport) throw new Error(mode + " panel exceeds the viewport");
+      const expectedFlow = expectedWidth <= 620 ? "column" : "row";
+      if (state.flow !== expectedFlow) {
+        throw new Error(mode + " flow " + state.flow + "; expected " + expectedFlow);
+      }
+      return state;
+    };
+
+    const setup = await assertState("setup", widths.setup);
+    if (setup.inputsExpanded !== "true") {
+      throw new Error("setup inputs should be expanded; aria-expanded=" + setup.inputsExpanded);
+    }
+
+    await page.evaluate(() => window.App.popup.setLayoutMode("results"));
+    await assertState("results", widths.results || widths.setup);
+
+    if (id === "fta-small-starts") {
+      await page.locator('.module-popup-dialog button[data-tab="data-inputs"]:visible').click();
+      await assertState("workspace", widths.workspace);
+      await page.locator('.module-popup-dialog button[data-tab="ratings"]:visible').click();
+      await assertState("ratings", widths.setup);
+    }
+
+    // A user who reopens Inputs after viewing results must return to the
+    // narrow vertical form. Otherwise a wide result panel regresses to the
+    // former Settings | Results split while editing inputs.
+    const inputsHeader = page.locator(".module-inputs-header:visible");
+    await page.evaluate(() => window.App.popup.setLayoutMode("results"));
+    await page.evaluate(() => {
+      const dialog = document.querySelector(".module-popup-dialog");
+      dialog.style.transform = "translate(-96px, 24px)";
+    });
+    await inputsHeader.click();
+    const transformAfterCollapse = await page.locator(".module-popup-dialog").evaluate((el) => el.style.transform);
+    if (transformAfterCollapse !== "translate(-96px, 24px)") {
+      throw new Error("collapsing Inputs changed the panel docking transform");
+    }
+    await inputsHeader.click();
+    const transformAfterExpand = await page.locator(".module-popup-dialog").evaluate((el) => el.style.transform);
+    if (transformAfterExpand !== "translate(-96px, 24px)") {
+      throw new Error("opening Inputs changed the panel docking transform");
+    }
+    const reopened = await assertState("reopened inputs", widths.setup);
+    if (reopened.inputsExpanded !== "true") {
+      throw new Error("reopened Inputs should be expanded; aria-expanded=" + reopened.inputsExpanded);
+    }
+
+    await page.evaluate(() => window.App.popup.setLayoutMode("setup"));
+    await assertState("restored setup", widths.setup);
+    record(name, "ok");
+  } catch (e) {
+    record(name, "fail", e.message);
+  }
+}
+
+async function assertDisplayBufferControl(page, theme, id) {
+  const pair = DISPLAY_BUFFER_CONTROL_IDS[id];
+  if (!pair) return;
+  const [toggleSelector, inputSelector] = pair;
+  const name = theme + "_" + id + "_display-buffers";
+  try {
+    const toggle = page.locator(toggleSelector + ":visible");
+    const input = page.locator(inputSelector + ":visible");
+    const initial = await toggle.isChecked();
+    if (await input.isDisabled() !== initial) {
+      throw new Error("buffer field disabled state does not match Use Display Buffers");
+    }
+    await toggle.click();
+    if (await input.isDisabled() === initial) {
+      throw new Error("Use Display Buffers did not toggle the field disabled state");
+    }
+    await toggle.click();
+    if (await input.isDisabled() !== initial) {
+      throw new Error("Use Display Buffers did not restore the field disabled state");
+    }
+    record(name, "ok");
+  } catch (e) {
+    record(name, "fail", e.message);
+  }
 }
 
 // ---- Main capture routine for one theme ----
@@ -224,22 +350,13 @@ async function captureTheme(browser, theme, port) {
     console.warn("  [warn] map did not report loaded() within " + MAP_READY_TIMEOUT_MS + "ms — continuing anyway (chrome is what we're checking).");
   }
 
-  // Dark mode: index.html's "no-flash" <head> script
-  //   (document.body.classList.add("dark-mode") off a localStorage read)
-  // runs while the parser is still inside <head>, before <body> exists, so
-  // document.body is null there and it throws every time (visible as a
-  // pageerror: "Cannot read properties of null (reading 'classList')").
-  // Pre-seeding mat-dark-mode in localStorage therefore has NO visual
-  // effect on first paint — this is a pre-existing app bug, not something
-  // phase 0 introduces or is allowed to fix (see docs/ui-refresh/README.md,
-  // "Never touch calculation code" / no product changes this phase). The
-  // #darkmode-btn click handler (wired after map load) is unaffected and
-  // is the only currently-working way to enter dark mode, so that's what
-  // this harness uses to drive the dark pass — the same path a real user
-  // takes every session.
+  // Phase 7 fixed the no-flash script so pre-seeded dark mode applies before
+  // first paint. Keep the real-button fallback for older snapshots or any
+  // future page variant that does not pre-apply the class.
   if (isDark) {
     try {
-      await page.click("#darkmode-btn", { timeout: 5000 });
+      const alreadyDark = await page.locator("body").evaluate((el) => el.classList.contains("dark-mode"));
+      if (!alreadyDark) await page.click("#darkmode-btn", { timeout: 5000 });
       await page.waitForFunction(
         "document.body.classList.contains('dark-mode')",
         { timeout: 5000 }
@@ -255,6 +372,44 @@ async function captureTheme(browser, theme, port) {
     record(theme + "_shell", "ok", null, VIEWPORT);
   } catch (e) {
     record(theme + "_shell", "fail", e.message);
+  }
+
+  // ---- Phase 7 grouped Analysis menu ----
+  try {
+    await page.locator("#analysis-btn").click();
+    const analysisMenuCheck = await page.locator("#analysis-dropdown").evaluate((dropdown) => {
+      const headings = Array.from(dropdown.querySelectorAll(":scope > .analysis-module-list > .add-data-heading"));
+      const groups = headings.map((heading) => {
+        const buttons = [];
+        let node = heading.nextElementSibling;
+        while (node && !node.classList.contains("add-data-heading")) {
+          if (node.matches(".analysis-module-btn")) buttons.push(node.textContent.replace(/\s*\(coming soon\)/, "").trim());
+          node = node.nextElementSibling;
+        }
+        return { label: heading.textContent.trim(), buttons };
+      });
+      return groups;
+    });
+    if (analysisMenuCheck.length !== 2 || analysisMenuCheck[0].label !== "General" ||
+        analysisMenuCheck[1].label !== "Transit Planning") {
+      throw new Error("Analysis menu groups are not General and Transit Planning");
+    }
+    if (analysisMenuCheck[0].buttons.join("|") !== "Feature Area Analysis|Walkshed Analysis") {
+      throw new Error("General Analysis menu order is incorrect");
+    }
+    const transitSorted = analysisMenuCheck[1].buttons.slice().sort((a, b) => a.localeCompare(b));
+    if (transitSorted.join("|") !== analysisMenuCheck[1].buttons.join("|")) {
+      throw new Error("Transit Planning menu is not alphabetized");
+    }
+    await shootLocator(
+      page,
+      "#analysis-dropdown",
+      join(OUT_DIR, theme + "_phase7-analysis-menu.png"),
+      theme + "_phase7-analysis-menu"
+    );
+    await page.locator("#analysis-btn").click();
+  } catch (e) {
+    record(theme + "_phase7-analysis-menu", "fail", e.message);
   }
 
   // ---- Sidebar ----
@@ -276,6 +431,36 @@ async function captureTheme(browser, theme, port) {
     await shootLocator(page, "#feature-panel", join(OUT_DIR, theme + "_feature-panel.png"), theme + "_feature-panel");
   } catch (e) {
     record(theme + "_feature-panel", "fail", e.message);
+  }
+
+  // ---- Phase 7 accessibility smoke checks ----
+  try {
+    const missingIconLabels = await page.evaluate(() => Array.from(document.querySelectorAll("button"))
+      .filter((b) => b.offsetParent !== null && b.querySelector("svg") && !b.textContent.trim() && !b.getAttribute("aria-label"))
+      .map((b) => b.id || b.className || "unnamed button"));
+    if (missingIconLabels.length) throw new Error("icon buttons missing aria-label: " + missingIconLabels.join(", "));
+
+    await page.locator('.fp-tab-btn[data-fptab="layers"]').click();
+    await sleep(TAB_SETTLE_MS);
+    const rowTargetIssues = await page.evaluate(() => Array.from(document.querySelectorAll(
+      ".fp-gear-btn,.fp-del-btn,.fp-visibility-btn,.fp-dup-btn,.fp-type-icon,.fp-section-toggle,.fp-group-toggle,.lp-row-btn,.lp-swatch,.lp-caret"
+    )).filter((el) => el.offsetParent !== null).flatMap((el) => {
+      const r = el.getBoundingClientRect();
+      const issues = [];
+      if (r.width < 24 || r.height < 24) issues.push((el.className || el.id) + "=" + Math.round(r.width) + "x" + Math.round(r.height));
+      if (!el.getAttribute("aria-label")) issues.push((el.className || el.id) + " missing aria-label");
+      return issues;
+    }));
+    if (rowTargetIssues.length) throw new Error(rowTargetIssues.join(", "));
+    await page.locator('.fp-tab-btn[data-fptab="features"]').click();
+
+    await page.locator("#save-state-btn").focus();
+    await page.keyboard.press("Tab");
+    const focusVisible = await page.evaluate(() => document.activeElement && document.activeElement.matches(":focus-visible"));
+    if (!focusVisible) throw new Error("toolbar keyboard focus is not visibly styled");
+    record(theme + "_phase7-a11y-smoke", "ok");
+  } catch (e) {
+    record(theme + "_phase7-a11y-smoke", "fail", e.message);
   }
 
   // ---- Per-feature attribute popup ----
@@ -300,7 +485,42 @@ async function captureTheme(browser, theme, port) {
       await page.evaluate((moduleId) => window.App.openModulePopup(moduleId), id);
       await page.locator("#module-popup").waitFor({ state: "visible", timeout: 10000 });
       await sleep(POPUP_SETTLE_MS);
+      await assertDisplayBufferControl(page, theme, id);
+      await assertAdaptivePanelLayout(page, theme, id);
       await shootLocator(page, ".module-popup-dialog", join(OUT_DIR, name + ".png"), name);
+
+      // Every adaptive single-step panel must retain a keyboard-operable
+      // Inputs section. Collapsing it cannot hide the Results column.
+      if (COLLAPSIBLE_INPUT_MODULE_IDS.has(id)) {
+        const inputsHeader = page.locator(".module-inputs-header:visible");
+        await inputsHeader.click();
+        await sleep(TAB_SETTLE_MS);
+        const collapsedState = await page.locator(".module-popup-dialog").evaluate((el) => {
+          const header = Array.from(el.querySelectorAll(".module-inputs-header"))
+            .find((candidate) => candidate.offsetParent !== null);
+          const activeSlot = header && header.closest(".module-body-slot");
+          const body = header && header.parentElement.querySelector(":scope > .module-inputs-body");
+          const results = activeSlot && activeSlot.querySelector(".rf-results-col");
+          return {
+            expanded: header && header.getAttribute("aria-expanded"),
+            inputsHidden: body && getComputedStyle(body).display === "none",
+            resultsVisible: results && getComputedStyle(results).display !== "none"
+          };
+        });
+        if (collapsedState.expanded !== "false" || !collapsedState.inputsHidden || !collapsedState.resultsVisible) {
+          throw new Error("collapsed Inputs state is not accessible or hid Results");
+        }
+        await shootLocator(
+          page,
+          ".module-popup-dialog",
+          join(OUT_DIR, name + "_inputs-collapsed.png"),
+          name + "_inputs-collapsed"
+        );
+        await inputsHeader.press("Enter");
+        await sleep(TAB_SETTLE_MS);
+        const expandedState = await inputsHeader.getAttribute("aria-expanded");
+        if (expandedState !== "true") throw new Error("Inputs header did not expand by keyboard");
+      }
 
       // Phase 6 behavior checkpoint: keep one representative full-page view
       // per theme so the live map, dock-right position, and collapsed title
@@ -358,6 +578,25 @@ async function captureTheme(browser, theme, port) {
     }
   }
 
+  // ---- Phase 7 responsive shell + representative collapsed Inputs ----
+  try {
+    await page.setViewportSize(NARROW_VIEWPORT);
+    await sleep(TAB_SETTLE_MS);
+    await shootPage(page, join(OUT_DIR, theme + "_phase7-narrow-shell.png"), theme + "_phase7-narrow-shell");
+    await page.evaluate(() => window.App.openModulePopup("buffer-summary"));
+    await page.locator("#module-popup").waitFor({ state: "visible", timeout: 10000 });
+    await page.locator(".module-inputs-header:visible").click();
+    await sleep(TAB_SETTLE_MS);
+    await shootPage(
+      page,
+      join(OUT_DIR, theme + "_phase7-narrow-inputs-collapsed.png"),
+      theme + "_phase7-narrow-inputs-collapsed"
+    );
+    await page.evaluate(() => window.App.popup.close());
+  } catch (e) {
+    record(theme + "_phase7-narrow", "fail", e.message, NARROW_VIEWPORT);
+  }
+
   await context.close();
 }
 
@@ -380,7 +619,8 @@ async function main() {
 
   const port = await findFreePort();
   console.log("Starting static server on port " + port + " (cwd=" + REPO_ROOT + ")...");
-  const server = spawn("python3", ["-m", "http.server", String(port)], {
+  const pythonExecutable = process.env.PYTHON || (process.platform === "win32" ? "python" : "python3");
+  const server = spawn(pythonExecutable, ["-m", "http.server", String(port)], {
     cwd: REPO_ROOT,
     stdio: ["ignore", "ignore", "ignore"]
   });

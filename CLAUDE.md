@@ -64,15 +64,15 @@ Browser-based geospatial analysis tool. Pure front-end (no build step, no backen
 ## File Structure
 
 ```
-index.html                  App shell: toolbar, sidebar, map, feature panel, module popup container, script tags
+index.html                  App shell: grouped toolbar, map, feature/layers panel, floating module-panel container, dormant hidden sidebar markup, script tags
 css/
   style.css                 Core layout, toolbar, feature panel, module popup, floating widgets, basemap switcher, BAS styles (.bas- prefix), TPI styles, RF styles (.rf- prefix), FTA styles (.fta- prefix), TVI styles (.tvi- prefix), pill rating colors
-  sidebar-v2.css            Sidebar panel system styles (scoped under #sidebar), variable checkbox list, section labels
+  sidebar-v2.css            Dormant legacy sidebar styles (scoped under hidden #sidebar); retained for compatibility
 js/
   app.js                    Startup, module registry, event wiring. Variable checkbox UI is built at runtime by buffer-summary.js from VAR_META in utils.js (no sidebar Data Inputs panel).
   core/
     utils.js                CSV parsing, number formatting, GEOID normalization, VAR_META (single source of truth — label, category, group, displayInChecklist, denominator), GROUP_INFO, getCheckboxGroups, getDenominator, getSelectedVars
-    sidebar.js              Sidebar panel manager: addPanel, removePanel, toggle, render
+    sidebar.js              Dormant legacy sidebar manager: addPanel, removePanel, toggle, render. `#sidebar-wrap` ships hidden and `App.sidebar.render()` is not called; current Data/Analysis entry points are toolbar menus and module popups.
     map.js                  MapLibre GL map instance, basemap registry + switcher control, cursor management
     travelshed.js           Transit Travelshed pure calculation engine (`window.Travelshed`, same engine-namespace convention as `window.TPI`). No turf/DOM/Map/App state — plain JSON in/out so the golden harness loads it directly. `parseHHMMtoMin`, `selectActiveBand` (wrap-aware), `initialWait`/`transferWait` (capped-initial/uncapped-transfer wait model — see `docs/transit-travelshed-plan.md` Appendix A), `rideMinAtDistance` (runTime-priority), `sampleStopPositions`, `propagateRide` (both/forward/loop-wrap), `bandNodeSets` (cumulative per-budget node sets), and the core `computeArrivalTimes` (layered-flood arrival-time propagation: initial boardings from an origin flood, egress-merge into a shared node-time map, one generalized transfer round). `computeArrivalTimes` takes three OPTIONAL walk-leg cap inputs in minutes — `accessMaxMin` (origin-flood seed + round-0 walk), `transferMaxMin` (round ≥1 walk), `egressMaxMin` (the egress-merge walk) — null/undefined = uncapped, backward compatible (see `docs/transit-travelshed-v2-walk-caps-plan.md` §2.2); it also returns `alightings: [{stopKey, alightMin}]`, the best (minimum) alighting time per stopKey across all rounds, consumed by the module's cluster-union polygonization (§2.4). Everything needing turf or the road graph lives in `road-network.js` or `js/projects/transit-travelshed.js`.
     points.js               Points, user-defined buffers (default 0.5 mi), union polygon, point drag support
@@ -87,10 +87,10 @@ js/
     lodes.js                LODES .csv.gz download/upload/parse, block-level employment
     cache.js                Session cache: save/restore/reset via localStorage; JSON import/export
     popup.js                Analysis popup manager: open/close module popups, floating map widgets (legend)
-    module-buffers.js       Shared module-owned analysis buffer helper: `App.ANALYSIS_BUFFER_DEFAULT_MILES` (0.5) / `_MIN_MILES` (0.05) / `_MAX_MILES` (5), `foldAnalysisUnion`, `buildAnalysisBuffer`, `readAnalysisBufferMiles`, `buildAnalysisBufferSet`. Lets Transit Coverage, Transit Propensity, Ridership Forecasting, and Corridor Scoring each carry their own analysis buffer distance, independent of the Feature Settings global buffer radius (`App.routeBuffers`/`App.lineBuffers`/`App.buffers`) — see those modules' entries below and `docs/module-buffer-distance-plan.md`.
+    module-buffers.js       Shared analysis-buffer helper: `App.ANALYSIS_BUFFER_DEFAULT_MILES` (0.5) / `_MIN_MILES` (0.05) / `_MAX_MILES` (5), `foldAnalysisUnion`, `buildAnalysisBuffer`, `buildDisplayBufferSet`, `readAnalysisBufferMiles`, `buildAnalysisBufferSet`. Lets Feature Area Analysis, Transit Coverage, Transit Propensity, Ridership Forecasting, and Corridor Scoring choose either a module-owned analysis distance or the selected current Feature Settings buffers without changing map state — see those modules' entries below and `docs/module-buffer-distance-plan.md`.
     present-overlays.js     Presentation mode overlay manager: draggable/resizable legend, north arrow, and title. Registers `"present-overlays"` cache state and listens for `mat:present-mode-change` from `App.setPresentMode()` in `app.js`. Legend auto-sizes to row content with balanced horizontal padding until manually resized. Title auto-sizes to entered text until manually resized; manual title size persists and title text scales from box width.
   projects/
-    buffer-summary.js       Buffer-Area Summary module: MANDATORY_VARS, expandGroups, runSummary, buildVarChecklistHTML (renders the popup's checkbox fieldset from VAR_META at init time). Registered as popup-based module.
+    buffer-summary.js       Feature Area Analysis module: MANDATORY_VARS, expandGroups, runSummary, buildVarChecklistHTML, and a points/lines/routes/polygons checklist. It can use a 0.5-mi default analysis distance or selected displayed buffers; polygons pass through unbuffered. Registered as popup-based module.
     fta-small-starts.js     FTA Small Starts: breakpoint classification, CRE/ESS/LBAR, popup-based 2-tab UI (Ratings | Data Inputs), session persistence, CSV export
     tpi-scoring.js          TPI scoring engine: 9-factor definitions, batch ACS fetch, LODES aggregation, quintile normalization, composite scoring
     transit-propensity.js   TPI module: popup-based 2-column UI (Settings | Results), weights modal overlay, buffer distance (mi, default 0.5 — module-owned analysis distance via `js/core/module-buffers.js`, independent of the Feature Settings global buffer radius; applies to routes/lines/circular-buffer points, preserves walkshed-flagged points' cached walkshed, leaves drawn polygons unbuffered), feature checklist (normalization pool), analysis corridor dropdown, scrollable geography list with expandable factor breakdowns, choropleth rendering, hover tooltips, floating legend (auto-shown on run), GeoJSON/CSV export, stale detection
@@ -107,7 +107,7 @@ js/
     gtfs.js                 GTFS Feed Viewer: loads a GTFS ZIP (JSZip + PapaParse), renders shapes.txt as dashed reference lines (gtfs-shapes-layer) and stops.txt as hollow circles (gtfs-stops-layer) below user-drawn features, hover tooltip + click detail popup on both layers (route name/mode for shapes; stop name/ID for stops), shape_id → route info pre-joined from trips.txt + routes.txt at load time, two-column analysis popup (file directory with REQ/OPT badges | scrollable CSV table, capped at 500 rows), layer visibility toggles, clear-feed button. No session persistence (feed must be re-uploaded per session). Wires Add Data dropdown buttons directly (no app.js changes needed).
     attribute-summary.js    Attribute Summary "system" module: registered with `system: true` so it does NOT appear in the Analysis dropdown. Opened via the Attribute Summary… button under Feature Settings (right-side feature panel). Single-column popup (960px) with one section per feature type (Points / Lines / Routes / Polygons / Text Boxes / Labels). Each row binds inputs directly to `feature.properties` and `feature.properties.attributes` — no duplicated state. Per-row override icons (opacity / buffer / width / offset / reset) reuse the same `App.buildOverrideIcons` helper as the per-feature attribute popup. Time bands and route-pickers are rendered as compact pill badges (`fp-bands-badge`, `fp-route-badge`) that open a shared mini-popup (`#fp-mini-popup`) with the same UI as the per-feature attribute popup.
 projects/
-  buffer-summary-popup.html   Feature Area Analysis (Buffer-Area Summary) popup body: 2-column layout (Settings | Results) on the shared `.rf-section-row` / `.rf-settings-col` / `.rf-results-col` schema. Settings column has the variable checklist (Select all / Clear all), geography level, ACS year, apportion toggle and the Calculate Summary primary button; Results column has the progress line, `#basEmptyState`, the results table and notes.
+  buffer-summary-popup.html   Feature Area Analysis popup body: vertical setup/results layout on the shared `.rf-section-row` / `.rf-settings-col` / `.rf-results-col` schema. Settings has an all-feature checklist, 0.5-mi default analysis distance, Use Display Buffers toggle, variable checklist, geography, ACS year, apportion toggle, and Calculate Summary; results has the progress line, `#basEmptyState`, table, and notes.
   fta-small-starts-popup.html  FTA popup body: 2-tab layout (Ratings | Data Inputs); Ratings tab has 2-column layout (settings + 5 rating cards); Data Inputs tab has CRE/ESS/LBAR file uploads with column mapping selects
   fta-small-starts.html     FTA sidebar HTML fragment (legacy, replaced by popup version)
   transit-propensity-popup.html  TPI popup body: 2-column layout (Settings | Results); Settings column has geography/year selectors, apportion toggle, feature checklist (normalization pool), analysis corridor dropdown, Adjust Weights button (opens modal overlay with 9 factor sliders + Confirm/Cancel/Reset), Analyze System button; Results column has scrollable geography list with expandable per-geo factor breakdowns, summary stats, export buttons; LODES warning icon (⚠) next to ACS Year selector
@@ -140,14 +140,16 @@ Ridership_Forecast_Readme.md    User-facing documentation for the Ridership Fore
 - **No build tools.** Plain `<script>` tags in dependency order. Anyone can read/edit the source directly.
 - **Global namespace.** All shared state and functions live on `window.App`. Each module IIFE reads `var App = window.App` and assigns its exports (e.g., `App.fetchTigerwebGeos = fetchTigerwebGeos`).
 - **Module-local state stays private.** Variables like `CRE_MAP`, `ESS_POINTS`, `LBAR_SITES` (FTA) and `_lastResult`, `_stale`, `_running` (TPI, RF) are declared inside the module IIFE closure, not on `App`. Scoring engines use separate window namespaces: `window.TPI` (TPI scoring), `window.RidershipModel` (ridership scoring).
-- **Panel-based sidebar.** Sidebar content is registered via `App.sidebar.addPanel()` and rendered on map load. Panel HTML is defined as strings in `app.js`, not hardcoded in `index.html`. Call `render()` once after all panels are registered (avoids destroying event listeners).
-- **Analysis popups.** Analysis modules open in popup windows (not the sidebar). The popup system (`App.popup`) handles HTML loading, init/open/close lifecycle, and Escape key. Floating widgets (like the TPI and RF legends) persist on the map independently of the popup.
+- **Dormant sidebar.** `#sidebar-wrap`, `sidebar-v2.css`, and `js/core/sidebar.js` remain for compatibility, but the wrapper ships hidden and `App.sidebar.render()` is not called. Current Data access is the toolbar Add Data menu; analyses are opened from the grouped toolbar Analysis menu. Do not describe the legacy sidebar as a live surface unless it is explicitly revived.
+- **Analysis panels.** Analysis modules open as non-modal floating panels over a live, interactive map. `App.popup` loads the HTML, manages init/open/close lifecycle and Escape, docks a fresh panel to the right, and collapses the whole panel to its title bar. Compatible single-step modules declare `panelWidths` and call `App.popup.setLayoutMode("setup" | "results" | "workspace")`: setup opens narrow with Inputs expanded; a successful run uses the result width and collapses Inputs; clearing returns to setup. `App.renderModuleInputs()` provides that separate, keyboard-accessible Inputs section. Use stable `data-input-group` wrappers for movable input sections and keep Run/Calculate controls in `.module-input-actions`. Floating widgets such as legends persist independently.
 - **Tabbed popup layout.** Multi-step analysis modules (e.g., Ridership Forecasting, FTA Small Starts, Title VI) use a tab bar (`<div class="rf-tabs">` / `<div class="fta-tabs">` / `<div class="tvi-tabs">` with `[data-tab]` buttons) and tab content panels toggled via a `switchTab(id)` function in the module JS. State is saved to closure variables on tab switch; the form is not reset.
 - **Inline info buttons.** Contextual help uses a small `<button class="rf-info-btn">ⓘ</button>` element adjacent to the label, wired in `init()` to toggle a sibling explanation `<div>` via `style.display`. No tooltip libraries needed.
 - **CSS namespacing.** TPI styles use `.tpi-` prefix. Ridership Forecasting styles use `.rf-` prefix. FTA Small Starts styles use `.fta-` prefix. Title VI styles use `.tvi-` prefix. Rating pill colors use `.pill.high` through `.pill.low`. All live in `css/style.css`. **Exception — `.rf-status` / `.rf-status-stale|-done|-error|-running` / `.rf-status-rerun` / `.rf-status-text` and `.rf-info-box` are intentionally SHARED cross-module classes** (despite the `rf-` prefix): every analysis popup's stale/empty UI is emitted by `App.renderModuleState()`. Do not "fix" the prefix or fork per-module copies.
 - **Standardized module state (stale + empty/onboarding).** Every analysis module routes its "results are stale" banner and "nothing to act on" empty state through `App.renderModuleState()` (see app.js API). The stale banner is uniform across the suite and carries a working **Re-run** button (each module passes its run function as `onRerun`). The empty state shows a one-line, context-aware "what this needs" onboarding hint on first open (e.g. "Draw a route or line to begin" vs. "Select corridors and click Score Corridors"). Modules typically keep a thin `setStatus(msg, kind)` that delegates to the helper, a `showStale()` wrapper, and an `emptyHint()` returning `{ need, action }`. When adding a new module, follow this pattern rather than styling a bespoke banner. Per-input tooltips are a deferred follow-up (not yet implemented).
-- **Typography variables.** All font sizes, weights, line heights, letter spacing, and font families are defined as CSS custom properties in `:root` (top of `css/style.css`). Use the variables (`var(--text-sm)`, `var(--weight-semibold)`, etc.) — never hardcode `px` values for typography. Scale: `--text-2xs` (10px) through `--text-3xl` (28px). Weights: `--weight-normal` (400), `--weight-medium` (500), `--weight-semibold` (600), `--weight-bold` (700). Line heights: `--leading-none` (1) through `--leading-relaxed` (1.5). Letter spacing: `--tracking-normal` (0) through `--tracking-lg` (0.06em).
-- **Typography hierarchy.** Structural labels follow a unified hierarchy across both sidebar and feature panels. Panel titles (DATA INPUTS, FEATURES): 11px semibold uppercase, 0.04em tracking, muted (#555). Section headers (STATIONS, CENSUS): 11px semibold uppercase, 0.04em tracking, muted. Group labels (DEMOGRAPHICS, EQUITY): 11px semibold uppercase, 0.03em tracking, muted. Attribute panel titles (ROUTE ATTRIBUTES): 10px semibold uppercase, 0.04em tracking, muted. Body text and labels: 13px normal weight, #333. Secondary labels (attr labels, units): 11–12px, #555. Text colors: #333 for primary content, var(--muted) (#555) for structural labels and secondary text.
+- **Design tokens and colors.** App chrome uses semantic tokens from `:root` and the `body.dark-mode` token block (`--bg`, `--surface*`, `--text-*`, `--border*`, `--accent`, status tokens). Do not add raw hex values for chrome colors. Data encodings are exempt: feature colors, choropleth ramps, rating/classification pills, legend swatches, and tool-specific map symbols retain explicit colors.
+- **Spacing and shared primitives.** Use the `--space-*` scale for new layout spacing. Shared form/control/layout primitives include `.form-field`, `.form-section`, `.btn-row`, `.rf-select`, `.rf-number-input`, `.rf-action-primary`, `.rf-btn-sm`, and `.u-*` utilities. Extend these shared primitives instead of adding module-specific duplicates.
+- **Typography.** Inter is the single app-wide UI and map-label font. Font sizes, weights, line heights, letter spacing, and families are CSS custom properties in `:root`; use variables such as `--text-sm`, `--weight-semibold`, and `--leading-normal` instead of hardcoded typography values. Dense tables intentionally use the smaller end of the shared scale.
+- **Visual verification.** `test/ui-screens/capture.mjs` is the UI regression harness. It renders the shell, feature/attribute panels, every analysis panel, tab states, representative collapse states, narrow viewport, and light/dark themes into `test/ui-screens/out/`; committed references live in `test/ui-screens/baseline/`. Run it after app-shell, shared-CSS, popup, or module-markup changes and inspect the images, not only the pass count.
 - **External libraries via CDN:** MapLibre GL JS, Turf.js, pako (gzip), PapaParse (CSV), JSZip (GTFS ZIP parsing).
 
 ## Script Load Order
@@ -172,7 +174,7 @@ lodes.js    (needs App.map, App.bboxStringFromFeature, App.bufferUnionPolygon, p
 cache.js    (needs App.points, App.lines, App.routes, App.polygons, render/rebuild functions)
 popup.js    (needs App namespace; defines App.popup)
 module-buffers.js   (needs App.points/lines/routes/polygons, App.getPointWalkshed (optional), turf; defines App.ANALYSIS_BUFFER_DEFAULT_MILES/_MIN_MILES/_MAX_MILES, App.foldAnalysisUnion, App.buildAnalysisBuffer, App.readAnalysisBufferMiles, App.buildAnalysisBufferSet)
-app.js              (wires everything; registers sidebar panels; defines App.registerModule; calls cache.restore)
+app.js              (wires everything; builds toolbar menus; defines App.registerModule; calls cache.restore)
 <modules>           (call App.registerModule)
   buffer-summary.js     (needs App namespace, App.cache; registers Buffer-Area Summary module; runSummary + builds checkbox UI from VAR_META at popup init)
   fta-small-starts.js   (needs App namespace, App.cache; registers FTA Small Starts module; popup-based 2-tab UI)
@@ -207,7 +209,7 @@ present-overlays.js     (needs App namespace and App.cache; loaded after modules
 ### sidebar.js
 `sidebar.addPanel(config)`, `sidebar.removePanel(id)`, `sidebar.toggle(id)`, `sidebar.render()`
 
-Panel config: `{ id, title, html, collapsed (default false), order (default 100) }`
+Dormant compatibility API; current startup does not call `render()`. Panel config remains `{ id, title, html, collapsed (default false), order (default 100) }` if the sidebar is deliberately revived later.
 
 ### map.js
 `map` (MapLibre instance), `switchBasemap(basemapId)`, `getBasemaps()` (returns `[{id, name}]`), `getCurrentBasemapId()`
@@ -281,7 +283,7 @@ Route features store `properties.waypoints` (user click points) separately from 
 **Mini-popup (`#fp-mini-popup`):** singleton floating dialog used by the time-bands and route-picker badge buttons, and by Trip Builder's Edit panel. 320px wide, z-index 9100, draggable header, Escape to close, anchored beneath the trigger button when opened. Independent from `#fp-attr-popup` so the per-feature popup can stay open simultaneously.
 
 ### attribute-summary.js (system module, no public API)
-Registered with `id: "attribute-summary"`, `system: true`, `popupWidth: 960`. Opened via `App.openAttributeSummary()`, which is wired to the `#open-attribute-summary` button under the Feature Settings panel (right-side feature panel, below the "Offset overlapping Lines/Routes" toggle). Hidden from the Analysis sidebar dropdown by the `entry.system === true` skip in `buildAnalysisButtonsHTML()` (`js/app.js`).
+Registered with `id: "attribute-summary"`, `system: true`, `popupWidth: 960`. Opened via `App.openAttributeSummary()`, which is wired to the `#open-attribute-summary` button under the Feature Settings panel (right-side feature panel, below the "Offset overlapping Lines/Routes" toggle). Hidden from the toolbar Analysis menu by the `entry.system === true` skip in `buildAnalysisButtonsHTML()` (`js/app.js`).
 
 **Layout:** single column. One `<section data-section="…">` per feature type (Points / Lines / Routes / Polygons / Text Boxes / Labels). Empty sections are hidden. The Lines and Routes tables share a column model: swatch · name · direction · mode · service · avg speed · run time · bands badge · **copy-attributes button** · override icons. Headers are short (`Avg Spd`, `RunT`, `Bands`) with `title=` tooltips for the full names; CSS Grid (`.as-grid-routelike`) keeps columns aligned in a 960px popup. Points rows show: swatch · name · stop ID · `App.buildPointRouteBadge` · copy-attributes button · override icons. Polygons rows show: swatch · name · notes · copy-attributes button · override icons. Text Boxes / Labels rows show: name · size · background swatch · text swatch (no override icons or copy-attributes button — these are DOM markers, not analytical features; out of scope for Copy Attributes).
 
@@ -316,13 +318,15 @@ Saves session state (points, lines, routes, polygons, buffer radii, form selecti
 Floating widget options: `{ position: "bottom-left"|"bottom-right"|"top-left"|"top-right", width: px, title: string }`
 
 ### module-buffers.js
-Shared "module-owned analysis buffer" helper. Each of Transit Coverage, Transit Propensity, Ridership Forecasting, and Corridor Scoring carries its own analysis buffer distance (a "Buffer distance (mi)" input in its Settings column), independent of the Feature Settings global buffer radius that drives what's drawn on the map (`App.routeBuffers`/`App.lineBuffers`/`App.buffers`, rebuilt by `routes.js`/`lines.js`/`points.js`). This file builds a **private** buffer set from source geometry + a caller-given distance for use inside a single analysis run — it never reads or mutates the shared buffer arrays. See `docs/module-buffer-distance-plan.md` for the full design rationale.
+Shared analysis-buffer helper. Feature Area Analysis, Transit Coverage, Transit Propensity, Ridership Forecasting, and Corridor Scoring each expose a Buffer distance (mi) input plus a default-off **Use Display Buffers** toggle. The toggle disables the field and reads the selected currently displayed Feature Settings buffers; the default path builds a private buffer set from source geometry at the module's distance. Neither path mutates shared map buffers. See `docs/module-buffer-distance-plan.md` for the full design rationale.
 
-`App.ANALYSIS_BUFFER_DEFAULT_MILES` (0.5 — one shared default for all four modules), `App.ANALYSIS_BUFFER_MIN_MILES` (0.05), `App.ANALYSIS_BUFFER_MAX_MILES` (5).
+`App.ANALYSIS_BUFFER_DEFAULT_MILES` (0.5 — one shared default for all five modules), `App.ANALYSIS_BUFFER_MIN_MILES` (0.05), `App.ANALYSIS_BUFFER_MAX_MILES` (5).
 
 `App.foldAnalysisUnion(polys)` — folds an array of polygons into one union via `turf.union`; `null` for an empty array.
 
 `App.buildAnalysisBuffer(feature, miles)` — `turf.buffer(feature, miles, {units:"miles", steps:64})`, `null` on failure.
+
+`App.buildDisplayBufferSet(filter)` — returns the displayed route, line, and point buffers for an explicit selection, plus selected polygons unchanged, in the same `{ byType, union, get, count }` shape as `buildAnalysisBufferSet`. It honors Feature Settings and per-feature overrides exactly as the map does.
 
 `App.readAnalysisBufferMiles(elOrId, fallback)` — reads + validates a buffer-distance input; accepts an element id (string), a DOM element, or any object exposing `.value` (so it's testable headless — the golden harness passes a plain `{value: "..."}` object). Returns `fallback` (default `ANALYSIS_BUFFER_DEFAULT_MILES`) when the value is missing, non-numeric, or outside `[MIN, MAX]`.
 
@@ -591,7 +595,7 @@ Registers module `"gtfs"` as a popup-based analysis. Opens in a 2-column popup (
 
 ## Analysis Module System
 
-Analysis modules are optional domain-specific analyses that plug into the core. Each module registers itself at load time and appears as a button in the "Analysis" sidebar panel. Multiple modules can be registered simultaneously. Clicking a module button opens its popup window.
+Analysis modules are optional domain-specific analyses that plug into the core. Each module registers itself at load time and appears in the grouped toolbar Analysis menu unless marked `system: true`. Selecting a module opens its floating panel.
 
 ### Registration
 
@@ -603,6 +607,7 @@ App.registerModule({
   name: "Human-readable Name",
   enabled: true,                                  // false = button shown grayed out
   popupWidth: 720,                                // dialog width in px
+  panelWidths: { setup: 520, results: 760 },      // optional adaptive widths; popupWidth is fallback
   popupHTML: "projects/my-analysis-popup.html",   // popup body HTML fragment path
 
   init: function (core) {
@@ -627,6 +632,27 @@ App.registerModule({
 ```
 
 `App.registerProject` is a backward-compat alias for `App.registerModule`.
+
+### Adaptive single-step panel widths
+
+`App.popup.setLayoutMode("setup" | "results" | "workspace")` resolves the active
+module's `panelWidths`, resets any drag offset by default, and preserves the 90vw
+maximum. Input expand/collapse passes its optional preservation flag so a user's drag
+position is retained while the panel width changes. Panels at 620px or less are marked
+narrow so `.rf-section-row` stacks vertically. Use it only
+for active single-step tools. Current choices are: Walkshed 460/460; Feature Area
+Analysis 520/900; Transit Propensity 520/520; Corridor Scoring 520/760; FTA Ratings
+520 with its Data Inputs workspace at 1000; Transit Coverage 540/760; and Transit
+Travelshed 540/640. Route Costing and Trip Builder intentionally retain their existing
+wide layouts; Ridership Forecasting, Title VI, GTFS, system modules, and the dormant
+Mitigation Needs prototype are not part of this pattern.
+
+**Analysis input order:** Where controls exist, analysis popup inputs are ordered as
+selection, Census geography, buffer/study-area parameters (including apportionment),
+module-specific settings, then additional settings in an existing modal or native
+details control. Transit Travelshed deliberately starts with **Select Origin**, followed
+by its route/line selection. This is presentation-only: preserve the existing IDs and
+listeners when reorganizing these groups.
 
 ### The `core` object
 
@@ -658,29 +684,31 @@ The FTA module still accesses `App.*` directly in its internal computation funct
 1. Create `js/projects/my-analysis.js` with an `App.registerModule({...})` call
 2. Create `projects/my-analysis-popup.html` with the popup body markup
 3. Add `<script src="js/projects/my-analysis.js"></script>` to `index.html` (after `app.js`)
-4. The module button automatically appears in the Analysis sidebar panel
+4. The module button automatically appears in the toolbar Analysis menu. Feature Area Analysis and Walkshed Analysis are in **General**; every other non-system module is alphabetized in **Transit Planning** by `buildAnalysisButtonsHTML()`.
 
 Multiple modules can be active simultaneously. No core code needs to change.
 
 ### How to run with no modules
 
-Remove all module `<script>` tags from `index.html`. The Analysis sidebar panel will not appear. The core app (map, points, ACS summaries, LODES) works independently.
+Remove all module `<script>` tags from `index.html`. The toolbar Analysis menu will be empty. The core app (map, points, ACS summaries, LODES) works independently.
 
 ## Layout
 
 ```
-+---------------------------------------------------------------+
-|  Toolbar                                                      |
-|  [Point] [Line] [Route] [Polygon]   [Delete Last] [Clear] [Reset Session] |
-+------------------+------------------------+-------------------+
-|  Sidebar (left)  |        Map (center)    | Feature Panel (R) |
-|  310px           |        flex            | 240px             |
-+------------------+------------------------+-------------------+
++--------------------------------------------------------------------------------+
+| Toolbar: workflow | draw tools/actions | view controls | location search       |
++-------------------------------------------------------------+------------------+
+|                    Live map (flex)                          | Feature/Layers   |
+|                                                            | panel (208px)    |
+|                    Floating analysis panel docks right over the map             |
++-------------------------------------------------------------+------------------+
 ```
 
-### Sidebar (left, panel-based)
+### Dormant legacy sidebar
 
-The sidebar is an empty `<div id="sidebar">` populated at runtime by `App.sidebar`. Panels are registered in `app.js` on map load, then `render()` builds the DOM. Each panel has a collapsible header (click to toggle). Panel HTML strings live in `app.js` (Data Inputs) or are built from registered modules (Analysis).
+`#sidebar-wrap` ships with `display:none`, and no live code calls `App.sidebar.render()`. The structure below is retained legacy code, not current navigation. Current data actions are in the toolbar Add Data menu; the toolbar Analysis menu is grouped into General and Transit Planning sections.
+
+Historical dormant structure:
 
 ```
 +-----------------------------+
@@ -706,7 +734,7 @@ The sidebar is an empty `<div id="sidebar">` populated at runtime by `App.sideba
 +-----------------------------+
 ```
 
-Clicking an analysis module button opens a popup window over the map. The Buffer-Area Summary popup contains geography/year settings and a results table. The TPI popup has a 2-column layout (Settings | Results) with an Adjust Weights modal overlay. The FTA Small Starts popup has a 2-tab layout (Ratings | Data Inputs). The Ridership Forecasting popup has a 4-tab layout (Calibrate | Demand | Elasticity | Scenarios). The Corridor Scoring popup has a 2-column layout (Settings | Results). The Route Costing popup has a 2-column layout (Service checklist | per-Service and system summary tables) with a Costing Settings modal overlay. The Trip Builder popup has a 2-column layout (Service list | trip schedule). The Title VI Service Equity popup has a 3-tab layout (Policies & Inputs | Analysis | Scenarios). Each active choropleth shows a floating legend widget at bottom-left of the map.
+Selecting an analysis from the toolbar menu opens a non-modal floating panel over the live map. The Buffer-Area Summary popup contains geography/year settings and a results table. The TPI popup has a 2-column layout (Settings | Results) with an Adjust Weights modal overlay. The FTA Small Starts popup has a 2-tab layout (Ratings | Data Inputs). The Ridership Forecasting popup has a 4-tab layout (Calibrate | Demand | Elasticity | Scenarios). The Corridor Scoring popup has a 2-column layout (Settings | Results). The Route Costing popup has a 2-column layout (Service checklist | per-Service and system summary tables) with a Costing Settings modal overlay. The Trip Builder popup has a 2-column layout (Service list | trip schedule). The Title VI Service Equity popup has a 3-tab layout (Policies & Inputs | Analysis | Scenarios). Each active choropleth shows a floating legend widget at bottom-left of the map.
 
 ### Feature Panel (right)
 

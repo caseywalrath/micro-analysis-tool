@@ -5,7 +5,15 @@
     <!-- Left: settings column -->
     <div class="rf-settings-col">
 
-      <div class="rf-section-title">Walk budget</div>
+      <div class="data-input-group" data-input-group="point-selection">
+      <div class="rf-section-title">Points</div>
+      <div id="wsPointList" class="rf-feature-checklist">
+        <div class="rf-empty-note">No points placed.</div>
+      </div>
+      </div>
+
+      <div class="data-input-group" data-input-group="analysis">
+      <div class="rf-section-title form-section">Walk budget</div>
 
       <div class="form-field">
         <label class="tiny">Minutes</label>
@@ -17,8 +25,17 @@
         <input type="number" id="wsSpeed" class="rf-number-input" min="0.5" max="7.5" step="0.1" value="3.1">
       </div>
 
-      <details class="u-mt-3">
-        <summary class="tiny u-muted ws-advanced-summary">Advanced</summary>
+      </div>
+
+      <div class="data-input-group" data-input-group="display">
+      <label class="tpi-toggle-row u-mt-3">
+        <input type="checkbox" id="wsShowSegments" checked>
+        <span class="tiny">Show reachable streets</span>
+      </label>
+      </div>
+
+      <details class="u-mt-3 data-input-group" data-input-group="advanced">
+        <summary class="tiny u-muted ws-advanced-summary">Advanced Settings</summary>
         <div class="form-field u-mt-2">
           <label class="tiny">Hull detail — max edge (km)</label>
           <input type="number" id="wsMaxEdge" class="rf-number-input" min="0.02" max="2" step="0.01" value="0.3">
@@ -28,27 +45,15 @@
         </p>
       </details>
 
-      <div class="rf-section-title form-section">Points</div>
-      <div id="wsPointList" class="rf-feature-checklist">
-        <div class="rf-empty-note">No points placed.</div>
+      <div class="module-input-actions">
+        <button id="wsDownloadBtn" type="button" class="rf-btn-sm" style="display:none;">
+          Download streets for this area
+        </button>
+
+        <button id="wsComputeBtn" type="button" class="rf-action-primary">
+          Calculate
+        </button>
       </div>
-
-      <label class="tpi-toggle-row u-mt-3">
-        <input type="checkbox" id="wsShowSegments" checked>
-        <span class="tiny">Show reachable streets</span>
-      </label>
-
-      <p id="wsNetWarn" class="tiny" style="display:none;color:#b45309;margin-top:12px;">
-        No street network loaded — Calculate will offer a scoped download. Or load one via Add&nbsp;Data.
-      </p>
-      <p id="wsCoverageWarn" class="tiny" style="display:none;color:#b45309;margin-top:8px;"></p>
-      <button id="wsDownloadBtn" type="button" class="rf-btn-sm" style="display:none;margin-top:6px;">
-        Download streets for this area
-      </button>
-
-      <button id="wsComputeBtn" type="button" class="rf-action-primary u-mt-3">
-        Calculate
-      </button>
 
     </div>
 
@@ -72,10 +77,6 @@
           more irregular than a circular buffer. Click <strong>Use as study areas</strong> to run Buffer-Area
           Summary, TPI, etc. against the walkshed instead of the circle.
         </p>
-      </div>
-
-      <div id="wsEmptyState" class="rf-info-box">
-        <p>Load a road network, place points, and click <strong>Calculate</strong> to build walking isochrones.</p>
       </div>
 
     </div>

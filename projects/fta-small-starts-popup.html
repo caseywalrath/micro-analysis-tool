@@ -13,6 +13,7 @@
 
       <!-- Left: settings -->
       <div class="rf-settings-col">
+        <div class="data-input-group" data-input-group="geography">
         <div class="rf-section-title">Geography</div>
 
         <label class="tiny">Level</label>
@@ -29,11 +30,15 @@
           <option value="2021">2021</option>
         </select>
 
-        <button id="ftaRun" type="button" class="rf-action-primary u-mt-4">
-          Compute Ratings
-        </button>
+        </div>
 
-        <div id="ftaDataSummary" class="fta-data-summary">
+        <div class="module-input-actions">
+          <button id="ftaRun" type="button" class="rf-action-primary">
+            Compute Ratings
+          </button>
+        </div>
+
+        <div id="ftaDataSummary" class="fta-data-summary data-input-group" data-input-group="data-status">
           <div class="rf-section-title">Loaded Data</div>
           <div class="tiny fta-data-status">
             <span id="ftaLodesIndicator" class="u-muted">LODES: not loaded</span><br>
@@ -107,6 +112,7 @@
       <!-- Left: CRE + ESS -->
       <div class="rf-settings-col fta-data-settings-col">
 
+        <div class="data-input-group" data-input-group="cre">
         <!-- CRE section -->
         <div class="rf-section-title">Community Risk (CRE)</div>
         <div class="tiny u-muted fta-description">
@@ -126,8 +132,10 @@
         </label>
         <div id="ftaCreInfo" class="tiny u-mt-2 u-muted">No file loaded.</div>
 
+        </div>
         <div class="fta-divider"></div>
 
+        <div class="data-input-group" data-input-group="ess">
         <!-- ESS section -->
         <div class="rf-section-title">Essential Services (ESS)</div>
         <div class="tiny u-muted fta-description">
@@ -143,12 +151,14 @@
           <select id="ftaEssColLon" class="rf-select" disabled></select>
         </label>
         <div id="ftaEssInfo" class="tiny u-mt-2 u-muted">No file loaded.</div>
+        </div>
 
       </div>
 
       <!-- Right: LBAR -->
       <div class="rf-results-col">
 
+        <div class="data-input-group" data-input-group="lbar">
         <div class="rf-section-title">LBAR Housing Inventory</div>
         <div class="tiny u-muted fta-description">
           Upload GeoJSON points (properties.units, optional properties.county) or CSV with lat/lon/units and optional county FIPS.
@@ -186,6 +196,7 @@
         </label>
 
         <div id="ftaLbarInfo" class="tiny u-mt-2 u-muted">No file loaded.</div>
+        </div>
 
       </div>
     </div>
